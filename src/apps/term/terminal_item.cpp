@@ -14,6 +14,7 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <cmath>
+#include <utility>
 #include <iostream>
 
 namespace b1air {
@@ -343,14 +344,26 @@ void TerminalItem::paint(QPainter *painter) {
                 }
             }
 
+            // Colours, with reverse video applied before anything is drawn.
+            //
+            // Only `bold` was ever read off the cell. libvterm hands over
+            // reverse, underline, italic and strike as well, and all four were
+            // dropped on the floor — so a man page's highlighted heading, the
+            // status line of `less`, vim's visual selection and htop's column
+            // header all came out as ordinary text. Reverse is the one that
+            // matters: it is how a terminal program says "this part", and
+            // without it there was no difference between selected and not.
+            QColor fg = toQColor(cell.fg, m_foreground);
+            QColor bg = VTERM_COLOR_IS_DEFAULT_BG(&cell.bg) ? m_background
+                                                            : toQColor(cell.bg, m_background);
+            if (cell.attrs.reverse)
+                std::swap(fg, bg);
+
             // Cell background
             if (isSelected) {
                 painter->fillRect(cellRect, QColor(137, 180, 250, 80));
-            } else if (!VTERM_COLOR_IS_DEFAULT_BG(&cell.bg)) {
-                QColor bg = toQColor(cell.bg, m_background);
-                if (bg != m_background) {
-                    painter->fillRect(cellRect, bg);
-                }
+            } else if (bg != m_background) {
+                painter->fillRect(cellRect, bg);
             }
 
             // Cell character
@@ -361,19 +374,26 @@ void TerminalItem::paint(QPainter *painter) {
                     text += QString::fromUcs4(&cp, 1);
                 }
 
-                QColor fg = toQColor(cell.fg, m_foreground);
-                if (cell.attrs.bold) {
+                const bool styled = cell.attrs.bold || cell.attrs.underline
+                                 || cell.attrs.italic || cell.attrs.strike;
+                if (styled) {
                     QFont f = m_font;
-                    f.setBold(true);
+                    if (cell.attrs.bold)      f.setBold(true);
+                    if (cell.attrs.italic)    f.setItalic(true);
+                    // libvterm reports the underline *style* — single, double,
+                    // curly — as a small integer, not a flag. Anything non-zero
+                    // is a line under the cell; Qt draws one kind, so that is
+                    // what all of them get.
+                    if (cell.attrs.underline) f.setUnderline(true);
+                    if (cell.attrs.strike)    f.setStrikeOut(true);
                     painter->setFont(f);
                 }
 
                 painter->setPen(fg);
                 painter->drawText(QPointF(x, y + m_fontAscent), text);
 
-                if (cell.attrs.bold) {
+                if (styled)
                     painter->setFont(m_font);
-                }
             }
 
             col += widthInCells;

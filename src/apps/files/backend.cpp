@@ -148,14 +148,6 @@ void FileManagerBackend::setSortAscending(bool asc) {
     }
 }
 
-QVariantList FileManagerBackend::items() const {
-    return m_items;
-}
-
-int FileManagerBackend::itemCount() const {
-    return m_items.size();
-}
-
 QVariantList FileManagerBackend::breadcrumbs() const {
     QVariantList crumbs;
     QString home = QDir::homePath();
@@ -245,140 +237,14 @@ QString FileManagerBackend::formatSize(qint64 bytes) const {
     return QString("%1 GB").arg(bytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', 1);
 }
 
-QString FileManagerBackend::getIconGlyph(const QFileInfo& fi) const {
-    if (fi.isDir()) return "\u{f07b}"; // folder
-    QString ext = fi.suffix().toLower();
-
-    // Images
-    if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" || ext == "gif" || ext == "svg" || ext == "bmp")
-        return "\u{f03e}"; // image
-
-    // Code & Scripts
-    if (ext == "cpp" || ext == "hpp" || ext == "c" || ext == "h" || ext == "qml" || ext == "js" || ext == "ts" || ext == "py" || ext == "rs" || ext == "sh")
-        return "\u{f121}"; // code
-
-    // Documents & Text
-    if (ext == "txt" || ext == "md" || ext == "json" || ext == "conf" || ext == "ini" || ext == "toml" || ext == "yaml" || ext == "yml")
-        return "\u{f0f6}"; // file-text
-
-    if (ext == "pdf") return "\u{f1c1}"; // pdf
-    if (ext == "zip" || ext == "tar" || ext == "gz" || ext == "xz" || ext == "7z" || ext == "zst")
-        return "\u{f1c6}"; // archive
-
-    if (ext == "mp3" || ext == "flac" || ext == "wav" || ext == "ogg" || ext == "m4a")
-        return "\u{f001}"; // audio
-
-    if (ext == "mp4" || ext == "mkv" || ext == "webm" || ext == "mov" || ext == "avi")
-        return "\u{f008}"; // video
-
-    if (fi.isExecutable()) return "\u{f135}"; // rocket / binary
-
-    return "\u{f016}"; // default file
-}
-
-QString FileManagerBackend::getIconColor(const QFileInfo& fi) const {
-    if (fi.isDir()) return "#7aa2f7"; // blue
-    QString ext = fi.suffix().toLower();
-
-    if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" || ext == "gif" || ext == "svg")
-        return "#f7768e"; // red/pink
-
-    if (ext == "cpp" || ext == "hpp" || ext == "qml" || ext == "py" || ext == "rs" || ext == "sh" || ext == "js")
-        return "#73daca"; // green
-
-    if (ext == "txt" || ext == "md" || ext == "json" || ext == "conf" || ext == "ini" || ext == "toml")
-        return "#c0caf5"; // text bright
-
-    if (ext == "pdf") return "#ff9e64"; // orange
-    if (ext == "zip" || ext == "tar" || ext == "gz" || ext == "7z")
-        return "#e0af68"; // yellow
-
-    if (ext == "mp3" || ext == "flac" || ext == "wav")
-        return "#bb9af7"; // purple
-
-    if (ext == "mp4" || ext == "mkv")
-        return "#7dcfff"; // cyan
-
-    if (fi.isExecutable()) return "#9ece6a";
-
-    return "#a9b1d6";
-}
-
 void FileManagerBackend::refresh() {
-    loadDirectory();
+    // Only the disk readout. This used to call loadDirectory(), which walked
+    // the directory, formatted every size and date, decided an icon glyph and
+    // colour for each entry and sorted the lot — into a list nothing read. The
+    // views are driven by a FolderListModel bound to the same currentPath,
+    // showHidden and filterQuery, so every navigation paid for the same
+    // listing twice and used one of them.
     emit diskInfoChanged();
-}
-
-void FileManagerBackend::loadDirectory() {
-    QDir dir(m_currentPath);
-    if (!dir.exists()) return;
-
-    QDir::Filters filters = QDir::AllEntries | QDir::NoDotAndDotDot;
-    if (m_showHidden) {
-        filters |= QDir::Hidden;
-    }
-
-    QFileInfoList entryList = dir.entryInfoList(filters);
-    QVariantList res;
-
-    QString q = m_filterQuery.trimmed().toLower();
-
-    for (const QFileInfo& fi : entryList) {
-        QString name = fi.fileName();
-        if (!q.isEmpty() && !name.toLower().contains(q)) {
-            continue;
-        }
-
-        QString ext = fi.suffix().toLower();
-        bool isImg = (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp" || ext == "gif" || ext == "bmp" || ext == "svg");
-        bool isVid = (ext == "mp4" || ext == "mkv" || ext == "webm" || ext == "mov" || ext == "avi");
-
-        QVariantMap item;
-        item["name"] = name;
-        item["path"] = fi.absoluteFilePath();
-        item["url"] = QUrl::fromLocalFile(fi.absoluteFilePath()).toString();
-        item["isDir"] = fi.isDir();
-        item["isImage"] = isImg;
-        item["isVideo"] = isVid;
-        item["size"] = fi.isDir() ? 0 : fi.size();
-        item["sizeFormatted"] = fi.isDir() ? "Folder" : formatSize(fi.size());
-        item["mtime"] = fi.lastModified().toSecsSinceEpoch();
-        item["mtimeFormatted"] = fi.lastModified().toString("MMM d, yyyy  hh:mm");
-        item["glyph"] = getIconGlyph(fi);
-        item["color"] = getIconColor(fi);
-
-        res.append(item);
-    }
-
-    // Sort: Folders always first, then by field
-    std::sort(res.begin(), res.end(), [this](const QVariant& a, const QVariant& b) {
-        QVariantMap ma = a.toMap();
-        QVariantMap mb = b.toMap();
-
-        bool dirA = ma["isDir"].toBool();
-        bool dirB = mb["isDir"].toBool();
-
-        if (dirA != dirB) {
-            return dirA; // Directory comes first
-        }
-
-        if (m_sortField == "size") {
-            qint64 sa = ma["size"].toLongLong();
-            qint64 sb = mb["size"].toLongLong();
-            return m_sortAscending ? (sa < sb) : (sa > sb);
-        } else if (m_sortField == "mtime") {
-            qint64 ta = ma["mtime"].toLongLong();
-            qint64 tb = mb["mtime"].toLongLong();
-            return m_sortAscending ? (ta < tb) : (ta > tb);
-        } else {
-            QString na = ma["name"].toString().toLower();
-            QString nb = mb["name"].toString().toLower();
-            return m_sortAscending ? (na < nb) : (na > nb);
-        }
-    });
-
-    m_items = res;
-    emit itemsChanged();
 }
 
 void FileManagerBackend::openItem(const QString& path) {

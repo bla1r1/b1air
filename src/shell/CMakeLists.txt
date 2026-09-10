@@ -202,15 +202,38 @@ target_link_libraries(b1air-settings PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::WaylandClient Qt6::DBus Threads::Threads)
 
 # ── b1air-term (Native Terminal Emulator) ────────────────────────────────────
+#
+# libvterm compiled in from third_party rather than linked against the system
+# package, the same treatment SQLite gets above and for the same reason: it was
+# the last thing the terminal could not start without. Nine C files, and its own
+# flags — upstream is not warning-clean under this project's -Wall -Wextra.
+add_library(b1air-vterm OBJECT
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/encoding.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/keyboard.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/mouse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/pen.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/screen.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/state.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/unicode.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src/vterm.c
+)
+target_include_directories(b1air-vterm PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/src)
+target_compile_options(b1air-vterm PRIVATE -w)
+
 qt_wrap_cpp(B1AIR_TERM_MOC ../apps/term/terminal_item.hpp)
 add_executable(b1air-term
     ../apps/term/main.cpp
     ../apps/term/terminal_item.cpp
     ../apps/term/terminal_item.hpp
     ${B1AIR_TERM_MOC}
+    $<TARGET_OBJECTS:b1air-vterm>
 )
 
 target_include_directories(b1air-term PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libvterm/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../apps/term
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -223,7 +246,6 @@ target_link_libraries(b1air-term PRIVATE
     Qt6::Quick
     Qt6::WaylandClient
     Threads::Threads
-    vterm
     util
 )
 

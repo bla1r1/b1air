@@ -11,3 +11,10 @@ src/third_party/sqlite/sqlite3.h -diff
 # Same for the vendored nlohmann/json single header.
 src/third_party/nlohmann/* linguist-vendored
 src/third_party/nlohmann/json.hpp -diff
+
+# Same for the vendored libvterm. Its .inc files are generated lookup tables,
+# so they get -diff too; the .c files stay diffable, because a security fix
+# pulled in by hand is a diff someone will want to read.
+src/third_party/libvterm/* linguist-vendored
+src/third_party/libvterm/src/*.inc -diff
+src/third_party/libvterm/src/encoding/*.inc -diff

@@ -630,7 +630,22 @@ ApplicationWindow {
                                 NavIconBtn { icon: "󰁍"; enabled: window.historyIndex > 0; onClicked: window.historyBack() }
                                 NavIconBtn { icon: "󰁔"; enabled: window.historyIndex < window.history.length - 1; onClicked: window.historyForward() }
                                 NavIconBtn { icon: "󰁝"; enabled: window.currentPath !== "/"; onClicked: window.goUp() }
-                                NavIconBtn { icon: "󰑐"; enabled: true; onClicked: isNative ? FilesBackend.refresh() : null }
+                                // Re-points the model as well as asking the backend for the disk
+                                // figures. The button used to do only the second of those — the list
+                                // is a FolderListModel bound to currentPath, and nothing told it to
+                                // look again — so "refresh" refreshed the free-space readout and left
+                                // the files exactly as they were.
+                                NavIconBtn {
+                                    icon: "󰑐"
+                                    enabled: true
+                                    onClicked: {
+                                        if (!isNative) return;
+                                        FilesBackend.refresh();
+                                        const here = folderModel.folder;
+                                        folderModel.folder = "";
+                                        folderModel.folder = here;
+                                    }
+                                }
                             }
                         }
 

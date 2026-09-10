@@ -1,12 +1,14 @@
 # nlohmann/json — vendored single header
 
 `json.hpp` is the official single-header amalgamation of
-[nlohmann/json](https://github.com/nlohmann/json), **version 3.12.0**, taken
-verbatim from the release asset:
+[nlohmann/json](https://github.com/nlohmann/json), taken verbatim from the
+release asset.
 
-    https://github.com/nlohmann/json/releases/download/v3.12.0/json.hpp
+* Version: **3.12.0**
+* Source: <https://github.com/nlohmann/json/releases/download/v3.12.0/json.hpp>
+* Licence: MIT (the text is at the top of the file)
 
-It is unmodified. Licence: MIT (the text is at the top of the file).
+It is unmodified.
 
 ## Why it is here
 

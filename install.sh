@@ -162,8 +162,6 @@ arch_packages() {
         quickshell
         # Modern CLI & Shell
         fish starship eza bat fzf zoxide fastfetch btop
-        # Native b1air-term uses libvterm for terminal emulation.
-        libvterm
         # GUI Applications
         # b1air-files and b1air-view replace the old Thunar/Imv entries.
         # Keep Firefox: there is no bundled browser replacement.
@@ -208,10 +206,20 @@ arch_packages() {
         xdg-utils
         wlsunset snapper
         # Storage & archives: removable media, phones, NTFS volumes.
-        # libarchive (pulled in by base-devel/pacman itself) powers extraction
-        # built into b1air-files; 7zip is the CLI fallback for formats/broken
-        # links libarchive can't handle.
-        udisks2 gvfs ntfs-3g 7zip libarchive
+        #
+        # libarchive powers the extraction built into b1air-files, and is
+        # already on any Arch system because pacman links it — listed anyway,
+        # because relying on somebody else's dependency is not the same as
+        # asking for it.
+        #
+        # 7zip used to be here as "the CLI fallback for formats libarchive
+        # can't handle". There is no such fallback: extractWithLibarchive is
+        # the only extraction path in the file manager, and "7z" appears in the
+        # source three times, every one of them as a file extension in an icon
+        # table. Measured before removing it — bsdtar, which is libarchive's
+        # own front end, lists and extracts a .7z here on its own, and this
+        # build carries zlib, lzma, bz2, lz4 and zstd.
+        udisks2 gvfs ntfs-3g libarchive
         # Desktop plumbing every DE ships: XDG user directories, Qt platform
         # theming (this repo already ships qt5ct/qt6ct configs), printing.
         xdg-user-dirs qt5ct qt6ct cups

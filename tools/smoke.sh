@@ -26,6 +26,20 @@
 #   shell-boot      The shell actually starts. Only when there is a Wayland
 #                   session to start it in; skipped otherwise.
 #
+# And one that is deliberately NOT in the default run:
+#
+#   vendor-updates  Asks each vendored library's upstream whether there is a
+#                   newer release than the one in src/third_party. It reaches
+#                   the network, which everything above refuses to do — this
+#                   runs before every commit and must stay fast and offline —
+#                   so it has to be asked for by name:
+#
+#                       tools/smoke.sh vendor-updates
+#
+#                   Worth running now and then, and worth running deliberately
+#                   for libvterm, which parses untrusted input and no longer
+#                   gets the distribution's security updates.
+#
 # Usage: tools/smoke.sh [check ...]     (default: all)
 # Exit status is the number of failed checks.
 
@@ -431,8 +445,96 @@ check_shell_boot() {
     else pass "the shell starts and stays up with no errors"; fi
 }
 
+# ── vendor-updates ───────────────────────────────────────────────────────────
+check_vendor_updates() {
+    head_ "vendor-updates"
+    python3 - "$REPO" <<'PY_VENDOR'
+import json, os, re, sys, urllib.error, urllib.request
+
+repo = sys.argv[1]
+
+# The pinned version is read from each library's own README, which is where it
+# is already recorded and has to be updated by hand anyway — one source of
+# truth rather than a second list that can drift from it. How to ask upstream
+# is the checker's business, so it lives here.
+SOURCES = {
+    "sqlite": (
+        "https://sqlite.org/download.html",
+        # The page carries a machine-readable manifest in a comment:
+        #   PRODUCT,3.53.4,2026/sqlite-amalgamation-3530400.zip,...
+        lambda t: max(re.findall(r"PRODUCT,([0-9.]+),[^,]*amalgamation", t),
+                      key=_key, default=None),
+    ),
+    "nlohmann": (
+        "https://api.github.com/repos/nlohmann/json/releases/latest",
+        lambda t: json.loads(t).get("tag_name", "").lstrip("v") or None,
+    ),
+    "libvterm": (
+        "https://www.leonerd.org.uk/code/libvterm/",
+        lambda t: max(re.findall(r"libvterm-([0-9.]+)\.tar\.gz", t),
+                      key=_key, default=None),
+    ),
+}
+
+
+def _key(v):
+    return [int(p) for p in v.split(".") if p.isdigit()]
+
+
+def pinned(name):
+    path = os.path.join(repo, "src/third_party", name, "README.md")
+    try:
+        m = re.search(r"^\* Version: \*\*([0-9.]+)\*\*", open(path, encoding="utf-8").read(),
+                      re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+behind, unknown, current = [], [], []
+for name, (url, extract) in sorted(SOURCES.items()):
+    have = pinned(name)
+    if not have:
+        unknown.append(f"{name}: no `* Version: **x.y.z**` line in its README")
+        continue
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "b1air-smoke"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            latest = extract(r.read().decode("utf-8", "replace"))
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError) as e:
+        unknown.append(f"{name}: could not ask upstream ({type(e).__name__})")
+        continue
+
+    if not latest:
+        unknown.append(f"{name}: upstream page did not name a version")
+    elif _key(latest) > _key(have):
+        behind.append(f"{name}: carrying {have}, upstream has {latest}")
+    else:
+        current.append(f"{name} {have}")
+
+for line in behind:
+    print("      " + line)
+for line in unknown:
+    print("      " + line)
+if current:
+    print("      current: " + ", ".join(current))
+
+# Being behind is news, not a failure: it is a decision for whoever reads it,
+# and a build that stops because someone else made a release is a build that
+# gets ignored. Not being able to ask at all is not news either — this check is
+# expected to be run without a network sometimes.
+sys.exit(0)
+PY_VENDOR
+    # shellcheck disable=SC2181
+    if [[ $? -eq 0 ]]; then pass "asked upstream about every vendored library"
+    else fail "could not check the vendored libraries"; fi
+}
+
 # ── driver ───────────────────────────────────────────────────────────────────
 ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets daemon_cli shell_boot)
+
+# Runnable by name, absent from the default run: it needs the network.
+EXTRA=(vendor_updates)
 
 to_run=()
 if (( $# == 0 )); then
@@ -445,7 +547,7 @@ for c in "${to_run[@]}"; do
     if declare -F "check_$c" >/dev/null; then
         "check_$c"
     else
-        printf '\nunknown check: %s (have: %s)\n' "$c" "${ALL[*]}"
+        printf '\nunknown check: %s (have: %s, plus %s)\n' "$c" "${ALL[*]}" "${EXTRA[*]}"
         fail_count=$((fail_count + 1))
     fi
 done

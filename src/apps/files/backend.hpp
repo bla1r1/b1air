@@ -25,12 +25,10 @@ class FileManagerBackend : public QObject {
     Q_PROPERTY(QString viewMode READ viewMode WRITE setViewMode NOTIFY viewModeChanged)
     Q_PROPERTY(QString sortField READ sortField WRITE setSortField NOTIFY sortChanged)
     Q_PROPERTY(bool sortAscending READ sortAscending WRITE setSortAscending NOTIFY sortChanged)
-    Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantList breadcrumbs READ breadcrumbs NOTIFY currentPathChanged)
     Q_PROPERTY(QVariantList places READ places CONSTANT)
     Q_PROPERTY(QString diskFreeSpace READ diskFreeSpace NOTIFY diskInfoChanged)
     Q_PROPERTY(QString diskTotalSpace READ diskTotalSpace NOTIFY diskInfoChanged)
-    Q_PROPERTY(int itemCount READ itemCount NOTIFY itemsChanged)
 
 public:
     explicit FileManagerBackend(QObject* parent = nullptr);
@@ -62,12 +60,10 @@ public:
     bool sortAscending() const;
     void setSortAscending(bool asc);
 
-    QVariantList items() const;
     QVariantList breadcrumbs() const;
     QVariantList places() const;
     QString diskFreeSpace() const;
     QString diskTotalSpace() const;
-    int itemCount() const;
 
 public slots:
     void refresh();
@@ -98,15 +94,11 @@ signals:
     void filterQueryChanged();
     void viewModeChanged();
     void sortChanged();
-    void itemsChanged();
     void diskInfoChanged();
     void errorOccurred(const QString& message);
 
 private:
-    void loadDirectory();
     QString formatSize(qint64 bytes) const;
-    QString getIconGlyph(const QFileInfo& fi) const;
-    QString getIconColor(const QFileInfo& fi) const;
     QString uniqueExtractDir(const QFileInfo& archive) const;
     bool extractWithLibarchive(const QString& archivePath, const QString& destDir, QString* error);
 
@@ -118,7 +110,6 @@ private:
     QString m_viewMode;
     QString m_sortField;
     bool m_sortAscending;
-    QVariantList m_items;
 };
 
 } // namespace b1air
