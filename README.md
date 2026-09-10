@@ -186,7 +186,10 @@ DotsFiles/
 
 ## Roadmap
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone breakdowns (M0 through M14) and upcoming feature specifications.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md). It opens with what is next and in
+what order, what was dropped and why, and the corrections from an audit of the
+completed milestones — the `[x]` marks say a thing was built, never that it
+works.
 
 ---
 

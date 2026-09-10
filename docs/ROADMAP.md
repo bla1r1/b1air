@@ -3,12 +3,89 @@
 Status:
 
 - `[x]`: completed.
-- `initial`: usable first implementation.
-- `partial`: incomplete or limited implementation.
-- `planned`: not implemented.
-- `deferred`: intentionally postponed.
+- `[ ]`: not implemented.
+- `[~]`: **dropped** — decided against, with the reason beside it. Kept in the
+  file rather than deleted so the same idea does not come back as a new one.
+- `initial` / `partial` / `deferred`: as before.
 
-`b1nix` is a primary target of this Desktop Environment: each subsystem is built to run standalone without systemd dependencies (supporting seatd, runit, and native b1nix userspace).
+`b1nix` is a primary target of this Desktop Environment: each subsystem is built
+to run standalone without systemd dependencies (supporting seatd, runit, and
+native b1nix userspace).
+
+## How to read the done column
+
+It is mostly right. It was audited in September 2026 by checking, for every
+completed milestone, that the keybinding exists in `conf.d/keybinds.conf`, that
+the `b1air-daemon` verb exists in `main.cpp`, and that whatever external program
+the verb shells out to is in the installer's package list. Those three held for
+M1 through M3 and for most of M4.
+
+What it does **not** tell you is whether a feature does anything once pressed.
+That is a different question, and the answer has repeatedly been no: settings
+pages that stored values nothing read, six daemon functions that parsed sway's
+pretty-printed JSON by substring and so matched nothing, a privilege dialog that
+could not build, a clipboard that recorded nothing. Treat `[x]` as "it was
+built", never as "it works".
+
+### Corrections
+
+- **Waybar is not part of this project.** It is not in the installer's package
+  list and the bar has been `shell/qml/TopBar.qml` for a long time. M0's "Waybar
+  indicators" and M4's "Privacy Dots in Waybar" describe a component that does
+  not exist, and M9 plans another one. References to it also survive in
+  `settings_manager.cpp`, `system_control.cpp`, `settings.json`,
+  `update-dotfiles.sh` and a comment in `TopBar.qml`; those want removing.
+- **M4's Timeshift snapshot** is marked done. `timeshift` is not installed —
+  `snapper` is — and until recently that code reported "Restore Point Created"
+  whichever of them was missing. It reports honestly now, but the line promises
+  more than exists.
+- **M5's "Remote Desktop quick-toggle tile (`Super+C`)"** is unbuilt and the
+  shortcut it names is already the Control Center.
+
+## What is next
+
+In order. These are the ones worth building, and the reason is written down so
+that a future reader can disagree with the reason rather than guess at it.
+
+1. **Touchpad gestures** (M8) — three- and four-finger. The largest daily gap on
+   a laptop desktop, and the one thing every other environment has.
+2. **Per-monitor bar content** (M7) — see below; two monitors currently get two
+   identical bars.
+3. **Fractional scaling and dock/undock display profiles** (M7) — this is a
+   ThinkPad that meets external monitors.
+4. **Drop-down terminal** (M9) — small, and used every day.
+5. **Scheduled Do Not Disturb** (M14) — the focus timer it belongs to is built.
+6. **Remote session indicator and Control Center tile** (M5) — the WayVNC
+   backend is done; this is the missing front.
+7. **Keyboard shortcut editor** (M6) — the Keyboard settings page is already
+   half of it.
+8. **Per-workspace and per-monitor wallpaper** (M7) — cheap and visible.
+
+Before any of them: delete the Waybar remnants and fix the three lines above.
+A roadmap whose done column disagrees with the tree is worse than no roadmap,
+because it is the one people make decisions from.
+
+## What was cut, and why
+
+Dropped items are marked `[~]` in their milestone below. The reasoning, in one
+place:
+
+- **Anything that reimplements a good existing tool.** The Wine/Proton prefix
+  manager, the in-game FPS overlay, the checksum calculator and the disk
+  treemap are Steam, MangoHud, `sha256sum` and `ncdu`. A desktop environment
+  that ships its own worse copy of each has bought a maintenance burden and
+  sold nothing.
+- **Graphical front ends to files where a mistake breaks the boot.** The
+  environment-variable editor and the system services manager.
+- **Security theatre.** USB Guard and captive-portal detection are real
+  measures in a fleet and a ritual on one personal laptop.
+- **Novelty.** Mechanical keyboard sound simulation, song lyrics.
+- **Overlap with what already exists.** The "Glance Layer canvas widgets" are
+  the Control Center and calendar panels, which are now arrangeable and
+  resizable in place.
+
+Accessibility is not novelty and stays: the colour-blindness shaders and the
+large-text preset in M13 are kept.
 
 ## M0: Core Foundation and Session Management
 
@@ -74,7 +151,8 @@ Status:
 ## M6: Desktop Widgets, Personalization, and Smart UI
 
 - [ ] Add desktop Sticky Notes and scratchpad memos (`Super+Shift+N`) with Markdown formatting.
-- [ ] Add desktop Glance Layer canvas widgets (`Super+G`) for clocks, weather, and circular hardware dials.
+- [~] Add desktop Glance Layer canvas widgets (`Super+G`) for clocks, weather, and circular hardware dials.
+      **Cut:** The Control Center and calendar panels are this, and are now arrangeable in place.
 - [ ] Add visual GUI Keyboard Shortcuts editor in Settings for modifying keybindings without text editing.
 - [ ] Add dynamic solar day/night auto-theming engine for sunrise/sunset wallpaper and palette switching.
 - [ ] Add live rolling hardware sensor and temperature telemetry graph overlay.
@@ -86,6 +164,16 @@ Status:
 - [ ] Add external monitor hardware brightness control via DDC/CI in Control Center slider.
 - [ ] Add ICC/ICM color profile calibration importer in Display Settings.
 - [ ] Add distinct per-workspace and per-monitor wallpaper assignment engine.
+- [ ] Add per-monitor top bar content. The bar itself is already on every screen
+      — `Main.qml` instantiates it through `Variants` over `Quickshell.screens`,
+      which was fixed after a two-monitor desktop turned out to have a bar on
+      one of them — but nothing in `TopBar.qml` reads `topBar.screen`, so two or
+      three monitors get two or three *identical* bars: the same tray, the same
+      clock, and the same workspace strip with the same pill lit, because
+      `focused` is global. Wanted: a primary bar that keeps the tray, the clock
+      and the system island, secondary bars reduced to workspaces and the
+      window title, and a workspace strip that shows the workspaces on *its*
+      output.
 - [ ] Add virtual headless display creation for tablet sidecar streaming (Moonlight / Sunshine).
 
 ## M8: Advanced Input, Touchpad Gestures, and Keyboard Physics
@@ -102,43 +190,56 @@ Status:
 - [ ] Add global file content search (Ripgrep integration in Spotlight via `find:` / `grep:` prefix).
 - [ ] Add open network ports and listening process inspector in Settings with 1-click process kill.
 - [ ] Add Git repository status telemetry widget in Waybar and Spotlight.
-- [ ] Add Environment Variables (`PATH`, `EDITOR`, `XDG_*`) GUI editor in Settings.
-- [ ] Add System Services manager (systemd/runit/b1nix) in Settings Maintenance.
+- [~] Add Environment Variables (`PATH`, `EDITOR`, `XDG_*`) GUI editor in Settings.
+      **Cut:** A GUI over a file where a typo breaks the login.
+- [~] Add System Services manager (systemd/runit/b1nix) in Settings Maintenance.
+      **Cut:** Same, with more at stake.
 
 ## M10: Gaming, Graphics, and Low-Latency Performance
 
-- [ ] Add Variable Refresh Rate (VRR / G-Sync / FreeSync) toggle per output in Display Settings.
-- [ ] Add direct scanout compositor bypass for fullscreen games to achieve 0ms compositor overhead.
-- [ ] Add in-game telemetry HUD overlay (`Super+Shift+F`) displaying FPS, frametimes, GPU/CPU load, and temps.
-- [ ] Add connected gamepad controller battery level indicator in Waybar (DualSense, Xbox, 8BitDo).
-- [ ] Add Wine and Proton bottle prefix manager in App Launcher for running Windows executables.
+- [~] Add Variable Refresh Rate (VRR / G-Sync / FreeSync) toggle per output in Display Settings.
+      **Cut:** One line of sway output config; a GUI for it is not the gap.
+- [~] Add direct scanout compositor bypass for fullscreen games to achieve 0ms compositor overhead.
+      **Cut:** A compositor concern, and swayfx's, not this daemon's.
+- [~] Add in-game telemetry HUD overlay (`Super+Shift+F`) displaying FPS, frametimes, GPU/CPU load, and temps.
+      **Cut:** MangoHud exists and is one line in a launch command.
+- [~] Add connected gamepad controller battery level indicator in Waybar (DualSense, Xbox, 8BitDo).
+      **Cut:** The bar is not where a controller battery is looked at.
+- [~] Add Wine and Proton bottle prefix manager in App Launcher for running Windows executables.
+      **Cut:** Steam and Lutris do this, and better.
 
 ## M11: File Management, Storage Analytics, and Archive Suite
 
 - [ ] Add batch file renamer utility (`Super+Shift+R`) with regex, numbering, and case transformation.
-- [ ] Add interactive disk space sunburst / treemap visualizer in Settings.
-- [ ] Add file checksum hash calculator and clipboard verifier (MD5, SHA256).
+- [~] Add interactive disk space sunburst / treemap visualizer in Settings.
+      **Cut:** `ncdu` and `baobab`.
+- [~] Add file checksum hash calculator and clipboard verifier (MD5, SHA256).
+      **Cut:** `sha256sum` and `sha256sum -c`.
 - [ ] Add native archive compression and extraction popup for `.zip`, `.tar.gz`, `.tar.zst`, and `.7z`.
 - [ ] Add scheduled Trash auto-purge (>30 days) and 1-click deleted file restore.
 
 ## M12: Network, VPN, Firewall, and Security Hardening
 
 - [ ] Add 1-click WireGuard and OpenVPN quick tiles in Control Center with ping and killswitch telemetry.
-- [ ] Add automatic Captive Portal browser login popup detection for public Wi-Fi networks.
+- [~] Add automatic Captive Portal browser login popup detection for public Wi-Fi networks.
+      **Cut:** The browser already does this.
 - [ ] Add 1-click Wi-Fi Hotspot sharing in Network Settings.
 - [ ] Add graphical Firewall (UFW / nftables) status monitor and port management in Security Settings.
-- [ ] Add USB Guard protection preventing unauthorized HID keyboard injection when locked.
+- [~] Add USB Guard protection preventing unauthorized HID keyboard injection when locked.
+      **Cut:** A fleet measure; on one laptop it is a ritual.
 
 ## M13: Wellness, Ergonomics, and Accessibility
 
 - [ ] Add 20-20-20 eye strain break reminder notification and subtle screen dim.
 - [ ] Add accessibility color blindness shaders (Protanopia, Deuteranopia, Tritanopia) and Grayscale digital detox mode.
 - [ ] Add high contrast and large text 130% accessibility scaling preset.
-- [ ] Add typing mechanical keyboard sound feedback simulation toggle.
+- [~] Add typing mechanical keyboard sound feedback simulation toggle.
+      **Cut:** Novelty.
 
 ## M14: Notification Intelligence and Focus Ecosystem
 
 - [ ] Add scheduled Do Not Disturb / Focus Hours automation (e.g. night hours or calendar meetings).
 - [ ] Add granular per-application notification priority rules and channel filtering.
 - [ ] Add 7-day searchable notification history archive.
-- [ ] Add synchronized LRC song lyrics display in the expanded media player.
+- [~] Add synchronized LRC song lyrics display in the expanded media player.
+      **Cut:** Novelty.
