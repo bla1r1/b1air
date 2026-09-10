@@ -3003,9 +3003,30 @@ std::string SystemControl::dotfiles_status_json() {
     std::string remote_message = exec_cmd("git -C " + shell_quote(repo) + " log -1 --pretty=%s " +
                                           shell_quote(remote_ref) + " 2>/dev/null");
 
-    bool update_available = (!remote_hash.empty() && local_hash != remote_hash);
+    // `local_hash != remote_hash` cannot tell "there is something to pull" from
+    // "there is something to push", and the two are opposite answers. A
+    // checkout with local commits not yet pushed — the normal state of this
+    // repository between a commit and a push — reported an update as available
+    // and drew the arrow backwards, from the newer local commit to the older
+    // remote one, offering to "update" to a revision that predates what is
+    // installed. Measured at twelve commits ahead and none behind: it said
+    // update_available true.
+    //
+    // --left-right --count over a symmetric difference answers both at once:
+    // the left number is what the remote has and this checkout does not, the
+    // right number is the reverse. Only the left one is an update.
+    long behind = 0, ahead = 0;
+    {
+        const std::string counts = exec_cmd("git -C " + shell_quote(repo) +
+                                            " rev-list --left-right --count " +
+                                            shell_quote(remote_ref + "...HEAD") + " 2>/dev/null");
+        std::istringstream in(counts);
+        in >> behind >> ahead;
+    }
 
-    return "{\"ok\":true,\"repo_dir\":\"" + json_escape(repo) + "\",\"branch\":\"" + json_escape(branch) + "\",\"local_hash\":\"" + local_hash + "\",\"remote_hash\":\"" + remote_hash + "\",\"remote_ref\":\"" + json_escape(remote_ref) + "\",\"remote_message\":\"" + json_escape(remote_message) + "\",\"update_available\":" + (update_available ? "true" : "false") + "}";
+    bool update_available = (!remote_hash.empty() && behind > 0);
+
+    return "{\"ok\":true,\"repo_dir\":\"" + json_escape(repo) + "\",\"branch\":\"" + json_escape(branch) + "\",\"local_hash\":\"" + local_hash + "\",\"remote_hash\":\"" + remote_hash + "\",\"remote_ref\":\"" + json_escape(remote_ref) + "\",\"remote_message\":\"" + json_escape(remote_message) + "\",\"behind\":" + std::to_string(behind) + ",\"ahead\":" + std::to_string(ahead) + ",\"update_available\":" + (update_available ? "true" : "false") + "}";
 }
 
 bool SystemControl::dotfiles_sync() {
