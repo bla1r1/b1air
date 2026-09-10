@@ -4,7 +4,10 @@
 
 if status is-interactive
     # Greeting
-    set -g fish_greeting
+    # The greeting the old prompt opened with. Emptied at some point during the
+    # move off tide; fastfetch below prints over it either way, but it is what
+    # a shell that says "Welcome back" says.
+    set -g fish_greeting "Welcome back, $USER 🐟"
 
     # ── Tokyo Night Syntax Highlighting ──────────────────────────────────────
     set -g fish_color_normal c0caf5

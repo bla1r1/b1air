@@ -26,9 +26,15 @@ $time\
 $line_break\
 $character"""
 
-# Move the rest of the prompt to the right
+# The connector across to the right-hand side.
+#
+# A space here meant the right half was joined to the left by nothing, and on a
+# wide terminal the time floated alone with a hand's width of gap. The old
+# prompt drew a dotted rule across it in the dim frame colour, which is what
+# made two halves read as one line.
 [fill]
-symbol = " "
+symbol = "·"
+style = "#3b4261"
 
 # OS Icon
 [os]
@@ -44,29 +50,43 @@ Linux = "󰌽 "
 Macos = "󰀵 "
 
 # Directory
+# The whole path, and a folder to hang it on.
+#
+# Truncating to three segments turned ~/Documents/GitHub/DotsFiles into
+# "…/DotsFiles" — the ellipsis says a path was cut without saying what from,
+# and the tilde that tells you it is under home went with it. The old prompt
+# showed the path.
 [directory]
 style = "bold #7dcfff"
 format = "[$path]($style) "
-truncation_length = 3
-truncation_symbol = "…/"
+truncate_to_repo = false
+truncation_length = 0
+home_symbol = "~"
 
 # Git
 [git_branch]
 symbol = " "
 style = "bold #bb9af7"
-format = "on [$symbol$branch]($style) "
+# No "on" in front of the branch. The old prompt put the branch straight after
+# the path, and the word was three characters of grammar in a line that is
+# otherwise all symbols.
+format = "[$symbol$branch]($style) "
 
 [git_status]
 style = "bold #f7768e"
 format = "([$all_status$ahead_behind]($style) )"
-conflicted = "󰞇 "
-ahead = "⇡${count}"
-behind = "⇣${count}"
-diverged = "⇕⇡${ahead_count}⇣${behind_count}"
-untracked = "󰋗 "
-stashed = " "
-modified = " "
-staged = "󰄬 "
+# With their counts. Collapsed to bare glyphs these said only *that* something
+# was modified or untracked, never how much — "[!?↓]" against the old prompt's
+# "↓12 !43 ?1", which is the difference between knowing there is work in the
+# tree and knowing how much of it there is.
+conflicted = "󰞇 ${count} "
+ahead = "↑${count} "
+behind = "↓${count} "
+diverged = "↕↑${ahead_count}↓${behind_count} "
+untracked = "?${count} "
+stashed = "*${count} "
+modified = "!${count} "
+staged = "+${count} "
 renamed = "󰁔 "
 deleted = " "
 
@@ -100,14 +120,16 @@ format = "via [$symbol$context]($style) "
 [cmd_duration]
 min_time = 2_000
 style = "bold #e0af68"
-format = "took [$duration]($style) "
+format = "  took [$duration]($style)"
 
 # Time
+# 12-hour with seconds, which is what the old prompt showed, and no "at" in
+# front of it: the dotted rule already says the line has a right-hand side.
 [time]
 disabled = false
-time_format = "%R"
-style = "bold #565f89"
-format = "at [$time]($style)"
+time_format = "%I:%M:%S %p"
+style = "#565f89"
+format = "  [$time]($style)"
 
 # Prompt Characters
 [character]
