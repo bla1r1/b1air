@@ -2,6 +2,11 @@
 #include <algorithm>
 #include <QUrl>
 #include <QDesktopServices>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -585,6 +590,59 @@ bool FileManagerBackend::renameItem(const QString& oldPath, const QString& newNa
         return true;
     }
     return false;
+}
+
+static QString bookmarksPath() {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                        + "/b1air";
+    QDir().mkpath(dir);
+    return dir + "/files_bookmarks.json";
+}
+
+QVariantList FileManagerBackend::loadBookmarks() const {
+    QFile f(bookmarksPath());
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    if (!doc.isArray())
+        return {};
+
+    QVariantList out;
+    for (const QJsonValue& v : doc.array()) {
+        const QJsonObject o = v.toObject();
+        const QString path = o.value("path").toString();
+        // A bookmark to a directory that is no longer there is a row that
+        // silently does nothing when clicked, which is how the shipped
+        // ~/DotsFiles entry behaved on every machine that kept its checkout
+        // somewhere else.
+        if (path.isEmpty() || !QFileInfo::exists(path))
+            continue;
+        QVariantMap m;
+        m["name"] = o.value("name").toString(QFileInfo(path).fileName());
+        m["path"] = path;
+        m["icon"] = o.value("icon").toString(QStringLiteral("\uF01BF"));
+        out.append(m);
+    }
+    return out;
+}
+
+void FileManagerBackend::saveBookmarks(const QVariantList& bookmarks) const {
+    QJsonArray arr;
+    for (const QVariant& v : bookmarks) {
+        const QVariantMap m = v.toMap();
+        QJsonObject o;
+        o["name"] = m.value("name").toString();
+        o["path"] = m.value("path").toString();
+        o["icon"] = m.value("icon").toString();
+        arr.append(o);
+    }
+
+    QSaveFile f(bookmarksPath());
+    if (!f.open(QIODevice::WriteOnly))
+        return;
+    f.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+    f.commit();
 }
 
 } // namespace b1air

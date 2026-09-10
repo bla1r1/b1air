@@ -82,13 +82,25 @@ ApplicationWindow {
             // ══════════════════════════════════════════════════════════════════
             // GITHUB DESKTOP TOP TOOLBAR (42px)
             // ══════════════════════════════════════════════════════════════════
+            // A full border on a bar that spans the window draws its left and
+            // right edges directly on top of the frame's own, and its top edge
+            // on nothing at all. What separates a bar from what is under it is
+            // one line, so that is what it has. The same correction is made to
+            // every header inside the panels below — the window used to be a
+            // grid of hairline boxes because each one drew four sides.
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(42)
                 color: window.colHeader
-                border.color: window.colBorder
-                border.width: 1
                 z: 20
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: window.colBorder
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -336,15 +348,23 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    spacing: 0
+                    anchors.margins: Design.s(Design.space.md)
+                    spacing: Design.s(Design.space.md)
 
                     // ── LEFT SIDEBAR (Changes & History) ──────────────────────
+                    // The two panels were butted against each other and against
+                    // the window edge with square corners, so this was the only
+                    // surface in the suite that did not look like the rest of
+                    // it: Files and the monitor are rounded cards with room
+                    // around them.
                     Rectangle {
                         Layout.preferredWidth: Design.s(320)
                         Layout.fillHeight: true
+                        radius: Design.s(Design.radius.card)
                         color: window.colDark
                         border.color: window.colBorder
                         border.width: 1
+                        clip: true
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -355,8 +375,14 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 height: Design.s(36)
                                 color: Design.tint(Design.ground, 0.8)
-                                border.color: window.colBorder
-                                border.width: 1
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 1
+                                    color: window.colBorder
+                                }
 
                                 RowLayout {
                                     anchors.fill: parent
@@ -425,8 +451,14 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         height: Design.s(28)
                                         color: Design.tint(Design.ground, 0.40)
-                                        border.color: window.colBorder
-                                        border.width: 1
+
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.bottom: parent.bottom
+                                            height: 1
+                                            color: window.colBorder
+                                        }
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -554,12 +586,20 @@ ApplicationWindow {
                                     }
 
                                     // Bottom GitHub Desktop Commit Box
+                                    // The commit box is the foot of the panel,
+                                    // so its separator is on top of it.
                                     Rectangle {
                                         Layout.fillWidth: true
                                         height: Design.s(130)
                                         color: Design.tint(Design.ground, 0.90)
-                                        border.color: window.colBorder
-                                        border.width: 1
+
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.top: parent.top
+                                            height: 1
+                                            color: window.colBorder
+                                        }
 
                                         ColumnLayout {
                                             anchors.fill: parent
@@ -572,11 +612,21 @@ ApplicationWindow {
                                                 height: Design.s(28)
                                                 radius: Design.s(4)
                                                 color: window.colBg
+                                                opacity: window.hasRepo ? 1.0 : 0.5
                                                 border.color: sumInput.activeFocus ? window.colBlue : window.colBorder
                                                 border.width: 1
 
                                                 TextInput {
                                                     id: sumInput
+                                                    // The commit button was
+                                                    // gated on having a
+                                                    // repository and these two
+                                                    // fields were not, so with
+                                                    // none open you could type a
+                                                    // whole commit message into
+                                                    // a box that had nowhere to
+                                                    // send it.
+                                                    enabled: window.hasRepo
                                                     anchors.fill: parent
                                                     anchors.margins: Design.s(6)
                                                     font.family: Design.font.sans
@@ -602,11 +652,13 @@ ApplicationWindow {
                                                 Layout.fillHeight: true
                                                 radius: Design.s(4)
                                                 color: window.colBg
+                                                opacity: window.hasRepo ? 1.0 : 0.5
                                                 border.color: descInput.activeFocus ? window.colBlue : window.colBorder
                                                 border.width: 1
 
                                                 TextArea {
                                                     id: descInput
+                                                    enabled: window.hasRepo
                                                     anchors.fill: parent
                                                     anchors.margins: Design.s(4)
                                                     font.family: Design.font.sans
@@ -730,19 +782,37 @@ ApplicationWindow {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: window.colBg
+                        radius: Design.s(Design.radius.card)
+                        color: window.colDark
+                        border.color: window.colBorder
+                        border.width: 1
+                        clip: true
 
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 0
 
                             // Diff File Header Bar
+                            // Names the file being shown, and nothing else. It
+                            // used to state the panel's empty condition too —
+                            // "Open a repository" — directly above the centred
+                            // empty state reading "No Git Repository Open", so
+                            // the same sentence was on screen twice in two
+                            // wordings. One message, in the middle, where there
+                            // is room for it.
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: Design.s(36)
-                                color: window.colDark
-                                border.color: window.colBorder
-                                border.width: 1
+                                visible: GitBackend.selectedFile !== ""
+                                color: Design.tint(Design.ground, 0.8)
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 1
+                                    color: window.colBorder
+                                }
 
                                 RowLayout {
                                     anchors.fill: parent
@@ -758,7 +828,7 @@ ApplicationWindow {
                                     }
 
                                     Text {
-                                        text: GitBackend.selectedFile || (GitBackend.isRepo ? "Working tree clean" : "Open a repository")
+                                        text: GitBackend.selectedFile
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(12)
                                         font.bold: true

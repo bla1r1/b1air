@@ -405,8 +405,25 @@ QString NotesBackend::renderMarkdownToHtml(const QString& markdown, const QVaria
     html.replace(QRegularExpression("(^|\\s)#([a-zA-Z0-9_-]+)", QRegularExpression::MultilineOption),
                  "\\1<span style='color:" + accent + ";font-weight:600;'>#\\2</span>");
 
-    // Newlines to <br>
+    // Newlines to <br>, then back out of the ones that are not line breaks.
+    //
+    // Every rule above turns a line into a *block* element — <p>, <h1>, <li>,
+    // <pre> — and a block already ends its own line and carries its own
+    // margins. Replacing the newline after one with <br/> stacked a whole
+    // empty line box on top of those margins, and a blank line in the markdown
+    // stacked a second: two consecutive checkbox items rendered 67px apart in
+    // a 13px font. The preview looked double-spaced against an editor pane
+    // showing the same lines adjacent.
+    //
+    // A newline between two pieces of plain text is still a line break, which
+    // is why this is a subtraction rather than dropping the rule.
     html.replace("\n", "<br/>");
+    static const QRegularExpression afterBlock(
+        "(</(?:p|h1|h2|h3|li|pre|blockquote)>)(?:<br/>)+");
+    static const QRegularExpression beforeBlock(
+        "(?:<br/>)+(<(?:p|h1|h2|h3|li|pre|blockquote)[ >])");
+    html.replace(afterBlock, "\\1");
+    html.replace(beforeBlock, "\\1");
 
     return "<div style='font-family:sans-serif;color:" + body + ";font-size:13px;line-height:1.6;'>"
            + html + "</div>";

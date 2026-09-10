@@ -84,6 +84,13 @@ public slots:
     bool deleteItem(const QString& path);
     bool renameItem(const QString& oldPath, const QString& newName);
 
+    // Bookmarks were a plain QML array with a hard-coded first entry and no
+    // store of any kind: the "+" in the sidebar appended to it, the row
+    // appeared, and closing the window threw it away. Kept beside the rest of
+    // this suite's per-app state in ~/.config/b1air.
+    QVariantList loadBookmarks() const;
+    void saveBookmarks(const QVariantList& bookmarks) const;
+
 signals:
     void currentPathChanged();
     void historyChanged();

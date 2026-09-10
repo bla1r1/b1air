@@ -697,7 +697,13 @@ Window {
                     spacing: Design.s(Design.space.sm)
 
                     Text { text: "PID"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
-                    Text { text: "PROCESS NAME"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.fillWidth: true }
+                    Text { text: "PROCESS NAME"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
+                    // The name column was the only one with fillWidth, so it
+                    // took every spare pixel: on a 1280px window it ran 950px
+                    // wide for names that need two hundred, and the numbers
+                    // anyone actually reads sat crushed against the far edge
+                    // with a void between. The slack carries the reading now.
+                    Text { text: "LOAD"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.fillWidth: true }
                     Text { text: "USER"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
                     Text { text: "% CPU"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
                     Text { text: "% MEM"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
@@ -736,7 +742,13 @@ Window {
                         }
 
                         RowLayout {
-                            Layout.fillWidth: true
+                            // Explicitly false: Layout.fillWidth defaults to
+                            // true for a nested layout and false for everything
+                            // else, so this row went on taking the whole slack
+                            // and Layout.preferredWidth alone did nothing — the
+                            // bar beside it came out two pixels wide.
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: Design.s(300)
                             spacing: Design.s(8)
 
                             Text {
@@ -754,6 +766,48 @@ Window {
                                 color: Design.text
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
+                            }
+                        }
+
+                        // What the empty middle of the table is for. A column of
+                        // numbers has to be read one row at a time; a bar of the
+                        // same numbers can be scanned, which is the whole reason
+                        // to open a process list. CPU is the filled bar and
+                        // memory the outline behind it, both on the same scale,
+                        // so a process heavy on one and light on the other says
+                        // so at a glance.
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(10)
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width
+                                height: Design.s(6)
+                                radius: height / 2
+                                color: Design.tint(Design.text, 0.06)
+                            }
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                // Clamped: a multi-core machine reports well
+                                // over 100% for one process, and a bar wider
+                                // than its track draws outside the column.
+                                width: parent.width * Math.min(1, model.mem / 100)
+                                height: Design.s(6)
+                                radius: height / 2
+                                color: "transparent"
+                                border.color: Design.tint(Design.mauve, 0.55)
+                                border.width: 1
+                            }
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width * Math.min(1, model.cpu / 100)
+                                height: Design.s(6)
+                                radius: height / 2
+                                color: model.cpu > 15.0 ? Design.pink
+                                     : (model.cpu > 5.0 ? Design.peach : Design.tint(Design.sapphire, 0.75))
                             }
                         }
 

@@ -18,6 +18,26 @@ ApplicationWindow {
 
     readonly property bool isNative: typeof FilesBackend !== "undefined"
     readonly property string homeDir: isNative ? FilesBackend.homePath : "/home/dev"
+
+    // Where this desktop's own checkout actually is. install.sh records it and
+    // SystemControl::find_dotfiles_repo() reads the same file, which is what
+    // stopped the daemon guessing at a handful of paths — one of them a
+    // specific developer's. Read the same way Ui/Design reads the active
+    // theme: plain Qt over XMLHttpRequest, which is what the session sets
+    // QML_XHR_ALLOW_FILE_READ for. Empty when there is no such file, and the
+    // sidebar entry is then simply absent rather than pointing nowhere.
+    readonly property string dotfilesRepo: {
+        if (!window.isNative)
+            return "";
+        const xhr = new XMLHttpRequest();
+        try {
+            xhr.open("GET", "file://" + window.homeDir + "/.local/state/b1air/dotfiles-repo", false);
+            xhr.send();
+            if (xhr.status === 0 || xhr.status === 200)
+                return (xhr.responseText || "").trim();
+        } catch (e) {}
+        return "";
+    }
     property string currentPath: isNative ? FilesBackend.currentPath : homeDir
     property string currentPathDisplay: currentPath.startsWith(homeDir) 
         ? ("~" + currentPath.substring(homeDir.length)) 
@@ -33,9 +53,14 @@ ApplicationWindow {
     property string selectedPath: ""
 
     // User Bookmarks
-    property var customBookmarks: [
-        { name: "DotsFiles", path: homeDir + "/DotsFiles", icon: "󰊢" }
-    ]
+    // Read from disk, not shipped. The one entry that used to be hard-coded
+    // here pointed at ~/DotsFiles, which does not exist on a machine that
+    // cloned the repository anywhere else, and the list itself was never
+    // stored: the "+" in the sidebar appended to this array, the row appeared,
+    // and closing the window lost it. loadBookmarks() also drops any entry
+    // whose directory has since gone, so a bookmark on screen is one that
+    // still leads somewhere.
+    property var customBookmarks: window.isNative ? FilesBackend.loadBookmarks() : []
 
     // A second, hand-rolled Tokyo Night palette used to live here alongside the
     // Catppuccin one in Ui/Design.qml, so this window never followed the theme.
@@ -226,12 +251,14 @@ ApplicationWindow {
         let copy = Array.from(customBookmarks);
         copy.push({ name: name, path: currentPath, icon: "󰉋" });
         customBookmarks = copy;
+        if (window.isNative) FilesBackend.saveBookmarks(copy);
     }
 
     function removeBookmark(index) {
         let copy = Array.from(customBookmarks);
         copy.splice(index, 1);
         customBookmarks = copy;
+        if (window.isNative) FilesBackend.saveBookmarks(copy);
     }
 
     // ── FolderListModel ──────────────────────────────────────────────────────
@@ -342,7 +369,15 @@ ApplicationWindow {
                         }
                     }
 
-                    // 1. QUICK JUMP (Root, Home, DotsFiles)
+                    // 1. QUICK JUMP (Root, Home, the dotfiles checkout)
+                    //
+                    // Three of the glyphs below were simply the wrong picture,
+                    // which in a sidebar of icon-and-label rows is only half
+                    // wrong — and in the viewer's unlabelled toolbar, where the
+                    // same check found a ✕ on "Zoom Out", entirely so. Root had
+                    // Home's house, Downloads pointed *up*, and Videos was the
+                    // VLC traffic cone among six generic places. Verified by
+                    // rendering the codepoints, not by trusting their names.
                     Text {
                         text: "QUICK JUMP"
                         font.family: Design.font.mono
@@ -356,9 +391,22 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: Design.s(2)
 
-                        SidebarPill { label: "Root (/)"; path: "/"; icon: "󰋜"; iconCol: window.colRed }
+                        SidebarPill { label: "Root (/)"; path: "/"; icon: "󰋊"; iconCol: window.colRed }
                         SidebarPill { label: "Home (~)"; path: window.homeDir; icon: "󰋜"; iconCol: window.colBlue }
-                        SidebarPill { label: "DotsFiles"; path: window.homeDir + "/DotsFiles"; icon: "󰊢"; iconCol: window.colCyan }
+                        SidebarPill {
+                            // Was hard-coded to ~/DotsFiles, which does not exist on a
+                            // machine that cloned the repository anywhere else — this one
+                            // keeps it under ~/Documents/GitHub — so the shortcut led to a
+                            // directory that is not there, and duplicated the bookmark
+                            // below on a machine where it happened to be right. install.sh
+                            // records the real path and the daemon reads the same file to
+                            // find the checkout; so does this.
+                            visible: window.dotfilesRepo !== ""
+                            label: window.dotfilesRepo.split("/").pop()
+                            path: window.dotfilesRepo
+                            icon: "\u{f02a2}"
+                            iconCol: window.colCyan
+                        }
                     }
 
                     // 2. PLACES
@@ -376,10 +424,10 @@ ApplicationWindow {
                         spacing: Design.s(2)
 
                         SidebarPill { label: "Documents"; path: window.homeDir + "/Documents"; icon: "󰈙"; iconCol: window.colPurple }
-                        SidebarPill { label: "Downloads"; path: window.homeDir + "/Downloads"; icon: "󰁝"; iconCol: window.colGreen }
+                        SidebarPill { label: "Downloads"; path: window.homeDir + "/Downloads"; icon: "󰁅"; iconCol: window.colGreen }
                         SidebarPill { label: "Pictures"; path: window.homeDir + "/Pictures"; icon: "󰋩"; iconCol: window.colPurple }
                         SidebarPill { label: "Music"; path: window.homeDir + "/Music"; icon: "󰎆"; iconCol: window.colOrange }
-                        SidebarPill { label: "Videos"; path: window.homeDir + "/Videos"; icon: "󰕼"; iconCol: window.colRed }
+                        SidebarPill { label: "Videos"; path: window.homeDir + "/Videos"; icon: "󰎁"; iconCol: window.colRed }
                     }
 
                     // 3. BOOKMARKS
@@ -767,8 +815,17 @@ ApplicationWindow {
                         reuseItems: true
                         anchors.fill: parent
                         anchors.margins: Design.s(14)
-                        cellWidth: Design.s(114)
-                        cellHeight: Design.s(114)
+                        // A fixed cell size ignores the window. At 1280px wide
+                        // that laid out fourteen columns of 80px around a 24px
+                        // glyph, so a file manager full of files still read as
+                        // mostly empty, and every name longer than "DotsFiles"
+                        // was elided. The floor decides how small a cell may
+                        // get; the remainder is shared out evenly so the grid
+                        // reaches the right edge instead of leaving a ragged
+                        // strip beside it.
+                        readonly property int columns: Math.max(1, Math.floor(width / Design.s(136)))
+                        cellWidth: Math.floor(width / grid.columns)
+                        cellHeight: grid.cellWidth
                         clip: true
                         visible: window.viewMode === "grid"
                         model: folderModel
@@ -776,8 +833,8 @@ ApplicationWindow {
 
                         delegate: Rectangle {
                             id: gridCard
-                            width: Design.s(104)
-                            height: Design.s(104)
+                            width: grid.cellWidth - Design.s(10)
+                            height: grid.cellHeight - Design.s(10)
                             radius: Design.s(8)
                             color: isSelected ? Design.tint(Design.accent, 0.22) : (cardHover.containsMouse ? window.colCardHover : "transparent")
                             border.color: isSelected ? window.colBlue : (cardHover.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
@@ -798,7 +855,7 @@ ApplicationWindow {
                                     Image {
                                         id: gridThumb
                                         anchors.centerIn: parent
-                                        width: Design.s(44); height: Design.s(44)
+                                        width: Design.s(60); height: Design.s(60)
                                         source: window.isImageFile(model.fileName) ? model.filePath : ""
                                         fillMode: Image.PreserveAspectFit
 
@@ -813,14 +870,14 @@ ApplicationWindow {
                                         asynchronous: true
                                         cache: true
                                         // Low resolution decoding to eliminate scroll stutter!
-                                        sourceSize: Qt.size(48, 48)
+                                        sourceSize: Qt.size(64, 64)
                                     }
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: window.getIconGlyph(model.fileName, model.fileIsDir)
                                         font.family: Design.font.mono
-                                        font.pixelSize: Design.s(34)
+                                        font.pixelSize: Design.s(46)
                                         color: window.getIconColor(model.fileName, model.fileIsDir)
                                         visible: !gridThumb.visible
                                     }
@@ -834,12 +891,22 @@ ApplicationWindow {
                                     font.bold: gridCard.isSelected
                                     color: gridCard.isSelected ? "#ffffff" : window.colFg
                                     horizontalAlignment: Text.AlignHCenter
-                                    elide: Text.ElideMiddle
+                                    // Two lines. One elided line in an 80px cell
+                                    // turned most of a real directory into
+                                    // "DotsFile…es" and "run-headl…sh".
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
                                 }
 
                                 Text {
                                     Layout.fillWidth: true
-                                    text: model.fileIsDir ? "Folder" : window.formatSize(model.fileSize)
+                                    // A folder is already drawn as a folder, so
+                                    // the word under it was a third line of type
+                                    // saying what the icon says. Files keep their
+                                    // size, which the icon cannot tell you.
+                                    visible: !model.fileIsDir
+                                    text: window.formatSize(model.fileSize)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(9)
                                     color: window.colDim

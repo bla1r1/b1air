@@ -13,6 +13,15 @@ ApplicationWindow {
     // rotate and next/previous controls all sat there enabled with nothing to
     // act on. Every other surface in the suite states an empty view.
     readonly property bool hasImage: ViewBackend.currentPath !== ""
+
+    // How many pictures are in the folder this one came from. Everything that
+    // moves between them — the two arrows and the filmstrip — used to be shown
+    // whenever an image was open, so a folder holding exactly one picture still
+    // got arrows offering to go somewhere and a 70px strip across the whole
+    // window holding a single thumbnail of the image already filling the
+    // screen.
+    readonly property int siblingCount: ViewBackend.filesInDir ? ViewBackend.filesInDir.length : 0
+    readonly property bool hasSiblings: window.siblingCount > 1
     width: Design.s(960)
     height: Design.s(640)
     minimumWidth: 500
@@ -122,11 +131,20 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     // Viewer Controls: Zoom In, Zoom Out, Reset, Rotate, Filmstrip Toggle, Wallpaper
+                    //
+                    // Two of these were the wrong glyph, which in a row of
+                    // unlabelled icon buttons is the whole message: Zoom Out
+                    // was nf-md-close, so the control beside the zoom
+                    // percentage was a ✕ that reads as "close the viewer", and
+                    // Set Wallpaper was nf-md-music, a note. Checked by
+                    // rendering the codepoints rather than by reading the
+                    // names — that is how these two were found in the first
+                    // place.
                     Row {
                         spacing: Design.s(4)
                         Layout.alignment: Qt.AlignVCenter
 
-                        CtrlBtn { icon: "󰅖"; tip: "Zoom Out"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                        CtrlBtn { icon: "󰍴"; tip: "Zoom Out"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
                         Rectangle {
                             width: zoomText.implicitWidth + Design.s(10); height: Design.s(26); radius: Design.s(4)
                             color: "transparent"
@@ -135,8 +153,9 @@ ApplicationWindow {
                         CtrlBtn { icon: "󰐕"; tip: "Zoom In"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
                         CtrlBtn { icon: "󰑐"; tip: "Reset View"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
                         CtrlBtn { icon: "󰑓"; tip: "Rotate 90°"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
-                        CtrlBtn { icon: "󰎆"; tip: "Set Wallpaper"; onClicked: ViewBackend.setWallpaper() }
-                        CtrlBtn { icon: "󰋩"; tip: "Toggle Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                        CtrlBtn { icon: "󰸉"; tip: "Set Wallpaper"; onClicked: ViewBackend.setWallpaper() }
+                        // Nothing to toggle in a folder of one.
+                        CtrlBtn { visible: window.hasSiblings; icon: "󰋩"; tip: "Toggle Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
                     }
                 }
             }
@@ -202,7 +221,7 @@ ApplicationWindow {
                     color: prevArrArea.containsMouse ? Design.tint(Design.ground, 0.85) : Design.tint(Design.ground, 0.45)
                     border.color: window.colBorder
                     border.width: 1
-                    visible: window.hasImage
+                    visible: window.hasImage && window.hasSiblings
                     Text { anchors.centerIn: parent; text: "󰁍"; font.family: Design.font.mono; font.pixelSize: Design.s(14); color: window.colFg }
                     MouseArea { id: prevArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.previous() }
                 }
@@ -213,7 +232,7 @@ ApplicationWindow {
                     anchors.rightMargin: Design.s(16)
                     anchors.verticalCenter: parent.verticalCenter
                     width: Design.s(36); height: Design.s(36); radius: Design.s(18)
-                    visible: window.hasImage
+                    visible: window.hasImage && window.hasSiblings
                     color: nextArrArea.containsMouse ? Design.tint(Design.ground, 0.85) : Design.tint(Design.ground, 0.45)
                     border.color: window.colBorder
                     border.width: 1
@@ -227,9 +246,18 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(70)
                 color: window.colSidebar
-                border.color: window.colBorder
-                border.width: 1
-                visible: window.showFilmstrip
+                visible: window.showFilmstrip && window.hasSiblings
+
+                // One rule where the strip meets the picture, not a box: a full
+                // border on a bar this wide draws its side edges on top of the
+                // window frame's own.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: 1
+                    color: window.colBorder
+                }
 
                 ListView {
                     id: filmstripList
