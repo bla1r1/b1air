@@ -579,7 +579,6 @@ PanelWindow {
                     anchors.centerIn: parent
                     spacing: Design.s(6)
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: "󰍜"
                         font.family: Design.font.mono
                         font.pixelSize: Design.s(13)
@@ -587,7 +586,6 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: "APPS"
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(12)
@@ -957,7 +955,6 @@ PanelWindow {
                     spacing: Design.s(6)
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: Media.playing ? "\u{f040a}" : "\u{f03e4}"
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
@@ -966,7 +963,6 @@ PanelWindow {
                     }
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         // Elided rather than allowed to push the clock off
                         // centre: a track title is arbitrarily long.
                         width: Math.min(implicitWidth, Design.s(220))
@@ -1006,7 +1002,6 @@ PanelWindow {
                     spacing: Design.s(6)
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: Weather.icon
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
@@ -1015,7 +1010,6 @@ PanelWindow {
                     }
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
                         text: Weather.temp
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(11)

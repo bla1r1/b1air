@@ -1,4 +1,8 @@
 #include "b1airdaemon.hpp"
+#include <cmath>
+#include <QUrl>
+#include <QImage>
+#include <QColor>
 
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
@@ -267,4 +271,113 @@ void B1airDaemon::onCameraInUseChanged(bool inUse) {
         return;
     m_cameraInUse = inUse;
     emit cameraInUseChanged(inUse);
+}
+
+// ── Wallpaper palette ────────────────────────────────────────────────────────
+
+namespace {
+
+/** One role, as HSL on a given hue. */
+QString tone(qreal hueDeg, qreal sat, qreal light) {
+    QColor c;
+    c.setHslF(std::fmod(std::fmod(hueDeg, 360.0) + 360.0, 360.0) / 360.0,
+              qBound(0.0, sat, 1.0), qBound(0.0, light, 1.0));
+    return c.name(QColor::HexRgb);
+}
+
+} // namespace
+
+QVariantMap B1airDaemon::paletteFromImage(const QString& path) const {
+    QVariantMap out;
+
+    QString file = path;
+    if (file.startsWith("file://"))
+        file = QUrl(file).toLocalFile();
+
+    QImage img(file);
+    if (img.isNull())
+        return out;                        // caller keeps whatever it had
+
+    // Small enough that this is instant and that single stray pixels stop
+    // deciding anything; large enough that a small bright subject still counts.
+    img = img.scaled(96, 96, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+             .convertToFormat(QImage::Format_RGB32);
+
+    // Hue histogram, weighted by how colourful and how well-lit each pixel is.
+    // Grey and near-black pixels carry no hue, and a wallpaper is mostly those:
+    // counting them would drag every result towards whatever the sky happens to
+    // be doing.
+    constexpr int kBuckets = 36;
+    double weight[kBuckets] = {0};
+    double litSum = 0;
+    int litCount = 0;
+
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb* row = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const QColor c = QColor::fromRgb(row[x]);
+            // float, not qreal: this Qt build's getHslF takes float*.
+            float h = 0, s = 0, l = 0;
+            c.getHslF(&h, &s, &l);
+            litSum += l;
+            ++litCount;
+            if (h < 0 || s < 0.18 || l < 0.10 || l > 0.92)
+                continue;
+            const int b = qBound(0, int(h * kBuckets), kBuckets - 1);
+            weight[b] += s * (1.0 - std::abs(l - 0.5));
+        }
+    }
+
+    int best = -1;
+    double bestWeight = 0;
+    for (int i = 0; i < kBuckets; ++i)
+        if (weight[i] > bestWeight) { bestWeight = weight[i]; best = i; }
+
+    // A picture with no colour in it at all — a black-and-white photograph, a
+    // solid grey — has no hue to offer. Rather than invent one, fall back to the
+    // shipped accent's, so the result is the built-in palette's own family.
+    const qreal hue = (best >= 0) ? (best + 0.5) * (360.0 / kBuckets) : 220.0;
+    const qreal meanLight = litCount ? litSum / litCount : 0.2;
+
+    // Structural roles: one hue, fixed steps. A wallpaper that is washed out
+    // gets a slightly stronger tint so the theme still reads as coming from it.
+    const qreal tint = (meanLight < 0.25) ? 0.24 : 0.18;
+
+    out["ground"]         = tone(hue, tint,        0.08);
+    out["lowest"]         = tone(hue, tint + 0.02, 0.05);
+    out["low"]            = tone(hue, tint,        0.11);
+    out["mid"]            = tone(hue, tint - 0.04, 0.19);
+    out["high"]           = tone(hue, tint - 0.06, 0.26);
+    out["highest"]        = tone(hue, tint - 0.08, 0.34);
+
+    out["text"]           = tone(hue, 0.16, 0.91);
+    out["textDim"]        = tone(hue, 0.13, 0.73);
+    out["outline"]        = tone(hue, 0.11, 0.50);
+    out["outlineVariant"] = tone(hue, 0.13, 0.29);
+
+    out["primary"]        = tone(hue, 0.62, 0.70);
+    out["primaryText"]    = tone(hue, 0.30, 0.08);
+    out["primaryBox"]     = tone(hue, 0.26, 0.29);
+    out["tertiary"]       = tone(hue + 55, 0.55, 0.74);
+
+    // Decorative family: offsets from the wallpaper's hue, so the accents in the
+    // Control Center's tiles stay related to each other and to the picture.
+    out["blue"]     = tone(hue,        0.62, 0.70);
+    out["sapphire"] = tone(hue + 20,   0.58, 0.68);
+    out["mauve"]    = tone(hue + 45,   0.55, 0.74);
+    out["pink"]     = tone(hue + 75,   0.55, 0.78);
+    out["lavender"] = tone(hue - 25,   0.60, 0.80);
+    out["teal"]     = tone(hue - 45,   0.50, 0.70);
+
+    // Semantic colours keep their own hues and borrow only the saturation, so
+    // "error" is still red on a green wallpaper.
+    out["error"]     = tone(348, 0.65, 0.72);
+    out["errorText"] = tone(hue, 0.30, 0.08);
+    out["red"]       = tone(348, 0.65, 0.72);
+    out["maroon"]    = tone(358, 0.55, 0.74);
+    out["peach"]     = tone(25,  0.70, 0.72);
+    out["yellow"]    = tone(45,  0.68, 0.76);
+    out["green"]     = tone(120, 0.45, 0.72);
+
+    return out;
 }

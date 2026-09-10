@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../Ui"
 
@@ -133,7 +134,36 @@ Singleton {
     }
 
     /** Apply by id, persist the choice, and fall back cleanly if it is gone. */
+    /**
+     * A palette built from the wallpaper.
+     *
+     * The picture decides a hue; the plugin builds every role from fixed
+     * lightness steps on it, which is what keeps the result readable whatever
+     * the picture is — colours sampled straight out of an image give you two
+     * that are nearly the same and text you cannot read on its own background.
+     *
+     * The wallpaper is read from ~/.cache/current_wallpaper.jpg, which is where
+     * the daemon puts whatever it last set, so this follows the wallpaper
+     * without needing to be told what it is.
+     */
+    function applyFromWallpaper() {
+        const path = Quickshell.env("HOME") + "/.cache/current_wallpaper.jpg";
+        const palette = Daemon.paletteFromImage(path);
+        if (!palette || !palette.ground) {
+            // An unreadable or entirely greyscale file: leave what is on screen
+            // rather than replace it with a half-built palette.
+            return false;
+        }
+        Design.applyPalette(palette);
+        root._publish(palette);
+        Settings.set("themeName", "wallpaper");
+        return true;
+    }
+
     function apply(id) {
+        if (id === "wallpaper")
+            return root.applyFromWallpaper();
+
         const b = root._builtinById(id);
         if (b) {
             Design.applyPalette(b.palette);

@@ -13,6 +13,7 @@
 // =============================================================================
 
 #include <QObject>
+#include <QVariantMap>
 #include <QString>
 #include <QDBusConnection>
 
@@ -31,6 +32,27 @@ public:
     explicit B1airDaemon(QObject* parent = nullptr);
 
     bool cameraInUse() const { return m_cameraInUse; }
+
+    /**
+     * A palette in Design.applyPalette()'s shape, derived from an image.
+     *
+     * matugen does this properly and is one `pacman -S` away, and it is the
+     * honest alternative to what follows. It is not used because this suite has
+     * spent its recent history taking dependencies *out* — SQLite, json and
+     * libvterm are all carried now — and because the answer here only has to be
+     * a coherent palette, not a faithful implementation of Material You.
+     *
+     * The wallpaper decides one thing: a hue. Everything structural is then
+     * built from fixed lightness and saturation steps on that hue, which is
+     * what guarantees the result is readable whatever the picture looks like —
+     * a palette sampled directly from an image gives you two colours that are
+     * nearly the same and text you cannot read on its own background.
+     *
+     * The semantic colours do not follow it. A red that is not red is not a
+     * theme, it is a bug: error, warning and success keep their own hues and
+     * borrow only the saturation.
+     */
+    Q_INVOKABLE QVariantMap paletteFromImage(const QString& path) const;
 
     bool available() const { return m_available; }
 

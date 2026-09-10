@@ -106,6 +106,8 @@ for path in sys.argv[1:]:
     stack = [0]
     next_id = 1
     seen = {}
+    assigned = {}
+    depth_of_binding = 0
     for line in lines:
         m = re.match(r"^\s*(?:readonly\s+|default\s+)?property\s+[\w.<>]+\s+(\w+)\b", line)
         if m:
@@ -113,6 +115,25 @@ for path in sys.argv[1:]:
             if key in seen:
                 problems.append(f"{os.path.relpath(path)}: `{m.group(1)}` is declared twice in the same object")
             seen[key] = True
+
+        # The same *assignment* twice in one object is the other half of this,
+        # and the half that actually took the shell down: "Property value set
+        # multiple times" is not a parse error, so qmllint reports nothing and
+        # the component fails to build at runtime. A script that added an
+        # anchor to rows that already had one produced six of them at once.
+        #
+        # Only plain `name: value` on one line, and only outside a binding
+        # block, so a JS object literal or a multi-line binding cannot look
+        # like an assignment.
+        a = re.match(r"^\s*([a-z_][\w.]*)\s*:\s*\S", line)
+        if a and not line.rstrip().endswith("{") and depth_of_binding == 0:
+            name = a.group(1)
+            if name not in ("property", "signal", "function", "import"):
+                key = (stack[-1], "=" + name)
+                if key in assigned:
+                    problems.append(
+                        f"{os.path.relpath(path)}: `{name}` is set twice in the same object")
+                assigned[key] = True
         # Strings are stripped so a brace inside one cannot move the depth.
         bare = re.sub(r'"[^"]*"', "", re.sub(r"'[^']*'", "", line))
         for ch in bare:

@@ -26,6 +26,38 @@ ColumnLayout {
         icon: "\u{f0765}"
         accentColor: Design.mauve
 
+        // From the wallpaper.
+        //
+        // Not in the Repeater above it, because it is not a file in the themes
+        // directory — it is generated from whatever picture is on the desktop
+        // right now, and re-generated whenever it is asked for.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.md)
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(2)
+                Label {
+                    Layout.fillWidth: true
+                    text: "From the wallpaper"
+                    weight: Design.weight.semibold
+                    color: Settings.themeName === "wallpaper" ? Design.accent : Design.text
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Takes the picture's dominant colour and builds the palette around it. Warnings and errors keep their own colours."
+                    role: "caption"; dim: true; wrapMode: Text.WordWrap
+                }
+            }
+
+            ActionButton {
+                label: Settings.themeName === "wallpaper" ? "Regenerate" : "Apply"
+                icon: "\u{f0765}"
+                onActivated: Services.Theme.applyFromWallpaper()
+            }
+        }
+
         Repeater {
             model: Services.Theme.available
 
