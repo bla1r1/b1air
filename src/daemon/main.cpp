@@ -59,7 +59,7 @@ static void print_usage(const char* prog) {
               << "                                     10-band EasyEffects equalizer control\n"
               << "  brightness {available|get|up [N]|down [N]|set <pct>}\n"
               << "                                     Control screen backlight brightness\n"
-              << "  ddc {list|get <id>|set <id> <pct>|up [N]|down [N]|waybar|refresh|dim|undim}\n"
+              << "  ddc {list|get <id>|set <id> <pct>|up [N]|down [N]|status|refresh|dim|undim}\n"
               << "                                     Control external monitor brightness via DDC/CI\n"
               << "  kbd-backlight {available|get|up [N]|down [N]|set <pct>|off}\n"
               << "                                     Control keyboard backlight\n"
@@ -122,6 +122,12 @@ int main(int argc, char* argv[]) {
         } else {
             return SettingsManager::apply_from_file() ? 0 : 1;
         }
+    } else if (cmd == "camera") {
+        // Prints and exits 0 when in use, 1 when not, so a script can branch
+        // on either the word or the status.
+        const bool used = SystemControl::camera_in_use();
+        std::cout << (used ? "in-use" : "idle") << "\n";
+        return used ? 0 : 1;
     } else if (cmd == "focus" || cmd == "focus-tracker") {
         // `focus away` / `focus back` are swayidle's, not a person's: they mark
         // the start and end of an idle stretch so the break reminder can tell
@@ -390,7 +396,9 @@ int main(int argc, char* argv[]) {
         }
     } else if (cmd == "mic") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
-        if (sub == "get" || sub == "waybar") {
+        // "status" is the name; "waybar" is what it was called when a bar of
+        // that name read it, and is kept so an existing script does not break.
+        if (sub == "get" || sub == "status" || sub == "waybar") {
             std::string status = SystemControl::get_mic_status();
             std::cout << (status == "muted" ? "" : "") << "\n";
             return 0;
@@ -475,15 +483,15 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else if (cmd == "ddc") {
-        std::string sub = (argc >= 3) ? argv[2] : "waybar";
+        std::string sub = (argc >= 3) ? argv[2] : "status";
         if (sub == "list" || sub == "list-ddc" || sub == "has" || sub == "has-ddc") {
             std::cout << SystemControl::ddc_list_json(false) << "\n";
             return 0;
         } else if (sub == "refresh" || sub == "refresh-ddc") {
             std::cout << SystemControl::ddc_list_json(true) << "\n";
             return 0;
-        } else if (sub == "waybar") {
-            std::cout << SystemControl::ddc_get_waybar_json() << "\n";
+        } else if (sub == "status" || sub == "waybar") {
+            std::cout << SystemControl::ddc_status_json() << "\n";
             return 0;
         } else if (sub == "set") {
             if (argc < 5) {
@@ -504,7 +512,7 @@ int main(int argc, char* argv[]) {
         } else if (sub == "undim") {
             return SystemControl::ddc_undim() ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " ddc {list|set <id> <val>|up [N]|down [N]|waybar|refresh|dim|undim}\n";
+            std::cerr << "Usage: " << argv[0] << " ddc {list|set <id> <val>|up [N]|down [N]|status|refresh|dim|undim}\n";
             return 1;
         }
     } else if (cmd == "weather") {

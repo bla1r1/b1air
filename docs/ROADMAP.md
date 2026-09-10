@@ -49,19 +49,21 @@ that a future reader can disagree with the reason rather than guess at it.
 
 1. **Touchpad gestures** (M8) — three- and four-finger. The largest daily gap on
    a laptop desktop, and the one thing every other environment has.
-2. **Per-monitor bar content** (M7) — see below; two monitors currently get two
-   identical bars.
-3. **Fractional scaling and dock/undock display profiles** (M7) — this is a
+2. **Fractional scaling and dock/undock display profiles** (M7) — this is a
    ThinkPad that meets external monitors.
-4. **Drop-down terminal** (M9) — small, and used every day.
-5. **Scheduled Do Not Disturb** (M14) — the focus timer it belongs to is built.
-6. **Remote session indicator and Control Center tile** (M5) — the WayVNC
+3. **Drop-down terminal** (M9) — small, and used every day.
+4. **Scheduled Do Not Disturb** (M14) — the focus timer it belongs to is built.
+5. **Remote session indicator and Control Center tile** (M5) — the WayVNC
    backend is done; this is the missing front.
-7. **Keyboard shortcut editor** (M6) — the Keyboard settings page is already
+6. **Keyboard shortcut editor** (M6) — the Keyboard settings page is already
    half of it.
-8. **Per-workspace and per-monitor wallpaper** (M7) — cheap and visible.
+7. **Per-workspace and per-monitor wallpaper** (M7) — cheap and visible.
 
-Before any of them: delete the Waybar remnants and fix the three lines above.
+The Waybar remnants that used to head this list are gone: five
+`pkill -RTMIN+N waybar` calls signalling a process this desktop does not run,
+and a `ddc waybar` verb named after it. The two `app_id == "waybar"` filters
+stay — they keep a bar out of the window switcher, and are still right for
+anyone who runs one.
 A roadmap whose done column disagrees with the tree is worse than no roadmap,
 because it is the one people make decisions from.
 
@@ -132,7 +134,9 @@ large-text preset in M13 are kept.
 
 ## M4: Privacy, Security, and System Health Maintenance
 
-- [x] Add live Privacy Dots in Waybar for active microphone and camera access telemetry.
+- [x] Add live privacy dots for active microphone and camera access. Not in
+      Waybar, which this desktop does not run — in the native bar's system
+      island, shown only while a device is actually in use.
 - [x] Add Disk Sweeper and cache cleaner module in Settings for pacman, orphan packages, and thumbnails.
 - [x] Add automatic Btrfs and Timeshift pre-update restore point snapshot integration.
 - [x] Add Encrypted Vaults GUI manager for mounting password-protected folders.
@@ -164,16 +168,21 @@ large-text preset in M13 are kept.
 - [ ] Add external monitor hardware brightness control via DDC/CI in Control Center slider.
 - [ ] Add ICC/ICM color profile calibration importer in Display Settings.
 - [ ] Add distinct per-workspace and per-monitor wallpaper assignment engine.
-- [ ] Add per-monitor top bar content. The bar itself is already on every screen
-      — `Main.qml` instantiates it through `Variants` over `Quickshell.screens`,
-      which was fixed after a two-monitor desktop turned out to have a bar on
-      one of them — but nothing in `TopBar.qml` reads `topBar.screen`, so two or
-      three monitors get two or three *identical* bars: the same tray, the same
-      clock, and the same workspace strip with the same pill lit, because
-      `focused` is global. Wanted: a primary bar that keeps the tray, the clock
-      and the system island, secondary bars reduced to workspaces and the
-      window title, and a workspace strip that shows the workspaces on *its*
-      output.
+- [x] Add per-monitor top bar content. The bar itself was already on every
+      screen — `Main.qml` instantiates it through `Variants` over
+      `Quickshell.screens`, fixed after a two-monitor desktop turned out to
+      have a bar on one of them — but nothing in `TopBar.qml` read
+      `topBar.screen`, so two or three monitors got two or three *identical*
+      bars: the same tray, the same clock, and the same workspace strip with
+      the same pill lit, because `focused` is global to the session rather
+      than to an output. One bar carries the weather, the media title, the
+      tray and the CPU island now; the others keep their workspaces, the clock
+      and the system controls — volume and power should not need a trip to
+      another screen, which is where the first sketch of this had them. The
+      strip shows the workspaces on its own output, the unused numbers are
+      offered by the main bar alone, and a pill lights only where the focus
+      actually is. Which screen is the main one is on the Native Top Bar
+      settings page, in a card that is absent when there is only one.
 - [ ] Add virtual headless display creation for tablet sidecar streaming (Moonlight / Sunshine).
 
 ## M8: Advanced Input, Touchpad Gestures, and Keyboard Physics
@@ -182,6 +191,8 @@ large-text preset in M13 are kept.
 - [ ] Add mouse acceleration profile switcher (Flat raw sensor input vs Adaptive curve).
 - [ ] Add per-device scroll direction configuration (Natural scrolling for touchpad, standard for mouse wheel).
 - [ ] Add 1-click CapsLock re-mapping to Escape/Control in Keyboard Settings.
+- [x] Add a Caps Lock indicator to the bar, read from the kernel's own lock LED
+      — sway's IPC does not report lock state and no protocol carries it.
 - [ ] Add responsive on-screen virtual touch keyboard (OSK) for touchscreen devices.
 
 ## M9: Developer, Terminal, and Power-User Workflow

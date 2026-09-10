@@ -1475,7 +1475,46 @@ bool SystemControl::toggle_fullscreen() {
     return ipc.toggle_fullscreen();
 }
 
-// ── Waybar Layout Shorthand ──────────────────────────────────────────────────
+// ── Camera privacy ───────────────────────────────────────────────────────────
+
+bool SystemControl::camera_in_use() {
+    DIR *proc = opendir("/proc");
+    if (!proc) return false;
+
+    bool found = false;
+    struct dirent *pe;
+    while (!found && (pe = readdir(proc)) != nullptr) {
+        if (pe->d_name[0] < '0' || pe->d_name[0] > '9')
+            continue;
+
+        const std::string fd_dir = std::string("/proc/") + pe->d_name + "/fd";
+        DIR *fds = opendir(fd_dir.c_str());
+        if (!fds)
+            continue;                       // another user's process, or it exited
+
+        struct dirent *fe;
+        while ((fe = readdir(fds)) != nullptr) {
+            if (fe->d_name[0] == '.')
+                continue;
+            char target[256];
+            const std::string link = fd_dir + "/" + fe->d_name;
+            const ssize_t n = readlink(link.c_str(), target, sizeof(target) - 1);
+            if (n <= 0)
+                continue;
+            target[n] = '\0';
+            if (std::strncmp(target, "/dev/video", 10) == 0) {
+                found = true;
+                break;
+            }
+        }
+        closedir(fds);
+    }
+
+    closedir(proc);
+    return found;
+}
+
+// ── Layout Shorthand ─────────────────────────────────────────────────────────
 std::string SystemControl::get_layout_shorthand() {
     SwayIPC ipc;
     if (!ipc.connect()) return "US";
@@ -1976,7 +2015,6 @@ bool SystemControl::ddc_set(const std::string& id, int percent) {
     else args.insert(args.end(), {"--display", id});
     args.push_back("--noverify");
     (void)util::spawn_detached(args);
-    (void)run_argv_status({"pkill", "-RTMIN+3", "waybar"});
     return true;
 }
 
@@ -1990,7 +2028,7 @@ bool SystemControl::ddc_adjust_all(int step) {
     return true;
 }
 
-std::string SystemControl::ddc_get_waybar_json() {
+std::string SystemControl::ddc_status_json() {
     auto displays = detect_ddc_displays(false);
     if (displays.empty()) {
         return "{\"text\":\"\",\"tooltip\":\"No DDC brightness controls found\",\"class\":\"empty\"}";
@@ -2306,7 +2344,6 @@ bool SystemControl::kbd_backlight_inc(int step) {
     int val = kbd_backlight_get();
     notify_user("b1air DE", "Keyboard Backlight: " + std::to_string(val) + "%", {}, "input-keyboard",
                 "string:x-canonical-private-synchronous:sys-notify-kbd", "low");
-    (void)run_argv_status({"pkill", "-RTMIN+2", "waybar"});
     return true;
 }
 
@@ -2317,7 +2354,6 @@ bool SystemControl::kbd_backlight_dec(int step) {
     int val = kbd_backlight_get();
     notify_user("b1air DE", "Keyboard Backlight: " + std::to_string(val) + "%", {}, "input-keyboard",
                 "string:x-canonical-private-synchronous:sys-notify-kbd", "low");
-    (void)run_argv_status({"pkill", "-RTMIN+2", "waybar"});
     return true;
 }
 
@@ -2325,7 +2361,6 @@ bool SystemControl::kbd_backlight_set(int val) {
     std::string dev = detect_kbd_device();
     if (dev.empty()) return false;
     (void)run_argv_status({"brightnessctl", "-d", dev, "set", std::to_string(val) + "%"});
-    (void)run_argv_status({"pkill", "-RTMIN+2", "waybar"});
     return true;
 }
 
@@ -2335,7 +2370,6 @@ bool SystemControl::kbd_backlight_off() {
     (void)run_argv_status({"brightnessctl", "-d", dev, "set", "0"});
     notify_user("b1air DE", "Keyboard Backlight: OFF", {}, "input-keyboard",
                 "string:x-canonical-private-synchronous:sys-notify-kbd", "low");
-    (void)run_argv_status({"pkill", "-RTMIN+2", "waybar"});
     return true;
 }
 

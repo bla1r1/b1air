@@ -9,6 +9,8 @@ import Quickshell.Services.SystemTray
 import Quickshell.Widgets
 import "./Ui"
 import B1air.Daemon
+import Quickshell.Services.Pipewire
+import Qt.labs.folderlistmodel
 import "./Services"
 
 PanelWindow {
@@ -48,6 +50,84 @@ PanelWindow {
 
     readonly property var swayEnv: ({ "SWAYSOCK": topBar.swaySock })
 
+    // ── Which screen this bar is on ──────────────────────────────────────────
+    //
+    // The bar has been on every screen since Main.qml started instantiating it
+    // through Variants — but nothing in here ever asked *which* screen it was
+    // on, so two monitors got two identical bars: the same tray, the same
+    // clock, and the same workspace strip with the same pill lit, because
+    // `focused` is global to the session rather than to an output.
+    readonly property string outputName: topBar.screen ? topBar.screen.name : ""
+
+    // ── Privacy and Caps Lock ────────────────────────────────────────────────
+    //
+    // The microphone is answered by PipeWire directly: a capture stream is a
+    // node that is a stream and is not a sink, so anything recording shows up
+    // without asking anyone. The camera has no such thing — V4L2 exposes no
+    // in-use attribute and the lamp beside the lens is wired to the hardware —
+    // so the daemon walks /proc for an open /dev/video* and pushes the answer
+    // over the bus when it changes.
+    readonly property bool micInUse: {
+        const nodes = Pipewire.nodes ? Pipewire.nodes.values : [];
+        for (const n of nodes)
+            if (n && n.isStream && !n.isSink)
+                return true;
+        return false;
+    }
+
+    readonly property bool cameraInUse: Daemon.cameraInUse
+
+    // Caps Lock, read off the LED the kernel already keeps. sway's IPC does not
+    // report lock state and there is no protocol for it, so this is the file
+    // the keyboard driver writes. The directory is listed rather than a path
+    // guessed, because the input number differs per machine and per boot.
+    property string capsLedPath: ""
+    property bool capsOn: false
+
+    FolderListModel {
+        id: ledDir
+        folder: "file:///sys/class/leds"
+        nameFilters: ["*capslock*"]
+        showFiles: true
+        showDirs: true
+        onCountChanged: {
+            topBar.capsLedPath = ledDir.count > 0
+                ? String(ledDir.get(0, "filePath")) + "/brightness" : "";
+        }
+    }
+
+    FileView {
+        id: capsLed
+        path: topBar.capsLedPath
+        printErrors: false
+        onLoaded: topBar.capsOn = parseInt(capsLed.text()) > 0
+        onLoadFailed: topBar.capsOn = false
+    }
+
+    // A keypress is not a file change sysfs will tell anyone about, so this is
+    // read on a timer — one file, no process, and only while a lock LED was
+    // actually found. Fast enough that the pill appears with the keystroke.
+    Timer {
+        interval: 250
+        repeat: true
+        running: topBar.capsLedPath !== ""
+        onTriggered: capsLed.reload()
+    }
+
+    readonly property bool isPrimary: {
+        const pinned = Settings.barPrimaryOutput || "";
+        if (pinned !== "")
+            return topBar.outputName === pinned;
+        // Nothing pinned: the first screen the compositor reports. Also true
+        // when there is only one, which is what keeps a single-monitor desktop
+        // exactly as it was.
+        const all = Quickshell.screens;
+        return !all || all.length === 0 || !all[0] || all[0].name === topBar.outputName;
+    }
+
+    /** A second or third bar carries less unless told otherwise. */
+    readonly property bool reduced: !topBar.isPrimary && Settings.barSecondaryReduced
+
     /**
      * The workspace strip: 1..Settings.workspaceCount, plus anything sway has
      * outside that range.
@@ -59,21 +139,39 @@ PanelWindow {
      * workspace you have never visited has no pill to click.
      */
     readonly property var workspaceSlots: {
-        const live = {};
-        for (const w of topBar.workspacesList)
-            live[String(w.name !== undefined ? w.name : w.num)] = w;
+        // Only the workspaces that live on this output. sway names the output
+        // on every workspace it reports, and without this a three-monitor
+        // desktop drew the same ten pills three times, each highlighting the
+        // workspace focused somewhere else.
+        const mine = {};
+        for (const w of topBar.workspacesList) {
+            if (!topBar.isPrimary && w.output !== undefined && topBar.outputName !== ""
+                    && w.output !== topBar.outputName)
+                continue;
+            mine[String(w.name !== undefined ? w.name : w.num)] = w;
+        }
 
         const out = [];
-        const count = Math.max(1, Settings.workspaceCount || 10);
+        // The unused numbers are offered by the primary bar only. Three bars
+        // each offering to create workspace 7 is three answers to one
+        // question — and sway puts a new workspace on the focused output
+        // whichever of them was clicked.
+        const count = topBar.isPrimary ? Math.max(1, Settings.workspaceCount || 10) : 0;
         for (let i = 1; i <= count; ++i) {
             const key = String(i);
-            const w = live[key];
-            out.push({ name: key, focused: w ? !!w.focused : false, exists: !!w });
-            delete live[key];
+            const w = mine[key];
+            // Lit only when the focus is on *this* output. The primary offers
+            // the whole numbered range, so without this the workspace focused
+            // on the second monitor was highlighted on both bars — the same
+            // pill lit twice, which is the thing this was meant to stop.
+            const here = w && (w.output === undefined || topBar.outputName === ""
+                               || w.output === topBar.outputName);
+            out.push({ name: key, focused: !!(w && w.focused && here), exists: !!w });
+            delete mine[key];
         }
         // Named or out-of-range workspaces still have to be reachable.
-        for (const key in live)
-            out.push({ name: key, focused: !!live[key].focused, exists: true });
+        for (const key in mine)
+            out.push({ name: key, focused: !!mine[key].focused, exists: true });
         return out;
     }
 
@@ -481,6 +579,7 @@ PanelWindow {
                     anchors.centerIn: parent
                     spacing: Design.s(6)
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         text: "󰍜"
                         font.family: Design.font.mono
                         font.pixelSize: Design.s(13)
@@ -488,6 +587,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         text: "APPS"
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(12)
@@ -848,7 +948,7 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
 
                 // Only when asked for, and only when there is something to say.
-                visible: Settings.barShowMedia && Media.hasPlayer
+                visible: Settings.barShowMedia && Media.hasPlayer && !topBar.reduced
                          && String(Media.track.title || "") !== ""
 
                 Row {
@@ -857,6 +957,7 @@ PanelWindow {
                     spacing: Design.s(6)
 
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         text: Media.playing ? "\u{f040a}" : "\u{f03e4}"
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
@@ -865,6 +966,7 @@ PanelWindow {
                     }
 
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         // Elided rather than allowed to push the clock off
                         // centre: a track title is arbitrarily long.
                         width: Math.min(implicitWidth, Design.s(220))
@@ -896,7 +998,7 @@ PanelWindow {
                 border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
 
-                visible: Settings.barShowWeather && Weather.loaded
+                visible: Settings.barShowWeather && Weather.loaded && !topBar.reduced
 
                 Row {
                     id: weatherRow
@@ -904,6 +1006,7 @@ PanelWindow {
                     spacing: Design.s(6)
 
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         text: Weather.icon
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
@@ -912,6 +1015,7 @@ PanelWindow {
                     }
 
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
                         text: Weather.temp
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(11)
@@ -946,7 +1050,7 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
 
                 // No applets means no empty pill sitting in the bar.
-                visible: Settings.barShowTray && SystemTray.items.values.length > 0
+                visible: Settings.barShowTray && SystemTray.items.values.length > 0 && !topBar.reduced
 
                 Row {
                     id: trayRow
@@ -994,7 +1098,7 @@ PanelWindow {
             Rectangle {
                 height: Design.s(30)
                 width: statsRow.implicitWidth + Design.s(20)
-                visible: Settings.barShowStats
+                visible: Settings.barShowStats && !topBar.reduced
                 radius: Design.s(10)
                 color: statsArea.containsMouse ? Design.tint(Design.accent, 0.15) : topBar.colBg
                 border.color: statsArea.containsMouse ? Design.tint(Design.accent, 0.35) : topBar.colBorder
@@ -1007,14 +1111,14 @@ PanelWindow {
 
                     Row {
                         spacing: Design.s(4)
-                        Text { text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colCyan }
-                        Text { text: topBar.cpuUsage; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colCyan }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
                     }
 
                     Row {
                         spacing: Design.s(4)
-                        Text { text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colPurple }
-                        Text { text: topBar.loadAvg; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colPurple }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.loadAvg; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
                     }
                 }
 
@@ -1040,6 +1144,63 @@ PanelWindow {
                     id: systemRow
                     anchors.centerIn: parent
                     spacing: Design.s(10)
+
+                    // Privacy dots. Present only while something is using the
+                    // device, because an indicator that is always there is one
+                    // nobody looks at.
+                    Rectangle {
+                        visible: topBar.micInUse
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Design.s(18); height: Design.s(18)
+                        radius: width / 2
+                        color: Design.tint(Design.red, 0.22)
+                        Icon {
+                            anchors.centerIn: parent
+                            text: "\u{f036c}"
+                            role: "caption"
+                            color: Design.red
+                        }
+                        HoverHandler { id: micDotHover }
+                        ToolTip.visible: micDotHover.hovered
+                        ToolTip.text: "Microphone in use"
+                    }
+
+                    Rectangle {
+                        visible: topBar.cameraInUse
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Design.s(18); height: Design.s(18)
+                        radius: width / 2
+                        color: Design.tint(Design.peach, 0.22)
+                        Icon {
+                            anchors.centerIn: parent
+                            text: "\u{f0567}"
+                            role: "caption"
+                            color: Design.peach
+                        }
+                        HoverHandler { id: camDotHover }
+                        ToolTip.visible: camDotHover.hovered
+                        ToolTip.text: "Camera in use"
+                    }
+
+                    // Caps Lock, shown only while it is on — which is the only
+                    // time anyone wants to know.
+                    Rectangle {
+                        visible: topBar.capsOn
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: capsText.implicitWidth + Design.s(10)
+                        height: Design.s(20)
+                        radius: Design.s(5)
+                        color: Design.tint(Design.yellow, 0.20)
+                        Text {
+                            id: capsText
+                            anchors.centerIn: parent
+                            text: "CAPS"
+                            font.family: topBar.fontMain
+                            font.pixelSize: Design.s(10)
+                            font.bold: true
+                            color: Design.yellow
+                        }
+                    }
 
                     // Keyboard Layout Pill
                     Rectangle {
@@ -1078,12 +1239,14 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s(4)
                             Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: (Audio.defaultSink && Audio.defaultSink.audio && Audio.defaultSink.audio.muted) ? "󰖁" : "󰕾"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(13)
                                 color: (Audio.defaultSink && Audio.defaultSink.audio && Audio.defaultSink.audio.muted) ? topBar.colRed : topBar.colFgDim
                             }
                             Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: (Audio.defaultSink && Audio.defaultSink.audio) ? Math.round(Audio.defaultSink.audio.volume * 100) + "%" : "65%"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)
@@ -1117,12 +1280,14 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s(4)
                             Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: Power.charging ? "󰂄" : "󰁹"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(13)
                                 color: Power.charging ? Design.ok : topBar.colFgDim
                             }
                             Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: Power.capacity + "%"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)

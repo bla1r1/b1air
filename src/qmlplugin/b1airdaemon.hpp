@@ -22,9 +22,15 @@ class B1airDaemon : public QObject {
     // False when the daemon is not on the bus, so the UI can disable controls
     // instead of offering actions that cannot work.
     Q_PROPERTY(bool available READ available NOTIFY availableChanged)
+    // Whether anything currently holds a /dev/video* device open. Pushed by the
+    // daemon when it changes rather than polled: the walk of /proc that answers
+    // it belongs on one side of the bus, not in every surface that asks.
+    Q_PROPERTY(bool cameraInUse READ cameraInUse NOTIFY cameraInUseChanged)
 
 public:
     explicit B1airDaemon(QObject* parent = nullptr);
+
+    bool cameraInUse() const { return m_cameraInUse; }
 
     bool available() const { return m_available; }
 
@@ -118,9 +124,13 @@ signals:
      * on the bus the shell is already connected to.
      */
     void panelRequested(const QString& action, const QString& panel, const QString& arg);
+    void cameraInUseChanged(bool inUse);
 
 private slots:
     void onNameOwnerChanged(const QString& name, const QString& oldOwner, const QString& newOwner);
+
+private slots:
+    void onCameraInUseChanged(bool inUse);
 
 private:
     // Fire-and-report: dispatches asynchronously and turns a D-Bus error into
@@ -132,4 +142,5 @@ private:
 
     QDBusConnection m_bus;
     bool m_available = false;
+    bool m_cameraInUse = false;
 };

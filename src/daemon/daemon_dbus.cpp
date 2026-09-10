@@ -384,6 +384,10 @@ static const sd_bus_vtable daemon_vtable[] = {
     SD_BUS_SIGNAL("VolumeChanged", "ib", 0),
     SD_BUS_SIGNAL("BrightnessChanged", "i", 0),
     SD_BUS_SIGNAL("WallpaperChanged", "s", 0),
+    // Emitted when something opens or closes a /dev/video* device. The three
+    // signals above it are declared and never emitted by anything — noted here
+    // rather than quietly joined.
+    SD_BUS_SIGNAL("CameraInUseChanged", "b", 0),
     SD_BUS_VTABLE_END
 };
 

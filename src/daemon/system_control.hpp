@@ -35,7 +35,23 @@ public:
 
     // Screenshot helper
 
-    // Waybar & Layout helpers
+    /**
+     * Is anything holding a /dev/video* device open right now.
+     *
+     * There is no kernel flag for "the camera is on": V4L2 exposes no in-use
+     * attribute and the LED beside the lens is wired to the hardware, not to
+     * anything readable. What there is, is the open file descriptor, so this
+     * walks /proc looking for one. No process is spawned — this is readdir and
+     * readlink, which is what `fuser` would do for us at the cost of a fork
+     * every time we asked.
+     *
+     * Processes belonging to other users are skipped rather than reported as
+     * an error: not being allowed to look is not the same as nothing being
+     * there, but it is the best a session daemon can say.
+     */
+    static bool camera_in_use();
+
+    // Layout helpers
     static std::string get_layout_shorthand();
     static bool toggle_fullscreen();
     static std::string get_wifi_status_json();
@@ -103,7 +119,7 @@ public:
     static std::string ddc_list_json(bool force_detect = false);
     static bool ddc_set(const std::string& id, int percent);
     static bool ddc_adjust_all(int step);
-    static std::string ddc_get_waybar_json();
+    static std::string ddc_status_json();
     static bool ddc_refresh();
     static bool ddc_dim();
     static bool ddc_undim();
@@ -186,7 +202,14 @@ public:
     static bool night_light_toggle();
     static bool night_light_auto();
 
-    // System Updates & Waybar JSON
+    // System updates and the brightness status line.
+    //
+    // These print a one-line JSON object — text, tooltip, class — which is the
+    // shape Waybar's custom modules read. That is where it came from; the bar
+    // has been this project's own since, and nothing in the shell parses it.
+    // Kept because it is a reasonable thing for a status script to consume,
+    // renamed because calling it "waybar" said it belonged to a program this
+    // desktop does not ship.
     static std::string get_updates_json(bool force = false);
     static bool launch_system_upgrade();
 

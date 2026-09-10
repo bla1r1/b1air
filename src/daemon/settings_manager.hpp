@@ -17,7 +17,7 @@ struct DesktopSettings {
     bool smartBorders = true;
     bool smartGaps = false;
 
-    // Waybar
+    // Top bar
     int workspaceCount = 8;
     bool guideShortcut = true;
     bool topbarHelpIcon = false;

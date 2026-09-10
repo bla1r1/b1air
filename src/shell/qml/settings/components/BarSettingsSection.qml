@@ -47,4 +47,71 @@ ColumnLayout {
             onIncrement: Settings.set("workspaceCount", Math.min(20, Settings.workspaceCount + 1))
         }
     }
+
+    // ── Multiple monitors ────────────────────────────────────────────────────
+    //
+    // Absent on a single-screen desktop, where every control in it would be a
+    // question about a situation that does not exist.
+    Card {
+        visible: Quickshell.screens && Quickshell.screens.length > 1
+        title: "Multiple Monitors"
+        subtitle: "Which screen carries the full bar, and what the others show"
+        icon: "\u{f0379}"
+        accentColor: Design.blue
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.md)
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(2)
+                Label { Layout.fillWidth: true; text: "Shorter bars on other screens"; weight: Design.weight.semibold }
+                Label {
+                    Layout.fillWidth: true
+                    text: "The weather, the media title, the tray and the CPU island stay on the main screen; the others keep their workspaces, the clock and the system controls"
+                    role: "caption"; dim: true; wrapMode: Text.WordWrap
+                }
+            }
+
+            Toggle {
+                checked: Settings.barSecondaryReduced
+                onToggled: Settings.set("barSecondaryReduced", !Settings.barSecondaryReduced)
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+
+            Label { text: "Main screen"; weight: Design.weight.semibold }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
+
+                Pill {
+                    label: "Automatic"
+                    active: Settings.barPrimaryOutput === ""
+                    onClicked: Settings.set("barPrimaryOutput", "")
+                }
+
+                Repeater {
+                    model: Quickshell.screens
+                    delegate: Pill {
+                        required property var modelData
+                        label: modelData.name
+                        active: Settings.barPrimaryOutput === modelData.name
+                        onClicked: Settings.set("barPrimaryOutput", modelData.name)
+                    }
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: "Automatic uses the first screen the compositor reports. Naming one keeps it across replugs."
+                role: "caption"; dim: true; wrapMode: Text.WordWrap
+            }
+        }
+    }
 }

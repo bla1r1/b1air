@@ -594,7 +594,15 @@ int SessionManager::run_session() {
             // org.freedesktop.Notifications. Wait it out instead: when the
             // one on screen exits, this thread takes over from a clean start
             // and owns every shell after it.
-            while (g_session_running && is_process_running("quickshell")) {
+            // Exact process name, not is_process_running(), which falls back to
+            // `pgrep -f` and so matches anything with the word anywhere in its
+            // command line — a grep, an editor with the config open, a script
+            // that mentions it. The supervisor then waits for that to exit and
+            // the desktop comes up with no shell at all, which is how this was
+            // found: a test script named the binary, the guard saw it, and the
+            // bar never appeared.
+            while (g_session_running
+                   && run_status({"pgrep", "-r", "DRSW", "-x", "quickshell"})) {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
 
@@ -715,9 +723,28 @@ int SessionManager::run_session() {
     sd_bus *dbus = nullptr;
     DaemonDBus::init_server(&dbus);
 
+    // The camera privacy watch rides on the loop below rather than taking a
+    // thread of its own: sd_bus is not thread-safe, the loop already wakes at
+    // least once a second, and the check is a walk of /proc with no process
+    // spawned. Reported only when it changes, so a shell that is not listening
+    // costs nothing.
+    bool camera_was = false;
+    auto camera_checked = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+
     // Main session loop processing D-Bus messages with kernel epoll (0% CPU)
     while (g_session_running) {
         if (dbus) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now - camera_checked >= std::chrono::seconds(2)) {
+                camera_checked = now;
+                const bool camera_now = SystemControl::camera_in_use();
+                if (camera_now != camera_was) {
+                    camera_was = camera_now;
+                    (void)sd_bus_emit_signal(dbus, "/org/b1air/Daemon", "org.b1air.Daemon",
+                                             "CameraInUseChanged", "b", camera_now);
+                }
+            }
+
             int r = sd_bus_process(dbus, nullptr);
             if (r < 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));

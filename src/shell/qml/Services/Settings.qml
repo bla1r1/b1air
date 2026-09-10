@@ -112,6 +112,13 @@ Singleton {
     readonly property alias barShowWorkspaces: data.barShowWorkspaces
     readonly property alias barShowStats: data.barShowStats
 
+    // Which output carries the full bar. Empty means the first screen the
+    // compositor reports, which is the conventional primary; naming one pins it
+    // across replugs.
+    readonly property alias barPrimaryOutput: data.barPrimaryOutput
+    // Whether the other screens get a shortened bar or a copy of the full one.
+    readonly property alias barSecondaryReduced: data.barSecondaryReduced
+
     // Which individual buttons and cards a surface leaves out, as a
     // comma-separated list of ids. A list rather than a boolean each because
     // the Control Center alone has nine tiles, and nine schema keys that are
@@ -415,6 +422,8 @@ Singleton {
         barShowPinned: true,
         barShowWorkspaces: true,
         barShowStats: true,
+        barPrimaryOutput: "",
+        barSecondaryReduced: true,
         ccHiddenTiles: "",
         ccHiddenCards: "",
         calHiddenCards: "",
@@ -533,6 +542,8 @@ Singleton {
             property bool barShowPinned: true
             property bool barShowWorkspaces: true
             property bool barShowStats: true
+            property string barPrimaryOutput: ""
+            property bool barSecondaryReduced: true
             property string ccHiddenTiles: ""
             property string ccHiddenCards: ""
             property string calHiddenCards: ""

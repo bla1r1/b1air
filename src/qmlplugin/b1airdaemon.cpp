@@ -34,6 +34,8 @@ B1airDaemon::B1airDaemon(QObject* parent)
                   this, SIGNAL(panelStateChanged(QString, bool)));
     m_bus.connect(kShellService, kShellPath, kShellIface, "PanelRequested",
                   this, SIGNAL(panelRequested(QString, QString, QString)));
+    m_bus.connect(kDaemonService, kDaemonPath, kDaemonIface, "CameraInUseChanged",
+                  this, SLOT(onCameraInUseChanged(bool)));
 
     // The daemon may start after the shell, or be restarted under it.
     if (auto* iface = m_bus.interface()) {
@@ -258,4 +260,11 @@ void B1airDaemon::switcherAdvance() {
 }
 void B1airDaemon::switcherConfirm() {
     call(kShellService, kShellPath, kShellIface, "SwitcherConfirm");
+}
+
+void B1airDaemon::onCameraInUseChanged(bool inUse) {
+    if (m_cameraInUse == inUse)
+        return;
+    m_cameraInUse = inUse;
+    emit cameraInUseChanged(inUse);
 }
