@@ -5,5 +5,5 @@
 // when it's warranted; nothing derives it automatically from git history,
 // since commit count and version number are different things.
 namespace b1air {
-inline constexpr const char* kVersion = "0.3.0";
+inline constexpr const char* kVersion = "0.3.1";
 }
