@@ -18,6 +18,36 @@ ColumnLayout {
 
     property int updateCount: 0
     property string statusText: "Checking for updates..."
+    property string transferStatus: ""
+
+    // The daemon does the work; both buttons name the same file in the home
+    // folder, because a settings page has no file dialog and the point is to
+    // have something to copy to a USB stick or scp across.
+    readonly property string transferFile: Quickshell.env("HOME") + "/b1air-config.json"
+
+    function exportConfig() {
+        transferProc.command = ["b1air-daemon", "config", "export", section.transferFile];
+        section.transferStatus = "Exporting…";
+        transferProc.running = false;
+        transferProc.running = true;
+    }
+
+    function importConfig() {
+        transferProc.command = ["b1air-daemon", "config", "import", section.transferFile];
+        section.transferStatus = "Importing…";
+        transferProc.running = false;
+        transferProc.running = true;
+    }
+
+    Process {
+        id: transferProc
+        stdout: StdioCollector {
+            onStreamFinished: section.transferStatus = this.text.trim() || "Done."
+        }
+        stderr: StdioCollector {
+            onStreamFinished: if (this.text.trim()) section.transferStatus = this.text.trim()
+        }
+    }
     property bool isChecking: false
 
     property string dotfilesLocal: "..."
@@ -124,6 +154,53 @@ ColumnLayout {
                 label: "View Backups"
                 tone: Design.textDim
                 onActivated: section.viewBackups()
+            }
+        }
+    }
+
+    // ── Moving this configuration to another machine ─────────────────────────
+    Card {
+        title: "Settings Backup & Transfer"
+        subtitle: "One file holding this desktop's settings, themes, pinned apps and bookmarks"
+        icon: "\u{f0193}"
+        accentColor: Design.teal
+
+        Label {
+            Layout.fillWidth: true
+            text: "Display layout, the main-screen choice and disabled sound devices stay behind: "
+                + "they name hardware, and on another machine they describe screens and cards that "
+                + "are not there. The weather API key is not included either — it lives in the "
+                + "secret store, and a credential does not belong in a file meant to be copied."
+            role: "caption"
+            dim: true
+            wrapMode: Text.WordWrap
+        }
+
+        Label {
+            Layout.fillWidth: true
+            text: section.transferStatus
+            role: "caption"
+            color: Design.accent
+            visible: section.transferStatus !== ""
+            wrapMode: Text.WordWrap
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+
+            ActionButton {
+                icon: "\u{f0552}"
+                label: "Export to Home Folder"
+                tone: Design.teal
+                onActivated: section.exportConfig()
+            }
+
+            ActionButton {
+                icon: "\u{f0552}"
+                label: "Import from Home Folder"
+                tone: Design.sapphire
+                onActivated: section.importConfig()
             }
         }
     }

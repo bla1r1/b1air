@@ -122,6 +122,20 @@ int main(int argc, char* argv[]) {
         } else {
             return SettingsManager::apply_from_file() ? 0 : 1;
         }
+    } else if (cmd == "config") {
+        const std::string sub = (argc >= 3) ? argv[2] : "";
+        const std::string arg = (argc >= 4) ? argv[3] : "";
+        if (sub == "export") {
+            const std::string out = arg.empty()
+                ? std::string(std::getenv("HOME") ? std::getenv("HOME") : "/tmp")
+                      + "/b1air-config.json"
+                : arg;
+            return SettingsManager::config_export(out) ? 0 : 1;
+        }
+        if (sub == "import" && !arg.empty())
+            return SettingsManager::config_import(arg) ? 0 : 1;
+        std::cerr << "Usage: " << argv[0] << " config {export [file]|import <file>}\n";
+        return 1;
     } else if (cmd == "camera") {
         // Prints and exits 0 when in use, 1 when not, so a script can branch
         // on either the word or the status.

@@ -1,4 +1,6 @@
 #include "settings_manager.hpp"
+#include <filesystem>
+#include <nlohmann/json.hpp>
 #include "sway_ipc.hpp"
 
 #include <iostream>
@@ -373,6 +375,150 @@ int SettingsManager::watch_and_apply(volatile int* running_flag) {
     }
 #endif
     return 0;
+}
+
+
+// ── Moving a configuration to another machine ────────────────────────────────
+
+namespace {
+
+/** Keys that describe this machine's hardware rather than a preference. */
+const char* const kLocalOnly[] = {
+    "monitors",              // a display layout, in physical positions
+    "barPrimaryOutput",      // names an output
+    "disabledAudioDevices",  // names sound cards
+};
+
+bool is_local_only(const std::string& key) {
+    for (const char* k : kLocalOnly)
+        if (key == k) return true;
+    return false;
+}
+
+std::string home_dir() {
+    const char* h = std::getenv("HOME");
+    return h ? h : "/tmp";
+}
+
+/** Reads a JSON file, or a null value if it is missing or malformed. */
+nlohmann::json read_json(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) return nullptr;
+    try {
+        nlohmann::json j;
+        in >> j;
+        return j;
+    } catch (const std::exception&) {
+        return nullptr;
+    }
+}
+
+bool write_json(const std::string& path, const nlohmann::json& j) {
+    const size_t slash = path.find_last_of('/');
+    if (slash != std::string::npos)
+        std::filesystem::create_directories(path.substr(0, slash));
+    std::ofstream out(path);
+    if (!out) return false;
+    out << j.dump(2) << "\n";
+    return out.good();
+}
+
+} // namespace
+
+bool SettingsManager::config_export(const std::string& path) {
+    nlohmann::json bundle;
+    bundle["format"] = "b1air-config";
+    bundle["version"] = 1;
+
+    nlohmann::json settings = read_json(get_settings_filepath());
+    if (!settings.is_object()) {
+        std::cerr << "[b1air-config] no settings file to export\n";
+        return false;
+    }
+
+    // Dropped here as well as on import: an export is a document people read
+    // and send to each other, and it should not contain another machine's
+    // monitor arrangement even if nothing would apply it.
+    nlohmann::json portable = nlohmann::json::object();
+    nlohmann::json skipped = nlohmann::json::array();
+    for (auto it = settings.begin(); it != settings.end(); ++it) {
+        if (is_local_only(it.key())) {
+            skipped.push_back(it.key());
+            continue;
+        }
+        portable[it.key()] = it.value();
+    }
+    bundle["settings"] = portable;
+    bundle["skipped"] = skipped;
+
+    const std::string b1 = home_dir() + "/.config/b1air";
+    for (const auto& [name, file] : std::initializer_list<std::pair<const char*, const char*>>{
+             {"pinnedApps", "/pinned_apps.json"},
+             {"fileBookmarks", "/files_bookmarks.json"},
+             {"theme", "/theme.json"}}) {
+        nlohmann::json v = read_json(b1 + file);
+        if (!v.is_null()) bundle[name] = v;
+    }
+
+    // Themes are files people write by hand, so they travel whole.
+    nlohmann::json themes = nlohmann::json::object();
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(b1 + "/themes", ec)) {
+        if (ec) break;
+        if (e.path().extension() != ".json") continue;
+        nlohmann::json t = read_json(e.path().string());
+        if (t.is_object()) themes[e.path().stem().string()] = t;
+    }
+    if (!themes.empty()) bundle["themes"] = themes;
+
+    if (!write_json(path, bundle)) {
+        std::cerr << "[b1air-config] could not write " << path << "\n";
+        return false;
+    }
+    std::cout << "Exported " << portable.size() << " settings";
+    if (!skipped.empty()) std::cout << " (" << skipped.size() << " machine-specific left out)";
+    std::cout << " to " << path << "\n";
+    return true;
+}
+
+bool SettingsManager::config_import(const std::string& path) {
+    nlohmann::json bundle = read_json(path);
+    if (!bundle.is_object() || bundle.value("format", "") != "b1air-config") {
+        std::cerr << "[b1air-config] " << path << " is not a b1air configuration export\n";
+        return false;
+    }
+
+    nlohmann::json current = read_json(get_settings_filepath());
+    if (!current.is_object()) current = nlohmann::json::object();
+
+    int applied = 0, refused = 0;
+    const nlohmann::json& incoming = bundle["settings"];
+    if (incoming.is_object()) {
+        for (auto it = incoming.begin(); it != incoming.end(); ++it) {
+            // Refused on the way in too, so a hand-edited or older export
+            // cannot put another machine's screens into this one's settings.
+            if (is_local_only(it.key())) { ++refused; continue; }
+            current[it.key()] = it.value();
+            ++applied;
+        }
+    }
+    if (!write_json(get_settings_filepath(), current)) {
+        std::cerr << "[b1air-config] could not write the settings file\n";
+        return false;
+    }
+
+    const std::string b1 = home_dir() + "/.config/b1air";
+    if (bundle.contains("pinnedApps"))    write_json(b1 + "/pinned_apps.json", bundle["pinnedApps"]);
+    if (bundle.contains("fileBookmarks")) write_json(b1 + "/files_bookmarks.json", bundle["fileBookmarks"]);
+    if (bundle.contains("theme"))         write_json(b1 + "/theme.json", bundle["theme"]);
+    if (bundle.contains("themes") && bundle["themes"].is_object())
+        for (auto it = bundle["themes"].begin(); it != bundle["themes"].end(); ++it)
+            write_json(b1 + "/themes/" + it.key() + ".json", it.value());
+
+    std::cout << "Imported " << applied << " settings";
+    if (refused) std::cout << " (" << refused << " machine-specific refused)";
+    std::cout << ". Log out and back in, or run `b1air-shell reload`.\n";
+    return true;
 }
 
 } // namespace b1air

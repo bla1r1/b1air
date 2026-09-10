@@ -66,6 +66,25 @@ public:
     static bool set_json_value(const std::string& key, const std::string& val);
 
     static int watch_and_apply(volatile int* running_flag);
+
+    // ── Moving a configuration to another machine ────────────────────────────
+    //
+    // One JSON document holding the settings file and the small stores beside
+    // it — themes, pinned apps, file-manager bookmarks — so a new machine can
+    // be brought up to the same desktop by copying a single file.
+    //
+    // Three keys never travel, whether or not an older export contains them:
+    // `monitors` is a display layout in physical positions, `barPrimaryOutput`
+    // names an output, and `disabledAudioDevices` names sound cards. Carrying
+    // those to another machine does not restore a preference, it describes
+    // hardware that is not there — the bar would look for a screen by a name
+    // nothing answers to.
+    //
+    // The weather API key is not in the settings file at all; it lives in the
+    // secret store, and a credential does not belong in a document meant to be
+    // copied around. It is entered again on the new machine.
+    static bool config_export(const std::string& path);
+    static bool config_import(const std::string& path);
 };
 
 } // namespace b1air
