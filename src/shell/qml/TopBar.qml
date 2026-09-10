@@ -465,6 +465,7 @@ PanelWindow {
             // 1. APPS Island (Launchpad on Left Click, Spotlight on Right Click)
             Rectangle {
                 id: appMenuBtn
+                visible: Settings.barShowApps
                 width: appRow.implicitWidth + Design.s(20)
                 height: Design.s(30)
                 radius: Design.s(10)
@@ -520,7 +521,7 @@ PanelWindow {
                 color: topBar.colBg
                 border.color: topBar.colBorder
                 border.width: 1
-                visible: PinnedApps.pinnedList.length > 0
+                visible: Settings.barShowPinned && PinnedApps.pinnedList.length > 0
 
                 Row {
                     id: pinnedRow
@@ -599,6 +600,7 @@ PanelWindow {
             // 3. Workspaces Island
             Rectangle {
                 id: workspacesIsland
+                visible: Settings.barShowWorkspaces
                 height: Design.s(30)
                 width: workspacesRow.implicitWidth + Design.s(12)
                 radius: Design.s(10)
@@ -992,6 +994,7 @@ PanelWindow {
             Rectangle {
                 height: Design.s(30)
                 width: statsRow.implicitWidth + Design.s(20)
+                visible: Settings.barShowStats
                 radius: Design.s(10)
                 color: statsArea.containsMouse ? Design.tint(Design.accent, 0.15) : topBar.colBg
                 border.color: statsArea.containsMouse ? Design.tint(Design.accent, 0.35) : topBar.colBorder

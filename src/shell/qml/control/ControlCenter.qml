@@ -39,17 +39,200 @@ PopupShell {
     // A two-column grid with an odd number of tiles leaves a hole. The last
     // visible tile fills it instead — the old version tried to decide this per
     // tile and the power branch could never be true.
-    readonly property int visibleTileCount: (wifiTile.visible ? 1 : 0) + (btTile.visible ? 1 : 0)
-                                          + (dndTile.visible ? 1 : 0) + (nightTile.visible ? 1 : 0)
-                                          + (powerTile.visible ? 1 : 0) + (gameTile.visible ? 1 : 0)
-                                          + (caffeineTile.visible ? 1 : 0) + (screenTile.visible ? 1 : 0)
-    readonly property Item lastTile: screenTile.visible ? screenTile : (caffeineTile.visible ? caffeineTile : (gameTile.visible ? gameTile : (powerTile.visible ? powerTile : nightTile)))
+    // Nine tiles, and this used to add up eight: pickerTile was in neither the
+    // count nor the lastTile chain, and it and screenTile had columnSpan pinned
+    // to 1 rather than asking spanOf() — so the two of them sat outside the
+    // hole-filling mechanism entirely and the grid worked from a tile count
+    // that was wrong whenever the dropper was on screen. One list now, in
+    // order, which also means a tile the user switches off is one the
+    // arithmetic stops counting.
+    // Arrange mode. Off by default and never persisted: it is a mode you are
+    // in for a few seconds, and a panel that reopens in it would be a panel
+    // that looks broken.
+    property bool editing: false
 
-    // Only worth filling a hole when there are two columns to leave one in —
-    // a columnSpan of 2 in a one-column grid collapses the item to nothing.
-    function spanOf(tile) {
-        return (center.visibleTileCount > 1 && center.visibleTileCount % 2 === 1
-                && tile === center.lastTile) ? 2 : 1;
+    readonly property var tileIds: ["wifi", "bluetooth", "dnd", "nightlight", "powermode",
+                                    "gamemode", "caffeine", "screenshot", "dropper"]
+    readonly property var tileById: ({
+        "wifi": wifiTile, "bluetooth": btTile, "dnd": dndTile, "nightlight": nightTile,
+        "powermode": powerTile, "gamemode": gameTile, "caffeine": caffeineTile,
+        "screenshot": screenTile, "dropper": pickerTile
+    })
+
+    /**
+     * Whether a tile is on screen at all: the user's choice, and for three of
+     * them whether the hardware is there.
+     *
+     * A function reading Settings and the device services directly, rather than
+     * the placement loop reading each tile's own `visible`. That version bailed
+     * out when a tile did not exist yet, and a binding that returns before
+     * touching anything captures no dependencies and never runs again — so the
+     * grid was computed once during construction, found no tiles, and put all
+     * nine in cell (0,0). QGridLayoutEngine said so nine times a reload.
+     *
+     * It also removes a precedence trap: `Power.hasBattery || Power.hasProfiles
+     * && shown` parses as `hasBattery || (hasProfiles && shown)`, so a laptop
+     * with a battery ignored the choice to hide that tile.
+     */
+    function tileShown(id) {
+        if (!center.editing && Settings.isWidgetHidden(Settings.ccHiddenTiles, id))
+            return false;
+        if (id === "wifi") return Network.hasWifi;
+        if (id === "bluetooth") return Network.hasBluetooth;
+        if (id === "powermode") return Power.hasBattery || Power.hasProfiles;
+        return true;
+    }
+
+    // Where each tile sits, packed into two columns from the saved order.
+    //
+    // The grid used to be declaration order with a span decided per tile, and
+    // the arithmetic behind it added up eight of the nine — pickerTile was in
+    // neither the count nor the last-tile chain, and it and screenTile had
+    // columnSpan pinned to 1 rather than asking. Both are gone: this places
+    // every tile explicitly, so the order is whatever the user dragged it into
+    // and a tile switched off leaves no gap behind.
+    readonly property var placement: {
+        const arr = Settings.tileArrangement(Settings.ccTileLayout, center.tileIds);
+        let out = ({});
+        let taken = ({});          // "row,col" -> true
+        let lastId = "";
+
+        const free = function (row, col, cols, rows) {
+            if (col + cols > 2)
+                return false;
+            for (let r = row; r < row + rows; r++)
+                for (let c = col; c < col + cols; c++)
+                    if (taken[r + "," + c])
+                        return false;
+            return true;
+        };
+
+        for (const id of arr.order) {
+            if (!center.tileShown(id))
+                continue;
+            const size = Settings.tileSizeCells(arr.spans[id]);
+
+            // First free block, scanning row by row. An occupancy map rather
+            // than a running column counter, because a two-row tile leaves the
+            // cell beside it usable and the one under it not — which a counter
+            // cannot express, and which is the whole reason a "large" size is
+            // possible at all.
+            let row = 0;
+            let col = 0;
+            while (!free(row, col, size.cols, size.rows)) {
+                col++;
+                if (col > 1) {
+                    col = 0;
+                    row++;
+                }
+            }
+            for (let r = row; r < row + size.rows; r++)
+                for (let c = col; c < col + size.cols; c++)
+                    taken[r + "," + c] = true;
+
+            out[id] = { row: row, col: col, cols: size.cols, rows: size.rows };
+            lastId = id;
+        }
+
+        // An odd number of small tiles leaves a hole at the end; the last one
+        // fills it, which is what the old spanOf() was for. Only when it is
+        // small — a size the user chose is a size the user gets.
+        if (lastId !== "" && out[lastId].cols === 1 && out[lastId].rows === 1) {
+            const beside = out[lastId].col === 0 ? 1 : 0;
+            if (!taken[out[lastId].row + "," + beside]) {
+                out[lastId].col = 0;
+                out[lastId].cols = 2;
+            }
+        }
+        return out;
+    }
+
+    // A GridLayout sizes a row to its tallest item, and a tile spanning two
+    // rows whose implicitHeight is one row tall does not make either of them
+    // taller — the second row has nothing else in it, so it collapses to
+    // nothing and the tile keeps its single-row height while its stacked
+    // contents spill onto whatever is underneath. Asking for the height
+    // outright is what makes the span mean anything.
+    function tileHeightFor(id) {
+        const rows = center.placeOf(id).rows;
+        return rows > 1
+            ? Design.s(Design.size.tile) * rows + Design.s(Design.space.sm) * (rows - 1)
+            : Design.s(Design.size.tile);
+    }
+
+    // The remove/restore badge, wherever a thing that can be hidden is drawn.
+    component EditBadge: Rectangle {
+        id: badge
+        property string listKey: ""
+        property string widgetId: ""
+        readonly property bool off: Settings.isWidgetHidden(
+            badge.listKey === "ccHiddenCards" ? Settings.ccHiddenCards : Settings.ccHiddenTiles,
+            badge.widgetId)
+
+        visible: center.editing
+        width: Design.s(20)
+        height: Design.s(20)
+        radius: width / 2
+        z: 25
+        color: badge.off ? Design.tint(Design.ok, 0.85) : Design.tint(Design.red, 0.85)
+
+        Icon {
+            anchors.centerIn: parent
+            text: badge.off ? "\u{f0415}" : "\u{f0156}"
+            role: "caption"
+            color: Design.accentText
+        }
+
+        TapHandler {
+            onTapped: Settings.setWidgetHidden(badge.listKey, badge.widgetId, !badge.off)
+        }
+    }
+
+    function placeOf(id) {
+        return center.placement[id] || ({ row: 0, col: 0, cols: 1, rows: 1 });
+    }
+
+    /**
+     * Finish a drag: whatever tile the pointer was released over swaps places
+     * with the one being dragged. Swap rather than insert — the user asked for
+     * "поменять местами", and a swap needs no notion of where between two
+     * cells a pointer is, which is the part that goes wrong on a grid.
+     */
+    function swapTiles(fromId, scenePos) {
+        for (const id of center.tileIds) {
+            if (id === fromId)
+                continue;
+            const tile = center.tileById[id];
+            if (!tile || !tile.visible)
+                continue;
+            const local = tile.mapFromItem(null, scenePos);
+            if (local.x < 0 || local.y < 0 || local.x > tile.width || local.y > tile.height)
+                continue;
+
+            const arr = Settings.tileArrangement(Settings.ccTileLayout, center.tileIds);
+            const a = arr.order.indexOf(fromId);
+            const b = arr.order.indexOf(id);
+            if (a < 0 || b < 0)
+                return;
+            arr.order[a] = id;
+            arr.order[b] = fromId;
+            Settings.setTileArrangement("ccTileLayout", arr.order, arr.spans);
+            return;
+        }
+    }
+
+    /** small → medium → large → small. */
+    function cycleTileSpan(id) {
+        const arr = Settings.tileArrangement(Settings.ccTileLayout, center.tileIds);
+        const now = Settings.tileSizeName(arr.spans[id]);
+        arr.spans[id] = now === "small" ? "medium" : (now === "medium" ? "large" : "small");
+        Settings.setTileArrangement("ccTileLayout", arr.order, arr.spans);
+    }
+
+    function setTileSize(id, size) {
+        const arr = Settings.tileArrangement(Settings.ccTileLayout, center.tileIds);
+        arr.spans[id] = size;
+        Settings.setTileArrangement("ccTileLayout", arr.order, arr.spans);
     }
 
     // A quick-toggle tile: circle toggles, the rest of the tile opens the page.
@@ -63,20 +246,117 @@ PopupShell {
         property bool circleToggles: true
         // Only a tile that opens a page shows a chevron. Focus does not.
         property string trailingGlyph: "\u{f0142}"
+        // Which entry in the saved arrangement this tile is.
+        property string widgetId: ""
 
         signal toggled()
+
+        // ── Rearranging ──────────────────────────────────────────────────────
+        //
+        // Press and drag a tile onto another and the two swap places; the
+        // arrangement is saved, so it survives a restart. A swap rather than an
+        // insertion because that is what was asked for, and because a swap
+        // needs no decision about which side of a cell boundary a pointer is
+        // on — the part of grid reordering that goes wrong.
+        //
+        // DragHandler has its own threshold, so a press that does not travel is
+        // still a click: the circle keeps toggling and the body keeps opening
+        // the page. The tile lifts rather than moves, because a GridLayout owns
+        // its children's positions and fighting it for them would make the
+        // whole grid jump on every frame of the drag.
+        readonly property bool tileHidden: tile.widgetId !== ""
+            && Settings.isWidgetHidden(Settings.ccHiddenTiles, tile.widgetId)
+
+        opacity: tileDrag.active ? 0.85 : (tile.tileHidden ? 0.35 : 1.0)
+
+        DragHandler {
+            id: tileDrag
+            // Only while arranging. A panel where a slightly long press on
+            // Wi-Fi silently moves it is a panel that rearranges itself by
+            // accident.
+            enabled: center.editing && tile.widgetId !== ""
+            target: null
+            onActiveChanged: {
+                if (!tileDrag.active && tile.widgetId !== "")
+                    center.swapTiles(tile.widgetId, tileDrag.centroid.scenePosition);
+            }
+        }
+
+        z: tileDrag.active ? 20 : 0
+        scale: tileDrag.active ? 1.06 : 1.0
+        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
+
+        // While arranging, the tile stops being a control. Tapping it steps
+        // through the sizes instead of toggling Wi-Fi, which is the only way a
+        // grid of live switches can also be a grid you edit.
+        MouseArea {
+            anchors.fill: parent
+            visible: center.editing && tile.widgetId !== ""
+            enabled: visible
+            z: 15
+            cursorShape: Qt.PointingHandCursor
+            onClicked: center.cycleTileSpan(tile.widgetId)
+        }
+
+        // Take it out, or put it back.
+        Rectangle {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: Design.s(Design.space.xs)
+            visible: center.editing && tile.widgetId !== ""
+            width: Design.s(20)
+            height: Design.s(20)
+            radius: width / 2
+            z: 25
+            color: tile.tileHidden ? Design.tint(Design.ok, 0.85) : Design.tint(Design.red, 0.85)
+
+            Icon {
+                anchors.centerIn: parent
+                text: tile.tileHidden ? "\u{f0415}" : "\u{f0156}"
+                role: "caption"
+                color: Design.accentText
+            }
+
+            TapHandler {
+                onTapped: Settings.setWidgetHidden("ccHiddenTiles", tile.widgetId,
+                                                   !tile.tileHidden)
+            }
+        }
+
+        // Wide or normal. A tile has no room for a resize handle and inventing
+        // a gesture for it would be a gesture nobody finds, so the width is a
+        // switch on the Widgets settings page and this is the shortcut for
+        // anyone who already knows.
+        TapHandler {
+            acceptedButtons: Qt.MiddleButton
+            enabled: tile.widgetId !== ""
+            onTapped: center.cycleTileSpan(tile.widgetId)
+        }
+
+        // A large tile is two rows tall, so it has to earn the height rather
+        // than centre one line of text in an empty box: the circle grows and
+        // the whole thing stacks. Read off the placement, so the tile does not
+        // have to be told twice what size it is.
+        readonly property bool tall: tile.widgetId !== ""
+                                     && center.placeOf(tile.widgetId).rows > 1
 
         implicitHeight: Design.s(Design.size.tile)
         interactive: true
 
-        RowLayout {
+        GridLayout {
             anchors.fill: parent
             anchors.margins: Design.s(Design.space.sm)
-            spacing: Design.s(Design.space.sm)
+            columns: tile.tall ? 1 : 3
+            rowSpacing: Design.s(Design.space.xs)
+            columnSpacing: Design.s(Design.space.sm)
 
             Rectangle {
-                Layout.preferredWidth: Design.s(Design.size.knob)
-                Layout.preferredHeight: Design.s(Design.size.knob)
+                Layout.alignment: tile.tall ? Qt.AlignHCenter | Qt.AlignBottom : Qt.AlignVCenter
+                Layout.preferredWidth: tile.tall ? Design.s(Design.size.knob) * 1.6
+                                                 : Design.s(Design.size.knob)
+                Layout.preferredHeight: tile.tall ? Design.s(Design.size.knob) * 1.6
+                                                  : Design.s(Design.size.knob)
                 radius: width / 2
                 color: tile.on ? Design.tint(tile.activeTextColor, 0.22) : Design.sunken
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -84,7 +364,7 @@ PopupShell {
                 Icon {
                     anchors.centerIn: parent
                     text: tile.glyph
-                    role: "subhead"
+                    role: tile.tall ? "title" : "subhead"
                     color: tile.glyphTone
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 }
@@ -99,14 +379,16 @@ PopupShell {
 
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.alignment: tile.tall ? Qt.AlignHCenter | Qt.AlignTop : Qt.AlignVCenter
                 spacing: 0
 
                 Label {
                     text: tile.title
-                    role: "caption"
+                    role: tile.tall ? "body" : "caption"
                     weight: Design.weight.bold
                     color: tile.on ? tile.activeTextColor : Design.text
                     Layout.fillWidth: true
+                    horizontalAlignment: tile.tall ? Text.AlignHCenter : Text.AlignLeft
                     elide: Text.ElideRight
                 }
 
@@ -115,18 +397,37 @@ PopupShell {
                     role: "caption"
                     color: tile.on ? Design.tint(tile.activeTextColor, 0.85) : Design.textDim
                     Layout.fillWidth: true
+                    horizontalAlignment: tile.tall ? Text.AlignHCenter : Text.AlignLeft
                     elide: Text.ElideRight
                 }
             }
 
             Icon {
-                visible: tile.trailingGlyph !== ""
+                // The chevron is a row-layout affordance; stacked, it has
+                // nowhere to point.
+                visible: tile.trailingGlyph !== "" && !tile.tall
                 text: tile.trailingGlyph
                 role: "caption"
                 color: tile.on ? Design.tint(tile.activeTextColor, 0.6) : Design.textFaint
             }
         }
     }
+
+    // What this panel would like to be, in pixels of height.
+    //
+    // The registry gives every popup a fixed size, and its note beside this one
+    // explains the 700: "the tile grid, the two sliders, the weather card and
+    // the media card add up to roughly 690px". They do — when all of them are
+    // there. Switch three tiles and two cards off and the panel still opened at
+    // 700 with a third of it empty below the last button. The number in the
+    // registry is a ceiling now and this is the request; the smaller wins.
+    //
+    // Zero on the mini pages, which say nothing and so keep the full height.
+    onCurrentViewChanged: if (center.currentView !== "main") center.editing = false;
+
+    readonly property real contentHeight: center.currentView === "main"
+        ? mainScroll.contentHeight + 2 * Design.s(center.padding)
+        : 0
 
     // ── Main dashboard ───────────────────────────────────────────────────────
     // The tile grid plus every mini-view below it never fit the popup's fixed
@@ -171,26 +472,51 @@ PopupShell {
             }
 
             Label {
-                text: "Control Center"
+                text: center.editing ? "Arrange" : "Control Center"
                 role: "subhead"
                 weight: Design.weight.bold
+                color: center.editing ? Design.accent : Design.text
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
 
+            // In edit mode the header is the instruction and the way out, and
+            // nothing else: a battery pill and a bell that open other pages
+            // while you are rearranging tiles are two ways to lose the work.
+            Label {
+                visible: center.editing
+                text: "drag to swap · tap size · × to remove"
+                role: "caption"
+                color: Design.textDim
+                elide: Text.ElideRight
+            }
+
             BatteryPill {
+                visible: !center.editing
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: center.currentView = "power"
             }
 
             IconButton {
+                visible: !center.editing
                 icon: Notifications.history.count > 0 ? "\u{f009a}" : "\u{f009b}"
                 bordered: true
                 hoverTone: Design.accent
                 onClicked: center.currentView = (center.currentView === "notifications" ? "main" : "notifications")
             }
 
+            // Rearranging happens here, in front of the thing being rearranged,
+            // rather than as a list of switches in another window where the
+            // only way to see the result is to close it and open this.
             IconButton {
+                icon: center.editing ? "\u{f012c}" : "\u{f03eb}"   // check / tune
+                bordered: true
+                hoverTone: Design.accent
+                onClicked: center.editing = !center.editing
+            }
+
+            IconButton {
+                visible: !center.editing
                 icon: "\u{f0493}"   // cog
                 bordered: true
                 onClicked: {
@@ -203,15 +529,22 @@ PopupShell {
         // ── 2. Quick toggles ─────────────────────────────────────────────────
         GridLayout {
             Layout.fillWidth: true
-            columns: center.visibleTileCount === 1 ? 1 : 2
+            // Always two: every tile now names its own row and column, and a
+            // lone visible tile is widened to span both by the packer.
+            columns: 2
             rowSpacing: Design.s(Design.space.sm)
             columnSpacing: Design.s(Design.space.sm)
 
             QuickTile {
                 id: wifiTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(wifiTile)
-                visible: Network.hasWifi
+                widgetId: "wifi"
+                Layout.row: center.placeOf("wifi").row
+                Layout.column: center.placeOf("wifi").col
+                Layout.columnSpan: center.placeOf("wifi").cols
+                Layout.rowSpan: center.placeOf("wifi").rows
+                Layout.preferredHeight: center.tileHeightFor("wifi")
+                visible: center.tileShown("wifi")
                 glyph: "\u{f0928}"
                 title: "Wi-Fi"
                 on: Network.wifi.power === "on"
@@ -225,8 +558,13 @@ PopupShell {
             QuickTile {
                 id: btTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(btTile)
-                visible: Network.hasBluetooth
+                widgetId: "bluetooth"
+                Layout.row: center.placeOf("bluetooth").row
+                Layout.column: center.placeOf("bluetooth").col
+                Layout.columnSpan: center.placeOf("bluetooth").cols
+                Layout.rowSpan: center.placeOf("bluetooth").rows
+                Layout.preferredHeight: center.tileHeightFor("bluetooth")
+                visible: center.tileShown("bluetooth")
                 glyph: "\u{f00af}"
                 title: "Bluetooth"
                 on: Network.bluetooth.power === "on"
@@ -240,7 +578,13 @@ PopupShell {
             QuickTile {
                 id: dndTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(dndTile)
+                widgetId: "dnd"
+                Layout.row: center.placeOf("dnd").row
+                Layout.column: center.placeOf("dnd").col
+                Layout.columnSpan: center.placeOf("dnd").cols
+                Layout.rowSpan: center.placeOf("dnd").rows
+                Layout.preferredHeight: center.tileHeightFor("dnd")
+                visible: center.tileShown("dnd")
                 glyph: Notifications.dnd ? "\u{f009b}" : "\u{f009a}"
                 // "Focus" meant three things: this tile, the FocusTime
                 // dashboard, and the work phase of the focus timer. It is the
@@ -260,7 +604,13 @@ PopupShell {
             QuickTile {
                 id: nightTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(nightTile)
+                widgetId: "nightlight"
+                Layout.row: center.placeOf("nightlight").row
+                Layout.column: center.placeOf("nightlight").col
+                Layout.columnSpan: center.placeOf("nightlight").cols
+                Layout.rowSpan: center.placeOf("nightlight").rows
+                Layout.preferredHeight: center.tileHeightFor("nightlight")
+                visible: center.tileShown("nightlight")
                 glyph: "\u{f0599}"
                 title: "Night Light"
                 on: Settings.nightLightEnabled !== undefined ? Settings.nightLightEnabled : false
@@ -285,8 +635,13 @@ PopupShell {
             QuickTile {
                 id: powerTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(powerTile)
-                visible: Power.hasBattery || Power.hasProfiles
+                widgetId: "powermode"
+                Layout.row: center.placeOf("powermode").row
+                Layout.column: center.placeOf("powermode").col
+                Layout.columnSpan: center.placeOf("powermode").cols
+                Layout.rowSpan: center.placeOf("powermode").rows
+                Layout.preferredHeight: center.tileHeightFor("powermode")
+                visible: center.tileShown("powermode")
                 glyph: Power.profile === "performance" ? "\u{f0e4}"
                      : (Power.profile === "power-saver" ? "\u{f0084}" : "\u{f0241}")
                 title: "Power Mode"
@@ -307,7 +662,13 @@ PopupShell {
             QuickTile {
                 id: gameTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(gameTile)
+                widgetId: "gamemode"
+                Layout.row: center.placeOf("gamemode").row
+                Layout.column: center.placeOf("gamemode").col
+                Layout.columnSpan: center.placeOf("gamemode").cols
+                Layout.rowSpan: center.placeOf("gamemode").rows
+                Layout.preferredHeight: center.tileHeightFor("gamemode")
+                visible: center.tileShown("gamemode")
                 glyph: "\u{f11b}"
                 title: "Game Mode"
                 on: Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false
@@ -326,7 +687,13 @@ PopupShell {
             QuickTile {
                 id: caffeineTile
                 Layout.fillWidth: true
-                Layout.columnSpan: center.spanOf(caffeineTile)
+                widgetId: "caffeine"
+                Layout.row: center.placeOf("caffeine").row
+                Layout.column: center.placeOf("caffeine").col
+                Layout.columnSpan: center.placeOf("caffeine").cols
+                Layout.rowSpan: center.placeOf("caffeine").rows
+                Layout.preferredHeight: center.tileHeightFor("caffeine")
+                visible: center.tileShown("caffeine")
                 glyph: "\u{f0f4}"
                 title: "Caffeine"
                 property bool active: false
@@ -348,7 +715,13 @@ PopupShell {
             QuickTile {
                 id: screenTile
                 Layout.fillWidth: true
-                Layout.columnSpan: 1
+                widgetId: "screenshot"
+                Layout.row: center.placeOf("screenshot").row
+                Layout.column: center.placeOf("screenshot").col
+                Layout.columnSpan: center.placeOf("screenshot").cols
+                Layout.rowSpan: center.placeOf("screenshot").rows
+                Layout.preferredHeight: center.tileHeightFor("screenshot")
+                visible: center.tileShown("screenshot")
                 glyph: "\u{f016d}"
                 title: "Screenshot"
                 on: false
@@ -366,7 +739,13 @@ PopupShell {
             QuickTile {
                 id: pickerTile
                 Layout.fillWidth: true
-                Layout.columnSpan: 1
+                widgetId: "dropper"
+                Layout.row: center.placeOf("dropper").row
+                Layout.column: center.placeOf("dropper").col
+                Layout.columnSpan: center.placeOf("dropper").cols
+                Layout.rowSpan: center.placeOf("dropper").rows
+                Layout.preferredHeight: center.tileHeightFor("dropper")
+                visible: center.tileShown("dropper")
                 glyph: "\u{f0592}"
                 title: "Color Dropper"
                 on: false
@@ -385,6 +764,8 @@ PopupShell {
         // ── 3. Sliders ───────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
+            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "sliders")
+            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "sliders") ? 0.35 : 1.0
             spacing: Design.s(Design.space.sm)
 
             Slider {
@@ -437,17 +818,35 @@ PopupShell {
                     Clickable { id: soundBtnMa; onClicked: center.currentView = "sound" }
                 }
             }
+
+            // A Layout cannot carry an anchored child, so here the
+            // badge is laid out with everything else.
+            EditBadge {
+                Layout.alignment: Qt.AlignRight
+                listKey: "ccHiddenCards"
+                widgetId: "sliders"
+            }
         }
 
         // ── 3.5 Live Weather Card ──────────────────────────────────────────
         Rectangle {
             id: weatherCard
             Layout.fillWidth: true
+            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "weather")
+            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "weather") ? 0.35 : 1.0
             Layout.preferredHeight: Design.s(52)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: Design.border
+
+            EditBadge {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: Design.s(Design.space.xs)
+                listKey: "ccHiddenCards"
+                widgetId: "weather"
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -500,11 +899,21 @@ PopupShell {
         Rectangle {
             id: mediaCard
             Layout.fillWidth: true
+            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "media")
+            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "media") ? 0.35 : 1.0
             Layout.preferredHeight: Design.s(Design.size.media)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: Design.border
+
+            EditBadge {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: Design.s(Design.space.xs)
+                listKey: "ccHiddenCards"
+                widgetId: "media"
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -617,6 +1026,8 @@ PopupShell {
         // ── 5. Session actions ───────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
+            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "session")
+            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "session") ? 0.35 : 1.0
             spacing: Design.s(Design.space.sm)
 
             ActionButton {
@@ -647,6 +1058,14 @@ PopupShell {
                 tone: Design.danger
                 destructive: true
                 onActivated: Daemon.power("shutdown")
+            }
+
+            // A Layout cannot carry an anchored child, so here the
+            // badge is laid out with everything else.
+            EditBadge {
+                Layout.alignment: Qt.AlignRight
+                listKey: "ccHiddenCards"
+                widgetId: "session"
             }
         }
     }

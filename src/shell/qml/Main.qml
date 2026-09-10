@@ -360,6 +360,57 @@ Scope {
         }
     }
 
+    // Shrink the window to what the surface actually needs.
+    //
+    // A popup's size came only from WindowRegistry, so a Control Center with
+    // half its widgets switched off opened at the height of a full one and put
+    // the rest of it on screen as empty panel. A surface that knows its own
+    // content height says so through a `contentHeight` property; the registry
+    // figure becomes the ceiling, because a surface with more content than that
+    // is meant to scroll rather than grow off the screen. Surfaces that do not
+    // declare one — the launcher and Spotlight among them, where a window that
+    // resizes as you type would be worse than one that does not — are left
+    // exactly as they were.
+    function refitHeight() {
+        const item = widgetStack.currentItem;
+        if (!item) return;
+        const t = getLayout(masterWindow.currentActive);
+        if (!t) return;
+
+        // Width too, for a panel built of cards side by side: take one away and
+        // what is left over is dead panel rather than a narrower one. And a
+        // popup that changes width has to be put back where it was anchored —
+        // the registry's x was computed from the registry's width, so a
+        // centred panel that shrinks without this drifts left and a
+        // right-hand one crawls away from the edge it belongs to.
+        if (item.contentWidth !== undefined && item.contentWidth > 0) {
+            const wRoom = Screen.width - Design.s(Design.space.md) * 2;
+            const fittedW = Math.max(Design.s(200), Math.min(wRoom, item.contentWidth));
+            const centred = Math.abs(t.rx - (Screen.width - t.w) / 2) <= 2;
+            masterWindow.animX = centred ? Math.floor((Screen.width - fittedW) / 2)
+                                         : (t.rx + t.w - fittedW);
+            masterWindow.targetW = fittedW;
+            masterWindow.animW = fittedW;
+        }
+
+        if (item.contentHeight === undefined || item.contentHeight <= 0)
+            return;
+        // Both directions. The registry figure was being used as a ceiling, so
+        // a panel with less in it shrank and a panel with more in it stayed put
+        // and scrolled. The only real ceiling is the screen: whatever is left
+        // between the bar and the bottom edge, less a margin so a full-height
+        // panel does not sit flush against it.
+        const room = Screen.height - t.ry - Design.s(Design.space.md);
+        const fitted = Math.max(Design.s(120), Math.min(room, item.contentHeight));
+        // Both, and this is the whole of it: targetH sizes the content and
+        // animH sizes the surface it sits in. Setting only the first left the
+        // window at its full height with the shrunken panel centred inside,
+        // which read as the panel having drifted down the screen rather than
+        // having got smaller.
+        masterWindow.targetH = fitted;
+        masterWindow.animH = fitted;
+    }
+
     function handleNativeScreenChange() {
         if (masterWindow.currentActive === "hidden") return;
         
@@ -417,6 +468,17 @@ Scope {
 
                 onCurrentItemChanged: {
                     if (currentItem) currentItem.forceActiveFocus();
+                    masterWindow.refitHeight();
+                }
+
+                // The height is not settled when the surface first appears —
+                // a card that has not loaded its data yet, or a widget switched
+                // off while the panel is open, changes it afterwards. Follow it.
+                Connections {
+                    target: widgetStack.currentItem
+                    ignoreUnknownSignals: true
+                    function onContentHeightChanged() { masterWindow.refitHeight(); }
+                    function onContentWidthChanged() { masterWindow.refitHeight(); }
                 }
 
                 replaceEnter: Transition {

@@ -107,6 +107,35 @@ Singleton {
     readonly property alias barShowMedia: data.barShowMedia
     readonly property alias barShowTray: data.barShowTray
     readonly property alias barClock24h: data.barClock24h
+    readonly property alias barShowApps: data.barShowApps
+    readonly property alias barShowPinned: data.barShowPinned
+    readonly property alias barShowWorkspaces: data.barShowWorkspaces
+    readonly property alias barShowStats: data.barShowStats
+
+    // Which individual buttons and cards a surface leaves out, as a
+    // comma-separated list of ids. A list rather than a boolean each because
+    // the Control Center alone has nine tiles, and nine schema keys that are
+    // all `true` by default is nine chances for one of them to be declared and
+    // never read — the single most common defect in this repository's history.
+    // Empty means everything is shown, which is what an unconfigured desktop
+    // should do.
+    readonly property alias ccHiddenTiles: data.ccHiddenTiles
+    readonly property alias ccHiddenCards: data.ccHiddenCards
+    readonly property alias calHiddenCards: data.calHiddenCards
+
+    // The Control Center's tile grid, as "id:span" pairs in the order they are
+    // laid out — "dnd:2,wifi:1,bluetooth:1". A span of 2 is a tile across both
+    // columns. Ids missing from the list keep their declared position at the
+    // end, so an empty string is the shipped arrangement and a list written by
+    // hand does not have to be complete.
+    readonly property alias ccTileLayout: data.ccTileLayout
+
+    // The calendar's parts, in the same "id:size" shape. No order in it — the
+    // four are a fixed arrangement, a month grid beside a dashboard, not a set
+    // of interchangeable cells — but each has a size that means something of
+    // its own: how wide the month is, how tall the metric pills are, how many
+    // days of forecast there is room for.
+    readonly property alias calCardLayout: data.calCardLayout
 
     // Sound Feedback
     readonly property alias soundVolumeFeedback: data.soundVolumeFeedback
@@ -183,6 +212,103 @@ Singleton {
             return;
         data[key] = value;
         root.flush();
+    }
+
+    // ── Hidden-widget lists ──────────────────────────────────────────────────
+    //
+    // The parsing lives here so that every surface asking "am I switched off?"
+    // and every toggle writing the answer agree about what the string means.
+    // Split on commas, ignore blanks, compare trimmed — a list edited by hand
+    // in settings.json should still work.
+
+    // Takes the list *value*, not its key: a caller writes
+    // `Settings.isWidgetHidden(Settings.ccHiddenTiles, "wifi")`, so the binding
+    // that asks reads the property directly and re-evaluates when it changes.
+    // Passing the key instead would hide that read inside a lookup and leave
+    // every switched-off widget stuck at whatever it was when first drawn.
+    function isWidgetHidden(list, id) {
+        return String(list || "").split(",").map(s => s.trim())
+                                 .filter(s => s.length > 0).indexOf(id) >= 0;
+    }
+
+    function setWidgetHidden(listKey, id, hidden) {
+        const raw = data[listKey];
+        if (raw === undefined) {
+            console.warn("Settings: unknown key", listKey, "— add it to the schema first");
+            return;
+        }
+        let ids = String(raw).split(",").map(s => s.trim()).filter(s => s.length > 0);
+        const at = ids.indexOf(id);
+        if (hidden && at < 0)
+            ids.push(id);
+        else if (!hidden && at >= 0)
+            ids.splice(at, 1);
+        else
+            return;
+        root.set(listKey, ids.join(","));
+    }
+
+    // ── Tile arrangement ─────────────────────────────────────────────────────
+
+    /** Parsed "id:span" list, in order, restricted to and completed from `all`. */
+    /**
+     * @param fallback the size for an id the list does not mention. The Control
+     *        Center ships all-small and the calendar ships all-medium, so the
+     *        default cannot be one constant: taking it as small everywhere
+     *        quietly halved the calendar's metric pills on any machine that had
+     *        never touched the setting.
+     */
+    function tileArrangement(list, all, fallback) {
+        const missing = root.tileSizeName(fallback || "small");
+        let order = [];
+        let spans = ({});
+        for (const part of String(list || "").split(",")) {
+            const bits = part.trim().split(":");
+            const id = (bits[0] || "").trim();
+            if (!id || all.indexOf(id) < 0 || order.indexOf(id) >= 0)
+                continue;
+            order.push(id);
+            spans[id] = root.tileSizeName(bits[1]);
+        }
+        // Anything the list does not mention keeps its declared place, at the
+        // end: a new tile added to the shell later appears rather than
+        // disappearing because an old saved arrangement had never heard of it.
+        for (const id of all)
+            if (order.indexOf(id) < 0) {
+                order.push(id);
+                spans[id] = missing;
+            }
+        return { order: order, spans: spans };
+    }
+
+    // Three sizes on a two-column grid, which is as many as two columns can
+    // carry and still mean something:
+    //
+    //   small   1 x 1   half the width, one row  — the shipped look
+    //   medium  2 x 1   the full width, one row
+    //   large   2 x 2   the full width, two rows
+    //
+    // Names rather than numbers in the saved string, so a file edited by hand
+    // reads as what it is; "1" and "2" are still understood because that is
+    // what the first version of this wrote.
+    function tileSizeName(raw) {
+        const v = String(raw || "").trim().toLowerCase();
+        if (v === "large" || v === "3") return "large";
+        if (v === "medium" || v === "2") return "medium";
+        return "small";
+    }
+
+    function tileSizeCells(name) {
+        if (name === "large") return { cols: 2, rows: 2 };
+        if (name === "medium") return { cols: 2, rows: 1 };
+        return { cols: 1, rows: 1 };
+    }
+
+    function setTileArrangement(key, order, spans) {
+        let parts = [];
+        for (const id of order)
+            parts.push(id + ":" + root.tileSizeName(spans[id]));
+        root.set(key, parts.join(","));
     }
 
     function setWeatherApiKey(value) {
@@ -285,6 +411,15 @@ Singleton {
         barShowMedia: true,
         barShowTray: true,
         barClock24h: true,
+        barShowApps: true,
+        barShowPinned: true,
+        barShowWorkspaces: true,
+        barShowStats: true,
+        ccHiddenTiles: "",
+        ccHiddenCards: "",
+        calHiddenCards: "",
+        ccTileLayout: "",
+        calCardLayout: "",
         nightLightEnabled: false,
         nightLightTemp: 4000,
         soundVolumeFeedback: true,
@@ -394,6 +529,15 @@ Singleton {
             property bool barShowMedia: true
             property bool barShowTray: true
             property bool barClock24h: true
+            property bool barShowApps: true
+            property bool barShowPinned: true
+            property bool barShowWorkspaces: true
+            property bool barShowStats: true
+            property string ccHiddenTiles: ""
+            property string ccHiddenCards: ""
+            property string calHiddenCards: ""
+            property string ccTileLayout: ""
+            property string calCardLayout: ""
 
             property bool nightLightEnabled: false
             property int nightLightTemp: 4000

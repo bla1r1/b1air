@@ -29,6 +29,7 @@ Item {
         { id: "theme",       icon: "\u{f0765}", label: "Themes",           color: Design.mauve,    tags: "theme palette colours colors catppuccin tokyo night import export create custom" },
         { id: "wallpaper",   icon: "\u{f02ca}", label: "Wallpaper",        color: Design.pink,     tags: "background wallpaper pictures desktop image slideshow photos" },
         { id: "bar",         icon: "\u{f07e}",  label: "Native Top Bar", color: Design.blue,     tags: "top bar panel position modules icons style workspaces scale ui dpi" },
+        { id: "widgets",     icon: "\u{f0331}", label: "Widgets",          color: Design.blue,     tags: "widgets buttons tiles modules control center calendar top bar show hide customize customise remove add panels" },
         // not "blur"/"corners": those live on Appearance, and listing them here
         // sent a search for either to a page that has neither.
         { id: "windows",     icon: "\u{f0379}", label: "Window & Gaps",    color: Design.sapphire, tags: "gaps border padding tiling sway layout inner outer smart borders smart gaps" },
@@ -357,6 +358,11 @@ Item {
                 Sections.BarSettingsSection {
                     Layout.fillWidth: true
                     visible: app.page === "bar"
+                }
+
+                Sections.WidgetsSettingsSection {
+                    Layout.fillWidth: true
+                    visible: app.page === "widgets"
                 }
 
                 Sections.CaptureSettingsSection {
