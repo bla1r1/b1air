@@ -105,25 +105,10 @@ ApplicationWindow {
                     spacing: Design.s(8)
 
                     // App Icon & Title
-                    Row {
-                        spacing: Design.s(8)
-                        Layout.alignment: Qt.AlignVCenter
-                        Text {
-                            text: "󰈙"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(15)
-                            color: window.colBlue
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Text {
-                            text: "b1air-notes"
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(12)
-                            font.bold: true
-                            color: window.colFg
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
+                    // No app name in the toolbar. Same reasoning as the file manager:
+                    // the window was opened by name and is full of notes, so "b1air-notes"
+                    // beside the New Note button was a label nobody needed and a gap the
+                    // buttons could have had.
 
                     // New Note Button
                     Rectangle {

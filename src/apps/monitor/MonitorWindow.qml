@@ -223,35 +223,12 @@ Window {
                     anchors.rightMargin: Design.s(Design.space.sm)
                     spacing: Design.s(Design.space.sm)
 
-                    // Title Branding
-                    RowLayout {
-                        spacing: Design.s(6)
-
-                        Rectangle {
-                            width: Design.s(22)
-                            height: Design.s(22)
-                            radius: Design.s(Design.radius.sm)
-                            color: Design.tint(Design.sapphire, 0.2)
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "\u{f080}" // bar-chart / pulse
-                                color: Design.sapphire
-                                font.family: Design.font.icon
-                                font.pixelSize: Design.s(12)
-                            }
-                        }
-
-                        Text {
-                            text: "System Monitor"
-                            font.family: Design.font.sans
-                            font.weight: Design.weight.bold
-                            font.pixelSize: Design.s(12)
-                            color: Design.text
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
+                    // No name and no badge. The window is opened by name and is a table of
+                    // processes; "System Monitor" beside a bar-chart glyph told nobody
+                    // anything, and removing the label left the icon on its own as pure
+                    // decoration, so both went. The tabs take the space they were
+                    // holding, at the start of the row where the eye already goes,
+                    // instead of staying pinned to the far edge of an empty bar.
 
                 // Tab Switcher Pills
                 Rectangle {
@@ -310,6 +287,8 @@ Window {
                         }
                     }
                 }
+
+                Item { Layout.fillWidth: true }
 
                 // Refresh Button
                 IconButton {

@@ -328,46 +328,10 @@ ApplicationWindow {
                     anchors.margins: Design.s(14)
                     spacing: Design.s(10)
 
-                    // App Header Branding Card
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Design.s(10)
-                        Layout.bottomMargin: 2
-
-                        Rectangle {
-                            width: Design.s(28)
-                            height: Design.s(28)
-                            radius: Design.s(8)
-                            color: Design.tint(Design.accent, 0.18)
-                            border.color: Design.tint(Design.accent, 0.35)
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "󰉋"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(15)
-                                color: window.colBlue
-                            }
-                        }
-
-                        Column {
-                            Layout.fillWidth: true
-                            Text {
-                                text: "Files"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(13)
-                                font.bold: true
-                                color: window.colFg
-                            }
-                            Text {
-                                text: "Explorer & Gallery"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(10)
-                                color: window.colDim
-                            }
-                        }
-                    }
+                    // No app header. The window is opened by name, has this suite's frame
+                    // and a folder tree in it — nothing about "Files / Explorer & Gallery"
+                    // was news, and it cost the top of the sidebar, which is where the
+                    // places you actually navigate to belong.
 
                     // 1. QUICK JUMP (Root, Home, the dotfiles checkout)
                     //
@@ -616,7 +580,18 @@ ApplicationWindow {
                         spacing: Design.s(8)
 
                         // History Navigation Cluster
+                        //
+                        // This had a height and no width. Its only child is
+                        // anchored, and an anchored child gives its parent no
+                        // implicit size, so the capsule was zero pixels wide:
+                        // the background and border never drew at all, and the
+                        // row of four buttons spilled out of it symmetrically —
+                        // half of it left, across the sidebar divider and up
+                        // against the app title, and half right, underneath the
+                        // breadcrumb. Sized from its contents, it sits in the
+                        // toolbar where it belongs and collides with nothing.
                         Rectangle {
+                            implicitWidth: navRow.implicitWidth + Design.s(10)
                             height: Design.s(30)
                             radius: Design.s(6)
                             color: window.colSunken
@@ -624,6 +599,7 @@ ApplicationWindow {
                             border.width: 1
 
                             Row {
+                                id: navRow
                                 anchors.centerIn: parent
                                 spacing: Design.s(2)
 
@@ -689,8 +665,18 @@ ApplicationWindow {
                                         implicitWidth: crumbText.implicitWidth + Design.s(12)
                                         height: Design.s(22)
                                         radius: Design.s(4)
-                                        color: crumbChip.isLast ? Design.accentSoft
-                                             : (crumbHover.containsMouse ? Design.hover : "transparent")
+                                        // accentSoft is a container role, and on
+                                        // this palette it resolves to a muddy grey
+                                        // that reads as a disabled field rather
+                                        // than as where you are. The accent tint is
+                                        // what marks a selection everywhere else in
+                                        // the suite — the sidebar pills, the
+                                        // launcher — so the path follows the theme
+                                        // the way the rest of it does.
+                                        color: crumbChip.isLast ? Design.tint(Design.accent, 0.20)
+                                             : (crumbHover.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
+                                        border.color: crumbChip.isLast ? Design.tint(Design.accent, 0.45) : "transparent"
+                                        border.width: 1
 
                                         readonly property bool isLast: index === (breadcrumbsList.count - 1)
 
@@ -701,7 +687,7 @@ ApplicationWindow {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(11)
                                             font.bold: crumbChip.isLast
-                                            color: crumbChip.isLast ? window.colBlue
+                                            color: crumbChip.isLast ? Design.accent
                                                  : (crumbHover.containsMouse ? Design.text : window.colFg)
                                         }
 
