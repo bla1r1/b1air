@@ -90,7 +90,7 @@ ColumnLayout {
         }
         WidgetRow {
             boolKey: "barShowStats"; boolValue: Settings.barShowStats
-            title: "CPU & Load"; subtitle: "Processor usage and load average"
+            title: "CPU & Memory"; subtitle: "Processor load and memory in use"
         }
         WidgetRow {
             boolKey: "barShowTray"; boolValue: Settings.barShowTray

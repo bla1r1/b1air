@@ -254,7 +254,7 @@ PanelWindow {
     property string clockTime: "00:00"
     property string clockDate: ""
     property string cpuUsage: "0%"
-    property string loadAvg: "0.00"
+    property string memUsage: "0.0G"
     property string kbdLayout: "US"
     property var workspacesList: [ { num: 1, name: "1", focused: true } ]
     property var runningApps: []
@@ -346,7 +346,7 @@ PanelWindow {
         }
     }
 
-    // ── CPU, load average and keyboard layout ────────────────────────────────
+    // ── CPU, memory and keyboard layout ──────────────────────────────────────
     //
     // This was one `bash -c` loop running for the life of the session, and
     // every two seconds it did three things: read /proc/stat, run `cut` over
@@ -393,14 +393,28 @@ PanelWindow {
         }
     }
 
+    // Memory in use across the whole system. This pill had a memory-chip icon
+    // over the one-minute load average — "0.64" beside a RAM symbol, which
+    // reads as nothing — so the bar never showed memory at all.
+    //
+    // Used is MemTotal − MemAvailable, the figure `free` puts in its "used"
+    // column less the reclaimable cache: MemFree alone counts the page cache
+    // as used, and a machine that has been up a while would sit near 100%.
     FileView {
-        id: procLoad
-        path: "/proc/loadavg"
+        id: procMem
+        path: "/proc/meminfo"
         printErrors: false
         onLoaded: {
-            const first = text().trim().split(/\s+/)[0];
-            if (first)
-                topBar.loadAvg = first;
+            let total = 0, avail = -1;
+            for (const line of text().split("\n")) {
+                if (line.startsWith("MemTotal:")) total = parseInt(line.split(/\s+/)[1]);
+                else if (line.startsWith("MemAvailable:")) avail = parseInt(line.split(/\s+/)[1]);
+                if (total > 0 && avail >= 0) break;
+            }
+            // In gigabytes, the whole machine's: every process, not the
+            // shell's own share. /proc/meminfo counts in KiB.
+            if (total > 0 && avail >= 0)
+                topBar.memUsage = ((total - avail) / 1048576).toFixed(1) + "G";
         }
     }
 
@@ -411,7 +425,7 @@ PanelWindow {
         triggeredOnStart: true
         onTriggered: {
             procStat.reload();
-            procLoad.reload();
+            procMem.reload();
         }
     }
 
@@ -1101,7 +1115,7 @@ PanelWindow {
                 }
             }
 
-            // 1. Stats Island (CPU + Load/RAM)
+            // 1. Stats Island (CPU + memory)
             Rectangle {
                 height: Design.s(30)
                 width: statsRow.implicitWidth + Design.s(20)
@@ -1125,7 +1139,7 @@ PanelWindow {
                     Row {
                         spacing: Design.s(4)
                         Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colPurple }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.loadAvg; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
                     }
                 }
 
