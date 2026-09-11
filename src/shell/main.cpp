@@ -41,10 +41,6 @@ int main(int argc, char* argv[]) {
                     reply = iface.call("Close", target);
                 } else if (action == "forceReload" || action == "reload") {
                     reply = iface.call("ForceReload");
-                } else if (action == "switcher-advance" || action == "switcherAdvance") {
-                    reply = iface.call("SwitcherAdvance");
-                } else if (action == "switcher-confirm" || action == "switcherConfirm") {
-                    reply = iface.call("SwitcherConfirm");
                 }
                 if (reply.type() == QDBusMessage::ReplyMessage) {
                     return 0;
@@ -64,16 +60,12 @@ int main(int argc, char* argv[]) {
         }
         if (qsMain.isEmpty()) return 1;
 
-        // The IpcHandler functions use camelCase, not the CLI's hyphenated
-        // spelling, and close()/switcherAdvance()/switcherConfirm() take no
-        // arguments at all — passing target/arg to those is itself an error.
-        QString ipcAction = action;
-        if (action == "switcher-advance") ipcAction = "switcherAdvance";
-        else if (action == "switcher-confirm") ipcAction = "switcherConfirm";
+        // close() and forceReload() take no arguments at all — passing
+        // target/arg to those is itself an error.
+        const QString ipcAction = action;
 
         QStringList qsArgs = {"-p", qsMain, "ipc", "call", "main", ipcAction};
-        if (ipcAction != "close" && ipcAction != "forceReload" && ipcAction != "reload" &&
-            ipcAction != "switcherAdvance" && ipcAction != "switcherConfirm") {
+        if (ipcAction != "close" && ipcAction != "forceReload" && ipcAction != "reload") {
             qsArgs << target << arg;
         }
         return QProcess::execute("quickshell", qsArgs) == 0 ? 0 : 1;

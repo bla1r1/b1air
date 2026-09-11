@@ -156,6 +156,74 @@ PopupShell {
         return !Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, id);
     }
 
+    // The dashboard card is there while any of its three parts is. It went
+    // with "weather" alone, so hiding the clock also took the pills and the
+    // forecast with it while their switches still said they were on.
+    readonly property bool dashShown: window.calShown("weather") || window.calShown("metrics")
+                                      || window.calShown("forecast")
+
+    readonly property int shownCount: window.calIds.filter(id => window.calShown(id)).length
+
+    // ── Arranging ────────────────────────────────────────────────────────────
+    //
+    // The order lives in calCardLayout, which has always been an ordered list
+    // and was only ever read for sizes. Two things can move: the month and the
+    // dashboard swap sides, and the dashboard's three rows — clock, pills,
+    // forecast — swap with each other.
+    readonly property var calOrder: Svc.Settings.tileArrangement(Svc.Settings.calCardLayout, window.calIds, "medium").order
+    readonly property var dashIds: ["weather", "metrics", "forecast"]
+    readonly property bool monthFirst: {
+        const o = window.calOrder;
+        const c = o.indexOf("calendar");
+        return window.dashIds.every(id => c < o.indexOf(id));
+    }
+    function dashRow(id) {
+        return window.calOrder.filter(x => window.dashIds.indexOf(x) >= 0).indexOf(id);
+    }
+
+    property string dragOver: ""
+
+    function partAt(fromId, scenePos) {
+        const parts = { "calendar": monthCard, "weather": weatherPart, "metrics": metricsPart, "forecast": forecastPart };
+        const hit = it => {
+            if (!it || !it.visible) return false;
+            const l = it.mapFromItem(null, scenePos);
+            return l.x >= 0 && l.y >= 0 && l.x <= it.width && l.y <= it.height;
+        };
+        // The month dragged anywhere over the dashboard means "swap sides".
+        if (fromId === "calendar")
+            return hit(dashCard) ? "dash" : "";
+        for (const id of window.dashIds)
+            if (id !== fromId && hit(parts[id]))
+                return id;
+        return hit(monthCard) ? "calendar" : "";
+    }
+
+    function dropPart(fromId, scenePos) {
+        const to = window.partAt(fromId, scenePos);
+        if (to === "")
+            return;
+        const arr = Svc.Settings.tileArrangement(Svc.Settings.calCardLayout, window.calIds, "medium");
+        if (to === "dash" || to === "calendar") {
+            // Sides: the month goes to the other end of the list.
+            const rest = arr.order.filter(x => x !== "calendar");
+            arr.order = window.monthFirst ? rest.concat("calendar") : ["calendar"].concat(rest);
+        } else {
+            const a = arr.order.indexOf(fromId);
+            const b = arr.order.indexOf(to);
+            arr.order[a] = to;
+            arr.order[b] = fromId;
+        }
+        Svc.Settings.setTileArrangement("calCardLayout", arr.order, arr.spans);
+    }
+
+    readonly property var partTitles: ({
+        "calendar": ["Month", "\u{f00ed}"], "weather": ["Clock & Weather", "\u{f0590}"],
+        "metrics": ["Weather Details", "\u{f059d}"], "forecast": ["Forecast", "\u{f0595}"]
+    })
+    readonly property var trayItems: window.calIds.filter(id => !window.calShown(id))
+        .map(id => ({ id: id, title: window.partTitles[id][0], icon: window.partTitles[id][1] }))
+
     readonly property real monthWidth: Design.s(window.calSize("calendar") === "small" ? 260
                                       : (window.calSize("calendar") === "large" ? 390 : 310))
 
@@ -177,15 +245,17 @@ PopupShell {
     // *minimum*, and a window sized to that squeezes the dashboard, which
     // lowers the minimum again. Hiding the month collapsed the panel to the
     // clock alone and squeezed the weather badge out of existence.
+    // Worked out while arranging as well now. It used to drop to zero, which
+    // meant the registry's fixed 860x480 — a different window from the one
+    // being arranged. Removed parts are in the tray instead of ghosted in
+    // place, so the panel no longer needs room for things that are not there.
     readonly property real contentWidth: {
-        if (window.editing)
-            return 0;
         let w = 0;
         if (window.calShown("calendar"))
             w += window.monthWidth;
-        if (window.calShown("weather"))
+        if (window.dashShown)
             w += window.dashWidth;
-        if (window.calShown("calendar") && window.calShown("weather"))
+        if (window.calShown("calendar") && window.dashShown)
             w += Design.s(Design.space.md);
         return w > 0 ? w + 2 * Design.s(window.padding) : 0;
     }
@@ -196,13 +266,13 @@ PopupShell {
     // glyphs. The inner columns are not fillHeight, so their implicit heights
     // are honest — the taller of the two, plus the card's own margins.
     readonly property real contentHeight: {
-        if (window.editing)
-            return 0;
         let h = 0;
         if (window.calShown("calendar"))
             h = Math.max(h, monthColumn.implicitHeight + 2 * Design.s(12));
-        if (window.calShown("weather"))
+        if (window.dashShown)
             h = Math.max(h, dashColumn.implicitHeight + 2 * Design.s(14));
+        if (window.editing)
+            h += partTray.implicitHeight + Design.s(Design.space.md);
         return h > 0 ? h + 2 * Design.s(window.padding) : 0;
     }
 
@@ -227,69 +297,64 @@ PopupShell {
         Svc.Settings.setTileArrangement("calCardLayout", arr.order, arr.spans);
     }
 
-    /**
-     * Steps a part through its sizes, and says which one it is on.
-     *
-     * A laid-out chip rather than an invisible tap area over the part: every
-     * one of the calendar's parts *is* a layout, and an anchored child of a
-     * layout is the thing Qt warns about and then positions wrong. It also
-     * means the current size is written down instead of being something you
-     * discover by clicking.
-     */
-    component SizeChip: Rectangle {
-        id: chip
-        property string widgetId: ""
-        readonly property string size: window.calSize(chip.widgetId)
-
-        visible: window.editing
-        implicitWidth: Design.s(22)
-        implicitHeight: Design.s(20)
-        radius: Design.s(Design.radius.sm)
-        color: chipMa.containsMouse ? Design.tint(Design.accent, 0.35)
-                                    : Design.tint(Design.accent, 0.18)
-        border.color: Design.tint(Design.accent, 0.45)
-        border.width: 1
-
-        Label {
-            anchors.centerIn: parent
-            text: chip.size === "small" ? "S" : (chip.size === "large" ? "L" : "M")
-            role: "caption"
-            weight: Design.weight.bold
-            color: Design.accent
+    // The frame each part wears while arranging (Ui/EditFrame): drag to move,
+    // S/M/L, remove. The size chip and the remove badge used to be laid out
+    // *inside* each part as extra cells, so arrange mode reshaped the thing
+    // being arranged — the four weather pills were pushed into the last two
+    // columns of their own grid.
+    component PartFrame: EditFrame {
+        property string partId: ""
+        readonly property string size: window.calSize(partId)
+        active: window.editing
+        sizeLabel: size === "small" ? "S" : (size === "large" ? "L" : "M")
+        // The last part cannot go: an empty panel has no header left to
+        // switch arrange mode on from.
+        removable: window.shownCount > 1
+        dropTarget: window.dragOver !== "" && (window.dragOver === partId
+                                                || (window.dragOver === "dash" && partId === "weather"))
+        onRemove: Svc.Settings.setWidgetHidden("calHiddenCards", partId, true)
+        onCycleSize: window.cycleCalSize(partId)
+        onDragMoved: p => window.dragOver = window.partAt(partId, p)
+        onDropped: p => {
+            window.dropPart(partId, p);
+            window.dragOver = "";
         }
-
-        Clickable { id: chipMa; hoverEnabled: true; onClicked: window.cycleCalSize(chip.widgetId) }
     }
 
-    // The badge that takes a part out or puts it back.
-    component EditBadge: Rectangle {
-        id: badge
-        property string widgetId: ""
-        readonly property bool off: Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards,
-                                                                badge.widgetId)
-        visible: window.editing
-        width: Design.s(20)
-        height: Design.s(20)
-        radius: width / 2
-        z: 25
-        color: badge.off ? Design.tint(Design.ok, 0.85) : Design.tint(Design.red, 0.85)
+    // Arrange on / off. It lived only in the month's header, so hiding the
+    // month hid the one way back into arrange mode — and with it every way
+    // to put anything back.
+    component EditToggle: Rectangle {
+        width: Design.s(26); height: Design.s(26)
+        radius: Design.s(Design.radius.ctl)
+        color: toggleMa.containsMouse ? Design.glassHover : Design.surface
+        border.color: window.editing ? Design.accent : Design.line
+        border.width: 1
 
         Icon {
             anchors.centerIn: parent
-            text: badge.off ? "\u{f0415}" : "\u{f0156}"
+            text: window.editing ? "\u{f012c}" : "\u{f03eb}"
             role: "caption"
-            color: Design.accentText
+            color: window.editing ? Design.accent : Design.text
         }
-
         Clickable {
-            onClicked: Svc.Settings.setWidgetHidden("calHiddenCards", badge.widgetId, !badge.off)
+            id: toggleMa
+            hoverEnabled: true
+            onClicked: window.editing = !window.editing
         }
     }
 
-    RowLayout {
-        id: row
+    ColumnLayout {
         anchors.fill: parent
         spacing: Design.s(Design.space.md)
+
+    // One row, two cells; a GridLayout so each card can be told its column.
+    GridLayout {
+        id: row
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        rows: 1
+        columnSpacing: Design.s(Design.space.md)
 
         // ═════════════════════════════════════════════════════════════════════
         // LEFT: CALENDAR CARD (310px)
@@ -298,14 +363,31 @@ PopupShell {
             // Small, medium, large: a tighter month, the shipped one, or one
             // with room for the day numbers to breathe. The dashboard beside it
             // fills whatever is left, so this one number sets both.
+            id: monthCard
             Layout.preferredWidth: window.monthWidth
-            visible: window.editing || !Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "calendar")
-            opacity: Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "calendar") ? 0.35 : 1.0
+            Layout.column: window.monthFirst ? 0 : 1
+            visible: window.calShown("calendar")
             Layout.fillHeight: true
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: 1
+
+            PartFrame {
+                anchors.fill: parent
+                partId: "calendar"
+            }
+
+            // Arranging starts here, in front of the panel being arranged.
+            // The month arrows step aside while it is on: paging the calendar
+            // is not what you came to do.
+            EditToggle {
+                id: monthToggle
+                z: 40
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: Design.s(12)
+            }
 
             ColumnLayout {
                 id: monthColumn
@@ -326,32 +408,6 @@ PopupShell {
                         Layout.fillWidth: true
                     }
 
-                    // Arranging happens here, in front of the panel being
-                    // arranged. The month arrows step aside while it is on:
-                    // paging the calendar is not what you came to do.
-                    Rectangle {
-                        width: Design.s(26); height: Design.s(26)
-                        radius: Design.s(Design.radius.ctl)
-                        color: editMa.containsMouse ? Design.glassHover : Design.surface
-                        border.color: window.editing ? Design.accent : Design.line
-                        border.width: 1
-
-                        Icon {
-                            anchors.centerIn: parent
-                            text: window.editing ? "\u{f012c}" : "\u{f03eb}"
-                            role: "caption"
-                            color: window.editing ? Design.accent : Design.text
-                        }
-                        Clickable {
-                            id: editMa
-                            hoverEnabled: true
-                            onClicked: window.editing = !window.editing
-                        }
-                    }
-
-                    SizeChip { Layout.alignment: Qt.AlignVCenter; widgetId: "calendar" }
-
-                    EditBadge { Layout.alignment: Qt.AlignVCenter; widgetId: "calendar" }
 
                     Rectangle {
                         visible: !window.editing
@@ -412,6 +468,11 @@ PopupShell {
                             onClicked: window.nextMonth()
                         }
                     }
+
+                    // Room for the arrange toggle, which is not in this row:
+                    // it is a child of the card so that it can sit above the
+                    // arrange frame and stay clickable (see monthToggle).
+                    Item { width: Design.s(26); height: Design.s(26) }
                 }
 
                 // Days of week header (Mo Tu We Th Fr Sa Su)
@@ -446,6 +507,13 @@ PopupShell {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            // A floor for the row. The cells asked for no
+                            // height at all, so the month was only as tall as
+                            // the dashboard beside it made the window: take
+                            // the forecast away and six weeks were squeezed
+                            // into a band where the numbers overlapped.
+                            Layout.minimumHeight: Design.s(window.calSize("calendar") === "small" ? 24
+                                                  : (window.calSize("calendar") === "large" ? 36 : 28))
                             radius: Design.s(Design.radius.ctl)
 
                             readonly property bool isSel: modelData.isCurrentMonth && (modelData.day === window.selectedDay)
@@ -518,32 +586,56 @@ PopupShell {
         // RIGHT: WEATHER & TIME DASHBOARD (Fill remaining width)
         // ═════════════════════════════════════════════════════════════════════
         Rectangle {
+            id: dashCard
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: window.editing || !Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "weather")
-            opacity: Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "weather") ? 0.35 : 1.0
+            Layout.column: window.monthFirst ? 1 : 0
+            visible: window.dashShown
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: 1
 
-            EditBadge {
-                anchors.top: parent.top
+            // The arrange toggle's second home, for when the month is hidden.
+            EditToggle {
+                z: 40
+                visible: !window.calShown("calendar")
+                anchors.bottom: parent.bottom
                 anchors.right: parent.right
-                anchors.margins: Design.s(Design.space.xs)
-                widgetId: "weather"
+                anchors.margins: Design.s(10)
             }
 
-            ColumnLayout {
+            // Three rows in the saved order. A one-column GridLayout because a
+            // grid takes an explicit row per child.
+            GridLayout {
                 id: dashColumn
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: Design.s(14)
-                spacing: Design.s(10)
+                columns: 1
+                // Wider while arranging, for the toolbars on each row's edge.
+                rowSpacing: Design.s(window.editing ? 20 : 10)
 
-                // ── Top Row: Clock & Current Weather Badge ───────────────────
+                // ── Clock & Current Weather Badge ────────────────────────────
+                Item {
+                    id: weatherPart
+                    Layout.fillWidth: true
+                    Layout.row: window.dashRow("weather")
+                    visible: window.calShown("weather")
+                    implicitHeight: clockRow.implicitHeight
+
+                    PartFrame {
+                        anchors.fill: parent
+                        anchors.margins: -Design.s(6)
+                        partId: "weather"
+                    }
+
                 RowLayout {
                     id: clockRow
-                    Layout.fillWidth: true
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
                     spacing: Design.s(Design.space.md)
 
                     // Big Clean Clock
@@ -612,7 +704,7 @@ PopupShell {
                                     Label {
                                         text: window.selectedDayOffset === 0 && Weather.loaded
                                               ? Weather.temp
-                                              : (window.todayForecast ? (window.todayForecast.max + "°C") : "--°C")
+                                              : (window.todayForecast ? (window.todayForecast.max + "°" + Weather.unit) : "--°")
                                         font.pixelSize: Design.s(20)
                                         font.family: Design.font.mono
                                         font.weight: Design.weight.bold
@@ -636,12 +728,6 @@ PopupShell {
                         }
                     }
                 }
-
-                // Divider
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 1
-                    color: Design.tint(Design.line, 0.4)
                 }
 
                 // ── Weather Metrics Pills ────────────────────────────────────
@@ -653,21 +739,27 @@ PopupShell {
                 // like outside" and drops the rest; medium is all four in a
                 // row; large is all four two by two, with room for the numbers
                 // to be read across the room.
-                GridLayout {
+                Item {
+                    id: metricsPart
                     Layout.fillWidth: true
+                    Layout.row: window.dashRow("metrics")
+                    visible: window.calShown("metrics")
+                    implicitHeight: metricsGrid.implicitHeight
+
+                    PartFrame {
+                        anchors.fill: parent
+                        anchors.margins: -Design.s(6)
+                        partId: "metrics"
+                    }
+
+                GridLayout {
+                    id: metricsGrid
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
                     columns: window.calSize("metrics") === "large" ? 2 : 4
                     rowSpacing: Design.s(Design.space.xs)
                     columnSpacing: Design.s(Design.space.xs)
-                    visible: window.editing || !Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "metrics")
-                    opacity: Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "metrics") ? 0.35 : 1.0
-
-                    // Laid out, not anchored: this row is a Layout child.
-                    EditBadge {
-                        Layout.alignment: Qt.AlignVCenter
-                        widgetId: "metrics"
-                    }
-
-                    SizeChip { Layout.alignment: Qt.AlignVCenter; widgetId: "metrics" }
 
                     // Wind
                     Rectangle {
@@ -684,7 +776,7 @@ PopupShell {
                             ColumnLayout {
                                 spacing: 0
                                 Label { text: "Wind"; role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: window.todayForecast ? (window.todayForecast.wind + " km/h") : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " mph" : " km/h")) : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
                             }
                         }
                     }
@@ -751,21 +843,28 @@ PopupShell {
                         }
                     }
                 }
+                }
 
                 // ── 5-Day Forecast Row ───────────────────────────────────────
-                RowLayout {
+                Item {
+                    id: forecastPart
                     Layout.fillWidth: true
-                    visible: window.editing || !Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "forecast")
-                    opacity: Svc.Settings.isWidgetHidden(Svc.Settings.calHiddenCards, "forecast") ? 0.35 : 1.0
-                    spacing: Design.s(Design.space.xs)
+                    Layout.row: window.dashRow("forecast")
+                    visible: window.calShown("forecast")
+                    implicitHeight: forecastRow.implicitHeight
 
-                    // Laid out, not anchored: this row is a Layout child.
-                    EditBadge {
-                        Layout.alignment: Qt.AlignVCenter
-                        widgetId: "forecast"
+                    PartFrame {
+                        anchors.fill: parent
+                        anchors.margins: -Design.s(6)
+                        partId: "forecast"
                     }
 
-                    SizeChip { Layout.alignment: Qt.AlignVCenter; widgetId: "forecast" }
+                RowLayout {
+                    id: forecastRow
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    spacing: Design.s(Design.space.xs)
 
                     Repeater {
                         // Three days, five, or as many as the reply carries.
@@ -813,7 +912,18 @@ PopupShell {
                         }
                     }
                 }
+                }
             }
         }
+    }
+
+    // Everything taken out of the panel, to put back.
+    WidgetTray {
+        id: partTray
+        Layout.fillWidth: true
+        active: window.editing
+        items: window.trayItems
+        onAdd: id => Svc.Settings.setWidgetHidden("calHiddenCards", id, false)
+    }
     }
 }

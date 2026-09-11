@@ -6,6 +6,8 @@ singleton Design 1.0 Design.qml
 PopupShell 1.0 PopupShell.qml
 Card       1.0 Card.qml
 Tile       1.0 Tile.qml
+EditFrame  1.0 EditFrame.qml
+WidgetTray 1.0 WidgetTray.qml
 ScrollArea 1.0 ScrollArea.qml
 OverflowBar 1.0 OverflowBar.qml
 

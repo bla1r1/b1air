@@ -99,7 +99,6 @@ function getLayout(name, mx, my, mw, mh, userScale, barAtBottom) {
         "ruler":     { w: s(820, scale), h: s(580, scale), rx: Math.floor((mw/2)-(s(820, scale)/2)), ry: Math.floor((mh/2)-(s(580, scale)/2)), comp: "ruler/ScreenRulerOverlay.qml" },
         "shelf":     { w: s(640, scale), h: s(480, scale), rx: mw - s(660, scale), ry: mh - s(510, scale), comp: "shelf/DropShelf.qml" },
         "quicklook": { w: s(780, scale), h: s(560, scale), rx: Math.floor((mw/2)-(s(780, scale)/2)), ry: Math.floor((mh/2)-(s(560, scale)/2)), comp: "quicklook/QuickLookPopup.qml" },
-        "switcher":  { w: s(760, scale), h: s(240, scale), rx: Math.floor((mw/2)-(s(760, scale)/2)), ry: Math.floor((mh/2)-(s(240, scale)/2)), comp: "switcher/WindowSwitcher.qml" },
         "hidden":    { w: 1, h: 1, rx: -5000 - mx, ry: -5000 - my, comp: "" } 
     };
 

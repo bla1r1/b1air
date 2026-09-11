@@ -429,7 +429,19 @@ PanelWindow {
                         const name = dev.xkb_active_layout_name;
                         if (!name)
                             continue;
-                        // "English (US)" -> "US", "Ukrainian" -> "UA".
+                        // The layout's own code, by position: sway's layouts
+                        // are the ones Settings -> Keyboard wrote, in order.
+                        // Cutting the name down gave "UK" for Ukrainian, "GE"
+                        // for German and "PO" for Polish, though the comment
+                        // here promised "UA".
+                        const codes = String(Settings.language || "").split(",")
+                            .map(x => x.trim()).filter(x => x !== "");
+                        const idx = Number(dev.xkb_active_layout_index);
+                        if (idx >= 0 && idx < codes.length && codes.length === (dev.xkb_layout_names || []).length) {
+                            topBar.kbdLayout = codes[idx].slice(0, 3).toUpperCase();
+                            return;
+                        }
+                        // "English (US)" -> "US".
                         const paren = name.match(/\(([^)]+)\)/);
                         topBar.kbdLayout = (paren ? paren[1] : name).slice(0, 2).toUpperCase();
                         return;
@@ -806,8 +818,10 @@ PanelWindow {
                             })
                         }
 
-                        ToolTip.visible: runningArea.containsMouse
-                        ToolTip.text: modelData.title || modelData.appId
+                        // No ToolTip, for the reason given at the Control
+                        // Center button: in a bar-high window it lands on top
+                        // of the button and takes the click meant to focus the
+                        // window.
                     }
                 }
             }
@@ -1252,7 +1266,11 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: topBar.requestCommand("toggle:control:", true)
+                            // Straight to the sound page. It opened the
+                            // Control Center's front page, which was the only
+                            // way into the Control Center from the bar at all;
+                            // that has its own button now, beside the bell.
+                            onClicked: topBar.requestCommand("toggle:sound:", true)
                             onWheel: (wheel) => {
                                 if (wheel.angleDelta.y > 0) {
                                     Daemon.volumeUp(5);
@@ -1295,6 +1313,31 @@ PanelWindow {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: topBar.requestCommand("toggle:battery:", true)
                         }
+                    }
+
+                    // Control Center. It had no button: the only way in from
+                    // the bar was clicking the volume percentage, which is not
+                    // somewhere anyone looks for a panel of switches.
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Design.s(20); height: Design.s(20); radius: Design.s(5)
+                        color: ccArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u{f062e}"   // sliders — the same glyph as the panel's own header
+                            font.family: topBar.fontMain
+                            font.pixelSize: Design.s(13)
+                            color: ccArea.containsMouse ? topBar.colBlue : topBar.colFgDim
+                        }
+                        MouseArea {
+                            id: ccArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: topBar.requestCommand("toggle:control:", true)
+                        }
+                        // No ToolTip. The bar's window is only as tall as the
+                        // bar, so a ToolTip has nowhere to go but on top of the
+                        // button it describes — and a ToolTip is a Popup, which
+                        // takes the click. It appeared on hover and the button
+                        // underneath could no longer be pressed.
                     }
 
                     // Notification bell — opens the notification centre.

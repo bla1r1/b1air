@@ -5,12 +5,7 @@
 # =============================================================================
 ACTION="${1:-toggle}"
 ARG="${3:-}"
-case "$ACTION" in
-    # These two take no panel argument; "launcher" as a default target would
-    # otherwise get tacked onto the IPC fallback call below and rejected.
-    switcher-advance|SwitcherAdvance|switcher-confirm|SwitcherConfirm) TARGET="" ;;
-    *) TARGET="${2:-launcher}" ;;
-esac
+TARGET="${2:-launcher}"
 
 # 1. Try Native D-Bus dispatch (sub-millisecond)
 case "$ACTION" in
@@ -34,16 +29,6 @@ case "$ACTION" in
             exit 0
         fi
         ;;
-    switcher-advance|SwitcherAdvance)
-        if busctl --user call org.b1air.Shell /org/b1air/Shell org.b1air.Shell SwitcherAdvance >/dev/null 2>&1; then
-            exit 0
-        fi
-        ;;
-    switcher-confirm|SwitcherConfirm)
-        if busctl --user call org.b1air.Shell /org/b1air/Shell org.b1air.Shell SwitcherConfirm >/dev/null 2>&1; then
-            exit 0
-        fi
-        ;;
 esac
 
 # 2. Quickshell IPC Fallback if D-Bus service is offline
@@ -63,13 +48,4 @@ for dir in "$HOME/.config/b1air-shell" "$HOME/.config/quickshell"; do
 done
 [ -z "$QS_MAIN" ] && exit 1
 
-case "$ACTION" in
-    switcher-advance) ACTION=switcherAdvance ;;
-    switcher-confirm) ACTION=switcherConfirm ;;
-esac
-
-if [ -z "$TARGET" ]; then
-    quickshell -p "$QS_MAIN" ipc call main "$ACTION" >/dev/null 2>&1 || true
-else
-    quickshell -p "$QS_MAIN" ipc call main "$ACTION" "$TARGET" "$ARG" >/dev/null 2>&1 || true
-fi
+quickshell -p "$QS_MAIN" ipc call main "$ACTION" "$TARGET" "$ARG" >/dev/null 2>&1 || true

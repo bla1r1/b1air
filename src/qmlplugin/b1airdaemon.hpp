@@ -120,8 +120,6 @@ public:
     Q_INVOKABLE void openPanel(const QString& panel, const QString& arg = QString());
     Q_INVOKABLE void closePanel(const QString& panel = QString());
     Q_INVOKABLE void forceReload();
-    Q_INVOKABLE void switcherAdvance();
-    Q_INVOKABLE void switcherConfirm();
 
 signals:
     void availableChanged();

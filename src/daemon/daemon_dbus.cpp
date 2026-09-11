@@ -498,31 +498,12 @@ static int method_shell_reload(sd_bus_message *m, void *userdata, sd_bus_error *
     return sd_bus_reply_method_return(m, "");
 }
 
-// Alt+Tab needs press-to-advance / release-to-confirm, not a single toggle:
-// toggling would close the popup on every second Tab press instead of
-// cycling. Bound in sway to Mod1+Tab and --release Mod1 respectively.
-static int method_shell_switcher_advance(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    (void)userdata; (void)ret_error;
-    REQUIRE_SESSION_USER();
-    emit_panel_request(m, "switcherAdvance", "", "");
-    return sd_bus_reply_method_return(m, "");
-}
-
-static int method_shell_switcher_confirm(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
-    (void)userdata; (void)ret_error;
-    REQUIRE_SESSION_USER();
-    emit_panel_request(m, "switcherConfirm", "", "");
-    return sd_bus_reply_method_return(m, "");
-}
-
 static const sd_bus_vtable shell_vtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_METHOD("Toggle", "s", "", method_shell_toggle, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Open", "ss", "", method_shell_open, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("Close", "s", "", method_shell_close, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_METHOD("ForceReload", "", "", method_shell_reload, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("SwitcherAdvance", "", "", method_shell_switcher_advance, SD_BUS_VTABLE_UNPRIVILEGED),
-    SD_BUS_METHOD("SwitcherConfirm", "", "", method_shell_switcher_confirm, SD_BUS_VTABLE_UNPRIVILEGED),
     SD_BUS_SIGNAL("PanelStateChanged", "sb", 0),
     SD_BUS_SIGNAL("PanelRequested", "sss", 0),
     SD_BUS_VTABLE_END

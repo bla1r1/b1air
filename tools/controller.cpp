@@ -36,7 +36,6 @@ const std::unordered_map<std::string, std::string> actions = {
     {"network", "quickshell ipc call main toggleNetwork"},
     {"keyboard", "quickshell ipc call main toggleKeyboard"},
     {"emoji", "quickshell ipc call main toggleEmoji"},
-    {"switcher", "quickshell ipc call main toggleSwitcher"},
     {"session", "quickshell ipc call main toggleSession"},
     {"reload_shell", "quickshell ipc call main forceReload"},
     {"close_all", "quickshell ipc call main close"},

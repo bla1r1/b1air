@@ -75,7 +75,10 @@ PopupShell {
      * with a battery ignored the choice to hide that tile.
      */
     function tileShown(id) {
-        if (!center.editing && Settings.isWidgetHidden(Settings.ccHiddenTiles, id))
+        // Hidden while arranging too: a removed tile is in the "Add a widget"
+        // tray, not ghosted in place at a third of its opacity, which read as
+        // disabled rather than as something to put back.
+        if (Settings.isWidgetHidden(Settings.ccHiddenTiles, id))
             return false;
         if (id === "wifi") return Network.hasWifi;
         if (id === "bluetooth") return Network.hasBluetooth;
@@ -160,32 +163,92 @@ PopupShell {
             : Design.s(Design.size.tile);
     }
 
-    // The remove/restore badge, wherever a thing that can be hidden is drawn.
-    component EditBadge: Rectangle {
-        id: badge
-        property string listKey: ""
-        property string widgetId: ""
-        readonly property bool off: Settings.isWidgetHidden(
-            badge.listKey === "ccHiddenCards" ? Settings.ccHiddenCards : Settings.ccHiddenTiles,
-            badge.widgetId)
-
-        visible: center.editing
-        width: Design.s(20)
-        height: Design.s(20)
-        radius: width / 2
-        z: 25
-        color: badge.off ? Design.tint(Design.ok, 0.85) : Design.tint(Design.red, 0.85)
-
-        Icon {
-            anchors.centerIn: parent
-            text: badge.off ? "\u{f0415}" : "\u{f0156}"
-            role: "caption"
-            color: Design.accentText
+    // The frame a card wears while arranging: move it, or take it out.
+    component CardFrame: EditFrame {
+        property string cardId: ""
+        anchors.fill: parent
+        active: center.editing
+        dropTarget: center.dragOver !== "" && center.dragOver === cardId
+        onRemove: Settings.setWidgetHidden("ccHiddenCards", cardId, true)
+        onDragMoved: p => center.dragOver = center.itemAt(center.cardIds, center.cardById, cardId, p)
+        onDropped: p => {
+            center.swapCards(cardId, p);
+            center.dragOver = "";
         }
+    }
 
-        TapHandler {
-            onTapped: Settings.setWidgetHidden(badge.listKey, badge.widgetId, !badge.off)
+    /** "S", "M" or "L" for the frame's size button. */
+    function tileSizeLetter(id) {
+        const n = Settings.tileSizeName(Settings.tileArrangement(Settings.ccTileLayout, center.tileIds).spans[id]);
+        return n === "large" ? "L" : (n === "medium" ? "M" : "S");
+    }
+
+    // Which widget a drag is over, so it can light up as the place it will go.
+    property string dragOver: ""
+
+    function itemAt(ids, byId, fromId, scenePos) {
+        for (const id of ids) {
+            if (id === fromId)
+                continue;
+            const it = byId[id];
+            if (!it || !it.visible)
+                continue;
+            const local = it.mapFromItem(null, scenePos);
+            if (local.x >= 0 && local.y >= 0 && local.x <= it.width && local.y <= it.height)
+                return id;
         }
+        return "";
+    }
+
+    // ── Cards below the tiles ────────────────────────────────────────────────
+    // The sliders, weather, media and power-button rows could be switched off
+    // and not moved. They are ordered now, from ccCardLayout, the same way the
+    // tiles are from ccTileLayout.
+    readonly property var cardIds: ["sliders", "weather", "media", "session"]
+    readonly property var cardById: ({
+        "sliders": slidersCard, "weather": weatherCard, "media": mediaCard, "session": sessionCard
+    })
+    readonly property var cardOrder: Settings.tileArrangement(Settings.ccCardLayout, center.cardIds).order
+
+    function cardRow(id) { return Math.max(0, center.cardOrder.indexOf(id)); }
+    function cardShown(id) { return !Settings.isWidgetHidden(Settings.ccHiddenCards, id); }
+
+    function swapCards(fromId, scenePos) {
+        const to = center.itemAt(center.cardIds, center.cardById, fromId, scenePos);
+        if (to === "")
+            return;
+        const arr = Settings.tileArrangement(Settings.ccCardLayout, center.cardIds);
+        const a = arr.order.indexOf(fromId);
+        const b = arr.order.indexOf(to);
+        arr.order[a] = to;
+        arr.order[b] = fromId;
+        Settings.setTileArrangement("ccCardLayout", arr.order, arr.spans);
+    }
+
+    readonly property var widgetTitles: ({
+        "wifi": ["Wi-Fi", "\u{f05a9}"], "bluetooth": ["Bluetooth", "\u{f00af}"],
+        "dnd": ["Do Not Disturb", "\u{f009b}"], "nightlight": ["Night Light", "\u{f0599}"],
+        "powermode": ["Power Mode", "\u{f0e4}"], "gamemode": ["Game Mode", "\u{f11b}"],
+        "caffeine": ["Caffeine", "\u{f0f4}"], "screenshot": ["Screenshot", "\u{f016d}"],
+        "dropper": ["Color Dropper", "\u{f0592}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
+        "weather": ["Weather", "\u{f0590}"], "media": ["Now Playing", "\u{f0025}"],
+        "session": ["Power Buttons", "\u{f0425}"]
+    })
+
+    readonly property var trayItems: {
+        const out = [];
+        for (const id of center.tileIds) {
+            if (!Settings.isWidgetHidden(Settings.ccHiddenTiles, id)) continue;
+            // Not offered where the hardware is not there to drive.
+            if (id === "wifi" && !Network.hasWifi) continue;
+            if (id === "bluetooth" && !Network.hasBluetooth) continue;
+            if (id === "powermode" && !(Power.hasBattery || Power.hasProfiles)) continue;
+            out.push({ id: id, kind: "tile", title: center.widgetTitles[id][0], icon: center.widgetTitles[id][1] });
+        }
+        for (const id of center.cardIds)
+            if (Settings.isWidgetHidden(Settings.ccHiddenCards, id))
+                out.push({ id: id, kind: "card", title: center.widgetTitles[id][0], icon: center.widgetTitles[id][1] });
+        return out;
     }
 
     function placeOf(id) {
@@ -264,70 +327,30 @@ PopupShell {
         // the page. The tile lifts rather than moves, because a GridLayout owns
         // its children's positions and fighting it for them would make the
         // whole grid jump on every frame of the drag.
-        readonly property bool tileHidden: tile.widgetId !== ""
-            && Settings.isWidgetHidden(Settings.ccHiddenTiles, tile.widgetId)
-
-        opacity: tileDrag.active ? 0.85 : (tile.tileHidden ? 0.35 : 1.0)
-
-        DragHandler {
-            id: tileDrag
-            // Only while arranging. A panel where a slightly long press on
-            // Wi-Fi silently moves it is a panel that rearranges itself by
-            // accident.
-            enabled: center.editing && tile.widgetId !== ""
-            target: null
-            onActiveChanged: {
-                if (!tileDrag.active && tile.widgetId !== "")
-                    center.swapTiles(tile.widgetId, tileDrag.centroid.scenePosition);
-            }
-        }
-
-        z: tileDrag.active ? 20 : 0
-        scale: tileDrag.active ? 1.06 : 1.0
+        opacity: tileFrame.dragging ? 0.85 : 1.0
+        z: tileFrame.dragging ? 20 : 0
+        scale: tileFrame.dragging ? 1.04 : 1.0
         Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
         Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
 
-        // While arranging, the tile stops being a control. Tapping it steps
-        // through the sizes instead of toggling Wi-Fi, which is the only way a
-        // grid of live switches can also be a grid you edit.
-        MouseArea {
+        // Arranging: move, resize, remove — all on a frame over the tile,
+        // which also keeps a tap from toggling the thing underneath.
+        EditFrame {
+            id: tileFrame
             anchors.fill: parent
-            visible: center.editing && tile.widgetId !== ""
-            enabled: visible
-            z: 15
-            cursorShape: Qt.PointingHandCursor
-            onClicked: center.cycleTileSpan(tile.widgetId)
-        }
-
-        // Take it out, or put it back.
-        Rectangle {
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.margins: Design.s(Design.space.xs)
-            visible: center.editing && tile.widgetId !== ""
-            width: Design.s(20)
-            height: Design.s(20)
-            radius: width / 2
-            z: 25
-            color: tile.tileHidden ? Design.tint(Design.ok, 0.85) : Design.tint(Design.red, 0.85)
-
-            Icon {
-                anchors.centerIn: parent
-                text: tile.tileHidden ? "\u{f0415}" : "\u{f0156}"
-                role: "caption"
-                color: Design.accentText
-            }
-
-            TapHandler {
-                onTapped: Settings.setWidgetHidden("ccHiddenTiles", tile.widgetId,
-                                                   !tile.tileHidden)
+            active: center.editing && tile.widgetId !== ""
+            sizeLabel: center.tileSizeLetter(tile.widgetId)
+            dropTarget: center.dragOver !== "" && center.dragOver === tile.widgetId
+            onRemove: Settings.setWidgetHidden("ccHiddenTiles", tile.widgetId, true)
+            onCycleSize: center.cycleTileSpan(tile.widgetId)
+            onDragMoved: p => center.dragOver = center.itemAt(center.tileIds, center.tileById, tile.widgetId, p)
+            onDropped: p => {
+                center.swapTiles(tile.widgetId, p);
+                center.dragOver = "";
             }
         }
 
-        // Wide or normal. A tile has no room for a resize handle and inventing
-        // a gesture for it would be a gesture nobody finds, so the width is a
-        // switch on the Widgets settings page and this is the shortcut for
-        // anyone who already knows.
+        // Middle click steps through the sizes, for anyone who knows.
         TapHandler {
             acceptedButtons: Qt.MiddleButton
             enabled: tile.widgetId !== ""
@@ -466,7 +489,7 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Icon {
-                text: "\u{f0067}"   // grid
+                text: "\u{f062e}"   // sliders; the bar's button uses the same
                 role: "subhead"
                 color: Design.accent
             }
@@ -485,7 +508,7 @@ PopupShell {
             // while you are rearranging tiles are two ways to lose the work.
             Label {
                 visible: center.editing
-                text: "drag to swap · tap size · × to remove"
+                text: "drag to move · S M L to size · × to remove"
                 role: "caption"
                 color: Design.textDim
                 elide: Text.ElideRight
@@ -532,7 +555,8 @@ PopupShell {
             // Always two: every tile now names its own row and column, and a
             // lone visible tile is widened to span both by the packer.
             columns: 2
-            rowSpacing: Design.s(Design.space.sm)
+            // Wider while arranging, for the toolbars on each tile's top edge.
+            rowSpacing: Design.s(center.editing ? Design.space.lg : Design.space.sm)
             columnSpacing: Design.s(Design.space.sm)
 
             QuickTile {
@@ -613,21 +637,19 @@ PopupShell {
                 visible: center.tileShown("nightlight")
                 glyph: "\u{f0599}"
                 title: "Night Light"
-                on: Settings.nightLightEnabled !== undefined ? Settings.nightLightEnabled : false
+                on: Settings.nightLightEnabled
                 activeColor: Design.yellow
                 glyphTone: on ? Design.yellow : Design.textDim
-                detail: on ? "Warm (" + (Settings.nightLightTemp || 4000) + "K)" : "Off"
+                detail: on ? "Warm (" + Settings.nightLightTemp + "K)" : "Off"
+                // Through the daemon, like the Settings page. The command that
+                // was here passed wlsunset equal -t and -T, which it refuses,
+                // so this tile had never changed the screen.
                 onToggled: {
-                    const next = !(Settings.nightLightEnabled !== undefined ? Settings.nightLightEnabled : false);
+                    const next = !Settings.nightLightEnabled;
                     Settings.set("nightLightEnabled", next);
-                    const temp = Settings.nightLightTemp || 4000;
-                    if (!next) {
-                        Quickshell.execDetached(["bash", "-c", "killall wlsunset gammastep 2>/dev/null || true"]);
-                    } else {
-                        Quickshell.execDetached(["bash", "-c",
-                            "killall wlsunset gammastep 2>/dev/null || true; wlsunset -t " + temp + " -T " + temp + " 2>/dev/null || gammastep -O " + temp + " 2>/dev/null &"
-                        ]);
-                    }
+                    Quickshell.execDetached(next
+                        ? ["b1air-daemon", "night-light", "on", String(Settings.nightLightTemp), "--quiet"]
+                        : ["b1air-daemon", "night-light", "off", "--quiet"]);
                 }
                 onActivated: center.openFull("nightlight")
             }
@@ -681,7 +703,9 @@ PopupShell {
                     Settings.set("gameModeEnabled", next);
                     Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "game-mode", next ? "on" : "off"]);
                 }
-                onActivated: center.openFull("settings:gamemode")
+                // "settings:gamemode" arrived as target "settings:gamemode" and was
+                // split on the colon into page "gamemode:", which is no page.
+                onActivated: center.openFull("settings", "gamemode")
             }
 
             QuickTile {
@@ -696,19 +720,36 @@ PopupShell {
                 visible: center.tileShown("caffeine")
                 glyph: "\u{f0f4}"
                 title: "Caffeine"
+                // Asked of the daemon, which holds the inhibitor. This was a
+                // property of the tile starting at false, so after the shell
+                // restarted — or anything else switched it — the tile said
+                // "Sleep Normal" over a machine that would not sleep.
                 property bool active: false
                 on: caffeineTile.active
                 activeColor: Design.teal
                 glyphTone: on ? Design.teal : Design.textDim
                 detail: on ? "Stay Awake" : "Sleep Normal"
                 trailingGlyph: ""
-                onToggled: {
+                function flip() {
                     caffeineTile.active = !caffeineTile.active;
-                    Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "caffeine", caffeineTile.active ? "on" : "off"]);
+                    caffeineSet.command = ["b1air-daemon", "caffeine", caffeineTile.active ? "on" : "off"];
+                    caffeineSet.running = false;
+                    caffeineSet.running = true;
                 }
-                onActivated: {
-                    caffeineTile.active = !caffeineTile.active;
-                    Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "caffeine", caffeineTile.active ? "on" : "off"]);
+                onToggled: caffeineTile.flip()
+                onActivated: caffeineTile.flip()
+
+                Process {
+                    id: caffeineSet
+                    onExited: { caffeineProbe.running = false; caffeineProbe.running = true; }
+                }
+                Process {
+                    id: caffeineProbe
+                    running: center.visible
+                    command: ["b1air-daemon", "caffeine", "status"]
+                    stdout: StdioCollector {
+                        onStreamFinished: caffeineTile.active = this.text.trim() === "active"
+                    }
                 }
             }
 
@@ -761,11 +802,41 @@ PopupShell {
             }
         }
 
-        // ── 3. Sliders ───────────────────────────────────────────────────────
-        ColumnLayout {
+        // ── Add a widget (arranging only) ────────────────────────────────────
+        WidgetTray {
             Layout.fillWidth: true
-            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "sliders")
-            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "sliders") ? 0.35 : 1.0
+            active: center.editing
+            items: center.trayItems
+            onAdd: id => {
+                const it = center.trayItems.find(x => x.id === id);
+                if (it)
+                    Settings.setWidgetHidden(it.kind === "tile" ? "ccHiddenTiles" : "ccHiddenCards", id, false);
+            }
+        }
+
+        // ── Cards, in the saved order ────────────────────────────────────────
+        // A one-column GridLayout rather than a ColumnLayout, because a grid
+        // takes an explicit row per child and a column layout only takes
+        // declaration order.
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 1
+            rowSpacing: Design.s(center.editing ? Design.space.lg : Design.space.md)
+
+        // ── 3. Sliders ───────────────────────────────────────────────────────
+        Item {
+            id: slidersCard
+            Layout.fillWidth: true
+            Layout.row: center.cardRow("sliders")
+            visible: center.cardShown("sliders")
+            implicitHeight: slidersCol.implicitHeight
+            opacity: slidersFrame.dragging ? 0.85 : 1.0
+
+        ColumnLayout {
+            id: slidersCol
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             spacing: Design.s(Design.space.sm)
 
             Slider {
@@ -819,34 +890,24 @@ PopupShell {
                 }
             }
 
-            // A Layout cannot carry an anchored child, so here the
-            // badge is laid out with everything else.
-            EditBadge {
-                Layout.alignment: Qt.AlignRight
-                listKey: "ccHiddenCards"
-                widgetId: "sliders"
-            }
+        }
+
+            CardFrame { id: slidersFrame; cardId: "sliders" }
         }
 
         // ── 3.5 Live Weather Card ──────────────────────────────────────────
         Rectangle {
             id: weatherCard
             Layout.fillWidth: true
-            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "weather")
-            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "weather") ? 0.35 : 1.0
+            Layout.row: center.cardRow("weather")
+            visible: center.cardShown("weather")
             Layout.preferredHeight: Design.s(52)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: Design.border
 
-            EditBadge {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: Design.s(Design.space.xs)
-                listKey: "ccHiddenCards"
-                widgetId: "weather"
-            }
+            CardFrame { cardId: "weather" }
 
             RowLayout {
                 anchors.fill: parent
@@ -899,21 +960,15 @@ PopupShell {
         Rectangle {
             id: mediaCard
             Layout.fillWidth: true
-            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "media")
-            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "media") ? 0.35 : 1.0
+            Layout.row: center.cardRow("media")
+            visible: center.cardShown("media")
             Layout.preferredHeight: Design.s(Design.size.media)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
             border.width: Design.border
 
-            EditBadge {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: Design.s(Design.space.xs)
-                listKey: "ccHiddenCards"
-                widgetId: "media"
-            }
+            CardFrame { cardId: "media" }
 
             RowLayout {
                 anchors.fill: parent
@@ -1018,16 +1073,19 @@ PopupShell {
             }
         }
 
-        Item {
-            Layout.fillHeight: true
-            Layout.fillWidth: true
-        }
-
         // ── 5. Session actions ───────────────────────────────────────────────
-        RowLayout {
+        Item {
+            id: sessionCard
             Layout.fillWidth: true
-            visible: center.editing || !Settings.isWidgetHidden(Settings.ccHiddenCards, "session")
-            opacity: Settings.isWidgetHidden(Settings.ccHiddenCards, "session") ? 0.35 : 1.0
+            Layout.row: center.cardRow("session")
+            visible: center.cardShown("session")
+            implicitHeight: sessionRow.implicitHeight
+
+        RowLayout {
+            id: sessionRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             spacing: Design.s(Design.space.sm)
 
             ActionButton {
@@ -1060,13 +1118,10 @@ PopupShell {
                 onActivated: Daemon.power("shutdown")
             }
 
-            // A Layout cannot carry an anchored child, so here the
-            // badge is laid out with everything else.
-            EditBadge {
-                Layout.alignment: Qt.AlignRight
-                listKey: "ccHiddenCards"
-                widgetId: "session"
-            }
+        }
+
+            CardFrame { cardId: "session" }
+        }
         }
     }
     }

@@ -259,12 +259,6 @@ void B1airDaemon::closePanel(const QString& panel) {
 void B1airDaemon::forceReload() {
     call(kShellService, kShellPath, kShellIface, "ForceReload");
 }
-void B1airDaemon::switcherAdvance() {
-    call(kShellService, kShellPath, kShellIface, "SwitcherAdvance");
-}
-void B1airDaemon::switcherConfirm() {
-    call(kShellService, kShellPath, kShellIface, "SwitcherConfirm");
-}
 
 void B1airDaemon::onCameraInUseChanged(bool inUse) {
     if (m_cameraInUse == inUse)

@@ -108,12 +108,6 @@ Scope {
             case "forceReload":
                 Quickshell.reload(true);
                 break;
-            case "switcherAdvance":
-                shellIpc.switcherAdvance();
-                break;
-            case "switcherConfirm":
-                shellIpc.switcherConfirm();
-                break;
             }
         }
     }
@@ -146,8 +140,6 @@ Scope {
         color: "transparent"
     
     IpcHandler {
-        // Named so the D-Bus handler above can reuse these, rather than a
-        // second copy of the switcher's advance/confirm logic.
         id: shellIpc
         target: "main"
     
@@ -215,29 +207,7 @@ Scope {
         function toggleLaunchpad() { masterWindow.handleIpcCommand("toggle:launchpad:", true) }
         function openMenu() { masterWindow.handleIpcCommand("open:menu:", true) }
         function toggleMenu() { masterWindow.handleIpcCommand("toggle:menu:", true) }
-        function openSwitcher() { masterWindow.handleIpcCommand("open:switcher:", true) }
-        function toggleSwitcher() { masterWindow.handleIpcCommand("toggle:switcher:", true) }
-
-        // Real Alt+Tab needs two distinct actions, not one toggle: each Tab
-        // press while Alt is held must advance the selection, and toggling
-        // would instead close the popup on every second press. Release of
-        // Alt (bound separately in sway) confirms. "switcher" was never in
-        // WindowRegistry until now, so toggleSwitcher above has always been
-        // a silent no-op — that's why Alt+Tab had no binding at all.
-        function switcherAdvance() {
-            if (masterWindow.currentActive === "switcher" && widgetStack.currentItem
-                    && widgetStack.currentItem.nextWindow) {
-                widgetStack.currentItem.nextWindow();
-            } else {
-                masterWindow.handleIpcCommand("open:switcher:", true);
-            }
-        }
-        function switcherConfirm() {
-            if (masterWindow.currentActive === "switcher" && widgetStack.currentItem
-                    && widgetStack.currentItem.activateCurrent) {
-                widgetStack.currentItem.activateCurrent();
-            }
-        }
+        // No switcher: Alt+Tab is sway's own `focus next` again (keybinds.conf).
         function openEmoji() { masterWindow.handleIpcCommand("open:emoji:", true) }
         function toggleEmoji() { masterWindow.handleIpcCommand("toggle:emoji:", true) }
         function openZones() { masterWindow.handleIpcCommand("open:zones:", true) }
@@ -569,6 +539,17 @@ Scope {
         // away, and still reachable directly as `toggle settings about`.
         if (w === "guide") return "shortcuts";
         if (w === "focus") return "focus";
+        // Registry entries that open the Settings window on one page. None of
+        // these were listed here, so every one of them opened Settings on
+        // whatever page it happened to be on — Displays, from a fresh start.
+        // The Night Light tile's arrow, the Wallpaper and Displays entries and
+        // the three "…Full" shortcuts all landed on the monitor layout.
+        const settingsPage = {
+            "nightlight": "nightlight", "wallpaper": "wallpaper", "appearance": "appearance",
+            "input": "input", "monitors": "monitors", "audioFull": "audio",
+            "powerFull": "power", "netFull": "network"
+        };
+        if (settingsPage[w] !== undefined) return settingsPage[w];
         if (w === "settings") {
             if (a === "wifi") return "network";
             if (a === "sound" || a === "volume") return "audio";
