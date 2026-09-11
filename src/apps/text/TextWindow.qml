@@ -54,10 +54,13 @@ Window {
     Rectangle {
         id: windowFrame
         anchors.fill: parent
-        radius: (window.visibility === Window.Maximized) ? 0 : Design.s(14)
+        // No corners or outline of our own: sway draws both, and only sway
+        // knows which window has focus. The app drew a fixed 1px line and sway
+        // was told `border none` for it, so ours were the only windows on the
+        // desktop that did not light up when focused. SwayFX's corner_radius
+        // rounds the surface; a 14px radius inside its 10px one left slivers.
+        radius: 0
         color: Design.base
-        border.color: (window.visibility === Window.Maximized) ? "transparent" : Design.glassBorder
-        border.width: 1
         clip: true
 
         ColumnLayout {
