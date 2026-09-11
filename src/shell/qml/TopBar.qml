@@ -299,16 +299,12 @@ PanelWindow {
         // every other application on the machine the same grey executable box.
         const fromEntry = Apps.iconFor(appId);
         if (fromEntry !== "")
-            return fromEntry.startsWith("/") ? "file://" + fromEntry : "image://icon/" + fromEntry;
+            return topBar.iconSource(fromEntry);
 
         const id = (appId || "").toLowerCase();
-        if (id.includes("b1air-term")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/utilities-terminal.png";
-        if (id.includes("b1air-files")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/system-file-manager.png";
-        if (id.includes("b1air-monitor")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/utilities-system-monitor.png";
-        if (id.includes("b1air-setting")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/preferences-system.png";
-        if (id.includes("b1air-note") || id.includes("b1air-text")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/accessories-text-editor.png";
-        if (id.includes("b1air-git")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/applications-development.png";
-        if (id.includes("b1air-view")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/mimetypes/image-x-generic.png";
+        // Our own apps by their own icons, when no entry answered for them.
+        const ours = id.match(/b1air-(term|files|monitor|settings|notes|text|git|view)/);
+        if (ours) return topBar.iconSource("b1air-" + ours[1]);
         if (id.includes("firefox") || id.includes("browser")) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/web-browser.png";
         // Never pass an unknown app-id to image://icon: that produces the
         // red/purple missing-icon tile. Use a real system fallback instead.
@@ -318,6 +314,9 @@ PanelWindow {
     function iconSource(icon) {
         const value = (icon || "application-x-executable").trim();
         if (value.startsWith("/") || value.startsWith("file://")) return value.startsWith("file://") ? value : "file://" + value;
+        // The suite's own icons, by file: they live in ~/.local/share/icons,
+        // which not every icon theme lookup searches.
+        if (value.startsWith("b1air-")) return "file://" + Quickshell.env("HOME") + "/.local/share/icons/hicolor/scalable/apps/" + value + ".svg";
         const legacy = {
             "utilities-terminal": "utilities-terminal.png",
             "system-file-manager": "system-file-manager.png",

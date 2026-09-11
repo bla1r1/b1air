@@ -5,6 +5,7 @@
 #include <QFontMetricsF>
 #include <QSocketNotifier>
 #include <QColor>
+#include <QTimer>
 #include <vterm.h>
 #include <sys/types.h>
 #include <deque>
@@ -75,12 +76,17 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
 
 private slots:
     void onPtyRead();
+    void onBlink();
 
 private:
     void initTerminal(int rows, int cols);
+    void childExited();
+    void restartBlink();
     void updateFontMetrics();
     void updatePtySize();
     QColor toQColor(const VTermColor &color, const QColor &defaultColor) const;
@@ -124,6 +130,14 @@ private:
     VTermPos m_cursorPos = {0, 0};
     bool m_cursorVisible = true;
 
+    // A thin bar that blinks, until the program asks for something else with
+    // DECSCUSR (vi modes ask for a block). It was always a solid block.
+    int m_cursorShape = VTERM_PROP_CURSORSHAPE_BAR_LEFT;
+    bool m_cursorBlinks = true;
+    bool m_blinkOn = true;
+    QTimer m_blinkTimer;
+    bool m_finished = false;
+
     bool m_selecting = false;
     VTermPos m_selStart = {0, 0};
     VTermPos m_selEnd = {0, 0};
@@ -140,6 +154,11 @@ private:
 
     std::deque<std::vector<VTermScreenCell>> m_scrollback;
     int m_viewOffset = 0;
+
+    // What the running program asked for, so the wheel can do what it expects.
+    int m_mouseMode = 0;        // VTERM_PROP_MOUSE_*: nonzero = it wants mouse events
+    bool m_altScreen = false;   // less, man, htop, an editor
+    int m_wheelAccum = 0;       // eighths of a degree not yet turned into lines
 };
 
 } // namespace b1air

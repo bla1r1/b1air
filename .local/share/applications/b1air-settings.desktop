@@ -2,7 +2,7 @@
 Name=System Settings
 Comment=Configure displays, audio, network, appearance, and maintenance
 Exec=b1air-settings
-Icon=preferences-system
+Icon=b1air-settings
 Terminal=false
 Type=Application
 Categories=Settings;HardwareSettings;DesktopSettings;

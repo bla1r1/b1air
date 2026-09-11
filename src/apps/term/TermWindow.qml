@@ -32,14 +32,19 @@ Window {
     }
 
     function closeTab(index) {
-        if (tabsModel.count > 1) {
-            tabsModel.remove(index);
-            if (window.currentTabIndex >= tabsModel.count) {
-                window.currentTabIndex = tabsModel.count - 1;
-            }
-        } else {
+        if (index < 0 || index >= tabsModel.count)
+            return;
+        if (tabsModel.count <= 1) {
             window.close();
+            return;
         }
+        tabsModel.remove(index);
+        // Closing a tab to the left of the current one used to leave the
+        // index where it was, which is now the next tab over: the view jumped
+        // to a different shell than the one you were typing in.
+        if (window.currentTabIndex > index || window.currentTabIndex >= tabsModel.count)
+            window.currentTabIndex = Math.max(0, window.currentTabIndex - 1);
+        Qt.callLater(() => { const v = window.currentTermView(); if (v) v.forceActiveFocus(); });
     }
 
     onClosing: Qt.quit()
@@ -47,10 +52,13 @@ Window {
     Rectangle {
         id: windowFrame
         anchors.fill: parent
-        radius: (window.visibility === Window.Maximized) ? 0 : Design.s(14)
+        // No corners or outline of our own: sway draws both, and only sway
+        // knows which window has focus. The app drew a fixed 1px line and sway
+        // was told `border none` for it, so ours were the only windows on the
+        // desktop that did not light up when focused. SwayFX's corner_radius
+        // rounds the surface; a 14px radius inside its 10px one left slivers.
+        radius: 0
         color: Design.base
-        border.color: (window.visibility === Window.Maximized) ? "transparent" : Design.glassBorder
-        border.width: 1
         clip: true
 
         ColumnLayout {
@@ -97,6 +105,20 @@ Window {
                                 border.color: window.currentTabIndex === index ? Design.sapphire : Design.glassBorder
                                 border.width: 1
 
+                                // Declared first so it sits under the close button.
+                                // Middle-click closes too, as in every browser.
+                                MouseArea {
+                                    id: tabArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: mouse => {
+                                        if (mouse.button === Qt.MiddleButton) window.closeTab(index);
+                                        else window.currentTabIndex = index;
+                                    }
+                                }
+
                                 RowLayout {
                                     id: tabRow
                                     anchors.fill: parent
@@ -130,17 +152,22 @@ Window {
                                             color: Design.subtext0
                                         }
 
-                                        HoverHandler { id: closeHover }
-                                        TapHandler { onTapped: window.closeTab(index) }
+                                        // A MouseArea, above the tab's own: the
+                                        // tab's MouseArea covered the whole pill
+                                        // and was on top, so it took every press
+                                        // and the TapHandler that was here never
+                                        // saw one — the × selected the tab and
+                                        // closed nothing.
+                                        MouseArea {
+                                            id: closeHover
+                                            readonly property bool hovered: containsMouse
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(3)
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: window.closeTab(index)
+                                        }
                                     }
-                                }
-
-                                MouseArea {
-                                    id: tabArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: window.currentTabIndex = index
                                 }
                             }
                         }
@@ -241,6 +268,7 @@ Window {
                 currentIndex: window.currentTabIndex
 
                 Repeater {
+                    id: termRepeater
                     model: tabsModel
                     delegate: Item {
                         id: tabItem
@@ -284,11 +312,13 @@ Window {
         }
     }
 
+    // Through the Repeater, not termStack.children: the Repeater is itself
+    // the first child of the stack, so children[i] was the tab before the
+    // current one — copy, paste and zoom acted on the neighbouring tab, and on
+    // the first tab did nothing at all.
     function currentTermView() {
-        if (termStack.children.length > window.currentTabIndex && termStack.children[window.currentTabIndex].children.length > 0) {
-            return termStack.children[window.currentTabIndex].children[0];
-        }
-        return null;
+        const tab = termRepeater.itemAt(window.currentTabIndex);
+        return tab && tab.children.length > 0 ? tab.children[0] : null;
     }
 
     // Global Shortcuts

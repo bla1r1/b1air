@@ -537,6 +537,14 @@ deploy_dotfiles() {
         ok "Installed $(ls -1 "$REPO_DIR"/.local/share/applications/*.desktop 2>/dev/null | wc -l) desktop entries"
     fi
 
+    # The suite's icons, which the entries above name (Icon=b1air-<app>).
+    if [[ -d "$REPO_DIR/.local/share/icons/hicolor/scalable/apps" ]]; then
+        mkdir -p "$HOME/.local/share/icons/hicolor/scalable/apps"
+        install -m 644 "$REPO_DIR"/.local/share/icons/hicolor/scalable/apps/b1air-*.svg \
+            "$HOME/.local/share/icons/hicolor/scalable/apps/"
+        gtk-update-icon-cache -q -t -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    fi
+
     # Sync wallpapers. Added, not replaced: --delete here threw away every
     # wallpaper the user had put in the folder themselves, and the folder is
     # exactly the place they are invited to put them.

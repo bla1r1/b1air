@@ -89,14 +89,14 @@ PopupShell {
     // They remain in SpotlightLauncher, which is a command palette rather than
     // an application grid, so searching "clipboard" there still finds it.
     readonly property var baseApps: [
-        { name: "Files", desc: "Native File Manager & Gallery", icon: "system-file-manager", app_id: "system-file-manager", cmd: "b1air-files", cat: "Utilities" },
-        { name: "Terminal", desc: "Multi-tab Native Terminal", icon: "utilities-terminal", app_id: "utilities-terminal", cmd: "b1air-term", cat: "System" },
-        { name: "Notes", desc: "Markdown Notes with Obsidian & Notion Sync", icon: "accessories-text-editor", app_id: "accessories-text-editor", cmd: "b1air-notes", cat: "Office" },
-        { name: "Git", desc: "GitHub Desktop Style Git Client", icon: "git", app_id: "git", cmd: "b1air-git", cat: "Development" },
-        { name: "System Monitor", desc: "Process & Hardware Monitor", icon: "utilities-system-monitor", app_id: "utilities-system-monitor", cmd: "b1air-monitor", cat: "System" },
-        { name: "Image Viewer", desc: "Lightweight Image & Media Viewer", icon: "image-x-generic", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
-        { name: "Text Editor", desc: "Minimal Text & Config Editor", icon: "text-editor", app_id: "text-editor", cmd: "b1air-text", cat: "Utilities" },
-        { name: "System Settings", desc: "Desktop Preferences & Appearance", icon: "preferences-system", app_id: "preferences-system", cmd: "b1air-settings", cat: "System" },
+        { name: "Files", desc: "Native File Manager & Gallery", icon: "b1air-files", app_id: "system-file-manager", cmd: "b1air-files", cat: "Utilities" },
+        { name: "Terminal", desc: "Multi-tab Native Terminal", icon: "b1air-term", app_id: "utilities-terminal", cmd: "b1air-term", cat: "System" },
+        { name: "Notes", desc: "Markdown Notes with Obsidian & Notion Sync", icon: "b1air-notes", app_id: "accessories-text-editor", cmd: "b1air-notes", cat: "Office" },
+        { name: "Git", desc: "GitHub Desktop Style Git Client", icon: "b1air-git", app_id: "git", cmd: "b1air-git", cat: "Development" },
+        { name: "System Monitor", desc: "Process & Hardware Monitor", icon: "b1air-monitor", app_id: "utilities-system-monitor", cmd: "b1air-monitor", cat: "System" },
+        { name: "Image Viewer", desc: "Lightweight Image & Media Viewer", icon: "b1air-view", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
+        { name: "Text Editor", desc: "Minimal Text & Config Editor", icon: "b1air-text", app_id: "text-editor", cmd: "b1air-text", cat: "Utilities" },
+        { name: "System Settings", desc: "Desktop Preferences & Appearance", icon: "b1air-settings", app_id: "preferences-system", cmd: "b1air-settings", cat: "System" },
     ]
 
     function categoryName(raw) {
@@ -113,6 +113,9 @@ PopupShell {
     function iconSource(icon) {
         const value = (icon || "application-x-executable").trim();
         if (value.startsWith("/") || value.startsWith("file://")) return value.startsWith("file://") ? value : "file://" + value;
+        // The suite's own icons, by file: they live in ~/.local/share/icons,
+        // which not every icon theme lookup searches.
+        if (value.startsWith("b1air-")) return "file://" + Quickshell.env("HOME") + "/.local/share/icons/hicolor/scalable/apps/" + value + ".svg";
         const legacy = {
             "utilities-terminal": "utilities-terminal.png",
             "system-file-manager": "system-file-manager.png",

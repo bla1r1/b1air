@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- b1air b1air-settings: dark tile, one accent, one glyph. Draw over it freely:
+       any SVG with this file name replaces it at the next `make install`. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2f45"/>
+      <stop offset="1" stop-color="#16161e"/>
+    </linearGradient>
+    <linearGradient id="ac" gradientUnits="userSpaceOnUse" x1="56" y1="56" x2="200" y2="200">
+      <stop offset="0" stop-color="#7dcfff"/>
+      <stop offset="1" stop-color="#7dcfff" stop-opacity="0.72"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#7dcfff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#7dcfff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#bg)"/>
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#glow)"/>
+  <rect x="12.75" y="12.75" width="230.5" height="230.5" rx="55.25" fill="none" stroke="#7dcfff" stroke-opacity="0.35" stroke-width="1.5"/>
+  <path d="M68 13.5 H188" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M183.9 112.5 L201.0 116.1 L201.0 139.9 L183.9 143.5 L178.5 156.6 L188.1 171.2 L171.2 188.1 L156.6 178.5 L143.5 183.9 L139.9 201.0 L116.1 201.0 L112.5 183.9 L99.4 178.5 L84.8 188.1 L67.9 171.2 L77.5 156.6 L72.1 143.5 L55.0 139.9 L55.0 116.1 L72.1 112.5 L77.5 99.4 L67.9 84.8 L84.8 67.9 L99.4 77.5 L112.5 72.1 L116.1 55.0 L139.9 55.0 L143.5 72.1 L156.6 77.5 L171.2 67.9 L188.1 84.8 L178.5 99.4 Z" fill="url(#ac)" fill-rule="evenodd"/>
+  <circle cx="128" cy="128" r="26" fill="#1c1f2e"/>
+</svg>

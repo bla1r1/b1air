@@ -2,7 +2,7 @@
 Name=System Monitor
 Comment=View system load, memory, storage, and manage tasks
 Exec=b1air-monitor
-Icon=utilities-system-monitor
+Icon=b1air-monitor
 Terminal=false
 Type=Application
 Categories=System;Monitor;

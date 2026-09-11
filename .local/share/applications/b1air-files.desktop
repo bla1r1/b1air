@@ -2,7 +2,7 @@
 Name=Files
 Comment=File Manager & Media Gallery
 Exec=b1air-files %U
-Icon=system-file-manager
+Icon=b1air-files
 Terminal=false
 Type=Application
 Categories=System;FileTools;FileManager;Utility;

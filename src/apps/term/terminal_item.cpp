@@ -14,6 +14,8 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <cmath>
+#include <algorithm>
+#include <cstring>
 #include <utility>
 #include <iostream>
 
@@ -44,6 +46,38 @@ TerminalItem::TerminalItem(QQuickItem *parent)
 
     updateFontMetrics();
     initTerminal(m_rows, m_cols);
+
+    // The platform's own rate, so it matches every other text field.
+    const int flash = QGuiApplication::styleHints()->cursorFlashTime();
+    m_blinkTimer.setInterval(flash > 0 ? flash / 2 : 530);
+    connect(&m_blinkTimer, &QTimer::timeout, this, &TerminalItem::onBlink);
+}
+
+void TerminalItem::onBlink() {
+    m_blinkOn = !m_blinkOn;
+    update();
+}
+
+// Solid again at once after typing or output, and blinking only while the
+// terminal has focus — a blinking cursor in a window you are not typing into
+// is just motion in the corner of your eye.
+void TerminalItem::restartBlink() {
+    m_blinkOn = true;
+    if (m_cursorBlinks && hasActiveFocus())
+        m_blinkTimer.start();
+    else
+        m_blinkTimer.stop();
+    update();
+}
+
+void TerminalItem::focusInEvent(QFocusEvent *event) {
+    QQuickPaintedItem::focusInEvent(event);
+    restartBlink();
+}
+
+void TerminalItem::focusOutEvent(QFocusEvent *event) {
+    QQuickPaintedItem::focusOutEvent(event);
+    restartBlink();
 }
 
 TerminalItem::~TerminalItem() {
@@ -87,6 +121,10 @@ void TerminalItem::initTerminal(int rows, int cols) {
 
     vterm_screen_set_callbacks(m_vts, &m_screenCallbacks, this);
     vterm_screen_reset(m_vts, 1);
+    // The reset reports a blinking block through settermprop; the default
+    // here is the bar. A program that wants a block still gets one by asking.
+    m_cursorShape = VTERM_PROP_CURSORSHAPE_BAR_LEFT;
+    m_cursorBlinks = true;
     vterm_output_set_callback(m_vt, cbOutput, this);
 }
 
@@ -206,14 +244,19 @@ void TerminalItem::onPtyRead() {
             if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 break; // read all currently available bytes
             }
-            // Child closed PTY
-            emit processFinished(0);
-            break;
+            // The child has gone. This used to emit and leave the notifier
+            // armed on a pty whose reads now fail at once, so it fired again
+            // on every turn of the event loop — processFinished arrived over
+            // and over, and TermWindow closed a tab for each one: typing
+            // `exit` in one tab could take its neighbours with it, and the
+            // emits could land on an item QML was already destroying.
+            childExited();
+            return;
         }
     }
 
     vterm_screen_flush_damage(m_vts);
-    update();
+    restartBlink();
 }
 
 void TerminalItem::updatePtySize() {
@@ -318,7 +361,16 @@ void TerminalItem::paint(QPainter *painter) {
                     std::memset(&cell, 0, sizeof(cell));
                     cell.width = 1;
                 } else if (sourceRow < static_cast<int>(m_scrollback.size())) {
-                    cell = m_scrollback[static_cast<size_t>(sourceRow)][static_cast<size_t>(col)];
+                    // A line is as wide as the window was when it scrolled
+                    // off. Widen the window since and this read past the end
+                    // of it.
+                    const auto &line = m_scrollback[static_cast<size_t>(sourceRow)];
+                    if (col < static_cast<int>(line.size())) {
+                        cell = line[static_cast<size_t>(col)];
+                    } else {
+                        std::memset(&cell, 0, sizeof(cell));
+                        cell.width = 1;
+                    }
                 } else {
                     vterm_screen_get_cell(m_vts, {sourceRow - static_cast<int>(m_scrollback.size()), col}, &cell);
                 }
@@ -400,13 +452,37 @@ void TerminalItem::paint(QPainter *painter) {
         }
     }
 
-    // Cursor
-    if (m_cursorVisible && m_cursorPos.row < m_rows && m_cursorPos.col < m_cols) {
+    // Cursor. Not while scrolled back: it belongs to the live screen, and was
+    // drawn at the same cell over whatever history was on show.
+    const bool focused = hasActiveFocus();
+    if (m_cursorVisible && m_viewOffset == 0 && !m_finished
+            && m_cursorPos.row < m_rows && m_cursorPos.col < m_cols
+            && (m_blinkOn || !focused)) {
         qreal cx = m_cursorPos.col * m_cellWidth;
         qreal cy = m_cursorPos.row * m_cellHeight;
         QRectF cursorRect(cx, cy, m_cellWidth, m_cellHeight);
+        QColor cursorColor = m_foreground;
 
-        painter->fillRect(cursorRect, QColor(205, 214, 244, 210));
+        if (!focused) {
+            // An outline when the window is not focused, like every terminal.
+            cursorColor.setAlpha(160);
+            painter->setPen(QPen(cursorColor, 1));
+            painter->setBrush(Qt::NoBrush);
+            painter->drawRect(cursorRect.adjusted(0.5, 0.5, -0.5, -0.5));
+            return;
+        }
+        if (m_cursorShape == VTERM_PROP_CURSORSHAPE_BAR_LEFT) {
+            painter->fillRect(QRectF(cx, cy, std::max<qreal>(2.0, m_cellWidth / 6.0), m_cellHeight), cursorColor);
+            return;
+        }
+        if (m_cursorShape == VTERM_PROP_CURSORSHAPE_UNDERLINE) {
+            const qreal h = std::max<qreal>(2.0, m_cellHeight / 10.0);
+            painter->fillRect(QRectF(cx, cy + m_cellHeight - h, m_cellWidth, h), cursorColor);
+            return;
+        }
+
+        cursorColor.setAlpha(210);
+        painter->fillRect(cursorRect, cursorColor);
 
         // Invert character inside cursor
         VTermScreenCell cell;
@@ -423,8 +499,31 @@ void TerminalItem::paint(QPainter *painter) {
     }
 }
 
+void TerminalItem::childExited() {
+    if (m_finished) return;
+    m_finished = true;
+    if (m_notifier) {
+        m_notifier->setEnabled(false);
+        m_notifier->deleteLater();
+        m_notifier = nullptr;
+    }
+    if (m_masterFd >= 0) {
+        close(m_masterFd);
+        m_masterFd = -1;
+    }
+    int status = 0;
+    if (m_childPid > 0 && waitpid(m_childPid, &status, WNOHANG) == m_childPid)
+        m_childPid = -1;
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : 0;
+    m_blinkTimer.stop();
+    // Queued: whoever listens may delete this item, and must not do it
+    // while onPtyRead is still on the stack.
+    QMetaObject::invokeMethod(this, [this, code]() { emit processFinished(code); }, Qt::QueuedConnection);
+}
+
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
     if (m_masterFd < 0) return;
+    restartBlink();
 
     if (m_viewOffset > 0) {
         m_viewOffset = 0;
@@ -456,73 +555,94 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
         }
     }
 
-    // Special Keys
-    const char *seq = nullptr;
-    switch (event->key()) {
-        case Qt::Key_Return:
-        case Qt::Key_Enter:
-            seq = "\r"; break;
-        case Qt::Key_Backspace:
-            seq = "\x7f"; break;
-        case Qt::Key_Tab:
-            seq = "\t"; break;
-        case Qt::Key_Escape:
-            seq = "\x1b"; break;
-        case Qt::Key_Up:
-            seq = "\x1b[A"; break;
-        case Qt::Key_Down:
-            seq = "\x1b[B"; break;
-        case Qt::Key_Right:
-            seq = "\x1b[C"; break;
-        case Qt::Key_Left:
-            seq = "\x1b[D"; break;
-        case Qt::Key_Home:
-            seq = "\x1b[H"; break;
-        case Qt::Key_End:
-            seq = "\x1b[F"; break;
-        case Qt::Key_Insert:
-            seq = "\x1b[2~"; break;
-        case Qt::Key_Delete:
-            seq = "\x1b[3~"; break;
-        case Qt::Key_PageUp:
-            seq = "\x1b[5~"; break;
-        case Qt::Key_PageDown:
-            seq = "\x1b[6~"; break;
-        case Qt::Key_F1: seq = "\x1bOP"; break;
-        case Qt::Key_F2: seq = "\x1bOQ"; break;
-        case Qt::Key_F3: seq = "\x1bOR"; break;
-        case Qt::Key_F4: seq = "\x1bOS"; break;
-        case Qt::Key_F5: seq = "\x1b[15~"; break;
-        case Qt::Key_F6: seq = "\x1b[17~"; break;
-        case Qt::Key_F7: seq = "\x1b[18~"; break;
-        case Qt::Key_F8: seq = "\x1b[19~"; break;
-        case Qt::Key_F9: seq = "\x1b[20~"; break;
-        case Qt::Key_F10: seq = "\x1b[21~"; break;
-        case Qt::Key_F11: seq = "\x1b[23~"; break;
-        case Qt::Key_F12: seq = "\x1b[24~"; break;
-        default:
-            break;
-    }
-
-    if (seq) {
-        write(m_masterFd, seq, strlen(seq));
-        return;
-    }
-
-    // Ctrl + Key
-    if (event->modifiers() & Qt::ControlModifier) {
-        int k = event->key();
-        if (k >= Qt::Key_A && k <= Qt::Key_Z) {
-            char ctrlByte = (char)(k - Qt::Key_A + 1);
-            write(m_masterFd, &ctrlByte, 1);
+    // Scrolling the terminal's own history from the keyboard, as every other
+    // terminal does: Shift+PageUp/PageDown by a page, Shift+Home/End to the
+    // ends. Not on the alternate screen, where these keys belong to the
+    // program (less, an editor) and there is no history to show.
+    if ((event->modifiers() & Qt::ShiftModifier) && !m_altScreen && !m_scrollback.empty()) {
+        const int page = std::max(1, m_rows - 1);
+        const int top = static_cast<int>(m_scrollback.size());
+        int to = -1;
+        if (event->key() == Qt::Key_PageUp)   to = std::min(top, m_viewOffset + page);
+        if (event->key() == Qt::Key_PageDown) to = std::max(0, m_viewOffset - page);
+        if (event->key() == Qt::Key_Home)     to = top;
+        if (event->key() == Qt::Key_End)      to = 0;
+        if (to >= 0) {
+            m_viewOffset = to;
+            update();
             return;
         }
     }
 
-    // Text Input
-    QByteArray utf8 = event->text().toUtf8();
-    if (!utf8.isEmpty()) {
-        write(m_masterFd, utf8.constData(), utf8.size());
+    // Everything else goes through libvterm's keyboard, which writes to the pty
+    // through cbOutput.
+    //
+    // This was a hand-written table of escape sequences that ignored both the
+    // modifiers and the modes the running program had switched on: Shift,
+    // Ctrl and Alt with an arrow all sent the bare arrow, Shift+Tab sent Tab,
+    // Alt+letter sent the letter without its ESC, and the arrows were always
+    // the normal-mode ones even after vim or less asked for application mode.
+    // libvterm encodes all of that from the state it is already tracking.
+    VTermModifier mod = VTERM_MOD_NONE;
+    if (event->modifiers() & Qt::ShiftModifier)   mod = static_cast<VTermModifier>(mod | VTERM_MOD_SHIFT);
+    if (event->modifiers() & Qt::AltModifier)     mod = static_cast<VTermModifier>(mod | VTERM_MOD_ALT);
+    if (event->modifiers() & Qt::ControlModifier) mod = static_cast<VTermModifier>(mod | VTERM_MOD_CTRL);
+    const bool keypad = event->modifiers() & Qt::KeypadModifier;
+
+    VTermKey key = VTERM_KEY_NONE;
+    switch (event->key()) {
+        case Qt::Key_Return:    key = VTERM_KEY_ENTER; break;
+        case Qt::Key_Enter:     key = keypad ? VTERM_KEY_KP_ENTER : VTERM_KEY_ENTER; break;
+        case Qt::Key_Backspace: key = VTERM_KEY_BACKSPACE; break;
+        case Qt::Key_Tab:       key = VTERM_KEY_TAB; break;
+        case Qt::Key_Backtab:   key = VTERM_KEY_TAB; mod = static_cast<VTermModifier>(mod | VTERM_MOD_SHIFT); break;
+        case Qt::Key_Escape:    key = VTERM_KEY_ESCAPE; break;
+        case Qt::Key_Up:        key = VTERM_KEY_UP; break;
+        case Qt::Key_Down:      key = VTERM_KEY_DOWN; break;
+        case Qt::Key_Left:      key = VTERM_KEY_LEFT; break;
+        case Qt::Key_Right:     key = VTERM_KEY_RIGHT; break;
+        case Qt::Key_Insert:    key = VTERM_KEY_INS; break;
+        case Qt::Key_Delete:    key = VTERM_KEY_DEL; break;
+        case Qt::Key_Home:      key = VTERM_KEY_HOME; break;
+        case Qt::Key_End:       key = VTERM_KEY_END; break;
+        case Qt::Key_PageUp:    key = VTERM_KEY_PAGEUP; break;
+        case Qt::Key_PageDown:  key = VTERM_KEY_PAGEDOWN; break;
+        default:
+            if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F35)
+                key = static_cast<VTermKey>(VTERM_KEY_FUNCTION(event->key() - Qt::Key_F1 + 1));
+            break;
+    }
+    if (key != VTERM_KEY_NONE) {
+        vterm_keyboard_key(m_vt, key, mod);
+        return;
+    }
+
+    // Ctrl with a character: the key's own character, not event->text(),
+    // which is already the control code (or nothing, for Ctrl+Space).
+    if (mod & VTERM_MOD_CTRL) {
+        const int k = event->key();
+        uint32_t c = 0;
+        if (k >= Qt::Key_A && k <= Qt::Key_Z) c = static_cast<uint32_t>('a' + (k - Qt::Key_A));
+        else if (k == Qt::Key_Space) c = ' ';
+        else if (k > 0x20 && k < 0x7f) c = static_cast<uint32_t>(k);
+        if (c) {
+            vterm_keyboard_unichar(m_vt, c, mod);
+            return;
+        }
+    }
+
+    // Text. Shift is already in the characters; Alt reaches libvterm, which
+    // sends it as the ESC prefix.
+    const QString text = event->text();
+    if (text.isEmpty()) return;
+    const VTermModifier textMod = static_cast<VTermModifier>(mod & VTERM_MOD_ALT);
+    for (const uint cp : text.toUcs4()) {
+        if (cp < 0x20 || cp == 0x7f) {
+            const char byte = static_cast<char>(cp);
+            write(m_masterFd, &byte, 1);
+        } else {
+            vterm_keyboard_unichar(m_vt, cp, textMod);
+        }
     }
 }
 
@@ -609,16 +729,54 @@ void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
     }
 }
 
+// The wheel, three ways, the way other terminals do it:
+//
+//   - a program that turned mouse reporting on (htop, nvim, tmux) gets the
+//     wheel as mouse buttons 4 and 5, at the cell under the pointer;
+//   - a full-screen program without it (less, man) gets arrow keys, one per
+//     line — the alternate screen has no scrollback to show;
+//   - the shell's own screen scrolls through the history.
+//
+// This only did the third, and returned early whenever the history was
+// empty, so the wheel did nothing at all in less, man, htop or an editor.
+// It also moved three lines for every event however small: a touchpad sends
+// a stream of tiny deltas, so the view lurched. Deltas are added up now, and
+// a notch of a wheel (120) is three lines, as everywhere else.
 void TerminalItem::wheelEvent(QWheelEvent *event) {
-    if (m_masterFd < 0 || m_scrollback.empty()) return;
-    int delta = event->angleDelta().y();
-    if (delta > 0) {
-        m_viewOffset = std::min(static_cast<int>(m_scrollback.size()), m_viewOffset + 3);
-    } else if (delta < 0) {
-        m_viewOffset = std::max(0, m_viewOffset - 3);
-    }
-    update();
     event->accept();
+    if (m_masterFd < 0 || !m_vt) return;
+
+    int delta = event->angleDelta().y();
+    if (delta == 0 && !event->pixelDelta().isNull())
+        delta = event->pixelDelta().y() * 120 / std::max<int>(1, static_cast<int>(m_cellHeight * 3));
+    m_wheelAccum += delta;
+    const int lines = m_wheelAccum / 40;      // 120 per notch -> 3 lines
+    if (lines == 0) return;
+    m_wheelAccum -= lines * 40;
+
+    if (m_mouseMode != VTERM_PROP_MOUSE_NONE) {
+        const QPointF p = event->position();
+        const int row = std::clamp(static_cast<int>(p.y() / m_cellHeight), 0, m_rows - 1);
+        const int col = std::clamp(static_cast<int>(p.x() / m_cellWidth), 0, m_cols - 1);
+        vterm_mouse_move(m_vt, row, col, VTERM_MOD_NONE);
+        const int button = lines > 0 ? 4 : 5;
+        for (int i = 0; i < std::abs(lines); ++i) {
+            vterm_mouse_button(m_vt, button, true, VTERM_MOD_NONE);
+            vterm_mouse_button(m_vt, button, false, VTERM_MOD_NONE);
+        }
+        return;
+    }
+
+    if (m_altScreen) {
+        const VTermKey key = lines > 0 ? VTERM_KEY_UP : VTERM_KEY_DOWN;
+        for (int i = 0; i < std::abs(lines); ++i)
+            vterm_keyboard_key(m_vt, key, VTERM_MOD_NONE);
+        return;
+    }
+
+    if (m_scrollback.empty()) return;
+    m_viewOffset = std::clamp(m_viewOffset + lines, 0, static_cast<int>(m_scrollback.size()));
+    update();
 }
 
 void TerminalItem::copySelection() {
@@ -657,8 +815,13 @@ void TerminalItem::pasteClipboard() {
     if (m_masterFd < 0) return;
     QString text = QGuiApplication::clipboard()->text();
     if (!text.isEmpty()) {
+        // Bracketed, when the program asked for it (libvterm emits the markers
+        // only then): a shell or an editor can tell a pasted block from typed
+        // keys, and does not run each line as it arrives.
+        vterm_keyboard_start_paste(m_vt);
         QByteArray data = text.toUtf8();
         write(m_masterFd, data.constData(), data.size());
+        vterm_keyboard_end_paste(m_vt);
     }
 }
 
@@ -717,6 +880,23 @@ int TerminalItem::cbSettermprop(VTermProp prop, VTermValue *val, void *user) {
     if (prop == VTERM_PROP_TITLE) {
         term->m_title = QString::fromUtf8(val->string.str, val->string.len);
         emit term->titleChanged();
+    } else if (prop == VTERM_PROP_CURSORVISIBLE) {
+        term->m_cursorVisible = val->boolean;
+        term->update();
+    } else if (prop == VTERM_PROP_CURSORBLINK) {
+        term->m_cursorBlinks = val->boolean;
+        term->restartBlink();
+    } else if (prop == VTERM_PROP_MOUSE) {
+        term->m_mouseMode = val->number;
+    } else if (prop == VTERM_PROP_ALTSCREEN) {
+        term->m_altScreen = val->boolean;
+        // Leaving history on show while a full-screen program draws over it
+        // would show neither.
+        term->m_viewOffset = 0;
+        term->update();
+    } else if (prop == VTERM_PROP_CURSORSHAPE) {
+        term->m_cursorShape = val->number;
+        term->update();
     }
     return 1;
 }

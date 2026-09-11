@@ -8,8 +8,8 @@ Singleton {
     id: root
 
     property var pinnedList: [
-        { id: "b1air-files", name: "Files", icon: "system-file-manager", cmd: "b1air-files" },
-        { id: "b1air-term", name: "Terminal", icon: "utilities-terminal", cmd: "b1air-term" },
+        { id: "b1air-files", name: "Files", icon: "b1air-files", cmd: "b1air-files" },
+        { id: "b1air-term", name: "Terminal", icon: "b1air-term", cmd: "b1air-term" },
         { id: "firefox", name: "Browser", icon: "web-browser", cmd: "firefox" }
     ]
 

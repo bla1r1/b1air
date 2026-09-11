@@ -145,6 +145,12 @@ install: daemon-target polkit-target secret-target shell-target
 			"$$f" > $(HOME)/.local/share/applications/$$(basename "$$f"); \
 	done
 	-update-desktop-database $(HOME)/.local/share/applications >/dev/null 2>&1
+	# The suite's own icons, looked up by the entries' Icon=b1air-<app>. An SVG
+	# dropped in with the same name replaces one at the next install.
+	mkdir -p $(HOME)/.local/share/icons/hicolor/scalable/apps
+	install -m 644 ../.local/share/icons/hicolor/scalable/apps/b1air-*.svg \
+		$(HOME)/.local/share/icons/hicolor/scalable/apps/
+	-gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor >/dev/null 2>&1
 	mkdir -p $(HOME)/.config/environment.d
 	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(HOME)/.config/environment.d/
 

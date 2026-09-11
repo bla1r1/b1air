@@ -2,7 +2,7 @@
 Name=Text Editor
 Comment=Lightweight and fast text and configuration editor
 Exec=b1air-text %U
-Icon=text-editor
+Icon=b1air-text
 Terminal=false
 Type=Application
 Categories=Utility;TextEditor;
