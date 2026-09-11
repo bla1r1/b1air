@@ -3,7 +3,6 @@ import QtQuick.Layouts
 import Quickshell
 import "../../Ui"
 import "../../Services"
-import B1air.Daemon
 
 // =============================================================================
 // Native Quickshell Top Bar Settings
@@ -14,13 +13,6 @@ ColumnLayout {
 
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
-
-    property string barPosition: Settings.barPosition || "top"
-    property bool barClock24h: Settings.barClock24h !== undefined ? Settings.barClock24h : true
-
-    function reloadTopBar() {
-        Daemon.reload();
-    }
 
     // ── 1. Position & Layout ─────────────────────────────────────────────────
     // The module switches that were here are on the Widgets page now,
@@ -34,6 +26,22 @@ ColumnLayout {
     // next to a UI scale slider — that slider is gone (scale now follows the
     // display's own scale, set from Displays), leaving a page with nothing
     // but this one control. It's a bar setting; it belongs with the rest.
+    // The bar has always read barClock24h and nothing on any page could set
+    // it, so a 12-hour clock needed a hand edit of settings.json.
+    Card {
+        title: "Clock"
+        subtitle: "How the time in the bar is written"
+        icon: "\u{f0954}"
+        accentColor: Design.blue
+
+        Toggle {
+            label: "24-hour time"
+            subtitle: Settings.barClock24h ? "14:30" : "2:30 PM"
+            checked: Settings.barClock24h
+            onToggled: Settings.set("barClock24h", !Settings.barClock24h)
+        }
+    }
+
     Card {
         title: "Workspaces"
         subtitle: "How many workspace numbers the bar shows"

@@ -14,13 +14,16 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
-    property bool gameModeEnabled: Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false
-    property bool gameModeAdaptiveSync: Settings.gameModeAdaptiveSync !== undefined ? Settings.gameModeAdaptiveSync : false
+    // Read-only views of Settings. These were writable copies that each
+    // handler assigned to, which cut them loose from Settings: once toggled
+    // here, Game Mode switched on from the Control Center or Mod+Shift+G no
+    // longer showed on this page.
+    readonly property bool gameModeEnabled: Settings.gameModeEnabled
+    readonly property bool gameModeAdaptiveSync: Settings.gameModeAdaptiveSync
     readonly property bool gameModeHideBar: Settings.gameModeHideBar
-    property bool gameModeDND: Settings.gameModeDND !== undefined ? Settings.gameModeDND : false
+    readonly property bool gameModeDND: Settings.gameModeDND
 
     function toggleGameMode(val) {
-        section.gameModeEnabled = val;
         Settings.set("gameModeEnabled", val);
         const daemonCmd = Quickshell.env("HOME") + "/.local/bin/b1air-daemon";
         Quickshell.execDetached([daemonCmd, "game-mode", val ? "on" : "off"]);
@@ -73,8 +76,7 @@ ColumnLayout {
                 Toggle {
                     checked: section.gameModeAdaptiveSync
                     onToggled: {
-                        section.gameModeAdaptiveSync = !section.gameModeAdaptiveSync;
-                        Settings.set("gameModeAdaptiveSync", section.gameModeAdaptiveSync);
+                        Settings.set("gameModeAdaptiveSync", !section.gameModeAdaptiveSync);
                     }
                 }
             }
@@ -118,8 +120,7 @@ ColumnLayout {
                 Toggle {
                     checked: section.gameModeDND
                     onToggled: {
-                        section.gameModeDND = !section.gameModeDND;
-                        Settings.set("gameModeDND", section.gameModeDND);
+                        Settings.set("gameModeDND", !section.gameModeDND);
                     }
                 }
             }

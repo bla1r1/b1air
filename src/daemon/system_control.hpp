@@ -72,10 +72,13 @@ public:
     // Color Dropper / Pixel Picker
     static std::string pick_color();
 
-    // Window Minimization & Window Switcher (Alt+Tab)
+    // Window Minimization
     static bool window_minimize();
     static bool window_restore(int64_t con_id = -1);
     static bool window_toggle_minimize();
+    static bool window_maximize_toggle();
+    static bool window_float_all_toggle();
+    static bool window_opacity_toggle();
     static int window_count_minimized();
     static std::string window_list_minimized_json();
     static std::string window_list_open_json();
@@ -150,7 +153,8 @@ public:
     static bool dotfiles_sys();
 
     // Advanced Screen Capture, Recording, OCR & QR Scanner
-    static bool capture(const std::string& mode = "full", const std::string& geom = "", bool edit = false);
+    static bool capture(const std::string& mode = "full", const std::string& geom = "", bool edit = false,
+                        int delay_override = -1);
     static bool run_screenshot_overlay(bool edit_mode = false);
     static bool record_toggle(const std::string& geom = "", double desk_vol = 1.0, double mic_vol = 1.0, bool desk_mute = false, bool mic_mute = false, const std::string& mic_dev = "");
     static bool record_stop();
@@ -197,8 +201,8 @@ public:
     static bool wallpaper_restore();
 
     // Night Light & Day/Night Ambiance
-    static bool night_light_on(int temp = 4000);
-    static bool night_light_off();
+    static bool night_light_on(int temp = 4000, bool announce = true);
+    static bool night_light_off(bool announce = true);
     static bool night_light_toggle();
     static bool night_light_auto();
 
@@ -212,6 +216,7 @@ public:
     // desktop does not ship.
     static std::string get_updates_json(bool force = false);
     static bool launch_system_upgrade();
+    static bool open_default(const std::string& kind);
 
     // Terminal Themes
     static std::vector<std::string> term_theme_list();

@@ -7,6 +7,7 @@
 #include "daemon_dbus.hpp"
 #include "runtime.hpp"
 #include "version.hpp"
+#include "proc_util.hpp"
 
 #include <iostream>
 #include <string>
@@ -49,6 +50,8 @@ static void print_usage(const char* prog) {
               << "  media-info                         Get full MPRIS & album art palette JSON for player\n"
               << "  weather [json|current|icon|temp]   Get live weather forecast JSON or current conditions\n"
               << "  schedule                           Get calendar schedule JSON\n"
+              << "  open-default {terminal|files|browser}\n"
+              << "                                     Launch the app chosen in Settings -> Default Apps\n"
               << "  diary                              Open or create today's Obsidian diary note\n"
               << "  dotfiles [status|sync|sys]         Git sync dotfiles repository or launch system upgrade\n"
               << "  updates [check|up]                 Get package updates JSON or launch system upgrade\n\n"
@@ -72,7 +75,7 @@ static void print_usage(const char* prog) {
               << "  game-mode {on|off|toggle|status}   Control zero-overhead gaming optimizations\n"
               << "  power {lock|logout|suspend|reboot|shutdown}\n"
               << "                                     Execute session power state transitions\n"
-              << "  capture [--geometry <geom>] [--edit] [--full|--area|--window]\n"
+              << "  capture [--geometry <geom>] [--edit] [--delay <s>] [--full|--area|--window]\n"
               << "                                     Capture screen, copy to clipboard & annotate\n"
               << "  record [toggle|stop] [--geometry <geom>] [--desk-vol <v>] [--mic-vol <v>]\n"
               << "                                     Hardware-accelerated GPU screen & audio recording\n"
@@ -98,6 +101,84 @@ static int run_focus_tracker() {
     SessionManager::run_focus_tracker();
 
     std::cout << "[b1air-focus] Daemon stopped gracefully.\n";
+    return 0;
+}
+
+// ── The D-Bus interface, without the bus ─────────────────────────────────────
+//
+// `b1air-daemon dbus-call <Method> [args…]` runs exactly what the session
+// daemon's D-Bus handler for <Method> runs, in this process, and prints the
+// method's string result if it has one.
+//
+// It is the fallback for the B1air.Daemon QML plugin. That plugin talked only
+// to org.b1air.Daemon, which exists only while `b1air-daemon session` is up —
+// so with the session daemon gone (it crashed on XWayland windows until
+// recently), or under KDE or any other desktop where it never runs, every call
+// failed and the Settings window put up a critical "DotfilesStatus failed"
+// notification each time it looked for updates. The plugin runs this instead
+// when the service is not there.
+static int run_dbus_call(int argc, char* argv[]) {
+    if (argc < 3) return 2;
+    const std::string m = argv[2];
+    auto arg = [&](int i, const std::string& def = "") -> std::string {
+        return (argc > 3 + i) ? std::string(argv[3 + i]) : def;
+    };
+    auto num = [&](int i, int def) {
+        try { return std::stoi(arg(i, std::to_string(def))); } catch (...) { return def; }
+    };
+    auto flag = [&](int i) { const std::string v = arg(i, "false"); return v == "true" || v == "1"; };
+
+    if (m == "Lock")               SystemControl::lock_session_async();
+    else if (m == "Reload")        { util::spawn_detached({"swaymsg", "reload"}); util::spawn_detached({"b1air-shell", "forceReload"}); }
+    else if (m == "VolumeUp")      SystemControl::volume_up(num(0, 5));
+    else if (m == "VolumeDown")    SystemControl::volume_down(num(0, 5));
+    else if (m == "ToggleMute")    SystemControl::volume_toggle_mute();
+    else if (m == "BrightnessUp")  SystemControl::brightness_up(num(0, 5));
+    else if (m == "BrightnessDown") SystemControl::brightness_down(num(0, 5));
+    else if (m == "BrightnessSet") SystemControl::brightness_set(num(0, 50));
+    else if (m == "SetGameMode")   { if (flag(0)) SystemControl::enable_game_mode(); else SystemControl::disable_game_mode(); }
+    else if (m == "Capture")       SystemControl::capture(arg(0, "full"), "", false);
+    else if (m == "CaptureGeom")   SystemControl::capture(arg(0, "full"), arg(1), flag(2));
+    else if (m == "Power") {
+        const std::string act = arg(0, "lock");
+        if (act == "lock") SystemControl::lock_session_async();
+        else if (act == "logout") SystemControl::logout_session();
+        else if (act == "suspend") SystemControl::suspend_system();
+        else if (act == "reboot") SystemControl::reboot_system();
+        else if (act == "shutdown") SystemControl::shutdown_system();
+    }
+    else if (m == "RemoteStatus")  std::cout << SystemControl::remote_desktop_status_json() << "\n";
+    else if (m == "RemoteStop")    SystemControl::remote_desktop_stop();
+    else if (m == "RemotePromptFree") SystemControl::set_screencast_prompt_free(flag(0));
+    else if (m == "SidecarCreate") SystemControl::sidecar_create_virtual_display(num(0, 1920), num(1, 1080));
+    else if (m == "SidecarRemove") SystemControl::sidecar_remove_virtual_display();
+    else if (m == "DotfilesStatus") std::cout << SystemControl::dotfiles_status_json() << "\n";
+    else if (m == "DotfilesSys")   SystemControl::dotfiles_sys();
+    else if (m == "DotfilesSync")  SystemControl::dotfiles_sync();
+    else if (m == "SweeperClean")  SystemControl::disk_sweeper_clean();
+    else if (m == "ZonesApply")    SystemControl::zones_apply(num(0, 0));
+    else if (m == "MicRnnoiseToggle") SystemControl::mic_rnnoise_toggle();
+    else if (m == "PowerProfileSet") SystemControl::power_profile_set(arg(0, "balanced"));
+    else if (m == "MonitorsApply") SystemControl::monitors_apply(arg(0));
+    else if (m == "DdcSet")        SystemControl::ddc_set(arg(0), num(1, 50));
+    else if (m == "EqApply")       SystemControl::eq_apply();
+    else if (m == "EqSetBand")     SystemControl::eq_set_band(num(0, 0), num(1, 0));
+    else if (m == "EqSetPreset")   SystemControl::eq_set_preset(arg(0, "Flat"));
+    else if (m == "EqSetAll") {
+        std::vector<int> bands;
+        for (int i = 3; i < argc; ++i) { try { bands.push_back(std::stoi(argv[i])); } catch (...) {} }
+        SystemControl::eq_set_all(bands);
+    }
+    else if (m == "ScanQr")        std::cout << SystemControl::scan_qr(arg(0)) << "\n";
+    else if (m == "GetVersion")    std::cout << b1air::kVersion << "\n";
+    else if (m == "GetStats") {
+        FocusTimeDB db;
+        std::cout << (db.open() ? db.get_stats_json(arg(0)) : std::string("{}")) << "\n";
+    }
+    else {
+        std::cerr << "dbus-call: unknown method " << m << "\n";
+        return 2;
+    }
     return 0;
 }
 
@@ -255,8 +336,14 @@ int main(int argc, char* argv[]) {
         } else if (sub == "open" || sub == "all") {
             std::cout << SystemControl::window_list_open_json() << "\n";
             return 0;
+        } else if (sub == "maximize") {
+            return SystemControl::window_maximize_toggle() ? 0 : 1;
+        } else if (sub == "float-all") {
+            return SystemControl::window_float_all_toggle() ? 0 : 1;
+        } else if (sub == "opacity-toggle") {
+            return SystemControl::window_opacity_toggle() ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " window {minimize|restore [id]|toggle|list|open|count}\n";
+            std::cerr << "Usage: " << argv[0] << " window {minimize|restore [id]|toggle|list|open|count|maximize|float-all|opacity-toggle}\n";
             return 1;
         }
     } else if (cmd == "color-picker" || cmd == "color" || cmd == "picker") {
@@ -581,17 +668,21 @@ int main(int argc, char* argv[]) {
         }
     } else if (cmd == "night-light" || cmd == "nightlight") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
+        // --quiet: the Settings page and the Control Center show the state
+        // themselves, and the slider restarts wlsunset on every step.
+        const bool quiet = argc >= 5 ? std::string(argv[4]) == "--quiet"
+                         : (argc >= 4 && std::string(argv[3]) == "--quiet");
         if (sub == "on") {
-            int temp = (argc >= 4) ? std::atoi(argv[3]) : 4000;
-            return SystemControl::night_light_on(temp) ? 0 : 1;
+            int temp = (argc >= 4 && std::string(argv[3]) != "--quiet") ? std::atoi(argv[3]) : 4000;
+            return SystemControl::night_light_on(temp, !quiet) ? 0 : 1;
         } else if (sub == "off") {
-            return SystemControl::night_light_off() ? 0 : 1;
+            return SystemControl::night_light_off(!quiet) ? 0 : 1;
         } else if (sub == "toggle") {
             return SystemControl::night_light_toggle() ? 0 : 1;
         } else if (sub == "auto") {
             return SystemControl::night_light_auto() ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " night-light {on [temp]|off|toggle|auto}\n";
+            std::cerr << "Usage: " << argv[0] << " night-light {on [temp] [--quiet]|off [--quiet]|toggle|auto}\n";
             return 1;
         }
     } else if (cmd == "term-theme") {
@@ -686,6 +777,15 @@ int main(int argc, char* argv[]) {
         } else {
             return SystemControl::caffeine_toggle() ? 0 : 1;
         }
+    } else if (cmd == "dbus-call") {
+        return run_dbus_call(argc, argv);
+    } else if (cmd == "open-default") {
+        const std::string kind = (argc >= 3) ? argv[2] : "";
+        if (kind != "terminal" && kind != "files" && kind != "browser") {
+            std::cerr << "Usage: " << argv[0] << " open-default {terminal|files|browser}\n";
+            return 1;
+        }
+        return SystemControl::open_default(kind) ? 0 : 1;
     } else if (cmd == "apps" || cmd == "applications") {
         std::string cat = (argc >= 3) ? argv[2] : "all";
         std::cout << SystemControl::apps_list_json(cat) << "\n";
@@ -694,22 +794,34 @@ int main(int argc, char* argv[]) {
         std::string mode = "full";
         std::string geom = "";
         bool edit = false;
+        int delay = -1;
 
         for (int i = 2; i < argc; ++i) {
             std::string arg = argv[i];
             if (arg == "--edit" || arg == "-e" || arg == "edit") edit = true;
+            else if (arg == "--delay" || arg == "-d") {
+                if (i + 1 < argc) { try { delay = std::stoi(argv[++i]); } catch (...) {} }
+            }
             else if (arg == "--geometry" || arg == "-g") {
                 if (i + 1 < argc) geom = argv[++i];
             } else if (arg == "--full" || arg == "full") mode = "full";
             else if (arg == "--area" || arg == "area") mode = "area";
             else if (arg == "--window" || arg == "window") mode = "window";
             else if (arg == "--select" || arg == "select") mode = "select";
-            else if (arg.front() != '-') mode = arg;
+            else if (!arg.empty() && arg.front() != '-') mode = arg;
+            else {
+                // Refused rather than ignored: an unknown option such as
+                // --help used to fall through to a full-screen capture, saved
+                // and copied to the clipboard.
+                std::cerr << "Usage: " << argv[0] << " screenshot [full|area|window|select] "
+                             "[--geometry <geom>] [--edit] [--delay <s>]\n";
+                return 2;
+            }
         }
         // "select" opens ScreenshotOverlay.qml — drag-to-select, annotate,
         // QR-scan and GIF recording — instead of an immediate blind capture.
         if (mode == "select") return SystemControl::run_screenshot_overlay(edit) ? 0 : 1;
-        return SystemControl::capture(mode, geom, edit) ? 0 : 1;
+        return SystemControl::capture(mode, geom, edit, delay) ? 0 : 1;
     } else if (cmd == "record") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
         if (sub == "stop") return SystemControl::record_stop() ? 0 : 1;

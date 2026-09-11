@@ -17,6 +17,7 @@ public:
      * parked on landed in one of them and not the other.
      */
     static void run_focus_tracker();
+    static void run_autotiler();
 
     /**
      * Start swayidle from the current settings, replacing any that is running.

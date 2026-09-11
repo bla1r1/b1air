@@ -24,7 +24,7 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    property string temp: "--°C"
+    property string temp: "--°"
     property string condition: ""
     property string icon: "\u{f0590}"
     property string location: "Weather"
@@ -60,7 +60,12 @@ Singleton {
         return "\u{f0599}";
     }
 
-    function refresh() {
+    /** "C" or "F", from the forecast, which carries the unit it was fetched in. */
+    property string unit: "C"
+
+    /** @param force skip the daemon's 15-minute cache — after a settings change. */
+    function refresh(force) {
+        fetcher.command = ["b1air-daemon", "weather", force ? "refresh" : "json"];
         fetcher.running = false;
         fetcher.running = true;
     }
@@ -76,10 +81,11 @@ Singleton {
                     if (!doc || !Array.isArray(doc.forecast) || doc.forecast.length === 0)
                         return;
                     root.forecast = doc.forecast;
+                    root.unit = doc.unit === "F" ? "F" : "C";
 
                     const today = doc.forecast[0];
                     const hour = root.currentHour;
-                    root.temp = (hour ? hour.temp : today.max) + "\u00B0C";
+                    root.temp = (hour ? hour.temp : today.max) + "\u00B0" + root.unit;
                     root.condition = today.desc || "";
                     root.icon = root._iconFor(root.condition);
                     if (doc.location)

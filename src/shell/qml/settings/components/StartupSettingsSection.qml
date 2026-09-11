@@ -17,7 +17,6 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
-    property var autostartApps: Settings.autostartApps || ["polkit", "quickshell"]
     property var autostartCustom: Settings.autostartCustom || []
     property bool openGuideAtStartup: Settings.openGuideAtStartup || false
     property bool showAppPicker: false
@@ -47,28 +46,32 @@ ColumnLayout {
         function onListChanged() { section.rebuildInstalledApps(); }
     }
 
-    function isAppEnabled(id) {
-        return (section.autostartApps || []).indexOf(id) !== -1;
-    }
+    property string customError: ""
 
-    function toggleApp(id) {
-        var list = (section.autostartApps || []).slice();
-        var idx = list.indexOf(id);
-        if (idx === -1) {
-            list.push(id);
-        } else {
-            list.splice(idx, 1);
-        }
-        section.autostartApps = list;
-        Settings.set("autostartApps", list);
+    /**
+     * The session runs these through a shell but refuses anything with shell
+     * syntax in it (session_manager.cpp, safe_custom_command), silently. Say
+     * so here instead of saving an entry that will never start. Field codes
+     * from a desktop file's Exec line (%u, %F…) are dropped: they are for a
+     * launcher to fill in, and the daemon strips them too.
+     */
+    function cleanCommand(cmd) {
+        return String(cmd || "").trim().split(/\s+/).filter(w => !/^%[a-zA-Z]$/.test(w)).join(" ");
     }
 
     function addCustomApp(name, cmd, icon) {
-        if (!name.trim() || !cmd.trim()) return;
+        const command = section.cleanCommand(cmd);
+        if (!name.trim() || !command) return;
+        if (/[;&|`$<>'"(){}\\]/.test(command)) {
+            section.customError = "Startup commands cannot contain shell syntax (quotes, $, ;, |, & …). "
+                + "Put it in a script and add the script instead.";
+            return;
+        }
+        section.customError = "";
         var list = (section.autostartCustom || []).slice();
         list.push({
             name: name.trim(),
-            command: cmd.trim(),
+            command: command,
             icon: icon || "",
             enabled: true
         });
@@ -97,70 +100,13 @@ ColumnLayout {
         }
     }
 
-    // ── 1. Core Desktop Services ─────────────────────────────────────────────
-    Card {
-        title: "Desktop Environment Services"
-        subtitle: "Core system components loaded automatically on login"
-        icon: "\u{f0459}"
-        accentColor: Design.sapphire
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Icon { text: "󰚰"; role: "title"; color: Design.sapphire }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: "Quickshell Desktop Shell"; weight: Design.weight.semibold }
-                    Label { text: "Renders Control Center, Spotlight Launcher, and widgets"; role: "caption"; dim: true }
-                }
-                Toggle {
-                    checked: section.isAppEnabled("quickshell")
-                    onToggled: section.toggleApp("quickshell")
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Icon { text: "󰃚"; role: "title"; color: Design.blue }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: "Native Quickshell Top Bar"; weight: Design.weight.semibold }
-                    Label { text: "Status bar with workspaces, clock, and hardware monitors"; role: "caption"; dim: true }
-                }
-                Toggle {
-                    checked: section.isAppEnabled("quickshell")
-                    onToggled: section.toggleApp("quickshell")
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Icon { text: "󰌾"; role: "title"; color: Design.peach }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: "Polkit Authentication Agent"; weight: Design.weight.semibold }
-                    Label { text: "Handles graphical sudo and privileged permission prompts"; role: "caption"; dim: true }
-                }
-                Toggle {
-                    checked: section.isAppEnabled("polkit")
-                    onToggled: section.toggleApp("polkit")
-                }
-            }
-        }
-    }
+    // A "Desktop Environment Services" card stood here with switches for the
+    // shell, the top bar and the polkit agent. They wrote "quickshell" and
+    // "polkit" into autostartApps, which the session never looks at for those
+    // two — it always starts both, as it has to: the switch for the shell was
+    // drawn by the shell. The bar and the shell also shared one id, so the two
+    // switches moved together. Removed rather than wired to something that
+    // would let you switch the desktop off from inside itself.
 
     // ── 2. Applications Autostart ────────────────────────────────────────────
     Card {
@@ -327,64 +273,21 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
 
-                Rectangle {
+                // Field, like the rest of the settings. These were bare
+                // TextInputs with a frame and font of their own that matched
+                // no other field on the page, and the command's placeholder
+                // was cut off mid-path.
+                Field {
+                    id: customNameInput
                     Layout.preferredWidth: Design.s(150)
-                    Layout.preferredHeight: Design.s(36)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.surface
-                    border.color: customNameInput.activeFocus ? Design.teal : Design.tint(Design.line, 0.4)
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: Design.s(Design.space.sm)
-                        TextInput {
-                            id: customNameInput
-                            Layout.fillWidth: true
-                            color: Design.text
-                            font.pixelSize: Design.font.caption
-                            clip: true
-                            selectByMouse: true
-                            Text {
-                                text: "App Name..."
-                                color: Design.textDim
-                                visible: !customNameInput.text && !customNameInput.activeFocus
-                                anchors.fill: parent
-                                font: customNameInput.font
-                            }
-                        }
-                    }
+                    placeholder: "Name"
                 }
 
-                Rectangle {
+                Field {
+                    id: customCmdInput
                     Layout.fillWidth: true
-                    Layout.minimumWidth: Design.s(200)
-                    Layout.preferredHeight: Design.s(36)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.surface
-                    border.color: customCmdInput.activeFocus ? Design.teal : Design.tint(Design.line, 0.4)
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: Design.s(Design.space.sm)
-                        TextInput {
-                            id: customCmdInput
-                            Layout.fillWidth: true
-                            color: Design.text
-                            font.pixelSize: Design.font.caption
-                            clip: true
-                            selectByMouse: true
-                            Text {
-                                text: "Custom binary / command (e.g. syncthing, /opt/app/bin, steam -silent)..."
-                                color: Design.textDim
-                                visible: !customCmdInput.text && !customCmdInput.activeFocus
-                                anchors.fill: parent
-                                font: customCmdInput.font
-                            }
-                            onAccepted: section.addCustomApp(customNameInput.text, customCmdInput.text, "")
-                        }
-                    }
+                    placeholder: "Command, e.g. syncthing or steam -silent"
+                    onAccepted: v => section.addCustomApp(customNameInput.text, v, "")
                 }
 
                 // Sized to its own text. ActionButton fills width by default,
@@ -398,6 +301,15 @@ ColumnLayout {
                     tone: Design.teal
                     onActivated: section.addCustomApp(customNameInput.text, customCmdInput.text, "")
                 }
+            }
+
+            Label {
+                visible: section.customError !== ""
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                role: "caption"
+                color: Design.danger
+                text: section.customError
             }
 
             // ── Active Startup Apps List ─────────────────────────────────────
@@ -432,10 +344,12 @@ ColumnLayout {
                             onToggled: section.toggleCustomApp(customAppItem.index)
                         }
 
-                        ActionButton {
+                        // Icon-sized: ActionButton fills its row by default,
+                        // and this one took half the width of every entry.
+                        IconButton {
                             icon: "󰆴"
-                            tone: Design.danger
-                            onActivated: section.removeCustomApp(customAppItem.index)
+                            hoverTone: Design.danger
+                            onClicked: section.removeCustomApp(customAppItem.index)
                         }
                     }
                 }

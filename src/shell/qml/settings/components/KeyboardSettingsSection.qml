@@ -1,34 +1,57 @@
 import QtQuick
-import Quickshell
-import "../../Ui"
 import QtQuick.Controls
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
+import "../../Ui"
+import "../../Services"
 
-Card {
+// =============================================================================
+// Keyboard: input layouts, the shortcut that switches between them, and
+// rebinding the desktop's own shortcuts.
+//
+// Layouts and the switch shortcut are saved to settings.json and nothing else;
+// the daemon turns them into conf.d/custom_keyboard.conf and tells the running
+// sway (settings_manager.cpp, apply_keyboard). Before that, what this page did
+// was:
+//
+//   - Remove a layout: nothing. The chip sent its *index* and SettingsApp
+//     filtered the list for a *code* equal to it, which no code is, so the
+//     list was written back unchanged. Layouts could be added and never taken
+//     away — including the two that ship.
+//   - Add a layout: rewrote input.conf and did not tell sway, so it appeared
+//     at the next login, if install.sh had not copied input.conf back first.
+//   - The "Layout shortcut" dropdown opened onto an empty list: toggleOptions
+//     and shortcutLabel were declared here and never given a value by anyone.
+//   - The layout list could not be reordered, and the first layout is the one
+//     every login starts in.
+//
+// The page reads Settings directly now rather than being handed copies of it
+// by SettingsApp, which is how the index/code mismatch got in between.
+// =============================================================================
+
+ColumnLayout {
     id: section
 
-    property string language: ""
-    property string kbOptions: "grp:alt_shift_toggle"
-    property string shortcutLabel: ""
-    // langSearchModel and searchChanged were declared here and never connected
-    // by SettingsApp, so the "Search to add…" field typed into nothing: the
-    // dropdown's height binding read .count off an undefined model and stayed
-    // 0, which meant there was no way to add a keyboard layout from Settings at
-    // all — even though onLanguageAdded was already wired and waiting on the
-    // other side. The list is local because the host has nothing to add to it.
-    property string langQuery: ""
-    property var langSearchModel: langResults
+    Layout.fillWidth: true
+    spacing: Design.s(Design.space.lg)
+
+    readonly property var layouts: String(Settings.language || "").split(",")
+        .map(x => x.trim()).filter(x => x !== "")
 
     readonly property var knownLayouts: [
         { code: "us", name: "English (US)" },
         { code: "gb", name: "English (UK)" },
         { code: "ua", name: "Ukrainian" },
         { code: "ru", name: "Russian" },
+        { code: "by", name: "Belarusian" },
         { code: "de", name: "German" },
         { code: "fr", name: "French" },
         { code: "es", name: "Spanish" },
         { code: "it", name: "Italian" },
         { code: "pt", name: "Portuguese" },
+        { code: "br", name: "Portuguese (Brazil)" },
+        { code: "latam", name: "Spanish (Latin America)" },
         { code: "pl", name: "Polish" },
         { code: "cz", name: "Czech" },
         { code: "sk", name: "Slovak" },
@@ -37,6 +60,9 @@ Card {
         { code: "fi", name: "Finnish" },
         { code: "dk", name: "Danish" },
         { code: "nl", name: "Dutch" },
+        { code: "be", name: "Belgian" },
+        { code: "ch", name: "Swiss" },
+        { code: "ca", name: "Canadian (French)" },
         { code: "tr", name: "Turkish" },
         { code: "gr", name: "Greek" },
         { code: "il", name: "Hebrew" },
@@ -46,569 +72,570 @@ Card {
         { code: "bg", name: "Bulgarian" },
         { code: "rs", name: "Serbian" },
         { code: "hr", name: "Croatian" },
+        { code: "si", name: "Slovenian" },
         { code: "lt", name: "Lithuanian" },
         { code: "lv", name: "Latvian" },
         { code: "ee", name: "Estonian" },
+        { code: "ge", name: "Georgian" },
+        { code: "am", name: "Armenian" },
+        { code: "kz", name: "Kazakh" },
         { code: "jp", name: "Japanese" },
         { code: "kr", name: "Korean" },
         { code: "cn", name: "Chinese" },
-        { code: "in", name: "Indian" },
-        { code: "ch", name: "Swiss" },
-        { code: "be", name: "Belgian" },
-        { code: "ca", name: "Canadian" },
-        { code: "br", name: "Portuguese (Brazil)" },
-        { code: "latam", name: "Spanish (Latin America)" }
+        { code: "in", name: "Indian" }
     ]
 
-    // A ListModel rather than a plain array: the dropdown below reads .count and
-    // its delegate reads model.code / model.name.
-    ListModel { id: langResults }
+    function layoutName(code) {
+        const l = section.knownLayouts.find(k => k.code === code);
+        return l ? l.name : code.toUpperCase();
+    }
 
-    onLangQueryChanged: section.refreshLangResults()
-
-    function refreshLangResults() {
-        langResults.clear();
-        const q = section.langQuery.trim().toLowerCase();
-        if (q === "")
-            return;
-        const already = section.language.split(",").filter(x => x !== "");
-        for (const l of section.knownLayouts) {
-            if (already.includes(l.code))
-                continue;
-            if (l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q))
-                langResults.append({ code: l.code, name: l.name });
+    function saveLayouts(list) {
+        if (list.length > 0) {
+            Settings.set("language", list.join(","));
+            applySoon.restart();
         }
     }
 
-    property var toggleOptions: []
-    signal languageRemoved(int index)
-    signal languageAdded(string code)
-    signal searchChanged(string query)
-    signal kbOptionsChangedByUser(string value)
-    signal accepted()
-
-    property bool shortcutOpen: false
-
-    title: "Keyboard"
-    subtitle: "Layouts and switch shortcut"
-    icon: "\u{f030c}"
-    accentColor: Design.mauve
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Design.s(14)
-
-        Text {
-            Layout.preferredWidth: Design.s(24)
-            Layout.alignment: Qt.AlignTop
-            Layout.topMargin: Design.s(2)
-            horizontalAlignment: Text.AlignHCenter
-            text: "󰌌"
-            font.family: Design.font.icon
-            font.pixelSize: Design.s(20)
-            color: Design.ok
-        }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(8)
-
-            Text {
-                text: "Keyboard layouts"
-                color: Design.text
-                font.family: Design.font.mono
-                font.weight: Design.weight.semibold
-                font.pixelSize: Design.s(13)
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text: "Matches config. Click X to remove."
-                color: Design.textDim
-                font.family: Design.font.mono
-                font.pixelSize: Design.s(11)
-                Layout.fillWidth: true
-            }
-
-            Flow {
-                Layout.fillWidth: true
-                spacing: Design.s(8)
-
-                Repeater {
-                    model: section.language ? section.language.split(",").filter(x => x.trim() !== "") : []
-
-                    Rectangle {
-                        width: chipLayout.implicitWidth + Design.s(24)
-                        height: Design.s(28)
-                        radius: Design.s(14)
-                        color: Design.raised
-                        border.color: chipArea.containsMouse ? Design.danger : Design.hover
-                        border.width: 1
-
-                        RowLayout {
-                            id: chipLayout
-                            anchors.centerIn: parent
-                            spacing: Design.s(8)
-
-                            Text {
-                                text: modelData
-                                color: chipArea.containsMouse ? Design.danger : Design.text
-                                font.family: Design.font.mono
-                                font.weight: Design.weight.semibold
-                                font.pixelSize: Design.s(12)
-                            }
-
-                            Text {
-                                text: "x"
-                                color: chipArea.containsMouse ? Design.danger : Design.textDim
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(13)
-                            }
-                        }
-
-                        MouseArea {
-                            id: chipArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: section.languageRemoved(index)
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(36)
-                radius: Design.s(6)
-                color: Design.surface
-                border.color: langInput.activeFocus ? Design.ok : Design.hover
-                border.width: 1
-
-                TextInput {
-                    id: langInput
-                    anchors.fill: parent
-                    anchors.margins: Design.s(10)
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.family: Design.font.mono
-                    font.pixelSize: Design.s(12)
-                    color: Design.text
-                    clip: true
-                    selectByMouse: true
-                    onTextChanged: {
-                        section.langQuery = text;
-                        section.searchChanged(text);
-                    }
-                    onAccepted: section.accepted()
-
-                    Text {
-                        text: "Search to add..."
-                        color: Design.textDim
-                        visible: !parent.text && !parent.activeFocus
-                        font: parent.font
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: langInput.activeFocus && section.langSearchModel && section.langSearchModel.count > 0 ? Math.min(Design.s(150), section.langSearchModel.count * Design.s(32)) : 0
-                radius: Design.s(6)
-                color: Design.surface
-                border.color: Design.ok
-                border.width: Layout.preferredHeight > 0 ? 1 : 0
-                clip: true
-
-                Behavior on Layout.preferredHeight { NumberAnimation { duration: 220; easing.type: Easing.OutExpo } }
-
-                ListView {
-                    anchors.fill: parent
-                    model: section.langSearchModel
-                    interactive: true
-                    ScrollBar.vertical: OverflowBar {}
-
-                    delegate: Rectangle {
-                        width: parent.width
-                        height: Design.s(32)
-                        color: searchArea.containsMouse ? Design.hover : "transparent"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Design.s(12)
-                            anchors.rightMargin: Design.s(12)
-                            spacing: Design.s(10)
-
-                            Text {
-                                text: model.code
-                                color: Design.text
-                                font.family: Design.font.mono
-                                font.weight: Design.weight.semibold
-                                font.pixelSize: Design.s(12)
-                            }
-
-                            Text {
-                                text: model.name
-                                color: Design.textDim
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-
-                        MouseArea {
-                            id: searchArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                section.languageAdded(model.code);
-                                langInput.text = "";
-                                langInput.focus = false;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    // Apply through a one-shot `b1air-daemon settings apply` as well as the
+    // session daemon's file watcher. The watcher lives in the session daemon,
+    // and when that was not running — it crashed on XWayland windows until
+    // recently — layouts removed here were saved and never reached sway.
+    // Deferred because Settings.set() is not on disk yet at this point. When
+    // the session daemon is up as well, sway just gets the same layouts twice.
+    Timer {
+        id: applySoon
+        interval: 400
+        onTriggered: Quickshell.execDetached(["b1air-daemon", "settings", "apply"])
     }
 
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 1
-        color: Qt.alpha(Design.raised, 0.5)
+    function addLayout(code) {
+        if (section.layouts.indexOf(code) < 0)
+            section.saveLayouts(section.layouts.concat(code));
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Design.s(14)
-
-        Text {
-            Layout.preferredWidth: Design.s(24)
-            Layout.alignment: Qt.AlignTop
-            Layout.topMargin: Design.s(2)
-            horizontalAlignment: Text.AlignHCenter
-            text: "󰯍"
-            font.family: Design.font.icon
-            font.pixelSize: Design.s(20)
-            color: Qt.alpha(Design.ok, 0.7)
-        }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(8)
-
-            Text {
-                text: "Layout shortcut"
-                color: Design.text
-                font.family: Design.font.mono
-                font.weight: Design.weight.semibold
-                font.pixelSize: Design.s(13)
-                Layout.fillWidth: true
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(36)
-                radius: Design.s(6)
-                color: Design.surface
-                border.color: section.shortcutOpen ? Design.ok : Design.hover
-                border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Design.s(10)
-
-                    Text {
-                        text: section.shortcutLabel
-                        color: Design.text
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(12)
-                        Layout.fillWidth: true
-                    }
-
-                    Text {
-                        text: section.shortcutOpen ? "^" : "v"
-                        color: Design.textDim
-                        font.pixelSize: Design.s(14)
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: section.shortcutOpen = !section.shortcutOpen
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: section.shortcutOpen ? section.toggleOptions.length * Design.s(32) : 0
-                radius: Design.s(6)
-                color: Design.surface
-                border.color: Design.ok
-                border.width: Layout.preferredHeight > 0 ? 1 : 0
-                clip: true
-
-                Behavior on Layout.preferredHeight { NumberAnimation { duration: 220; easing.type: Easing.OutExpo } }
-
-                ListView {
-                    anchors.fill: parent
-                    model: section.toggleOptions
-                    interactive: false
-
-                    delegate: Rectangle {
-                        width: parent.width
-                        height: Design.s(32)
-                        color: toggleArea.containsMouse ? Design.hover : "transparent"
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: Design.s(12)
-                            text: modelData.label
-                            color: section.kbOptions === modelData.val ? Design.ok : Design.text
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(12)
-                        }
-
-                        MouseArea {
-                            id: toggleArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                section.kbOptionsChangedByUser(modelData.val);
-                                section.shortcutOpen = false;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    function removeLayout(code) {
+        // Never the last one: an empty xkb_layout leaves sway on whatever
+        // it compiled last, which is not something this page can then show.
+        if (section.layouts.length > 1)
+            section.saveLayouts(section.layouts.filter(c => c !== code));
     }
 
-    // ── 2. Keybindings Cheat Sheet Card ──────────────────────────────────────
+    function makeFirst(code) {
+        section.saveLayouts([code].concat(section.layouts.filter(c => c !== code)));
+    }
+
+    property string layoutQuery: ""
+
+    readonly property var layoutResults: {
+        const q = section.layoutQuery.trim().toLowerCase();
+        return section.knownLayouts.filter(l =>
+            section.layouts.indexOf(l.code) < 0
+            && (q === "" || l.code.includes(q) || l.name.toLowerCase().includes(q)));
+    }
+
+    // ── The switch shortcut ──────────────────────────────────────────────────
+    //
+    // kbOptions can hold more than the grp: option (caps:escape, compose:...);
+    // choosing a shortcut replaces only the grp: part, where the old dropdown
+    // would have replaced the whole string.
+
+    readonly property var switchOptions: [
+        { val: "grp:alt_shift_toggle",  label: "Alt + Shift" },
+        { val: "grp:ctrl_shift_toggle", label: "Ctrl + Shift" },
+        { val: "grp:alt_space_toggle",  label: "Alt + Space" },
+        { val: "grp:caps_toggle",       label: "Caps Lock" },
+        { val: "grp:toggle",            label: "Right Alt" },
+        { val: "grp:rctrl_toggle",      label: "Right Ctrl" },
+        { val: "grp:menu_toggle",       label: "Menu key" },
+        { val: "",                      label: "None" }
+    ]
+    // Not offered: Super + Space. sway gives that key to the launcher first.
+
+    readonly property var otherOptions: String(Settings.kbOptions || "").split(",")
+        .map(x => x.trim()).filter(x => x !== "" && !x.startsWith("grp:"))
+    readonly property string switchOption: {
+        const g = String(Settings.kbOptions || "").split(",").map(x => x.trim())
+            .find(x => x.startsWith("grp:"));
+        return g || "";
+    }
+
+    function setSwitch(val) {
+        Settings.set("kbOptions", section.otherOptions.concat(val ? [val] : []).join(","));
+        applySoon.restart();
+    }
+
+    // ── Layouts ──────────────────────────────────────────────────────────────
     Card {
-        id: shortcutsCard
-        title: "Keyboard Shortcuts & Keybinds"
-        subtitle: "Click any shortcut to edit and rebind it in real-time"
+        title: "Input layouts"
+        subtitle: "The first one is what every login starts in"
         icon: "\u{f030c}"
+        accentColor: Design.peach
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+
+            Repeater {
+                model: section.layouts
+
+                Rectangle {
+                    id: chip
+                    required property string modelData
+                    required property int index
+                    readonly property bool first: chip.index === 0
+
+                    width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
+                    height: Design.s(36)
+                    radius: Design.s(Design.radius.ctl)
+                    color: chip.first ? Design.tint(Design.peach, 0.14) : Design.raised
+                    border.color: chip.first ? Design.tint(Design.peach, 0.5) : Design.line
+                    border.width: 1
+
+                    RowLayout {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        spacing: Design.s(Design.space.sm)
+
+                        Label {
+                            text: chip.modelData.toUpperCase()
+                            isMono: true
+                            weight: Design.weight.bold
+                            color: chip.first ? Design.peach : Design.text
+                        }
+
+                        Label {
+                            text: section.layoutName(chip.modelData)
+                            role: "caption"
+                            dim: true
+                        }
+
+                        Badge {
+                            visible: chip.first
+                            text: "default"
+                            tone: Design.peach
+                        }
+
+                        IconButton {
+                            visible: !chip.first
+                            icon: "\u{f005d}" // arrow up: make it the first
+                            role: "caption"
+                            hoverTone: Design.peach
+                            onClicked: section.makeFirst(chip.modelData)
+                        }
+
+                        IconButton {
+                            visible: section.layouts.length > 1
+                            icon: "\u{f0156}" // close
+                            role: "caption"
+                            hoverTone: Design.danger
+                            onClicked: section.removeLayout(chip.modelData)
+                        }
+                    }
+                }
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            dim: true
+            text: section.layouts.length > 1
+                ? "\u{f005d} makes a layout the default, \u{f0156} removes it. Changes apply immediately."
+                : "Add a second layout below to switch between them."
+        }
+
+        Field {
+            id: layoutField
+            Layout.fillWidth: true
+            placeholder: "Add a layout — type a language or a code (de, pl, jp…)"
+            onEdited: v => section.layoutQuery = v
+            // Enter takes the first match, so typing "pol" + Enter is enough.
+            onAccepted: v => {
+                if (section.layoutResults.length > 0) {
+                    section.addLayout(section.layoutResults[0].code);
+                    layoutField.text = "";
+                    section.layoutQuery = "";
+                }
+            }
+        }
+
+        // Shown while the field has focus, with every layout not yet added
+        // when nothing is typed: the old list stayed shut until you guessed a
+        // name, so there was no way to see what could be added.
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible
+                ? Math.min(Design.s(220), section.layoutResults.length * Design.s(32) + Design.s(8))
+                : 0
+            visible: (layoutField.focused || section.layoutQuery !== "") && section.layoutResults.length > 0
+            radius: Design.s(Design.radius.ctl)
+            color: Design.sunken
+            border.color: Design.line
+            border.width: 1
+            clip: true
+
+            ListView {
+                anchors.fill: parent
+                anchors.margins: Design.s(4)
+                model: section.layoutResults
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: OverflowBar {}
+
+                delegate: Rectangle {
+                    required property var modelData
+                    width: ListView.view.width
+                    height: Design.s(32)
+                    radius: Design.s(Design.radius.ctl)
+                    color: resultArea.containsMouse ? Design.hover : "transparent"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(Design.space.sm)
+                        anchors.rightMargin: Design.s(Design.space.sm)
+                        spacing: Design.s(Design.space.sm)
+
+                        Label {
+                            Layout.preferredWidth: Design.s(48)
+                            text: modelData.code.toUpperCase()
+                            isMono: true
+                            weight: Design.weight.semibold
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: modelData.name
+                            dim: true
+                            elide: Text.ElideRight
+                        }
+                        Icon { text: "\u{f0415}"; role: "caption"; color: Design.textDim } // plus
+                    }
+
+                    MouseArea {
+                        id: resultArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            section.addLayout(modelData.code);
+                            layoutField.text = "";
+                            section.layoutQuery = "";
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Card {
+        title: "Switching layouts"
+        subtitle: section.layouts.length > 1
+            ? "The key that cycles through the layouts above"
+            : "Only matters once there is more than one layout"
+        icon: "\u{f04e1}"
+        accentColor: Design.peach
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+
+            Repeater {
+                model: section.switchOptions
+                delegate: Pill {
+                    required property var modelData
+                    label: modelData.label
+                    active: section.switchOption === modelData.val
+                    activeColor: Design.peach
+                    onClicked: section.setSwitch(modelData.val)
+                }
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            dim: true
+            text: "The layout indicator in the bar switches too, with a click."
+        }
+    }
+
+    // ── Rebinding shortcuts ──────────────────────────────────────────────────
+    //
+    // Rebinding used to append `bindsym <new> <cmd>` to custom_keybinds.conf
+    // and reload. Three problems: the old key stayed bound, so a "rebind" was
+    // really a second binding; every edit appended another line and none were
+    // ever removed; and the format check rejected "$", so the example the field
+    // itself showed ("$mod+t") and the value it was pre-filled with were both
+    // "Unsupported key format" — nothing could be saved without already knowing
+    // to write Mod4. It also sat as a card nested inside the Keyboard card.
+    //
+    // Now the changes are kept as a map in settings (keybindOverrides) and the
+    // whole file is regenerated from it: unbind the default, bind the new key.
+    // A change can be put back with Reset, and "Super+Shift+T" is understood
+    // as well as sway's own spelling.
+
+    Card {
+        id: bindCard
+        title: "Desktop shortcuts"
+        subtitle: "Change the key for any of these. The full list is on the Shortcuts page."
+        icon: "\u{f11c}"
         accentColor: Design.sapphire
 
-        property string searchFilter: ""
-        property string activeCategory: "All"
+        property string filter: ""
         property string editingId: ""
         property string editKeys: ""
-        property string statusMsg: ""
+        property string status: ""
+        property bool statusBad: false
 
-        readonly property var allBindings: [
-            { id: "settings", cat: "System", keys: "$mod+shift+s", label: "SUPER + SHIFT + S", desc: "Open Settings App", cmd: "exec b1air-shell toggle settings" },
-            { id: "control", cat: "System", keys: "$mod+c", label: "SUPER + C", desc: "Toggle Control Center", cmd: "exec b1air-shell toggle control" },
-            { id: "guide", cat: "System", keys: "$mod+h", label: "SUPER + H", desc: "Open About This System", cmd: "exec b1air-shell open settings about" },
-            { id: "wallpaper", cat: "System", keys: "$mod+w", label: "SUPER + W", desc: "Open Wallpaper Gallery", cmd: "exec b1air-shell open settings wallpaper" },
-            { id: "battery", cat: "System", keys: "$mod+b", label: "SUPER + B", desc: "Toggle Battery / Power", cmd: "exec b1air-shell toggle battery" },
-            { id: "network", cat: "System", keys: "$mod+n", label: "SUPER + N", desc: "Toggle Network Manager", cmd: "exec b1air-shell toggle network" },
-            { id: "monitors", cat: "System", keys: "$mod+m", label: "SUPER + M", desc: "Toggle Displays Manager", cmd: "exec b1air-shell toggle monitors" },
-            { id: "focustime", cat: "System", keys: "$mod+shift+t", label: "SUPER + SHIFT + T", desc: "Toggle FocusTime Daemon", cmd: "exec b1air-shell toggle focustime" },
-            { id: "terminal", cat: "Apps", keys: "$mod+t", label: "SUPER + T", desc: "Launch Terminal", cmd: "exec $terminal" },
-            { id: "menu", cat: "Apps", keys: "$mod+space", label: "SUPER + SPACE", desc: "Application Launcher", cmd: "exec $menu" },
-            { id: "files", cat: "Apps", keys: "$mod+e", label: "SUPER + E", desc: "File Manager", cmd: "exec $fileManager" },
-            { id: "browser", cat: "Apps", keys: "$mod+f", label: "SUPER + F", desc: "Web Browser (Firefox)", cmd: "exec firefox" },
-            { id: "github", cat: "Apps", keys: "$mod+g", label: "SUPER + G", desc: "GitHub Desktop", cmd: "exec github-desktop" },
-            { id: "close", cat: "Windows", keys: "$mod+q", label: "SUPER + Q", desc: "Close Focused Window", cmd: "kill" },
-            { id: "floating", cat: "Windows", keys: "$mod+ctrl+space", label: "SUPER + CTRL + SPACE", desc: "Toggle Floating Window", cmd: "floating toggle" },
-            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f", label: "SUPER + SHIFT + F", desc: "Toggle Fullscreen", cmd: "exec b1air-daemon fullscreen-toggle" },
-            { id: "focus_left", cat: "Windows", keys: "$mod+Left", label: "SUPER + Left", desc: "Focus Window Left", cmd: "focus left" },
-            { id: "focus_right", cat: "Windows", keys: "$mod+Right", label: "SUPER + Right", desc: "Focus Window Right", cmd: "focus right" },
-            { id: "focus_up", cat: "Windows", keys: "$mod+Up", label: "SUPER + Up", desc: "Focus Window Up", cmd: "focus up" },
-            { id: "focus_down", cat: "Windows", keys: "$mod+Down", label: "SUPER + Down", desc: "Focus Window Down", cmd: "focus down" }
+        readonly property var overrides: {
+            try {
+                const o = JSON.parse(Settings.keybindOverrides || "{}");
+                return (o && typeof o === "object") ? o : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        // keys: exactly as keybinds.conf binds it (with --to-code), because
+        // that is what unbindsym has to name. KEEP IN SYNC with keybinds.conf.
+        readonly property var bindings: [
+            { id: "terminal",   cat: "Apps",    keys: "$mod+t",          desc: "Terminal",                cmd: "exec $terminal" },
+            { id: "files",      cat: "Apps",    keys: "$mod+e",          desc: "File manager",            cmd: "exec $fileManager" },
+            { id: "browser",    cat: "Apps",    keys: "$mod+f",          desc: "Web browser",             cmd: "exec $browser" },
+            { id: "menu",       cat: "Apps",    keys: "$mod+space",      desc: "Launchpad",               cmd: "exec $menu" },
+            { id: "spotlight",  cat: "Apps",    keys: "$mod+k",          desc: "Spotlight search",        cmd: "exec $spotlight" },
+            { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: "GitHub Desktop",          cmd: "exec github-desktop" },
+            { id: "settings",   cat: "System",  keys: "$mod+shift+s",    desc: "Settings",                cmd: "exec b1air-shell toggle settings" },
+            { id: "control",    cat: "System",  keys: "$mod+c",          desc: "Control Center",          cmd: "exec b1air-shell toggle control" },
+            { id: "clipboard",  cat: "System",  keys: "$mod+ctrl+v",          desc: "Clipboard history",       cmd: "exec b1air-shell toggle clipboard" },
+            { id: "emoji",      cat: "System",  keys: "$mod+period",     desc: "Emoji picker",            cmd: "exec b1air-shell toggle emoji" },
+            { id: "keyboard",   cat: "System",  keys: "$mod+shift+k",    desc: "Keyboard popup",          cmd: "exec b1air-shell toggle keyboard" },
+            { id: "session",    cat: "System",  keys: "$mod+shift+e",    desc: "Session menu",            cmd: "exec b1air-shell toggle session" },
+            { id: "guide",      cat: "System",  keys: "$mod+h",          desc: "Shortcut list",           cmd: "exec b1air-shell toggle guide" },
+            { id: "wallpaper",  cat: "System",  keys: "$mod+w",          desc: "Wallpaper settings",      cmd: "exec b1air-shell open settings wallpaper" },
+            { id: "battery",    cat: "System",  keys: "$mod+b",          desc: "Battery popup",           cmd: "exec b1air-shell toggle battery" },
+            { id: "network",    cat: "System",  keys: "$mod+n",          desc: "Network popup",           cmd: "exec b1air-shell toggle network" },
+            { id: "monitors",   cat: "System",  keys: "$mod+m",          desc: "Displays popup",          cmd: "exec b1air-shell toggle monitors" },
+            { id: "focustime",  cat: "System",  keys: "$mod+shift+t",    desc: "Screen time",             cmd: "exec b1air-shell toggle focustime" },
+            { id: "close",      cat: "Windows", keys: "$mod+q",          desc: "Close window",            cmd: "kill" },
+            { id: "floating",   cat: "Windows", keys: "$mod+ctrl+space", desc: "Toggle floating",         cmd: "floating toggle" },
+            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f",    desc: "Fullscreen",              cmd: "exec $HOME/.local/bin/b1air-daemon fullscreen-toggle" }
         ]
 
-        readonly property var filteredBindings: shortcutsCard.allBindings.filter(b => {
-            const matchCat = (shortcutsCard.activeCategory === "All" || b.cat === shortcutsCard.activeCategory);
-            const matchSearch = (!shortcutsCard.searchFilter || b.desc.toLowerCase().includes(shortcutsCard.searchFilter.toLowerCase()) || b.keys.toLowerCase().includes(shortcutsCard.searchFilter.toLowerCase()) || b.label.toLowerCase().includes(shortcutsCard.searchFilter.toLowerCase()));
-            return matchCat && matchSearch;
-        })
+        function keysOf(b) { return bindCard.overrides[b.id] || b.keys; }
 
-        function saveBinding(item, newKey) {
-            if (!newKey || newKey.trim() === "") return;
-            const cleanKey = newKey.trim();
-            if (!/^[A-Za-z0-9+_<>-]+$/.test(cleanKey)) {
-                shortcutsCard.statusMsg = "Unsupported key format";
-                statusTimer.restart();
-                return;
-            }
-            const cmd = "mkdir -p ~/.config/sway/conf.d && printf '%s\\n' \"bindsym --to-code $1 $2\" >> ~/.config/sway/conf.d/custom_keybinds.conf && swaymsg reload";
-            Quickshell.execDetached(["bash", "-c", cmd, "--", cleanKey, item.cmd]);
-            shortcutsCard.editingId = "";
-            shortcutsCard.statusMsg = "Keybind updated to " + cleanKey + " & Sway reloaded!";
+        /** "$mod+shift+t" -> "Super + Shift + T" */
+        function pretty(keys) {
+            const names = { "$mod": "Super", "mod4": "Super", "mod1": "Alt", "ctrl": "Ctrl",
+                            "control": "Ctrl", "shift": "Shift", "space": "Space",
+                            "period": ".", "comma": ",", "slash": "/", "minus": "-",
+                            "return": "Enter", "escape": "Esc", "delete": "Del",
+                            "backspace": "Backspace" };
+            return String(keys).split("+").map(k => {
+                const n = names[k.toLowerCase()];
+                return n ? n : (k.length === 1 ? k.toUpperCase() : k);
+            }).join(" + ");
+        }
+
+        /** What someone types -> sway's spelling, or "" if it is not a combo. */
+        function normalize(text) {
+            const map = { "super": "$mod", "win": "$mod", "mod": "$mod", "$mod": "$mod",
+                          "mod4": "$mod", "alt": "Mod1", "mod1": "Mod1", "ctrl": "ctrl",
+                          "control": "ctrl", "shift": "shift", "enter": "Return",
+                          "return": "Return", "esc": "Escape", "escape": "Escape",
+                          "space": "space", ".": "period", ",": "comma", "/": "slash",
+                          "-": "minus", "del": "Delete", "delete": "Delete", "tab": "Tab",
+                          "backspace": "BackSpace", "print": "Print" };
+            const parts = String(text).split("+").map(p => p.trim()).filter(p => p !== "");
+            if (parts.length === 0)
+                return "";
+            const out = parts.map(p => map[p.toLowerCase()] || (p.length === 1 ? p.toLowerCase() : p));
+            // Nothing but letters, digits and underscores in a key name, so
+            // what reaches the generated file cannot be anything but a key.
+            if (!out.every(p => p === "$mod" || /^[A-Za-z0-9_]+$/.test(p)))
+                return "";
+            const mods = ["$mod", "Mod1", "ctrl", "shift"];
+            if (mods.indexOf(out[out.length - 1]) >= 0)
+                return ""; // modifiers alone
+            return out.join("+");
+        }
+
+        function say(text, bad) {
+            bindCard.status = text;
+            bindCard.statusBad = bad;
             statusTimer.restart();
         }
 
-        Timer {
-            id: statusTimer
-            interval: 3000
-            onTriggered: shortcutsCard.statusMsg = ""
+        function save(b, typed) {
+            const keys = bindCard.normalize(typed);
+            if (keys === "") {
+                bindCard.say("Write it as keys joined by +, for example Super+Shift+T.", true);
+                return;
+            }
+            const clash = bindCard.bindings.find(o => o.id !== b.id
+                && bindCard.keysOf(o).toLowerCase() === keys.toLowerCase());
+            if (clash) {
+                bindCard.say(bindCard.pretty(keys) + " is already " + clash.desc + ".", true);
+                return;
+            }
+            const o = Object.assign({}, bindCard.overrides);
+            if (keys.toLowerCase() === b.keys.toLowerCase())
+                delete o[b.id];
+            else
+                o[b.id] = keys;
+            bindCard.write(o);
+            bindCard.editingId = "";
+            bindCard.say(b.desc + " is now " + bindCard.pretty(keys) + ".", false);
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+        function reset(b) {
+            const o = Object.assign({}, bindCard.overrides);
+            delete o[b.id];
+            bindCard.write(o);
+            bindCard.say(b.desc + " is back on " + bindCard.pretty(b.keys) + ".", false);
+        }
 
-            // Status message
+        function write(o) {
+            Settings.set("keybindOverrides", JSON.stringify(o));
+            let out = "# Generated by b1air Settings -> Keyboard -> Desktop shortcuts.\n"
+                    + "# Rewritten on every change there; edits here do not survive.\n\n";
+            for (const b of bindCard.bindings) {
+                const keys = o[b.id];
+                if (!keys)
+                    continue;
+                out += "unbindsym --to-code " + b.keys + "\n";
+                out += "bindsym --to-code " + keys + " " + b.cmd + "\n";
+            }
+            // The text goes in as an argument, never into the script, and the
+            // reload waits for the rename.
+            bindWriter.command = ["bash", "-c",
+                "f=\"$HOME/.config/sway/conf.d/custom_keybinds.conf\"; "
+                + "printf '%s' \"$1\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && swaymsg reload",
+                "--", out];
+            bindWriter.running = false;
+            bindWriter.running = true;
+        }
+
+        Process { id: bindWriter }
+
+        Timer {
+            id: statusTimer
+            interval: 5000
+            onTriggered: bindCard.status = ""
+        }
+
+        Field {
+            Layout.fillWidth: true
+            placeholder: "Filter — terminal, settings, window…"
+            onEdited: v => bindCard.filter = v.toLowerCase()
+        }
+
+        Label {
+            visible: bindCard.status !== ""
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            weight: Design.weight.semibold
+            text: bindCard.status
+            color: bindCard.statusBad ? Design.danger : Design.ok
+        }
+
+        Repeater {
+            model: bindCard.bindings.filter(b => bindCard.filter === ""
+                || b.desc.toLowerCase().includes(bindCard.filter)
+                || b.cat.toLowerCase().includes(bindCard.filter)
+                || bindCard.pretty(bindCard.keysOf(b)).toLowerCase().includes(bindCard.filter))
+
             Rectangle {
-                visible: shortcutsCard.statusMsg !== ""
+                id: bindRow
+                required property var modelData
+                readonly property bool editing: bindCard.editingId === bindRow.modelData.id
+                readonly property bool changed: bindCard.overrides[bindRow.modelData.id] !== undefined
+
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(28)
+                Layout.preferredHeight: bindCol.implicitHeight + Design.s(Design.space.sm) * 2
                 radius: Design.s(Design.radius.ctl)
-                color: Design.tint(Design.green, 0.15)
-                border.color: Design.green
+                color: bindRow.editing ? Design.tint(Design.sapphire, 0.1) : Design.sunken
+                border.color: bindRow.editing ? Design.sapphire : "transparent"
                 border.width: 1
 
-                Label {
-                    anchors.centerIn: parent
-                    text: shortcutsCard.statusMsg
-                    role: "caption"
-                    weight: Design.weight.semibold
-                    color: Design.green
-                }
-            }
+                ColumnLayout {
+                    id: bindCol
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: Design.s(Design.space.sm)
+                    spacing: Design.s(Design.space.sm)
 
-            // Search bar & Category filters
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.md)
 
-                Field {
-                    Layout.fillWidth: true
-                    placeholder: "Search shortcuts (e.g. terminal, settings, window)..."
-                    text: shortcutsCard.searchFilter
-                    onEdited: v => shortcutsCard.searchFilter = v
-                }
+                        Label {
+                            text: bindRow.modelData.desc
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
 
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
+                        Badge {
+                            visible: bindRow.changed
+                            text: "changed"
+                            tone: Design.sapphire
+                        }
 
-                    Repeater {
-                        model: ["All", "System", "Apps", "Windows"]
+                        Label {
+                            text: bindCard.pretty(bindCard.keysOf(bindRow.modelData))
+                            role: "caption"
+                            isMono: true
+                            weight: Design.weight.bold
+                            color: Design.sapphire
+                        }
 
-                        Pill {
-                            id: catPill
-                            required property string modelData
-                            label: catPill.modelData
-                            active: shortcutsCard.activeCategory === catPill.modelData
-                            activeColor: Design.sapphire
-                            onClicked: shortcutsCard.activeCategory = catPill.modelData
+                        IconButton {
+                            icon: "\u{f03eb}" // pencil
+                            role: "caption"
+                            hoverTone: Design.sapphire
+                            onClicked: {
+                                if (bindRow.editing) {
+                                    bindCard.editingId = "";
+                                } else {
+                                    bindCard.editingId = bindRow.modelData.id;
+                                    keyField.text = bindCard.pretty(bindCard.keysOf(bindRow.modelData));
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            // Shortcuts list
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.xs)
-
-                Repeater {
-                    model: shortcutsCard.filteredBindings
-
-                    Rectangle {
-                        id: bindRow
-                        required property var modelData
+                    RowLayout {
+                        visible: bindRow.editing
                         Layout.fillWidth: true
-                        Layout.preferredHeight: shortcutsCard.editingId === bindRow.modelData.id ? Design.s(72) : Design.s(38)
-                        radius: Design.s(Design.radius.ctl)
-                        color: shortcutsCard.editingId === bindRow.modelData.id ? Design.tint(Design.sapphire, 0.1) : (rowHoverMa.containsMouse ? Design.raised : Design.sunken)
-                        border.color: shortcutsCard.editingId === bindRow.modelData.id ? Design.sapphire : "transparent"
-                        border.width: 1
+                        spacing: Design.s(Design.space.sm)
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: Design.s(Design.space.sm)
-                            spacing: Design.s(Design.space.xs)
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Design.s(Design.space.md)
-
-                                Badge {
-                                    text: bindRow.modelData.cat
-                                    tone: Design.sapphire
-                                }
-
-                                Label {
-                                    text: bindRow.modelData.desc
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-
-                                Rectangle {
-                                    radius: Design.s(4)
-                                    color: Design.raised
-                                    border.color: Design.veilStrong
-                                    border.width: 1
-                                    Layout.preferredHeight: Design.s(24)
-                                    Layout.preferredWidth: keyTxt.implicitWidth + Design.s(16)
-
-                                    Label {
-                                        id: keyTxt
-                                        anchors.centerIn: parent
-                                        text: bindRow.modelData.label
-                                        role: "caption"
-                                        isMono: true
-                                        weight: Design.weight.bold
-                                        color: Design.sapphire
-                                    }
-                                }
-
-                                IconButton {
-                                    icon: "\u{f03eb}" // pencil
-                                    role: "caption"
-                                    hoverTone: Design.sapphire
-                                    onClicked: {
-                                        if (shortcutsCard.editingId === bindRow.modelData.id) {
-                                            shortcutsCard.editingId = "";
-                                        } else {
-                                            shortcutsCard.editingId = bindRow.modelData.id;
-                                            shortcutsCard.editKeys = bindRow.modelData.keys;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Inline editing row
-                            RowLayout {
-                                visible: shortcutsCard.editingId === bindRow.modelData.id
-                                Layout.fillWidth: true
-                                spacing: Design.s(Design.space.sm)
-
-                                Field {
-                                    Layout.fillWidth: true
-                                    placeholder: "New key combo (e.g. $mod+t, $mod+Return)..."
-                                    text: shortcutsCard.editKeys
-                                    onEdited: v => shortcutsCard.editKeys = v
-                                }
-
-                                ActionButton {
-                                    icon: "\u{f012c}"
-                                    label: "Save"
-                                    onActivated: shortcutsCard.saveBinding(bindRow.modelData, shortcutsCard.editKeys)
-                                }
-
-                                ActionButton {
-                                    icon: "\u{f0156}"
-                                    label: "Cancel"
-                                    onActivated: shortcutsCard.editingId = ""
-                                }
-                            }
+                        Field {
+                            id: keyField
+                            Layout.fillWidth: true
+                            placeholder: "e.g. Super+Shift+T or Ctrl+Alt+Return"
+                            onAccepted: v => bindCard.save(bindRow.modelData, v)
                         }
 
-                        MouseArea {
-                            id: rowHoverMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.NoButton
+                        ActionButton {
+                            Layout.fillWidth: false
+                            icon: "\u{f012c}"
+                            label: "Save"
+                            tone: Design.sapphire
+                            onActivated: bindCard.save(bindRow.modelData, keyField.text)
+                        }
+
+                        ActionButton {
+                            Layout.fillWidth: false
+                            visible: bindRow.changed
+                            icon: "\u{f0450}"
+                            label: "Reset"
+                            onActivated: {
+                                bindCard.reset(bindRow.modelData);
+                                bindCard.editingId = "";
+                            }
                         }
                     }
                 }

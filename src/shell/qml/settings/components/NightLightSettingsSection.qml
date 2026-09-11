@@ -7,8 +7,15 @@ import "../../Services"
 // =============================================================================
 // Night Light & Eye Care
 //
-// Controls screen color temperature to reduce eye strain at night.
-// Integrates with wlsunset / gammastep.
+// Colour temperature through wlsunset, started by the daemon
+// (`b1air-daemon night-light on <K>`), which also puts it back at login.
+//
+// This page used to start wlsunset itself with -t and -T equal, which wlsunset
+// refuses ("high temp must be higher than low") and exits; the fallback,
+// gammastep, is not installed. So the toggle said "Active at 4000K" over an
+// untinted screen, every time. And the page kept its own copies of the two
+// values, which stopped following Settings the first time it wrote them — a
+// change from the Control Center tile afterwards did not show here.
 // =============================================================================
 
 ColumnLayout {
@@ -17,27 +24,31 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
-    property bool nightLightEnabled: Settings.nightLightEnabled !== undefined ? Settings.nightLightEnabled : false
-    property int tempK: Settings.nightLightTemp !== undefined ? Settings.nightLightTemp : 4000
+    readonly property bool nightLightEnabled: Settings.nightLightEnabled
+    // While the slider moves, the number follows the finger; wlsunset is only
+    // restarted once it settles (each restart is a visible flash).
+    property int dragTemp: -1
+    readonly property int tempK: section.dragTemp >= 0 ? section.dragTemp : Settings.nightLightTemp
 
     function applyTemp(enabled, temp) {
-        section.nightLightEnabled = enabled;
-        section.tempK = temp;
         // One apply() instead of two set() calls. Two set() calls in a single
         // handler lose one of the two: each set() writes the file, and a write
         // started mid-handler clobbers the change that follows it — measured on
         // a live shell, five sets in one tick kept only the 1st, 3rd and 5th,
         // in memory as well as on disk. apply() mutates the adapter for every
         // key first and writes once, which is the shape that survives.
-        // This was the only handler in the shell calling set() more than once.
         Settings.apply({ nightLightEnabled: enabled, nightLightTemp: temp });
+        Quickshell.execDetached(enabled
+            ? ["b1air-daemon", "night-light", "on", String(temp), "--quiet"]
+            : ["b1air-daemon", "night-light", "off", "--quiet"]);
+    }
 
-        if (!enabled) {
-            Quickshell.execDetached(["bash", "-c", "killall wlsunset gammastep 2>/dev/null || true"]);
-        } else {
-            Quickshell.execDetached(["bash", "-c",
-                "killall wlsunset gammastep 2>/dev/null || true; wlsunset -t " + temp + " -T " + temp + " 2>/dev/null || gammastep -O " + temp + " 2>/dev/null &"
-            ]);
+    Timer {
+        id: dragSettle
+        interval: 300
+        onTriggered: {
+            section.applyTemp(true, section.dragTemp);
+            section.dragTemp = -1;
         }
     }
 
@@ -85,14 +96,14 @@ ColumnLayout {
                 tone: Design.yellow
                 icon: "\u{f0590}"
                 onMoved: pct => {
-                    const temp = Math.round(2500 + (pct / 100) * 4000);
-                    section.applyTemp(true, temp);
+                    section.dragTemp = Math.round((2500 + (pct / 100) * 4000) / 100) * 100;
+                    dragSettle.restart();
                 }
             }
 
             Label { text: "Quick Warmth Presets"; role: "caption"; dim: true }
 
-            RowLayout {
+            Flow {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.xs)
 

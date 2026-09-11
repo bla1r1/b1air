@@ -16,6 +16,7 @@
 #include <QVariantMap>
 #include <QString>
 #include <QDBusConnection>
+#include <functional>
 
 class B1airDaemon : public QObject {
     Q_OBJECT
@@ -159,6 +160,16 @@ private:
               const QString& method, const QVariantList& args = {});
 
     void refreshAvailability();
+
+    // A string-returning daemon method: over D-Bus, or through the fallback.
+    void request(const QString& method, const QVariantList& args,
+                 std::function<void(const QString&)> ready);
+
+    // The same method run as `b1air-daemon dbus-call …` (or, for the shell's
+    // interface, `b1air-shell …`) when org.b1air.Daemon is not on the bus:
+    // the session daemon is not running, or this is another desktop.
+    void runFallback(const QString& service, const QString& method, const QVariantList& args,
+                     std::function<void(const QString&)> ready = {});
 
     QDBusConnection m_bus;
     bool m_available = false;

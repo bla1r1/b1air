@@ -24,6 +24,7 @@ ColumnLayout {
     readonly property int borderWidth: Settings.borderWidth
     readonly property bool smartBorders: Settings.smartBorders
     readonly property bool smartGaps: Settings.smartGaps
+    readonly property bool autotiling: Settings.autotiling
     // `inactiveOpacity` was read here into a property no control bound to and
     // nothing else ever looked at; it is gone from the schema — see the note
     // in Services/SwayConfig for why it could not simply be adopted.
@@ -62,6 +63,24 @@ ColumnLayout {
     }
 
     // ── 1. Gaps Configuration ────────────────────────────────────────────────
+    // The daemon reads this on every focus change, so it takes effect from the
+    // next window opened — nothing to reload.
+    Card {
+        title: "Tiling"
+        subtitle: "How a new window finds its place"
+        icon: "\u{f0e5e}"
+        accentColor: Design.sapphire
+
+        Toggle {
+            label: "Automatic split (like Hyprland)"
+            subtitle: section.autotiling
+                ? "Each new window halves the focused one along its longer side, in a spiral"
+                : "New windows line up in one row; Mod+J and Mod+Shift+I change the direction"
+            checked: section.autotiling
+            onToggled: Settings.set("autotiling", !section.autotiling)
+        }
+    }
+
     Card {
         title: "Window Spacing (Gaps)"
         subtitle: "Adjust the inner and outer spacing between tiled windows"

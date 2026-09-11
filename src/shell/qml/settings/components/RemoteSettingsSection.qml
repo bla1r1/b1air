@@ -109,6 +109,11 @@ ColumnLayout {
                 text: section.vncPassword
                 echoMode: TextInput.Password
                 placeholder: "Required for TLS authentication"
+                // On every edit, not only on commit: the switch above is a
+                // mouse area and does not take focus, so a password typed and
+                // followed straight by a click on it was never committed and
+                // the server started with an empty one.
+                onEdited: v => section.vncPassword = v
                 onCommitted: v => section.vncPassword = v
             }
         }
@@ -183,32 +188,11 @@ ColumnLayout {
             }
         }
 
-        Item { height: Design.s(Design.space.xs) }
-
-        // RustDesk Service Control
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: "RustDesk Background Service"; weight: Design.weight.semibold }
-                Label {
-                    text: "Start or restart systemd daemon for persistent unattended access"
-                    role: "caption"
-                    dim: true
-                }
-            }
-
-            ActionButton {
-                label: "Start Service"
-                icon: "\u{f04b}"
-                onActivated: {
-                    Quickshell.execDetached(["bash", "-c", "sudo systemctl enable --now rustdesk 2>/dev/null || systemctl --user restart rustdesk 2>/dev/null || true"]);
-                }
-            }
-        }
+        // A "RustDesk Background Service — Start Service" button stood here.
+        // It ran `sudo systemctl enable --now rustdesk` detached, with no
+        // terminal for sudo to ask in, so sudo failed; then a user unit that
+        // RustDesk does not ship; then `|| true`. It could not succeed, and
+        // RustDesk is not something this desktop installs.
     }
 
     // ── 3. Wireless Tablet Sidecar Display ────────────────────────────────────

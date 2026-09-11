@@ -134,6 +134,19 @@ install: daemon-target polkit-target secret-target shell-target
 	# process searches there, and it must keep finding the real module.
 	mkdir -p $(HOME)/.local/share/b1air-qs-compat
 	rsync -a compat/qml/ $(HOME)/.local/share/b1air-qs-compat/
+	# Desktop entries, with the binary's full path. They said `Exec=b1air-term`
+	# and relied on ~/.local/bin being on PATH, which is true inside the sway
+	# session and false in KDE or GNOME — where the apps did not start from the
+	# menu at all. environment.d fixes PATH for systemd-started sessions; the
+	# full path fixes it for everything else.
+	mkdir -p $(HOME)/.local/share/applications
+	for f in ../.local/share/applications/b1air-*.desktop; do \
+		sed -e 's|^Exec=b1air-|Exec=$(PREFIX)/b1air-|' -e 's|^TryExec=b1air-|TryExec=$(PREFIX)/b1air-|' \
+			"$$f" > $(HOME)/.local/share/applications/$$(basename "$$f"); \
+	done
+	-update-desktop-database $(HOME)/.local/share/applications >/dev/null 2>&1
+	mkdir -p $(HOME)/.config/environment.d
+	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(HOME)/.config/environment.d/
 
 # The static checks run anywhere; shell-boot needs a Wayland session and skips
 # itself without one.

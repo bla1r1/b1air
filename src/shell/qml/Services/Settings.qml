@@ -39,6 +39,10 @@ Singleton {
     readonly property alias guideShortcut: data.guideShortcut
     readonly property alias language: data.language
     readonly property alias kbOptions: data.kbOptions
+    // Keybindings changed on the Keyboard page: a JSON object of binding id to
+    // key combo, rendered into conf.d/custom_keybinds.conf. A string because
+    // the adapter round-trips strings faithfully and the page owns the shape.
+    readonly property alias keybindOverrides: data.keybindOverrides
     readonly property alias wallpaperDir: data.wallpaperDir
     readonly property alias workspaceCount: data.workspaceCount
     readonly property alias monitors: data.monitors
@@ -71,6 +75,8 @@ Singleton {
     readonly property alias borderWidth: data.borderWidth
     readonly property alias smartBorders: data.smartBorders
     readonly property alias smartGaps: data.smartGaps
+    // Hyprland-style dwindle splitting, done by the daemon (run_autotiler).
+    readonly property alias autotiling: data.autotiling
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
     // so the UI shows what the session actually booted with.
@@ -88,12 +94,9 @@ Singleton {
     readonly property alias screenshotSaveToFile: data.screenshotSaveToFile
     readonly property alias screenshotDelay: data.screenshotDelay
 
-    // Default Applications
-    readonly property alias defaultBrowser: data.defaultBrowser
-    readonly property alias defaultTerminal: data.defaultTerminal
-    readonly property alias defaultFileManager: data.defaultFileManager
-    readonly property alias defaultEditor: data.defaultEditor
-    readonly property alias defaultPlayer: data.defaultPlayer
+    // Default applications are not here: they live in xdg-mime, which is what
+    // everything else asks. Five keys stood here that the Default Apps page
+    // wrote and nothing read.
 
     // Game Mode
     readonly property alias gameModeEnabled: data.gameModeEnabled
@@ -136,6 +139,9 @@ Singleton {
     // end, so an empty string is the shipped arrangement and a list written by
     // hand does not have to be complete.
     readonly property alias ccTileLayout: data.ccTileLayout
+    // Order of the cards under the Control Center's tiles (sliders, weather,
+    // media, power buttons), in the same "id:size" form as the tiles.
+    readonly property alias ccCardLayout: data.ccCardLayout
 
     // The calendar's parts, in the same "id:size" shape. No order in it — the
     // four are a fixed arrangement, a month grid beside a dashboard, not a set
@@ -191,15 +197,42 @@ Singleton {
 
     signal changed()
 
+    // Whether the secret store holds a weather key. The key itself stays out
+    // of this process: the field on the Weather page is always empty (the
+    // alias above is blanked on purpose), and without this there was no way
+    // to tell "no key" from "key saved" — the page said wttr.in either way.
+    property bool weatherKeyStored: false
+
     property string pendingWeatherApiKey: ""
     Process {
         id: secretWriter
         stdinEnabled: true
         command: ["b1air-secret-service", "set", "weather-api-key"]
         onStarted: {
-            write(root.pendingWeatherApiKey + "\n");
+            write(root.pendingWeatherApiKey);
+            root.pendingWeatherApiKey = "";
             stdinEnabled = false;
         }
+        onExited: root.probeWeatherKey()
+    }
+
+    Process {
+        id: secretRemover
+        command: ["b1air-secret-service", "remove", "weather-api-key"]
+        onExited: root.probeWeatherKey()
+    }
+
+    // Exit status only; no stdout handler, so the value is never read here.
+    Process {
+        id: secretProbe
+        running: true
+        command: ["b1air-secret-service", "get", "weather-api-key"]
+        onExited: code => root.weatherKeyStored = code === 0
+    }
+
+    function probeWeatherKey() {
+        secretProbe.running = false;
+        secretProbe.running = true;
     }
 
     // ── Writes ───────────────────────────────────────────────────────────────
@@ -318,10 +351,26 @@ Singleton {
         root.set(key, parts.join(","));
     }
 
+    /**
+     * Store a weather key, or remove it when given an empty one.
+     *
+     * The second key saved in a session used to be stored empty: the writer
+     * turns stdinEnabled off once it has written, and nothing turned it back
+     * on, so the next run had no stdin to write to. It also wrote a trailing
+     * newline, which the daemon then put into the request URL.
+     */
     function setWeatherApiKey(value) {
         root.data.weatherApiKey = "";
-        root.pendingWeatherApiKey = String(value || "");
-        secretWriter.running = true;
+        const key = String(value || "").trim();
+        if (key === "") {
+            secretRemover.running = false;
+            secretRemover.running = true;
+        } else {
+            root.pendingWeatherApiKey = key;
+            secretWriter.running = false;
+            secretWriter.stdinEnabled = true;
+            secretWriter.running = true;
+        }
         root.changed();
     }
 
@@ -371,6 +420,7 @@ Singleton {
         guideShortcut: "Mod+H",
         language: "us,ua",
         kbOptions: "grp:alt_shift_toggle",
+        keybindOverrides: "{}",
         wallpaperDir: Quickshell.env("HOME") + "/.wallpapers",
         workspaceCount: 10,
         audioStep: 5,
@@ -393,6 +443,7 @@ Singleton {
         borderWidth: 2,
         smartBorders: true,
         smartGaps: false,
+        autotiling: true,
         themeName: "catppuccin-mocha",
         accentName: "",
         cornerRadius: 10,
@@ -404,11 +455,6 @@ Singleton {
         screenshotCopyToClipboard: true,
         screenshotSaveToFile: true,
         screenshotDelay: 0,
-        defaultBrowser: "firefox",
-        defaultTerminal: "b1air-term",
-        defaultFileManager: "b1air-files",
-        defaultEditor: "code",
-        defaultPlayer: "mpv",
         gameModeEnabled: false,
         gameModeAdaptiveSync: false,
         gameModeHideBar: true,
@@ -428,6 +474,7 @@ Singleton {
         ccHiddenCards: "",
         calHiddenCards: "",
         ccTileLayout: "",
+        ccCardLayout: "",
         calCardLayout: "",
         nightLightEnabled: false,
         nightLightTemp: 4000,
@@ -482,6 +529,7 @@ Singleton {
             property string guideShortcut: "Mod+H"
             property string language: "us,ua"
             property string kbOptions: "grp:alt_shift_toggle"
+            property string keybindOverrides: "{}"
             property string wallpaperDir: Quickshell.env("HOME") + "/.wallpapers"
             property int workspaceCount: 10
             property var monitors: []
@@ -509,6 +557,7 @@ Singleton {
             property int borderWidth: 2
             property bool smartBorders: true
             property bool smartGaps: false
+            property bool autotiling: true
             property string themeName: "catppuccin-mocha"
             property string accentName: ""
             property int cornerRadius: 10
@@ -521,12 +570,6 @@ Singleton {
             property bool screenshotCopyToClipboard: true
             property bool screenshotSaveToFile: true
             property int screenshotDelay: 0
-
-            property string defaultBrowser: "firefox"
-            property string defaultTerminal: "b1air-term"
-            property string defaultFileManager: "b1air-files"
-            property string defaultEditor: "code"
-            property string defaultPlayer: "mpv"
 
             property bool gameModeEnabled: false
             property bool gameModeAdaptiveSync: false
@@ -548,6 +591,7 @@ Singleton {
             property string ccHiddenCards: ""
             property string calHiddenCards: ""
             property string ccTileLayout: ""
+            property string ccCardLayout: ""
             property string calCardLayout: ""
 
             property bool nightLightEnabled: false

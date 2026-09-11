@@ -10,6 +10,10 @@
 #include <QDBusPendingCall>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDir>
+#include <QFileInfo>
+#include <QProcess>
+#include <QStandardPaths>
 
 namespace {
 constexpr auto kDaemonService = "org.b1air.Daemon";
@@ -62,10 +66,80 @@ void B1airDaemon::refreshAvailability() {
     }
 }
 
+namespace {
+
+// ~/.local/bin first: that is where `make install` puts the suite, and it is
+// not on PATH in a KDE or GNOME session, which do not read the sway config.
+QString findTool(const QString& name) {
+    const QString local = QDir::homePath() + QStringLiteral("/.local/bin/") + name;
+    if (QFileInfo(local).isExecutable())
+        return local;
+    const QString onPath = QStandardPaths::findExecutable(name);
+    return onPath.isEmpty() ? name : onPath;
+}
+
+QStringList argStrings(const QVariantList& args) {
+    QStringList out;
+    for (const QVariant& v : args) {
+        if (v.metaType() == QMetaType::fromType<QList<int>>()) {
+            for (int i : v.value<QList<int>>()) out << QString::number(i);
+        } else if (v.metaType() == QMetaType::fromType<bool>()) {
+            out << (v.toBool() ? QStringLiteral("true") : QStringLiteral("false"));
+        } else {
+            out << v.toString();
+        }
+    }
+    return out;
+}
+
+bool serviceMissing(const QDBusError& e) {
+    return e.type() == QDBusError::ServiceUnknown || e.type() == QDBusError::NoServer
+        || e.type() == QDBusError::Disconnected;
+}
+
+} // namespace
+
+void B1airDaemon::runFallback(const QString& service, const QString& method, const QVariantList& args,
+                              std::function<void(const QString&)> ready) {
+    QString program;
+    QStringList argv;
+    if (service == QLatin1String(kShellService)) {
+        const QStringList a = argStrings(args);
+        program = findTool(QStringLiteral("b1air-shell"));
+        if (method == QLatin1String("Toggle"))           argv << QStringLiteral("toggle") << a.value(0);
+        else if (method == QLatin1String("Open"))        argv << QStringLiteral("open") << a.value(0) << a.value(1);
+        else if (method == QLatin1String("Close"))       argv << QStringLiteral("close") << a.value(0);
+        else                                             argv << QStringLiteral("forceReload");
+    } else {
+        program = findTool(QStringLiteral("b1air-daemon"));
+        argv << QStringLiteral("dbus-call") << method << argStrings(args);
+    }
+
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this,
+            [this, proc, method, ready](int code, QProcess::ExitStatus status) {
+        if (status == QProcess::NormalExit && code == 0) {
+            if (ready) ready(QString::fromUtf8(proc->readAllStandardOutput()).trimmed());
+        } else {
+            emit failed(method, QStringLiteral("b1air-daemon is not running, and running it directly failed: ")
+                                + QString::fromUtf8(proc->readAllStandardError()).trimmed());
+        }
+        proc->deleteLater();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc, method](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        emit failed(method, QStringLiteral("b1air-daemon is not running and could not be started."));
+        proc->deleteLater();
+    });
+    proc->start(program, argv);
+}
+
 void B1airDaemon::call(const QString& service, const QString& path, const QString& iface,
                        const QString& method, const QVariantList& args) {
-    if (!m_bus.isConnected()) {
-        emit failed(method, QStringLiteral("No session bus connection."));
+    // Straight to the fallback when nobody owns the name: a round trip only
+    // to be told so is a notification the user did not need.
+    if (!m_bus.isConnected() || (service == QLatin1String(kDaemonService) && !m_available)) {
+        runFallback(service, method, args);
         return;
     }
 
@@ -74,16 +148,38 @@ void B1airDaemon::call(const QString& service, const QString& path, const QStrin
 
     auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, method](QDBusPendingCallWatcher* w) {
+            [this, service, method, args](QDBusPendingCallWatcher* w) {
         QDBusPendingReply<> reply = *w;
         if (reply.isError()) {
             const QDBusError e = reply.error();
-            QString detail = e.message();
-            if (detail.isEmpty()) detail = e.name();
-            if (e.type() == QDBusError::ServiceUnknown)
-                detail = QStringLiteral("b1air-daemon is not running.");
-            emit failed(method, detail);
+            if (serviceMissing(e)) {
+                runFallback(service, method, args);
+            } else {
+                emit failed(method, e.message().isEmpty() ? e.name() : e.message());
+            }
         }
+        w->deleteLater();
+    });
+}
+
+void B1airDaemon::request(const QString& method, const QVariantList& args,
+                          std::function<void(const QString&)> ready) {
+    if (!m_bus.isConnected() || !m_available) {
+        runFallback(QString::fromLatin1(kDaemonService), method, args, ready);
+        return;
+    }
+    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath, kDaemonIface, method);
+    msg.setArguments(args);
+    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, method, args, ready](QDBusPendingCallWatcher* w) {
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isError())
+            ready(reply.value());
+        else if (serviceMissing(reply.error()))
+            runFallback(QString::fromLatin1(kDaemonService), method, args, ready);
+        else
+            emit failed(method, reply.error().message());
         w->deleteLater();
     });
 }
@@ -122,31 +218,11 @@ void B1airDaemon::captureWithGeometry(const QString& mode, const QString& geomet
 }
 
 void B1airDaemon::requestStats(const QString& query, const QString& tag) {
-    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath,
-                                                     kDaemonIface, "GetStats");
-    msg.setArguments({query});
-
-    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, tag](QDBusPendingCallWatcher* w) {
-        QDBusPendingReply<QString> reply = *w;
-        if (reply.isError()) emit failed(QStringLiteral("GetStats"), reply.error().message());
-        else emit statsReady(tag, reply.value());
-        w->deleteLater();
-    });
+    request(QStringLiteral("GetStats"), {query}, [this, tag](const QString& out) { emit statsReady(tag, out); });
 }
 
 void B1airDaemon::requestRemoteStatus(const QString& tag) {
-    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath,
-                                                     kDaemonIface, "RemoteStatus");
-    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, tag](QDBusPendingCallWatcher* w) {
-        QDBusPendingReply<QString> reply = *w;
-        if (reply.isError()) emit failed(QStringLiteral("RemoteStatus"), reply.error().message());
-        else emit remoteStatusReady(tag, reply.value());
-        w->deleteLater();
-    });
+    request(QStringLiteral("RemoteStatus"), {}, [this, tag](const QString& out) { emit remoteStatusReady(tag, out); });
 }
 
 void B1airDaemon::remoteStop() {
@@ -163,16 +239,7 @@ void B1airDaemon::sidecarRemove() {
 }
 
 void B1airDaemon::requestDotfilesStatus(const QString& tag) {
-    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath,
-                                                     kDaemonIface, "DotfilesStatus");
-    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, tag](QDBusPendingCallWatcher* w) {
-        QDBusPendingReply<QString> reply = *w;
-        if (reply.isError()) emit failed(QStringLiteral("DotfilesStatus"), reply.error().message());
-        else emit dotfilesStatusReady(tag, reply.value());
-        w->deleteLater();
-    });
+    request(QStringLiteral("DotfilesStatus"), {}, [this, tag](const QString& out) { emit dotfilesStatusReady(tag, out); });
 }
 
 void B1airDaemon::dotfilesSys() {
@@ -220,30 +287,11 @@ void B1airDaemon::eqSetAll(const QVariantList& bands) {
 }
 
 void B1airDaemon::requestScanQr(const QString& geometry, const QString& tag) {
-    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath,
-                                                     kDaemonIface, "ScanQr");
-    msg.setArguments({geometry});
-    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, tag](QDBusPendingCallWatcher* w) {
-        QDBusPendingReply<QString> reply = *w;
-        if (reply.isError()) emit failed(QStringLiteral("ScanQr"), reply.error().message());
-        else emit scanQrReady(tag, reply.value());
-        w->deleteLater();
-    });
+    request(QStringLiteral("ScanQr"), {geometry}, [this, tag](const QString& out) { emit scanQrReady(tag, out); });
 }
 
 void B1airDaemon::requestVersion(const QString& tag) {
-    QDBusMessage msg = QDBusMessage::createMethodCall(kDaemonService, kDaemonPath,
-                                                     kDaemonIface, "GetVersion");
-    auto* watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, tag](QDBusPendingCallWatcher* w) {
-        QDBusPendingReply<QString> reply = *w;
-        if (reply.isError()) emit failed(QStringLiteral("GetVersion"), reply.error().message());
-        else emit versionReady(tag, reply.value());
-        w->deleteLater();
-    });
+    request(QStringLiteral("GetVersion"), {}, [this, tag](const QString& out) { emit versionReady(tag, out); });
 }
 
 // ── org.b1air.Shell ─────────────────────────────────────────────────────────

@@ -195,6 +195,20 @@ std::string SwayIPC::get_outputs() {
 //
 // nlohmann::json is already a dependency of this daemon, so the tree is parsed
 // as the structured document it is.
+// A string field, or the fallback when the field is missing *or null*.
+//
+// nlohmann's value("key", "") only falls back when the key is absent; a key
+// that is present with the wrong type throws. sway reports "app_id": null for
+// every XWayland window and "name": null for split containers, so focusing
+// GitHub Desktop, Steam or Discord threw out of here, through the focus
+// tracker's event callback, into std::terminate — and took the whole session
+// daemon with it: settings stopped applying, autotiling stopped, the shell's
+// D-Bus service went away. Found as a SIGABRT core from a live session.
+static std::string str_field(const nlohmann::json& n, const char* key, const std::string& fallback = "") {
+    auto it = n.find(key);
+    return (it != n.end() && it->is_string()) ? it->get<std::string>() : fallback;
+}
+
 static bool parse_focused_node(const std::string& json_text, WindowInfo& out) {
     nlohmann::json tree;
     try {
@@ -209,7 +223,8 @@ static bool parse_focused_node(const std::string& json_text, WindowInfo& out) {
     // application windows; a focused workspace or output means nothing is.
     std::function<void(const nlohmann::json&)> walk = [&](const nlohmann::json& n) {
         if (found || !n.is_object()) return;
-        if (n.value("focused", false)) {
+        auto fo = n.find("focused");
+        if (fo != n.end() && fo->is_boolean() && fo->get<bool>()) {
             found = &n;
             return;
         }
@@ -228,38 +243,43 @@ static bool parse_focused_node(const std::string& json_text, WindowInfo& out) {
     if (!found) return false;
     const nlohmann::json& node = *found;
 
-    const std::string type = node.value("type", "");
+    const std::string type = str_field(node, "type");
     if (type != "con" && type != "floating_con") {
         // A workspace or output has focus, so no window does. Reported as
         // focused with an empty class, which is what the session tracker
         // records as "Desktop".
         out.focused = true;
-        out.title = node.value("name", "");
+        out.title = str_field(node, "name");
         return true;
     }
 
     out.focused = true;
-    out.id = node.value("id", 0LL);
-    out.title = node.value("name", "");
+    out.id = (node.contains("id") && node["id"].is_number()) ? node["id"].get<long long>() : 0;
+    out.title = str_field(node, "name");
 
     // Wayland gives app_id; XWayland gives window_properties.class.
-    out.app_class = node.value("app_id", "");
+    out.app_class = str_field(node, "app_id");
     if (out.app_class.empty()) {
         auto wp = node.find("window_properties");
         if (wp != node.end() && wp->is_object())
-            out.app_class = wp->value("class", "");
+            out.app_class = str_field(*wp, "class");
     }
 
-    out.fullscreen = node.value("fullscreen_mode", 0) > 0;
+    out.fullscreen = node.contains("fullscreen_mode") && node["fullscreen_mode"].is_number()
+                     && node["fullscreen_mode"].get<int>() > 0;
 
-    const std::string floating = node.value("floating", "");
+    const std::string floating = str_field(node, "floating");
     out.floating = (floating == "auto_on" || floating == "user_on")
                    || type == "floating_con";
 
     auto rect = node.find("rect");
     if (rect != node.end() && rect->is_object()) {
-        out.width  = rect->value("width", 0);
-        out.height = rect->value("height", 0);
+        auto num = [&](const char* k) {
+            auto f = rect->find(k);
+            return (f != rect->end() && f->is_number()) ? f->get<int>() : 0;
+        };
+        out.width  = num("width");
+        out.height = num("height");
     }
 
     return true;

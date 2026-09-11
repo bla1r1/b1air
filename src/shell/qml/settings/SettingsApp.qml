@@ -32,7 +32,7 @@ Item {
         { id: "widgets",     icon: "\u{f0331}", label: "Widgets",          color: Design.blue,     tags: "widgets buttons tiles modules control center calendar top bar show hide customize customise remove add panels" },
         // not "blur"/"corners": those live on Appearance, and listing them here
         // sent a search for either to a page that has neither.
-        { id: "windows",     icon: "\u{f0379}", label: "Window & Gaps",    color: Design.sapphire, tags: "gaps border padding tiling sway layout inner outer smart borders smart gaps" },
+        { id: "windows",     icon: "\u{f0379}", label: "Window & Gaps",    color: Design.sapphire, tags: "gaps border padding tiling sway layout inner outer smart borders smart gaps autotiling dwindle split hyprland spiral" },
         { id: "nightlight",  icon: "\u{f0599}", label: "Night Light",      color: Design.yellow,   tags: "night light wlsunset blue light temperature schedule eye protect" },
 
         // ── Input & Navigation ────────────────────────────────────────────────
@@ -302,7 +302,6 @@ Item {
         }
 
         // ── Page Scroll Container ────────────────────────────────────────────
-        // ── Page Scroll Container ────────────────────────────────────────────
         EmptyState {
             visible: app.noResults
             Layout.fillWidth: true
@@ -425,21 +424,12 @@ Item {
                     visible: app.page === "input"
                 }
 
+                // Reads and writes Settings itself, like every other section.
+                // Passing the values through here is how the remove button came
+                // to send an index to a handler comparing layout codes.
                 Sections.KeyboardSettingsSection {
                     Layout.fillWidth: true
                     visible: app.page === "keyboard"
-                    language: Settings.language
-                    kbOptions: Settings.kbOptions
-                    onKbOptionsChangedByUser: v => Settings.set("kbOptions", v)
-                    onLanguageAdded: code => {
-                        const list = Settings.language.split(",").filter(x => x !== "");
-                        if (!list.includes(code))
-                            Settings.set("language", list.concat(code).join(","));
-                    }
-                    onLanguageRemoved: code => {
-                        Settings.set("language",
-                            Settings.language.split(",").filter(x => x !== code && x !== "").join(","));
-                    }
                 }
 
                 Sections.ShortcutsSettingsSection {

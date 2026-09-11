@@ -7,8 +7,12 @@ namespace b1air {
 
 struct DesktopSettings {
     // Keyboard & input
-    std::string language = "us";
-    std::string kbOptions = "grp:alt_shift_toggle,caps:escape";
+    //
+    // Must match Services/Settings.qml and conf.d/input.conf. These were "us"
+    // and "...,caps:escape", so a settings file without the keys would have
+    // switched off the second layout and remapped Caps Lock on the next apply.
+    std::string language = "us,ua";
+    std::string kbOptions = "grp:alt_shift_toggle";
 
     // Windows & Compositor
     int gapsInner = 8;
@@ -42,6 +46,8 @@ struct DesktopSettings {
 
     // Autostart
     std::vector<std::string> autostartApps;
+    // The commands of the enabled entries only. The Startup page stores
+    // objects ({name, command, icon, enabled}); load() flattens them.
     std::vector<std::string> autostartCustom;
 
     // Monitors

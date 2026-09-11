@@ -1,4 +1,5 @@
 #include "session_manager.hpp"
+#include <nlohmann/json.hpp>
 #include "settings_manager.hpp"
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
@@ -365,24 +366,15 @@ void SessionManager::run_focus_tracker() {
 
     std::cerr << "[b1air-focus] tracking started\n";
 
-    bool ok = ipc.subscribe_events({"window", "workspace"}, [&](const std::string&, const std::string&) {
-        if (!g_session_running) return;
+    // Nothing thrown in here may leave it: this runs on a detached thread, so
+    // an escaping exception is std::terminate for the whole session daemon,
+    // not the end of one event. That is exactly how an XWayland window with a
+    // null app_id used to end the session (see str_field in sway_ipc.cpp).
+    auto on_event = [&]() {
         bool is_locked = (access(runtime_path("swaylock.lock").c_str(), F_OK) == 0);
         WindowInfo win = query.get_focused_window();
         std::string new_app = is_locked ? "Screen Locked" : (win.app_class.empty() ? "Desktop" : win.app_class);
         std::string new_title = is_locked ? "Locked" : win.title;
-
-        // Native zero-overhead autotiling (replaces external autotiling python daemon)
-        if (!is_locked && !win.floating && !win.fullscreen && win.width > 0 && win.height > 0) {
-            SwayIPC split_ipc;
-            if (split_ipc.connect()) {
-                if (win.width > win.height) {
-                    split_ipc.send_command(0, "split h");
-                } else {
-                    split_ipc.send_command(0, "split v");
-                }
-            }
-        }
 
         if (is_locked != current_locked) {
             // Locking ends the stretch of screen time; unlocking starts a new
@@ -397,6 +389,15 @@ void SessionManager::run_focus_tracker() {
         if (new_app != current_app || is_locked != current_locked) {
             flush_interval(new_app, new_title, is_locked);
         }
+    };
+
+    bool ok = ipc.subscribe_events({"window", "workspace"}, [&](const std::string&, const std::string&) {
+        if (!g_session_running) return;
+        try {
+            on_event();
+        } catch (const std::exception& e) {
+            std::cerr << "[b1air-focus] event skipped: " << e.what() << "\n";
+        }
     });
 
     // subscribe_events() only returns when the socket closes or the subscribe
@@ -405,6 +406,47 @@ void SessionManager::run_focus_tracker() {
               << (ok ? "true" : "false") << ")\n";
 
     flush_interval("", "", false);
+}
+
+// ── Autotiling: Hyprland's dwindle, in sway ──────────────────────────────────
+//
+// Whenever focus lands on a tiled window, the next split is set along its
+// longer side, so each new window halves the one it opens next to and the
+// layout spirals the way Hyprland's dwindle did. Without it sway lines every
+// new window up in one row.
+//
+// This used to live inside the screen-time tracker's event handler, so the
+// "Auto-Start FocusTime Daemon" switch on the Screen Time page quietly turned
+// window tiling off as well, and any exception in the tracker ended both. It
+// has its own thread and its own switch now (Window & Gaps → Automatic split,
+// key `autotiling`).
+void SessionManager::run_autotiler() {
+    SwayIPC events;
+    SwayIPC query;
+    if (!events.connect() || !query.connect()) {
+        std::cerr << "[b1air-tiling] no sway IPC connection; autotiling off\n";
+        return;
+    }
+    events.subscribe_events({"window"}, [&](const std::string&, const std::string& payload) {
+        if (!g_session_running) return;
+        try {
+            // Only focus changes and new windows move the split point. Parsed,
+            // not substring-matched: sway pretty-prints its events.
+            const auto evt = nlohmann::json::parse(payload, nullptr, false);
+            const auto ch = evt.is_object() ? evt.find("change") : evt.end();
+            const std::string change = (evt.is_object() && ch != evt.end() && ch->is_string())
+                ? ch->get<std::string>() : "";
+            if (change != "focus" && change != "new")
+                return;
+            if (!SettingsManager::get_json_bool("autotiling", true)) return;
+            const WindowInfo win = query.get_focused_window();
+            if (win.app_class.empty() && win.title.empty()) return;
+            if (win.floating || win.fullscreen || win.width <= 0 || win.height <= 0) return;
+            query.send_command(0, win.width > win.height ? "split h" : "split v");
+        } catch (const std::exception& e) {
+            std::cerr << "[b1air-tiling] event skipped: " << e.what() << "\n";
+        }
+    });
 }
 
 int SessionManager::run_session() {
@@ -511,12 +553,22 @@ int SessionManager::run_session() {
     SystemControl::wallpaper_restore();
     mark("wallpaper restored");
 
+    // Night light was saved as on and never turned back on: the toggle kept
+    // saying "Enabled" at every login over a screen at full blue.
+    if (SettingsManager::get_json_bool("nightLightEnabled", false)) {
+        SystemControl::night_light_on(SettingsManager::get_json_int("nightLightTemp", 4000), false);
+        mark("night light restored");
+    }
+
     // 6. Spawn Background Threads (Focus tracker, Gamepad inhibitor, Settings inotify watcher)
     //
     // "Auto-Start FocusTime Daemon — launch background activity tracker
     // automatically on login" was a switch with no reader: the tracker started
     // regardless, so someone who did not want their window activity recorded
     // had no way to say so. `b1air-daemon focus` still starts it by hand.
+    std::thread tiling_th(SessionManager::run_autotiler);
+    tiling_th.detach();
+
     if (SettingsManager::get_json_bool("focusDaemonAutoStart", true)) {
         std::thread focus_th(SessionManager::run_focus_tracker);
         focus_th.detach();

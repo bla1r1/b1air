@@ -523,7 +523,13 @@ deploy_dotfiles() {
                 mkdir -p "$BACKUP_DIR/applications"
                 mv "$HOME/.local/share/applications/$dbase" "$BACKUP_DIR/applications/$dbase"
             fi
-            install -m 644 "$item" "$HOME/.local/share/applications/$dbase"
+            # Full path to the binary: ~/.local/bin is on PATH in the sway
+            # session and not in KDE or GNOME, whose menus then could not
+            # start the apps at all. Same rewrite as `make install`.
+            sed -e "s|^Exec=b1air-|Exec=$HOME/.local/bin/b1air-|" \
+                -e "s|^TryExec=b1air-|TryExec=$HOME/.local/bin/b1air-|" \
+                "$item" > "$HOME/.local/share/applications/$dbase"
+            chmod 644 "$HOME/.local/share/applications/$dbase"
         done
         # Without this the new entries exist but nothing has indexed them, so
         # xdg-open still resolves nothing until the next login.

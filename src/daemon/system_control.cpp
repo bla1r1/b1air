@@ -1210,7 +1210,17 @@ void focused_output_size(const std::string& outputs_json, int& w, int& h) {
 bool is_window(const nlohmann::json& n) {
     const std::string type = json_str(n, "type", "");
     if (type != "con" && type != "floating_con") return false;
-    return n.contains("app_id") || n.contains("window_properties") || n.contains("window");
+    // Present *and not null*. sway sends "app_id": null and "window": null on
+    // split containers too, so testing for the key alone counted every split
+    // as a window: "float the whole workspace" floated a split with two
+    // windows in it as one block, and left those two tiled inside it.
+    const auto has = [&](const char* k, bool (nlohmann::json::*ok)() const noexcept) {
+        auto it = n.find(k);
+        return it != n.end() && ((*it).*ok)();
+    };
+    return has("app_id", &nlohmann::json::is_string)
+        || has("window_properties", &nlohmann::json::is_object)
+        || has("window", &nlohmann::json::is_number);
 }
 
 /** app_id, falling back to the X11 class for an XWayland window. */
@@ -1293,6 +1303,183 @@ std::string SystemControl::window_list_open_json() {
     res += "]";
     return res;
 }
+
+// ── Hyprland's window controls, in sway ──────────────────────────────────────
+//
+// Three things Hyprland had on the keyboard that sway has no single command
+// for, asked for back after the move from Hyprland.
+
+namespace {
+
+/** The focused window, and the workspace it is on, from one tree read. */
+struct FocusedCtx {
+    const nlohmann::json* win = nullptr;
+    const nlohmann::json* workspace = nullptr;
+};
+
+void find_focused(const nlohmann::json& n, const nlohmann::json* ws, FocusedCtx& out) {
+    if (out.win) return;
+    if (json_str(n, "type", "") == "workspace") ws = &n;
+    if (n.contains("focused") && n["focused"].is_boolean() && n["focused"].get<bool>()) {
+        out.win = &n;
+        out.workspace = ws;
+        return;
+    }
+    for (const char* key : {"nodes", "floating_nodes"}) {
+        if (!n.contains(key) || !n[key].is_array()) continue;
+        for (const auto& c : n[key]) find_focused(c, ws, out);
+    }
+}
+
+int rect_num(const nlohmann::json& n, const char* key) {
+    if (!n.contains("rect") || !n["rect"].is_object()) return 0;
+    const auto& r = n["rect"];
+    return (r.contains(key) && r[key].is_number()) ? r[key].get<int>() : 0;
+}
+
+bool has_mark_prefix(const nlohmann::json& n, const std::string& prefix, std::string* found = nullptr) {
+    if (!n.contains("marks") || !n["marks"].is_array()) return false;
+    for (const auto& m : n["marks"]) {
+        if (m.is_string() && m.get<std::string>().rfind(prefix, 0) == 0) {
+            if (found) *found = m.get<std::string>();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_floating_node(const nlohmann::json& n) {
+    const std::string f = json_str(n, "floating", "");
+    return f == "user_on" || f == "auto_on" || json_str(n, "type", "") == "floating_con";
+}
+
+} // namespace
+
+/**
+ * Maximize, as Hyprland's `fullscreen, 1`: the window fills the workspace but
+ * the bar and the outer gaps stay. sway only has real fullscreen, so the
+ * window is floated over the workspace's usable area — which sway reports with
+ * the bar's exclusive zone and the gaps already taken off — and remembered by a
+ * mark: a tiled window goes back into the tiling, a floating one to where it was.
+ */
+bool SystemControl::window_maximize_toggle() {
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    nlohmann::json tree;
+    try { tree = nlohmann::json::parse(ipc.send_command(4, "")); } catch (...) { return false; }
+    FocusedCtx ctx;
+    find_focused(tree, nullptr, ctx);
+    if (!ctx.win || !ctx.workspace || !is_window(*ctx.win)) return false;
+    const auto& w = *ctx.win;
+    const std::string id = std::to_string(w.value("id", static_cast<int64_t>(0)));
+    const std::string sel = "[con_id=" + id + "] ";
+
+    std::string mark;
+    if (has_mark_prefix(w, "_b1air_max_tiled", &mark)) {
+        ipc.send_command(0, sel + "floating disable; " + sel + "unmark " + mark);
+        return true;
+    }
+    if (has_mark_prefix(w, "_b1air_max_float_", &mark)) {
+        // _b1air_max_float_X_Y_W_H
+        int x = 0, y = 0, ww = 0, hh = 0;
+        if (std::sscanf(mark.c_str(), "_b1air_max_float_%d_%d_%d_%d", &x, &y, &ww, &hh) == 4 && ww > 0 && hh > 0) {
+            ipc.send_command(0, sel + "resize set " + std::to_string(ww) + " px " + std::to_string(hh) + " px; "
+                              + sel + "move absolute position " + std::to_string(x) + " px " + std::to_string(y) + " px");
+        }
+        ipc.send_command(0, sel + "unmark " + mark);
+        return true;
+    }
+
+    const auto& ws = *ctx.workspace;
+    const int wx = rect_num(ws, "x"), wy = rect_num(ws, "y");
+    const int ww = rect_num(ws, "width"), wh = rect_num(ws, "height");
+    if (ww <= 0 || wh <= 0) return false;
+
+    std::string remember;
+    if (is_floating_node(w)) {
+        remember = "_b1air_max_float_" + std::to_string(rect_num(w, "x")) + "_" + std::to_string(rect_num(w, "y"))
+                 + "_" + std::to_string(rect_num(w, "width")) + "_" + std::to_string(rect_num(w, "height"));
+    } else {
+        remember = "_b1air_max_tiled";
+    }
+    ipc.send_command(0, sel + "mark --add " + remember + "; " + sel + "floating enable; "
+                      + sel + "resize set " + std::to_string(ww) + " px " + std::to_string(wh) + " px; "
+                      + sel + "move absolute position " + std::to_string(wx) + " px " + std::to_string(wy) + " px");
+    return true;
+}
+
+/**
+ * Every window on the workspace floating, or every one tiled again — Hyprland's
+ * `workspaceopt allfloat`. If anything on the workspace is still tiled, the
+ * press floats it all; if nothing is, it tiles it all, so the key is a toggle
+ * whatever mixture it starts from.
+ */
+bool SystemControl::window_float_all_toggle() {
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    nlohmann::json tree;
+    try { tree = nlohmann::json::parse(ipc.send_command(4, "")); } catch (...) { return false; }
+    FocusedCtx ctx;
+    find_focused(tree, nullptr, ctx);
+    if (!ctx.workspace) return false;
+
+    std::vector<std::pair<int64_t, bool>> wins;   // id, floating
+    walk_tree(*ctx.workspace, [&](const nlohmann::json& n) {
+        if (is_window(n))
+            wins.emplace_back(n.value("id", static_cast<int64_t>(0)), is_floating_node(n));
+    });
+    if (wins.empty()) return true;
+    const bool any_tiled = std::any_of(wins.begin(), wins.end(), [](const auto& p) { return !p.second; });
+
+    std::string cmd;
+    for (const auto& [id, floating] : wins) {
+        if (id <= 0 || floating == any_tiled) continue;
+        cmd += "[con_id=" + std::to_string(id) + "] floating " + (any_tiled ? "enable" : "disable") + "; ";
+    }
+    if (!cmd.empty()) ipc.send_command(0, cmd);
+    return true;
+}
+
+/**
+ * Opaque, and back — Hyprland's `setprop active opaque toggle`.
+ *
+ * sway does not report a window's opacity, so "back" is the value windowrules
+ * gives this app (the terminal's 0.92), or 1.0 when no rule names it. The
+ * mark is how the second press knows it is the second press.
+ */
+bool SystemControl::window_opacity_toggle() {
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    nlohmann::json tree;
+    try { tree = nlohmann::json::parse(ipc.send_command(4, "")); } catch (...) { return false; }
+    FocusedCtx ctx;
+    find_focused(tree, nullptr, ctx);
+    if (!ctx.win || !is_window(*ctx.win)) return false;
+    const auto& w = *ctx.win;
+    const std::string sel = "[con_id=" + std::to_string(w.value("id", static_cast<int64_t>(0))) + "] ";
+
+    std::string mark;
+    if (has_mark_prefix(w, "_b1air_opaque", &mark)) {
+        double rule = 1.0;
+        const std::string app = node_app_id(w);
+        const char* home = std::getenv("HOME");
+        std::ifstream rules(std::string(home ? home : "") + "/.config/sway/conf.d/windowrules.conf");
+        std::string line;
+        const std::string needle = "for_window [app_id=\"" + app + "\"] opacity ";
+        while (!app.empty() && std::getline(rules, line)) {
+            if (line.rfind(needle, 0) == 0) {
+                try { rule = std::stod(line.substr(needle.size())); } catch (...) {}
+            }
+        }
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%.2f", std::clamp(rule, 0.1, 1.0));
+        ipc.send_command(0, sel + "opacity set " + buf + "; " + sel + "unmark " + mark);
+    } else {
+        ipc.send_command(0, sel + "opacity set 1; " + sel + "mark --add _b1air_opaque");
+    }
+    return true;
+}
+
 
 // ── Multi-Monitor Layout Manager ─────────────────────────────────────────────
 static std::string get_monitors_state_file() {
@@ -2127,23 +2314,16 @@ std::string SystemControl::weather_get_json(bool force) {
     const std::string home_str = home ? home : "/tmp";
     std::string cache_dir = home_str + "/.cache/quickshell/weather";
     mkdir(cache_dir.c_str(), 0755);
-    std::string json_file = cache_dir + "/weather.json";
-
-    struct stat st;
-    if (!force && stat(json_file.c_str(), &st) == 0) {
-        auto now = std::chrono::system_clock::now();
-        auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-        if (now_sec - st.st_mtime < 900 && st.st_size > 50) {
-            std::string cached = read_file_string(json_file);
-            if (!cached.empty()) return cached;
-        }
-    }
 
     std::string env_file = home_str + "/.config/b1air-shell/calendar/.env";
     if (access(env_file.c_str(), R_OK) != 0) env_file = home_str + "/.config/quickshell/calendar/.env";
     std::string api_key;
     SecretStore secrets;
     (void)secrets.get("weather-api-key", api_key);
+    // The Settings writer sends the key followed by a newline, and the store
+    // keeps what it is given, so the key went into the URL as "abc…\n".
+    while (!api_key.empty() && std::isspace(static_cast<unsigned char>(api_key.back()))) api_key.pop_back();
+    while (!api_key.empty() && std::isspace(static_cast<unsigned char>(api_key.front()))) api_key.erase(api_key.begin());
     std::string city_id = std::getenv("OPENWEATHER_CITY_ID") ? std::getenv("OPENWEATHER_CITY_ID") : "";
     std::string unit = std::getenv("OPENWEATHER_UNIT") ? std::getenv("OPENWEATHER_UNIT") : "metric";
 
@@ -2167,7 +2347,38 @@ std::string SystemControl::weather_get_json(bool force) {
         }
     }
 
-    if (api_key.empty() || api_key == "Skipped" || api_key == "OPENWEATHER_KEY" || city_id.empty()) {
+    // The Weather settings page writes weatherCityId and weatherUnit, and this
+    // only ever looked at the environment and a legacy .env file. So a city
+    // entered there was never used — with no city the OpenWeather branch below
+    // is skipped, and a saved key did nothing either — and Fahrenheit changed
+    // no number anywhere. The page wins over the older sources.
+    const std::string settings_city = SettingsManager::get_json_string("weatherCityId");
+    if (!settings_city.empty()) city_id = settings_city;
+    const std::string settings_unit = SettingsManager::get_json_string("weatherUnit");
+    if (!settings_unit.empty()) unit = settings_unit;
+    if (unit != "imperial") unit = "metric";
+    // Goes into a URL and a file name.
+    city_id.erase(std::remove_if(city_id.begin(), city_id.end(),
+                                 [](unsigned char c) { return !std::isdigit(c); }), city_id.end());
+    const bool imperial = unit == "imperial";
+    const bool use_openweather = !(api_key.empty() || api_key == "Skipped" || api_key == "OPENWEATHER_KEY" || city_id.empty());
+
+    // One cache per source and unit. A single weather.json meant that changing
+    // the unit or the city kept serving the old numbers for up to 15 minutes,
+    // which is exactly when someone is looking to see whether it worked.
+    std::string json_file = cache_dir + "/weather-" + unit + "-" + (use_openweather ? city_id : std::string("wttr")) + ".json";
+
+    struct stat st;
+    if (!force && stat(json_file.c_str(), &st) == 0) {
+        auto now = std::chrono::system_clock::now();
+        auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        if (now_sec - st.st_mtime < 900 && st.st_size > 50) {
+            std::string cached = read_file_string(json_file);
+            if (!cached.empty()) return cached;
+        }
+    }
+
+    if (!use_openweather) {
         std::string raw = run_argv_capture({"curl", "-fsS", "--max-time", "5", "https://wttr.in/?format=j1"});
         if (!raw.empty()) {
             try {
@@ -2176,7 +2387,7 @@ std::string SystemControl::weather_get_json(bool force) {
                     nlohmann::json forecast_arr = nlohmann::json::array();
                     auto curr = (data.contains("current_condition") && data["current_condition"].is_array() && !data["current_condition"].empty())
                                 ? data["current_condition"][0] : nlohmann::json::object();
-                    std::string feels = curr.value("FeelsLikeC", "20");
+                    std::string feels = curr.value(imperial ? "FeelsLikeF" : "FeelsLikeC", "20");
 
                     int idx = 0;
                     for (const auto& day : data["weather"]) {
@@ -2200,7 +2411,7 @@ std::string SystemControl::weather_get_json(bool force) {
                                 if (mid.contains("weatherDesc") && mid["weatherDesc"].is_array() && !mid["weatherDesc"].empty()) {
                                     day_desc = mid["weatherDesc"][0].value("value", "Clear");
                                 }
-                                wind = mid.value("windspeedKmph", "0");
+                                wind = mid.value(imperial ? "windspeedMiles" : "windspeedKmph", "0");
                                 humid = mid.value("humidity", "0");
                                 pop = mid.value("chanceofrain", "0");
                             }
@@ -2218,7 +2429,7 @@ std::string SystemControl::weather_get_json(bool force) {
 
                                 hourly_arr.push_back({
                                     {"time", t_str},
-                                    {"temp", h.value("tempC", "0")},
+                                    {"temp", h.value(imperial ? "tempF" : "tempC", "0")},
                                     {"icon", weather_icon_from_desc(hdesc)},
                                     {"hex", weather_hex_from_desc(hdesc)}
                                 });
@@ -2230,8 +2441,8 @@ std::string SystemControl::weather_get_json(bool force) {
                             {"day", day_short},
                             {"day_full", day_full},
                             {"date", date_formatted},
-                            {"max", day.value("maxtempC", "0")},
-                            {"min", day.value("mintempC", "0")},
+                            {"max", day.value(imperial ? "maxtempF" : "maxtempC", "0")},
+                            {"min", day.value(imperial ? "mintempF" : "mintempC", "0")},
                             {"feels_like", feels},
                             {"wind", wind},
                             {"humidity", humid},
@@ -2244,7 +2455,7 @@ std::string SystemControl::weather_get_json(bool force) {
                         idx++;
                     }
 
-                    nlohmann::json result = {{"forecast", forecast_arr}};
+                    nlohmann::json result = {{"unit", imperial ? "F" : "C"}, {"forecast", forecast_arr}};
                     std::string res_str = result.dump();
                     std::ofstream out(json_file);
                     out << res_str << "\n";
@@ -2270,18 +2481,21 @@ std::string SystemControl::weather_get_json(bool force) {
         return get_dummy_weather_json();
     }
 
+    // OpenWeather reports wind in m/s for metric and mph for imperial; the
+    // calendar labels it km/h, so metric is converted here. It used to go
+    // through as m/s under a km/h label, a quarter of the real figure.
     const std::string transform_program =
         "def weather_icon($code): if ($code == \"50d\" or $code == \"50n\") then \"\" elif $code == \"01d\" then \"\" elif $code == \"01n\" then \"\" elif ($code | test(\"^(02|03|04)[dn]$\")) then \"\" elif ($code | test(\"^(09|10)[dn]$\")) then \"\" elif ($code == \"11d\" or $code == \"11n\") then \"\" elif ($code == \"13d\" or $code == \"13n\") then \"\" else \"\" end; "
         "def weather_hex($code): if ($code == \"50d\" or $code == \"50n\") then \"#84afdb\" elif $code == \"01d\" then \"#f9e2af\" elif $code == \"01n\" then \"#cba6f7\" elif ($code | test(\"^(02|03|04)[dn]$\")) then \"#bac2de\" elif ($code | test(\"^(09|10)[dn]$\")) then \"#74c7ec\" elif $code == \"11d\" then \"#f9e2af\" elif ($code == \"13d\" or $code == \"13n\") then \"#cdd6f4\" else \"#cdd6f4\" end; "
         "def one_decimal: ((. * 10 | round) / 10 | tostring); "
         "def titlecase: split(\" \") | map(if length > 0 then (.[0:1] | ascii_upcase) + .[1:] else . end) | join(\" \"); "
-        "def day_forecast($idx; $items): ($items[(($items | length) / 2 | floor)].weather[0].icon // \"04d\") as $code | { id: ($idx | tostring), day: ($items[0].dt | strftime(\"%a\")), day_full: ($items[0].dt | strftime(\"%A\")), date: ($items[0].dt | strftime(\"%d %b\")), max: ([$items[].main.temp_max] | max | one_decimal), min: ([$items[].main.temp_min] | min | one_decimal), feels_like: ([$items[].main.feels_like] | max | one_decimal), wind: ([$items[].wind.speed] | max | round | tostring), humidity: (([$items[].main.humidity] | add / length) | round | tostring), pop: (([$items[].pop] | max // 0) * 100 | floor | tostring), icon: weather_icon($code), hex: weather_hex($code), desc: (($items[(($items | length) / 2 | floor)].weather[0].description // \"Unknown\") | titlecase), hourly: [ $items[] | (.weather[0].icon // \"04d\") as $hour_code | { time: (.dt | strftime(\"%H:%M\")), temp: (.main.temp | one_decimal), icon: weather_icon($hour_code), hex: weather_hex($hour_code) } ] }; "
-        ".list as $items | ($items | map(.dt_txt[0:10]) | unique | .[:5]) as $dates | { forecast: [ range(0; ($dates | length)) as $idx | $dates[$idx] as $date | day_forecast($idx; [$items[] | select(.dt_txt | startswith($date))]) ] }";
+        "def day_forecast($idx; $items): ($items[(($items | length) / 2 | floor)].weather[0].icon // \"04d\") as $code | { id: ($idx | tostring), day: ($items[0].dt | strftime(\"%a\")), day_full: ($items[0].dt | strftime(\"%A\")), date: ($items[0].dt | strftime(\"%d %b\")), max: ([$items[].main.temp_max] | max | one_decimal), min: ([$items[].main.temp_min] | min | one_decimal), feels_like: ([$items[].main.feels_like] | max | one_decimal), wind: ([$items[].wind.speed] | max | (if $unit == \"C\" then . * 3.6 else . end) | round | tostring), humidity: (([$items[].main.humidity] | add / length) | round | tostring), pop: (([$items[].pop] | max // 0) * 100 | floor | tostring), icon: weather_icon($code), hex: weather_hex($code), desc: (($items[(($items | length) / 2 | floor)].weather[0].description // \"Unknown\") | titlecase), hourly: [ $items[] | (.weather[0].icon // \"04d\") as $hour_code | { time: (.dt | strftime(\"%H:%M\")), temp: (.main.temp | one_decimal), icon: weather_icon($hour_code), hex: weather_hex($hour_code) } ] }; "
+        ".list as $items | ($items | map(.dt_txt[0:10]) | unique | .[:5]) as $dates | { unit: $unit, forecast: [ range(0; ($dates | length)) as $idx | $dates[$idx] as $date | day_forecast($idx; [$items[] | select(.dt_txt | startswith($date))]) ] }";
 
     // Feed network data through stdin.  Never embed an HTTP response in a
     // shell here-document: an attacker-controlled line such as EOF could
     // terminate it and turn the remainder into shell syntax.
-    std::string formatted = run_argv_capture({"jq", "-c", transform_program}, raw);
+    std::string formatted = run_argv_capture({"jq", "-c", "--arg", "unit", imperial ? "F" : "C", transform_program}, raw);
     if (formatted.find("\"forecast\":") != std::string::npos) {
         std::ofstream out(json_file);
         out << formatted << "\n";
@@ -2302,11 +2516,13 @@ std::string SystemControl::weather_get_current_info(const std::string& field) {
     std::strftime(buf, sizeof(buf), "%H:%M", tm);
     std::string curr_time = buf;
 
-    std::string program = "((.forecast[0].hourly | map(select(.time <= $ct)) | last) // .forecast[0].hourly[0]) | ";
+    // The unit comes from the forecast itself, which carries it since the
+    // Fahrenheit setting started doing something.
+    std::string program = "(.unit // \"C\") as $u | ((.forecast[0].hourly | map(select(.time <= $ct)) | last) // .forecast[0].hourly[0]) | ";
     if (field == "icon" || field == "--current-icon") program += ".icon";
-    else if (field == "temp" || field == "--current-temp") program += "(.temp + \"°C\")";
+    else if (field == "temp" || field == "--current-temp") program += "(.temp + \"°\" + $u)";
     else if (field == "hex" || field == "--current-hex") program += ".hex";
-    else program += "(.icon + \"\\n\" + .temp + \"°C\")";
+    else program += "(.icon + \"\\n\" + .temp + \"°\" + $u)";
     return run_argv_capture({"jq", "-r", "--arg", "ct", curr_time, program}, json);
 }
 
@@ -2436,7 +2652,7 @@ bool SystemControl::wallpaper_restore() {
 }
 
 // ── Night Light ──────────────────────────────────────────────────────────────
-bool SystemControl::night_light_on(int temp) {
+bool SystemControl::night_light_on(int temp, bool announce) {
     // spawn_detached tells you the fork worked, not that the program ran:
     // with wlsunset missing the exec fails inside the child and this still
     // announced "Night Light Enabled" over a screen that never changed
@@ -2447,8 +2663,17 @@ bool SystemControl::night_light_on(int temp) {
         return false;
     }
 
+    // wlsunset has no "fixed temperature" mode; it moves between -t at night
+    // and -T by day. This passed -t alone, so -T stayed at its 6500 K default,
+    // and with no location given wlsunset decides it is permanently day and
+    // sits at 6500 K — which is no filter at all. The shell's own attempt
+    // passed -t and -T equal, which wlsunset refuses outright ("high temp
+    // must be higher than low") and exits. So night light had never tinted
+    // the screen from any of the three places that offer it. A one-kelvin
+    // gap makes both ends the chosen value.
+    temp = std::clamp(temp, 1000, 6500);
     (void)run_argv_status({"pkill", "-x", "wlsunset"});
-    if (!util::spawn_detached({"wlsunset", "-t", std::to_string(temp)})) {
+    if (!util::spawn_detached({"wlsunset", "-t", std::to_string(temp), "-T", std::to_string(temp + 1)})) {
         notify_user("Night Light", "Could not start wlsunset", {}, "dialog-error");
         return false;
     }
@@ -2460,13 +2685,18 @@ bool SystemControl::night_light_on(int temp) {
         return false;
     }
 
-    notify_user("Night Light", "Night Light Enabled", "Warm color temperature active", "weather-clear-night");
+    // Quiet for the Settings slider, which restarts this on every step, and
+    // for the login restore: a toast per notch, or one at every login, is
+    // noise about something the user is looking at.
+    if (announce)
+        notify_user("Night Light", "Night Light Enabled", "Warm color temperature active", "weather-clear-night");
     return true;
 }
 
-bool SystemControl::night_light_off() {
+bool SystemControl::night_light_off(bool announce) {
     (void)run_argv_status({"pkill", "-x", "wlsunset"});
-    notify_user("Night Light", "Night Light Disabled", "Standard display colors restored", "weather-clear");
+    if (announce)
+        notify_user("Night Light", "Night Light Disabled", "Standard display colors restored", "weather-clear");
     return true;
 }
 
@@ -2475,7 +2705,7 @@ bool SystemControl::night_light_toggle() {
     if (!check.empty()) {
         return night_light_off();
     } else {
-        return night_light_on(4000);
+        return night_light_on(SettingsManager::get_json_int("nightLightTemp", 4000));
     }
 }
 
@@ -2511,6 +2741,29 @@ std::string SystemControl::get_updates_json(bool /*force*/) {
     std::string cls = (total > 50) ? "red" : ((total > 0) ? "yellow" : "green");
     std::string tooltip = std::to_string(arch_updates) + " System | " + std::to_string(aur_updates) + " AUR";
     return "{\"text\":\" " + std::to_string(total) + "\",\"alt\":\"" + std::to_string(total) + "\",\"tooltip\":\"" + tooltip + "\",\"class\":\"" + cls + "\"}";
+}
+
+// ── Default applications ─────────────────────────────────────────────────────
+//
+// Settings -> Default Apps records its choice with xdg-mime, and Mod+T, Mod+E
+// and Mod+F ran b1air-term, b1air-files and firefox by name. Picking another
+// terminal there changed what a link or a folder opened in and left the key
+// that everyone actually uses on the old one. The keys come through here now,
+// so the page and the keyboard agree.
+bool SystemControl::open_default(const std::string& kind) {
+    std::string mime, fallback;
+    if (kind == "terminal")     { mime = "x-scheme-handler/terminal"; fallback = "b1air-term"; }
+    else if (kind == "files")   { mime = "inode/directory";           fallback = "b1air-files"; }
+    else if (kind == "browser") { mime = "x-scheme-handler/https";    fallback = "firefox"; }
+    else return false;
+
+    std::string desktop = run_argv_capture({"xdg-mime", "query", "default", mime});
+    while (!desktop.empty() && std::isspace(static_cast<unsigned char>(desktop.back()))) desktop.pop_back();
+    // gtk-launch hands the entry to GIO and returns once it has started, so
+    // its status says whether the entry was found and could run.
+    if (!desktop.empty() && run_argv_status({"gtk-launch", desktop}))
+        return true;
+    return util::spawn_detached({fallback});
 }
 
 bool SystemControl::launch_system_upgrade() {
@@ -3092,7 +3345,7 @@ bool SystemControl::run_screenshot_overlay(bool edit_mode) {
     return util::spawn_detached(argv);
 }
 
-bool SystemControl::capture(const std::string& mode, const std::string& geom, bool edit) {
+bool SystemControl::capture(const std::string& mode, const std::string& geom, bool edit, int delay_override) {
     if (!geom.empty() && !valid_geometry(geom)) return false;
 
     // Settings → Screenshots offers a folder, a format, a delay and switches
@@ -3111,7 +3364,11 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
                    [](unsigned char c) { return std::tolower(c); });
     if (format != "jpg" && format != "jpeg" && format != "webp") format = "png";
 
-    const int delay = std::max(0, std::min(60, SettingsManager::get_json_int("screenshotDelay", 0)));
+    // A delay on the command line wins over the setting: that is how the
+    // delayed-shot keys (Mod+Ctrl+Print, 5 s; Mod+Ctrl+Shift+Print, 10 s) ask
+    // for theirs without changing what plain Print does.
+    const int delay = std::max(0, std::min(60, delay_override >= 0 ? delay_override
+                                               : SettingsManager::get_json_int("screenshotDelay", 0)));
     const bool to_file = SettingsManager::get_json_bool("screenshotSaveToFile", true);
     const bool to_clipboard = SettingsManager::get_json_bool("screenshotCopyToClipboard", true);
 
