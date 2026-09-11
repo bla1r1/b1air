@@ -1,4 +1,6 @@
 #include "backend.hpp"
+#include <QClipboard>
+#include <QGuiApplication>
 #include <algorithm>
 #include <QUrl>
 #include <QDesktopServices>
@@ -429,20 +431,18 @@ bool FileManagerBackend::deleteItem(const QString& path) {
     QFileInfo fi(path);
     if (!fi.exists()) return false;
 
-    // Use trash-put if available, otherwise fallback to remove
-    if (QProcess::execute("trash-put", QStringList() << path) == 0) {
-        refresh();
-        return true;
+    // To the trash, and only to the trash. This tried trash-put — which is
+    // not installed here — and then removed the file for good, so "delete"
+    // on this machine was permanent with nothing said. gio ships with glib,
+    // which everything on the desktop already needs.
+    for (const QStringList& cmd : {QStringList{"gio", "trash", path}, QStringList{"trash-put", path}}) {
+        if (QProcess::execute(cmd.first(), cmd.mid(1)) == 0) {
+            refresh();
+            return true;
+        }
     }
-
-    bool ok = false;
-    if (fi.isDir()) {
-        ok = QDir(path).removeRecursively();
-    } else {
-        ok = QFile::remove(path);
-    }
-    if (ok) refresh();
-    return ok;
+    emit errorOccurred(QStringLiteral("Could not move %1 to the trash").arg(fi.fileName()));
+    return false;
 }
 
 bool FileManagerBackend::renameItem(const QString& oldPath, const QString& newName) {
@@ -456,6 +456,33 @@ bool FileManagerBackend::renameItem(const QString& oldPath, const QString& newNa
         return true;
     }
     return false;
+}
+
+static QString prefsPath() {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                        + "/b1air";
+    QDir().mkpath(dir);
+    return dir + "/files_prefs.json";
+}
+
+QVariantMap FileManagerBackend::loadPrefs() const {
+    QFile f(prefsPath());
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    return doc.isObject() ? doc.object().toVariantMap() : QVariantMap{};
+}
+
+void FileManagerBackend::savePrefs(const QVariantMap& prefs) const {
+    QSaveFile f(prefsPath());
+    if (!f.open(QIODevice::WriteOnly))
+        return;
+    f.write(QJsonDocument(QJsonObject::fromVariantMap(prefs)).toJson(QJsonDocument::Indented));
+    f.commit();
+}
+
+void FileManagerBackend::copyText(const QString& text) const {
+    QGuiApplication::clipboard()->setText(text);
 }
 
 static QString bookmarksPath() {

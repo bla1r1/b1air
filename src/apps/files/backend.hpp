@@ -87,6 +87,14 @@ public slots:
     QVariantList loadBookmarks() const;
     void saveBookmarks(const QVariantList& bookmarks) const;
 
+    // View preferences (hidden files, sort, folders first, view mode), kept
+    // beside the bookmarks so the window opens the way it was left.
+    QVariantMap loadPrefs() const;
+    void savePrefs(const QVariantMap& prefs) const;
+
+    // For "Copy path": QML has no clipboard of its own.
+    void copyText(const QString& text) const;
+
 signals:
     void currentPathChanged();
     void historyChanged();

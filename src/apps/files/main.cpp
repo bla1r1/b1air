@@ -28,6 +28,12 @@ int main(int argc, char* argv[]) {
     app.setDesktopFileName("b1air-files");
     app.setOrganizationName("bla1r1");
 
+    // Before the engine, so it outlives it. Declared after, it was destroyed
+    // first on exit, and the engine's teardown then re-evaluated every binding
+    // on FilesBackend against null — eight TypeErrors each time the window
+    // closed.
+    b1air::FileManagerBackend backend;
+
     QQmlApplicationEngine engine;
     b1air::app::add_import_paths(engine, "files");
 
@@ -37,7 +43,6 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    b1air::FileManagerBackend backend;
     if (argc > 1) {
         // Desktop entries use %U, so callers (Firefox "Open Containing
         // Folder", xdg-open, etc.) pass a file:// URI, not a bare path.

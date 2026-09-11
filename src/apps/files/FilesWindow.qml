@@ -19,36 +19,52 @@ ApplicationWindow {
     readonly property bool isNative: typeof FilesBackend !== "undefined"
     readonly property string homeDir: isNative ? FilesBackend.homePath : "/home/dev"
 
-    // Where this desktop's own checkout actually is. install.sh records it and
-    // SystemControl::find_dotfiles_repo() reads the same file, which is what
-    // stopped the daemon guessing at a handful of paths — one of them a
-    // specific developer's. Read the same way Ui/Design reads the active
-    // theme: plain Qt over XMLHttpRequest, which is what the session sets
-    // QML_XHR_ALLOW_FILE_READ for. Empty when there is no such file, and the
-    // sidebar entry is then simply absent rather than pointing nowhere.
-    readonly property string dotfilesRepo: {
-        if (!window.isNative)
-            return "";
-        const xhr = new XMLHttpRequest();
-        try {
-            xhr.open("GET", "file://" + window.homeDir + "/.local/state/b1air/dotfiles-repo", false);
-            xhr.send();
-            if (xhr.status === 0 || xhr.status === 200)
-                return (xhr.responseText || "").trim();
-        } catch (e) {}
-        return "";
-    }
     property string currentPath: isNative ? FilesBackend.currentPath : homeDir
     property string currentPathDisplay: currentPath.startsWith(homeDir) 
         ? ("~" + currentPath.substring(homeDir.length)) 
         : currentPath
 
-    property var history: [currentPath]
-    property int historyIndex: 0
+    // Back and forward are the backend's history, which records every
+    // navigation and says with a signal when it moved.
+    //
+    // The window kept its own as well, as `property var history:
+    // [currentPath]` — a binding, so every change of folder rebuilt the list as
+    // just the folder now open, while the index went on counting up. Back led
+    // to an entry that was no longer there, and forward lit up with nothing
+    // ahead of it.
+    readonly property bool canGoBack: isNative && FilesBackend.canGoBack
+    readonly property bool canGoForward: isNative && FilesBackend.canGoForward
 
-    property bool showHidden: false
+    // View preferences, remembered between runs (FilesBackend.savePrefs).
+    readonly property var prefs: isNative ? FilesBackend.loadPrefs() : ({})
+    property bool showHidden: prefs.showHidden === true
+    property bool dirsFirst: prefs.dirsFirst !== false
+    property string sortBy: prefs.sortBy || "name"      // name | time | size | type
+    property bool sortDescending: prefs.sortDescending === true
     property string filterQuery: ""
-    property string viewMode: "grid" // "grid", "list", "gallery"
+    property string viewMode: prefs.viewMode || "grid" // "grid", "list", "gallery"
+    property string statusNote: ""
+
+    function savePrefs() {
+        if (!isNative) return;
+        FilesBackend.savePrefs({ showHidden: showHidden, dirsFirst: dirsFirst, sortBy: sortBy,
+                                 sortDescending: sortDescending, viewMode: viewMode });
+    }
+    onShowHiddenChanged: savePrefs()
+    onDirsFirstChanged: savePrefs()
+    onSortByChanged: savePrefs()
+    onSortDescendingChanged: savePrefs()
+    onViewModeChanged: savePrefs()
+
+    function note(text) {
+        statusNote = text;
+        noteTimer.restart();
+    }
+    Timer { id: noteTimer; interval: 3500; onTriggered: window.statusNote = "" }
+    Connections {
+        target: window.isNative ? FilesBackend : null
+        function onErrorOccurred(message) { window.note(message); }
+    }
     property int selectedIndex: -1
     property string selectedPath: ""
 
@@ -178,46 +194,91 @@ ApplicationWindow {
         return crumbs;
     }
 
-    function navigateTo(path) {
-        if (!path || path === currentPath) return;
-        currentPath = path;
+    function clearSelection() {
         selectedIndex = -1;
         selectedPath = "";
+    }
 
-        if (historyIndex >= 0 && historyIndex < history.length - 1) {
-            history = history.slice(0, historyIndex + 1);
-        }
-        history.push(path);
-        historyIndex = history.length - 1;
+    function navigateTo(path) {
+        if (!path || path === currentPath || !isNative) return;
+        FilesBackend.currentPath = path;
+        clearSelection();
     }
 
     function historyBack() {
-        if (historyIndex > 0) {
-            historyIndex--;
-            currentPath = history[historyIndex];
-            selectedIndex = -1;
-            selectedPath = "";
-        }
+        if (!canGoBack) return;
+        FilesBackend.historyBack();
+        clearSelection();
     }
 
     function historyForward() {
-        if (historyIndex < history.length - 1) {
-            historyIndex++;
-            currentPath = history[historyIndex];
-            selectedIndex = -1;
-            selectedPath = "";
-        }
+        if (!canGoForward) return;
+        FilesBackend.historyForward();
+        clearSelection();
     }
 
     function goUp() {
-        if (currentPath === "/" || currentPath === "") return;
-        let parts = currentPath.split("/").filter(Boolean);
-        if (parts.length <= 1) {
-            navigateTo("/");
-        } else {
-            parts.pop();
-            navigateTo("/" + parts.join("/"));
+        if (!isNative || currentPath === "/" || currentPath === "") return;
+        FilesBackend.goUp();
+        clearSelection();
+    }
+
+    // ── Actions behind the menus and the keys ────────────────────────────────
+    function parentOf(path) {
+        const i = path.lastIndexOf("/");
+        return i <= 0 ? "/" : path.substring(0, i);
+    }
+
+    function copyPath(path) {
+        if (!isNative || !path) return;
+        FilesBackend.copyText(path);
+        note("Copied " + path);
+    }
+
+    function trash(path) {
+        if (!isNative || !path) return;
+        if (FilesBackend.deleteItem(path)) {
+            note("Moved " + path.split("/").pop() + " to the trash");
+            clearSelection();
         }
+    }
+
+    function askName(mode, target, initial) {
+        nameDialog.mode = mode;
+        nameDialog.target = target;
+        nameField.text = initial;
+        nameDialog.open();
+        nameField.forceActiveFocus();
+        nameField.selectBase();
+    }
+
+    function submitName(text) {
+        const v = String(text || "").trim();
+        if (v === "" || !isNative) return;
+        if (nameDialog.mode === "rename") {
+            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+            if (!FilesBackend.renameItem(nameDialog.target, v)) { note("Could not rename to " + v); return; }
+            note("Renamed to " + v);
+        } else if (nameDialog.mode === "newfolder") {
+            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+            if (!FilesBackend.createFolder(v)) { note("Could not create " + v); return; }
+            note("Created " + v);
+        } else if (nameDialog.mode === "goto") {
+            const path = v.startsWith("~") ? homeDir + v.substring(1) : v;
+            FilesBackend.currentPath = path;
+            if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/")
+                note("No folder at " + v);
+            clearSelection();
+        }
+        nameDialog.close();
+    }
+
+    function openMenuFor(path, isDir, index) {
+        selectedIndex = index;
+        selectedPath = path;
+        itemMenu.path = path;
+        itemMenu.isDir = isDir;
+        itemMenu.popup();
     }
 
     function openItem(path, isDir) {
@@ -226,6 +287,14 @@ ApplicationWindow {
         } else if (isNative) {
             FilesBackend.openItem(path);
         }
+    }
+
+    function refreshView() {
+        if (!isNative) return;
+        FilesBackend.refresh();
+        const here = folderModel.folder;
+        folderModel.folder = "";
+        folderModel.folder = here;
     }
 
     function openTerminalHere() {
@@ -265,12 +334,14 @@ ApplicationWindow {
     FolderListModel {
         id: folderModel
         folder: "file://" + window.currentPath
-        showDirsFirst: true
+        showDirsFirst: window.dirsFirst
         showDotAndDotDot: false
         showHidden: window.showHidden
         nameFilters: window.filterQuery ? ["*" + window.filterQuery + "*"] : ["*"]
-        sortField: FolderListModel.Name
-        sortReversed: false
+        sortField: window.sortBy === "time" ? FolderListModel.Time
+                 : window.sortBy === "size" ? FolderListModel.Size
+                 : window.sortBy === "type" ? FolderListModel.Type : FolderListModel.Name
+        sortReversed: window.sortDescending
     }
 
     // ── Global Keyboard Shortcuts ────────────────────────────────────────────
@@ -286,6 +357,13 @@ ApplicationWindow {
     Shortcut { sequence: "Alt+Right"; onActivated: window.historyForward() }
     Shortcut { sequence: "Ctrl+H"; onActivated: window.showHidden = !window.showHidden }
     Shortcut { sequence: "Ctrl+T"; onActivated: window.openTerminalHere() }
+    Shortcut { sequence: "F5"; onActivated: window.refreshView() }
+    Shortcut { sequence: "F2"; onActivated: if (window.selectedPath) window.askName("rename", window.selectedPath, window.selectedPath.split("/").pop()) }
+    Shortcut { sequence: "Delete"; onActivated: window.trash(window.selectedPath) }
+    Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", "New Folder") }
+    Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPathDisplay) }
+    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: window.copyPath(window.selectedPath || window.currentPath) }
+    Shortcut { sequence: "Ctrl+D"; onActivated: { window.addCurrentToBookmarks(); window.note("Bookmarked " + window.currentPathDisplay); } }
     Shortcut { sequence: "Ctrl+F"; onActivated: searchField.forceActiveFocus() }
     Shortcut { sequence: "Escape"; onActivated: { searchField.text = ""; window.filterQuery = ""; } }
 
@@ -360,20 +438,9 @@ ApplicationWindow {
 
                         SidebarPill { label: "Root (/)"; path: "/"; icon: "󰋊"; iconCol: window.colRed }
                         SidebarPill { label: "Home (~)"; path: window.homeDir; icon: "󰋜"; iconCol: window.colBlue }
-                        SidebarPill {
-                            // Was hard-coded to ~/DotsFiles, which does not exist on a
-                            // machine that cloned the repository anywhere else — this one
-                            // keeps it under ~/Documents/GitHub — so the shortcut led to a
-                            // directory that is not there, and duplicated the bookmark
-                            // below on a machine where it happened to be right. install.sh
-                            // records the real path and the daemon reads the same file to
-                            // find the checkout; so does this.
-                            visible: window.dotfilesRepo !== ""
-                            label: window.dotfilesRepo.split("/").pop()
-                            path: window.dotfilesRepo
-                            icon: "\u{f02a2}"
-                            iconCol: window.colCyan
-                        }
+                        // A pinned entry for this desktop's own repository sat here.
+                        // It is a bookmark like any other: add it with the "+" under
+                        // Bookmarks if you want it, remove it the same way.
                     }
 
                     // 2. PLACES
@@ -606,8 +673,8 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 spacing: Design.s(2)
 
-                                NavIconBtn { icon: "󰁍"; enabled: window.historyIndex > 0; onClicked: window.historyBack() }
-                                NavIconBtn { icon: "󰁔"; enabled: window.historyIndex < window.history.length - 1; onClicked: window.historyForward() }
+                                NavIconBtn { icon: "󰁍"; enabled: window.canGoBack; onClicked: window.historyBack() }
+                                NavIconBtn { icon: "󰁔"; enabled: window.canGoForward; onClicked: window.historyForward() }
                                 NavIconBtn { icon: "󰁝"; enabled: window.currentPath !== "/"; onClicked: window.goUp() }
                                 // Re-points the model as well as asking the backend for the disk
                                 // figures. The button used to do only the second of those — the list
@@ -617,13 +684,7 @@ ApplicationWindow {
                                 NavIconBtn {
                                     icon: "󰑐"
                                     enabled: true
-                                    onClicked: {
-                                        if (!isNative) return;
-                                        FilesBackend.refresh();
-                                        const here = folderModel.folder;
-                                        folderModel.folder = "";
-                                        folderModel.folder = here;
-                                    }
+                                    onClicked: window.refreshView()
                                 }
                             }
                         }
@@ -813,6 +874,22 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
+                    // Under the views: what a click on no file means. The side
+                    // buttons of a mouse go back and forward, as in a browser; a
+                    // right click on empty space is the folder's own menu; a left
+                    // click clears the selection. The views only take the left
+                    // button for scrolling, so these reach here.
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton | Qt.ForwardButton
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.BackButton) window.historyBack();
+                            else if (mouse.button === Qt.ForwardButton) window.historyForward();
+                            else if (mouse.button === Qt.RightButton) { window.clearSelection(); bgMenu.popup(); }
+                            else window.clearSelection();
+                        }
+                    }
+
                     // 1. GRID VIEW (Default, Smooth Fast Scrolling)
                     GridView {
                         id: grid
@@ -921,11 +998,22 @@ ApplicationWindow {
                             HoverHandler { id: cardHover }
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: {
-                                    window.selectedIndex = index;
-                                    window.selectedPath = model.filePath;
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                onClicked: mouse => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
+                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
+                                        // Middle click on a folder: a terminal there.
+                                        FilesBackend.openTerminal(model.filePath);
+                                    } else {
+                                        window.selectedIndex = index;
+                                        window.selectedPath = model.filePath;
+                                    }
                                 }
-                                onDoubleClicked: window.openItem(model.filePath, model.fileIsDir)
+                                onDoubleClicked: mouse => {
+                                    if (mouse.button === Qt.LeftButton)
+                                        window.openItem(model.filePath, model.fileIsDir);
+                                }
                             }
                         }
                     }
@@ -996,11 +1084,22 @@ ApplicationWindow {
                             HoverHandler { id: lHover }
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: {
-                                    window.selectedIndex = index;
-                                    window.selectedPath = model.filePath;
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                onClicked: mouse => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
+                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
+                                        // Middle click on a folder: a terminal there.
+                                        FilesBackend.openTerminal(model.filePath);
+                                    } else {
+                                        window.selectedIndex = index;
+                                        window.selectedPath = model.filePath;
+                                    }
                                 }
-                                onDoubleClicked: window.openItem(model.filePath, model.fileIsDir)
+                                onDoubleClicked: mouse => {
+                                    if (mouse.button === Qt.LeftButton)
+                                        window.openItem(model.filePath, model.fileIsDir);
+                                }
                             }
                         }
                     }
@@ -1078,11 +1177,22 @@ ApplicationWindow {
                             HoverHandler { id: gHover }
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: {
-                                    window.selectedIndex = index;
-                                    window.selectedPath = model.filePath;
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                onClicked: mouse => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
+                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
+                                        // Middle click on a folder: a terminal there.
+                                        FilesBackend.openTerminal(model.filePath);
+                                    } else {
+                                        window.selectedIndex = index;
+                                        window.selectedPath = model.filePath;
+                                    }
                                 }
-                                onDoubleClicked: window.openItem(model.filePath, model.fileIsDir)
+                                onDoubleClicked: mouse => {
+                                    if (mouse.button === Qt.LeftButton)
+                                        window.openItem(model.filePath, model.fileIsDir);
+                                }
                             }
                         }
                     }
@@ -1109,15 +1219,19 @@ ApplicationWindow {
                         anchors.rightMargin: Design.s(12)
 
                         Text {
-                            text: folderModel.count + " items" + (window.selectedPath ? ("  •  Selected: " + window.selectedPath.split('/').pop()) : "")
+                            text: window.statusNote !== "" ? window.statusNote
+                                : folderModel.count + " items" + (window.selectedPath ? ("  •  Selected: " + window.selectedPath.split('/').pop()) : "")
+                            color: window.statusNote !== "" ? window.colBlue : window.colDim
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(10)
-                            color: window.colDim
                             Layout.fillWidth: true
+                            elide: Text.ElideMiddle
                         }
 
                         Row {
                             spacing: Design.s(8)
+                            Text { text: "Right-click Actions"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
+                            Text { text: "•"; font.pixelSize: Design.s(8); color: window.colBorderSubtle }
                             Text { text: "Space QuickLook"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
                             Text { text: "•"; font.pixelSize: Design.s(8); color: window.colBorderSubtle }
                             Text { text: "Ctrl+T Terminal"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
@@ -1181,6 +1295,222 @@ ApplicationWindow {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: vsb.clicked()
+        }
+    }
+
+    // ── Menus ────────────────────────────────────────────────────────────────
+    //
+    // A right click did nothing at all. Rename, trash, new folder, extract and
+    // set-as-wallpaper were all in the backend with no way to reach them.
+
+    component FMenu: Menu {
+        id: fm
+        padding: Design.s(4)
+        background: Rectangle {
+            implicitWidth: Design.s(230)
+            radius: Design.s(8)
+            color: window.colCard
+            border.color: window.colBorder
+            border.width: 1
+        }
+    }
+
+    component FItem: MenuItem {
+        id: fi
+        property string glyph: ""
+        property string keys: ""
+        implicitHeight: Design.s(30)
+        visible: enabled
+        height: visible ? implicitHeight : 0
+        contentItem: RowLayout {
+            spacing: Design.s(8)
+            Text {
+                Layout.preferredWidth: Design.s(16)
+                text: fi.checkable ? (fi.checked ? "\u{f012c}" : "") : fi.glyph
+                font.family: Design.font.mono
+                font.pixelSize: Design.s(12)
+                color: fi.checked ? window.colBlue : window.colDim
+                horizontalAlignment: Text.AlignHCenter
+            }
+            Text {
+                Layout.fillWidth: true
+                text: fi.text
+                font.family: Design.font.sans
+                font.pixelSize: Design.s(11)
+                color: window.colFg
+                elide: Text.ElideRight
+            }
+            Text {
+                visible: fi.keys !== ""
+                text: fi.keys
+                font.family: Design.font.mono
+                font.pixelSize: Design.s(9)
+                color: window.colDim
+            }
+        }
+        background: Rectangle {
+            radius: Design.s(5)
+            color: fi.highlighted ? Design.tint(Design.accent, 0.20) : "transparent"
+        }
+    }
+
+    component DialogBtn: Rectangle {
+        id: db
+        property string label: ""
+        property bool primary: false
+        signal clicked()
+        implicitWidth: dbText.implicitWidth + Design.s(24)
+        implicitHeight: Design.s(28)
+        radius: Design.s(6)
+        color: db.primary ? (dbArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
+                          : (dbArea.containsMouse ? Design.tint(Design.text, 0.10) : "transparent")
+        border.color: db.primary ? "transparent" : window.colBorderSubtle
+        border.width: 1
+        Text {
+            id: dbText
+            anchors.centerIn: parent
+            text: db.label
+            font.family: Design.font.sans
+            font.pixelSize: Design.s(11)
+            font.bold: db.primary
+            color: db.primary ? Design.contrastOn(window.colBlue) : window.colFg
+        }
+        MouseArea { id: dbArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: db.clicked() }
+    }
+
+    component FSeparator: MenuSeparator {
+        contentItem: Rectangle { implicitHeight: 1; color: window.colBorderSubtle }
+    }
+
+    // On a file or folder.
+    FMenu {
+        id: itemMenu
+        property string path: ""
+        property bool isDir: false
+        readonly property string name: path.split("/").pop()
+
+        FItem { text: itemMenu.isDir ? "Open" : "Open"; glyph: "\u{f0770}"; keys: "Enter"; onTriggered: window.openItem(itemMenu.path, itemMenu.isDir) }
+        FItem { text: "Quick Look"; glyph: "\u{f0208}"; keys: "Space"; enabled: !itemMenu.isDir; onTriggered: FilesBackend.triggerQuickLook(itemMenu.path) }
+        FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; onTriggered: FilesBackend.openTerminal(itemMenu.isDir ? itemMenu.path : window.parentOf(itemMenu.path)) }
+        FSeparator {}
+        FItem { text: "Copy Path"; glyph: "\u{f018f}"; keys: "Ctrl+Shift+C"; onTriggered: window.copyPath(itemMenu.path) }
+        FItem { text: "Copy Name"; glyph: "\u{f0a0a}"; onTriggered: { FilesBackend.copyText(itemMenu.name); window.note("Copied " + itemMenu.name); } }
+        FItem { text: "Rename…"; glyph: "\u{f03eb}"; keys: "F2"; onTriggered: window.askName("rename", itemMenu.path, itemMenu.name) }
+        FItem { text: "Add to Bookmarks"; glyph: "\u{f00c0}"; enabled: itemMenu.isDir
+                onTriggered: {
+                    const copy = Array.from(window.customBookmarks);
+                    if (!copy.some(b => b.path === itemMenu.path)) {
+                        copy.push({ name: itemMenu.name, path: itemMenu.path, icon: "󰉋" });
+                        window.customBookmarks = copy;
+                        FilesBackend.saveBookmarks(copy);
+                    }
+                    window.note("Bookmarked " + itemMenu.name);
+                } }
+        FItem { text: "Extract Here"; glyph: "\u{f05c4}"; enabled: !itemMenu.isDir && window.isNative && FilesBackend.isArchive(itemMenu.path)
+                onTriggered: window.note(FilesBackend.extractArchive(itemMenu.path) ? "Extracted " + itemMenu.name : "Could not extract " + itemMenu.name) }
+        FItem { text: "Set as Wallpaper"; glyph: "\u{f02e9}"; enabled: !itemMenu.isDir && window.isImageFile(itemMenu.name)
+                onTriggered: { FilesBackend.setWallpaper(itemMenu.path); window.note("Wallpaper set"); } }
+        FSeparator {}
+        FItem { text: "Move to Trash"; glyph: "\u{f0a7a}"; keys: "Del"; onTriggered: window.trash(itemMenu.path) }
+    }
+
+    // On empty space: the folder itself, and how it is shown.
+    FMenu {
+        id: bgMenu
+        FItem { text: "New Folder…"; glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; onTriggered: window.askName("newfolder", "", "New Folder") }
+        FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; onTriggered: window.openTerminalHere() }
+        FItem { text: "Go to Folder…"; glyph: "\u{f0770}"; keys: "Ctrl+L"; onTriggered: window.askName("goto", "", window.currentPathDisplay) }
+        FItem { text: "Copy Folder Path"; glyph: "\u{f018f}"; onTriggered: window.copyPath(window.currentPath) }
+        FItem { text: "Bookmark This Folder"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; onTriggered: { window.addCurrentToBookmarks(); window.note("Bookmarked " + window.currentPathDisplay); } }
+        FItem { text: "Refresh"; glyph: "\u{f0450}"; keys: "F5"; onTriggered: window.refreshView() }
+        FSeparator {}
+        FItem { text: "Show Hidden Files"; checkable: true; checked: window.showHidden; keys: "Ctrl+H"; onTriggered: window.showHidden = !window.showHidden }
+        FItem { text: "Folders First"; checkable: true; checked: window.dirsFirst; onTriggered: window.dirsFirst = !window.dirsFirst }
+        FSeparator {}
+        FItem { text: "Sort by Name"; checkable: true; checked: window.sortBy === "name"; onTriggered: window.sortBy = "name" }
+        FItem { text: "Sort by Date Modified"; checkable: true; checked: window.sortBy === "time"; onTriggered: window.sortBy = "time" }
+        FItem { text: "Sort by Size"; checkable: true; checked: window.sortBy === "size"; onTriggered: window.sortBy = "size" }
+        FItem { text: "Sort by Type"; checkable: true; checked: window.sortBy === "type"; onTriggered: window.sortBy = "type" }
+        FItem { text: "Descending"; checkable: true; checked: window.sortDescending; onTriggered: window.sortDescending = !window.sortDescending }
+    }
+
+    // One small dialog for everything that needs a name or a path.
+    Popup {
+        id: nameDialog
+        property string mode: ""      // rename | newfolder | goto
+        property string target: ""
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Design.s(380)
+        modal: true
+        focus: true
+        padding: Design.s(14)
+        background: Rectangle {
+            radius: Design.s(10)
+            color: window.colCard
+            border.color: window.colBorder
+            border.width: 1
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: Design.s(10)
+
+            Text {
+                text: nameDialog.mode === "rename" ? "Rename"
+                    : nameDialog.mode === "newfolder" ? "New folder in " + window.currentPathDisplay
+                    : "Go to folder"
+                font.family: Design.font.sans
+                font.pixelSize: Design.s(12)
+                font.bold: true
+                color: window.colFg
+                Layout.fillWidth: true
+                elide: Text.ElideMiddle
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(32)
+                radius: Design.s(6)
+                color: window.colSunken
+                border.color: nameField.activeFocus ? window.colBlue : window.colBorderSubtle
+                border.width: 1
+
+                TextInput {
+                    id: nameField
+                    anchors.fill: parent
+                    anchors.margins: Design.s(8)
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.family: Design.font.mono
+                    font.pixelSize: Design.s(11)
+                    color: window.colFg
+                    selectByMouse: true
+                    clip: true
+                    onAccepted: window.submitName(text)
+                    Keys.onEscapePressed: nameDialog.close()
+
+                    // Rename selects the name without its extension, as
+                    // everywhere else, so typing replaces "photo", not ".jpg".
+                    function selectBase() {
+                        const dot = nameDialog.mode === "rename" ? text.lastIndexOf(".") : -1;
+                        if (dot > 0) select(0, dot); else selectAll();
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(8)
+                Item { Layout.fillWidth: true }
+                // Drawn here rather than Basic's Button: its flat variant set
+                // dark text on this dark card, and "Cancel" was invisible.
+                DialogBtn { label: "Cancel"; onClicked: nameDialog.close() }
+                DialogBtn {
+                    label: nameDialog.mode === "rename" ? "Rename" : nameDialog.mode === "newfolder" ? "Create" : "Go"
+                    primary: true
+                    onClicked: window.submitName(nameField.text)
+                }
+            }
         }
     }
 }
