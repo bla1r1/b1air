@@ -35,20 +35,32 @@ Singleton {
     // shell. Keep the name in step with Design.activeThemePath.
     readonly property string activeFile: Quickshell.env("HOME") + "/.config/b1air/theme.json"
 
-    function _publish(palette) {
-        activeWriter.path = root.activeFile;
-        activeWriter.setText(JSON.stringify(palette, null, 2));
-        // Other applications follow too (GTK through gtk.css, Qt through a
-        // generated Kvantum theme). After the write has landed, hence the beat.
-        appsRecolour.restart();
-
-        // A theme that states its own accent takes it back from whatever the
-        // picker was last set to; picking a swatch afterwards overrides it
-        // again. Without this, a theme's accent was ignored whenever the user
-        // had ever touched the picker — and since the schema shipped with
-        // "blue" preselected, that was always.
-        if (palette && (palette.primary || palette.accent))
+    // byUser: a theme picked by hand takes back the accent from the swatch
+    // picker. Re-applying the saved theme at login must not, or the swatch
+    // was forgotten on every login.
+    function _publish(palette, byUser) {
+        if (byUser !== false && palette && (palette.primary || palette.accent))
             Settings.set("accentName", "");
+        root._writeActive(byUser !== false ? "" : Settings.accentName);
+    }
+
+    // theme.json is what the lock screen, the apps and the login screen read,
+    // so the swatch accent goes into it as primary.
+    function _writeActive(accentName) {
+        const out = Design.exportPalette();
+        const named = String(accentName !== undefined ? accentName : Settings.accentName).toLowerCase();
+        if (named && out[named]) out.primary = out[named];
+        activeWriter.path = root.activeFile;
+        activeWriter.setText(JSON.stringify(out, null, 2));
+        // GTK, Kvantum, SDDM and sway borders follow after the write lands.
+        appsRecolour.restart();
+    }
+
+    Connections {
+        target: Settings
+        function onAccentNameChanged() {
+            if (Settings.loaded) Qt.callLater(() => root._writeActive(Settings.accentName));
+        }
     }
 
     FileView {
@@ -155,31 +167,35 @@ Singleton {
      * the daemon puts whatever it last set, so this follows the wallpaper
      * without needing to be told what it is.
      */
-    function applyFromWallpaper() {
-        const path = Quickshell.env("HOME") + "/.cache/current_wallpaper.jpg";
-        const palette = Daemon.paletteFromImage(path);
-        if (!palette || !palette.ground) {
-            // An unreadable or entirely greyscale file: leave what is on screen
-            // rather than replace it with a half-built palette.
-            return false;
-        }
+    function _wallpaperPalette() {
+        const palette = Daemon.paletteFromImage(Quickshell.env("HOME") + "/.cache/current_wallpaper.jpg");
+        return (palette && palette.ground) ? palette : null;
+    }
+
+    function applyFromWallpaper(byUser) {
+        const palette = root._wallpaperPalette();
+        // Unreadable or greyscale: keep what is on screen.
+        if (!palette) return false;
         Design.applyPalette(palette);
-        root._publish(palette);
+        root._publish(palette, byUser);
         Settings.set("themeName", "wallpaper");
         return true;
     }
 
-    function apply(id) {
+    property bool _applyByUser: true
+
+    function apply(id, byUser) {
         if (id === "wallpaper")
-            return root.applyFromWallpaper();
+            return root.applyFromWallpaper(byUser);
 
         const b = root._builtinById(id);
         if (b) {
             Design.applyPalette(b.palette);
-            root._publish(b.palette);
+            root._publish(b.palette, byUser);
             Settings.set("themeName", id);
             return true;
         }
+        root._applyByUser = byUser !== false;
         // The path is derived from the id rather than looked up in
         // `userThemes`, because that list is filled by FolderListModel, which
         // populates asynchronously. At login the list is still empty when the
@@ -199,7 +215,7 @@ Singleton {
             try {
                 const obj = JSON.parse(text());
                 Design.applyPalette(obj);
-                root._publish(obj);
+                root._publish(obj, root._applyByUser);
             } catch (e) {
                 root.lastError = "Not a valid theme file: " + e;
                 Design.resetPalette();
@@ -221,7 +237,7 @@ Singleton {
         target: Settings
         function onLoadedChanged() {
             if (Settings.loaded && Settings.themeName)
-                root.apply(Settings.themeName);
+                root.apply(Settings.themeName, false);
         }
     }
 
@@ -236,12 +252,34 @@ Singleton {
      * renders a usable desktop.
      */
     function createFrom(displayName) {
+        return root._saveNew(displayName, Design.exportPalette());
+    }
+
+    /** Keep the wallpaper's palette as a theme of its own, so a new wallpaper doesn't replace it. */
+    function saveWallpaperAs(displayName) {
+        const palette = root._wallpaperPalette();
+        if (!palette) {
+            root.lastError = "Could not build a palette from the wallpaper.";
+            return "";
+        }
+        Design.applyPalette(palette);
+        const name = String(displayName || "").trim()
+            || "Wallpaper " + Qt.formatDateTime(new Date(), "d MMM hh-mm");
+        return root._saveNew(name, Design.exportPalette());
+    }
+
+    function _slug(name) {
+        return String(name).trim().toLowerCase()
+            .replace(/[\/\\\s.]+/g, "-").replace(/^-+|-+$/g, "");
+    }
+
+    function _saveNew(displayName, palette) {
         const name = String(displayName || "").trim();
         if (name === "") {
             root.lastError = "Give the theme a name first.";
             return "";
         }
-        const id = name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+        let id = root._slug(name);
         if (id === "") {
             root.lastError = "That name has no usable characters.";
             return "";
@@ -250,19 +288,104 @@ Singleton {
             root.lastError = "That name collides with a built-in theme.";
             return "";
         }
+        const taken = root.userThemes.map(t => t.id);
+        const base = id;
+        for (let n = 2; taken.indexOf(id) >= 0; ++n) id = base + "-" + n;
 
-        const palette = Design.exportPalette();
         writer.path = root.themesDir + "/" + id + ".json";
         writer.setText(JSON.stringify(palette, null, 2));
         root.lastError = "";
         root._rebuild();
 
-        // Apply the parsed object directly for the same reason import does:
-        // the file listing that apply(id) would search is filled asynchronously.
+        // Apply the object itself: the file list apply(id) would use fills in later.
         Design.applyPalette(palette);
         root._publish(palette);
         Settings.set("themeName", id);
         return id;
+    }
+
+    // ── Editing in place ─────────────────────────────────────────────────────
+
+    property string editingId: ""
+    property var draft: ({})
+    property var _original: ({})
+
+    // Edits save themselves, like everything else in Settings.
+    Timer {
+        id: draftSave
+        interval: 400
+        onTriggered: root._writeDraft()
+    }
+
+    function _writeDraft() {
+        if (root.editingId === "") return;
+        writer.path = root.themesDir + "/" + root.editingId + ".json";
+        writer.setText(JSON.stringify(root.draft, null, 2));
+        root._publish(root.draft, false);
+        if (Settings.themeName !== root.editingId) Settings.set("themeName", root.editingId);
+    }
+
+    FileView {
+        id: editReader
+        blockLoading: true
+        printErrors: false
+    }
+
+    function beginEdit(id) {
+        if (root._builtinById(id) || id === "wallpaper") return false;
+        root.finishEdit();
+        editReader.path = root.themesDir + "/" + id + ".json";
+        editReader.reload();
+        let obj;
+        try {
+            obj = JSON.parse(editReader.text());
+        } catch (e) {
+            root.lastError = "Could not read that theme.";
+            return false;
+        }
+        Design.applyPalette(obj);
+        root.draft = Design.exportPalette();
+        root._original = root.draft;
+        root.editingId = id;
+        root.lastError = "";
+        return true;
+    }
+
+    /** Change one role in the draft and show it on screen straight away. */
+    function setDraft(role, colour) {
+        // A picked swatch would hide an edited accent.
+        if (role === "primary" && Settings.accentName !== "") Settings.set("accentName", "");
+        const d = Object.assign({}, root.draft);
+        d[role] = String(colour);
+        root.draft = d;
+        Design.applyPalette(d);
+        draftSave.restart();
+    }
+
+    /** Write anything pending and close the editor. */
+    function finishEdit() {
+        if (root.editingId === "") return;
+        if (draftSave.running) {
+            draftSave.stop();
+            root._writeDraft();
+        }
+        root.editingId = "";
+    }
+
+    /** Back to the colours the theme had when editing started. */
+    function revertEdit() {
+        if (root.editingId === "") return;
+        root.draft = root._original;
+        Design.applyPalette(root.draft);
+        draftSave.stop();
+        root._writeDraft();
+    }
+
+    function deleteTheme(id) {
+        if (root._builtinById(id) || id === "wallpaper") return;
+        if (root.editingId === id) root.editingId = "";
+        Quickshell.execDetached(["rm", "-f", "--", root.themesDir + "/" + id + ".json"]);
+        if (Settings.themeName === id) root.apply("catppuccin-mocha");
     }
 
     /** Path of the current theme's file, or "" for a built-in. */
@@ -298,9 +421,10 @@ Singleton {
             if (root.currentFile === "")
                 return;
             try {
+                if (root.editingId !== "") return;
                 const obj = JSON.parse(text());
                 Design.applyPalette(obj);
-                root._publish(obj);
+                root._publish(obj, false);
                 root.lastError = "";
             } catch (e) {
                 // A half-typed file is normal while editing — say so, but keep

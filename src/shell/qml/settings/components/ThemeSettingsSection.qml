@@ -17,6 +17,9 @@ import "../../Services" as Services
 ColumnLayout {
     id: section
 
+    // Leaving the page must not lose an edit still waiting to be written.
+    Component.onDestruction: Services.Theme.finishEdit()
+
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -55,6 +58,16 @@ ColumnLayout {
                 label: Settings.themeName === "wallpaper" ? "Regenerate" : "Apply"
                 icon: "\u{f0765}"
                 onActivated: Services.Theme.applyFromWallpaper()
+            }
+
+            // Keeps this palette as a theme, so the next wallpaper doesn't replace it.
+            ActionButton {
+                label: "Save as theme"
+                icon: "\u{f0193}"
+                onActivated: {
+                    if (Services.Theme.saveWallpaperAs(newThemeName.text) !== "")
+                        newThemeName.text = "";
+                }
             }
         }
 
@@ -116,11 +129,214 @@ ColumnLayout {
                         role: "caption"
                         color: Design.accent
                     }
+
+                    IconButton {
+                        visible: !themeRow.modelData.builtin
+                        icon: "\u{f03eb}"
+                        onClicked: Services.Theme.beginEdit(themeRow.modelData.id)
+                    }
+
+                    ActionButton {
+                        visible: !themeRow.modelData.builtin
+                        Layout.fillWidth: false
+                        label: "Delete"
+                        icon: "\u{f01b4}"
+                        destructive: true
+                        onActivated: Services.Theme.deleteTheme(themeRow.modelData.id)
+                    }
                 }
 
                 Clickable {
                     id: themeMa
+                    z: -1
                     onClicked: Services.Theme.apply(themeRow.modelData.id)
+                }
+            }
+        }
+
+        // ── Editor ──────────────────────────────────────────────────────────
+        ColumnLayout {
+            id: editor
+            Layout.fillWidth: true
+            Layout.topMargin: Design.s(Design.space.sm)
+            spacing: Design.s(Design.space.sm)
+            visible: Services.Theme.editingId !== ""
+
+            property string selected: ""
+
+            readonly property var groups: [
+                { title: "Surfaces", roles: [["ground", "Background"], ["lowest", "Deepest"], ["low", "Panels"],
+                                             ["mid", "Cards"], ["high", "Hover"], ["highest", "Selected"]] },
+                { title: "Text", roles: [["text", "Text"], ["textDim", "Secondary text"],
+                                         ["outline", "Outline"], ["outlineVariant", "Divider"]] },
+                { title: "Accent", roles: [["primary", "Accent"], ["primaryText", "Text on accent"],
+                                           ["primaryBox", "Accent surface"], ["tertiary", "Second accent"],
+                                           ["error", "Error"], ["errorText", "Text on error"]] },
+                { title: "Colours", roles: [["blue", "Blue"], ["sapphire", "Sapphire"], ["mauve", "Mauve"],
+                                            ["pink", "Pink"], ["peach", "Peach"], ["yellow", "Yellow"],
+                                            ["green", "Green"], ["teal", "Teal"], ["red", "Red"],
+                                            ["maroon", "Maroon"], ["lavender", "Lavender"]] }
+            ]
+
+            SectionLabel {
+                text: "Editing " + Services.Theme.editingId.replace(/[-_]/g, " ")
+            }
+
+            Label {
+                text: "Changes show and save as you make them. Click a swatch for sliders, or type a hex value."
+                role: "caption"; dim: true; wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Repeater {
+                model: editor.groups
+
+                ColumnLayout {
+                    id: group
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.xs)
+
+                    Label {
+                        text: group.modelData.title
+                        role: "caption"
+                        weight: Design.weight.semibold
+                        dim: true
+                        Layout.topMargin: Design.s(Design.space.xs)
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: Math.max(1, Math.floor(width / Design.s(230)))
+                        columnSpacing: Design.s(Design.space.sm)
+                        rowSpacing: Design.s(Design.space.xs)
+
+                        Repeater {
+                            model: group.modelData.roles
+
+                            Rectangle {
+                                id: roleRow
+                                required property var modelData
+                                readonly property string role: modelData[0]
+                                readonly property string colour: Services.Theme.draft[role] || "#000000"
+                                readonly property bool isSelected: editor.selected === role
+                                // Typing breaks the text binding; keep it in step with the sliders.
+                                onColourChanged: if (!hexField.focused) hexField.text = colour
+
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Design.s(Design.size.row)
+                                radius: Design.s(Design.radius.ctl)
+                                color: isSelected ? Design.tint(Design.accent, 0.15) : Design.glassTile
+                                border.color: isSelected ? Design.tint(Design.accent, 0.4) : "transparent"
+                                border.width: Design.border
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(Design.space.xs)
+                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                    spacing: Design.s(Design.space.sm)
+
+                                    Rectangle {
+                                        Layout.preferredWidth: Design.s(26)
+                                        Layout.preferredHeight: Design.s(26)
+                                        radius: Design.s(Design.radius.sm)
+                                        color: roleRow.colour
+                                        border.color: Design.glassBorderStrong
+                                        border.width: Design.border
+                                        Clickable {
+                                            onClicked: editor.selected = roleRow.isSelected ? "" : roleRow.role
+                                        }
+                                    }
+
+                                    Label {
+                                        text: roleRow.modelData[1]
+                                        role: "caption"
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Field {
+                                        id: hexField
+                                        Layout.preferredWidth: Design.s(92)
+                                        text: roleRow.colour
+                                        function take(value) {
+                                            const v = value.trim();
+                                            if (!/^#?[0-9a-fA-F]{6}$/.test(v)) return;
+                                            const hex = (v.startsWith("#") ? v : "#" + v).toLowerCase();
+                                            if (hex !== String(roleRow.colour).toLowerCase())
+                                                Services.Theme.setDraft(roleRow.role, hex);
+                                        }
+                                        onEdited: value => take(value)
+                                        onCommitted: value => take(value)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Sliders for the selected colour, under its own group.
+                    ColumnLayout {
+                        id: picker
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.xs)
+                        visible: group.modelData.roles.some(r => r[0] === editor.selected)
+
+                        readonly property color current: Services.Theme.draft[editor.selected] || "#000000"
+
+                        function setHsl(h, sat, l) {
+                            const c = Qt.hsla(h, sat, l, 1.0);
+                            const hex = (v) => ("0" + Math.round(v * 255).toString(16)).slice(-2);
+                            Services.Theme.setDraft(editor.selected, "#" + hex(c.r) + hex(c.g) + hex(c.b));
+                        }
+
+                        Slider {
+                            Layout.fillWidth: true
+                            label: "Hue"
+                            showPercent: false
+                            minimum: 0; maximum: 359
+                            value: Math.max(0, Math.round(picker.current.hslHue * 359))
+                            tone: Qt.hsla(Math.max(0, picker.current.hslHue), 0.8, 0.6, 1)
+                            onMoved: pct => picker.setHsl(pct / 359, picker.current.hslSaturation, picker.current.hslLightness)
+                        }
+                        Slider {
+                            Layout.fillWidth: true
+                            label: "Saturation"
+                            value: Math.round(picker.current.hslSaturation * 100)
+                            tone: picker.current
+                            onMoved: pct => picker.setHsl(Math.max(0, picker.current.hslHue), pct / 100, picker.current.hslLightness)
+                        }
+                        Slider {
+                            Layout.fillWidth: true
+                            label: "Lightness"
+                            value: Math.round(picker.current.hslLightness * 100)
+                            tone: Design.text
+                            onMoved: pct => picker.setHsl(Math.max(0, picker.current.hslHue), picker.current.hslSaturation, pct / 100)
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.sm)
+                Item { Layout.fillWidth: true }
+                Pill {
+                    label: "Open JSON"
+                    icon: "\u{f0219}"
+                    activeColor: Design.sapphire
+                    onClicked: Quickshell.execDetached(["b1air-text", Services.Theme.themesDir + "/" + Services.Theme.editingId + ".json"])
+                }
+                Pill {
+                    label: "Revert"
+                    icon: "\u{f0156}"
+                    onClicked: Services.Theme.revertEdit()
+                }
+                Pill {
+                    label: "Done"
+                    icon: "\u{f012c}"
+                    active: true
+                    activeColor: Design.ok
+                    onClicked: { editor.selected = ""; Services.Theme.finishEdit(); }
                 }
             }
         }
@@ -169,17 +385,17 @@ ColumnLayout {
                 icon: "\u{f03eb}"
                 // Ui/Pill has no disabled state of its own; `enabled` blocks the
                 // clicks and the opacity says so.
-                enabled: Services.Theme.currentFile !== ""
+                enabled: Services.Theme.currentFile !== "" && Services.Theme.editingId === ""
                 opacity: enabled ? 1.0 : 0.45
                 activeColor: Design.sapphire
-                onClicked: Services.Theme.editCurrent()
+                onClicked: Services.Theme.beginEdit(Settings.themeName)
             }
         }
 
         Label {
             text: Services.Theme.currentFile !== ""
-                ? "Edit opens the theme in the text editor. Saving there re-applies it straight away."
-                : "Built-in themes cannot be edited — create a copy first."
+                ? "Edit opens the current theme in the editor above."
+                : "Built-in themes can't be edited — create a copy first."
             role: "caption"
             dim: true
             wrapMode: Text.WordWrap

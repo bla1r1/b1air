@@ -31,7 +31,7 @@ Scope {
     // undone on disk a moment later.
     Component.onCompleted: {
         if (Settings.loaded && Settings.themeName)
-            Theme.apply(Settings.themeName);
+            Theme.apply(Settings.themeName, false);
 
         // Warm the focused-screen lookup, so the first toast or OSD is placed
         // correctly instead of appearing on screen one and hopping across once
@@ -80,7 +80,7 @@ Scope {
         target: Settings
         function onLoadedChanged() {
             if (Settings.loaded && Settings.themeName)
-                Theme.apply(Settings.themeName);
+                Theme.apply(Settings.themeName, false);
         }
     }
 

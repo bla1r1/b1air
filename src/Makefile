@@ -173,6 +173,10 @@ install: daemon-target polkit-target secret-target shell-target
 	cp -a ../.local/share/icons/b1air-cursors $(DATADIR)/icons/
 	mkdir -p $(CONFDIR)/environment.d
 	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/
+	# A running shell keeps its old singletons while pages load the new files;
+	# reload it so both are the installed version.
+	-for p in $$(pgrep -u $$(id -u) -f "^quickshell -p $(QMLDIR)/Main.qml$$"); do \
+		quickshell ipc --pid $$p call main forceReload >/dev/null 2>&1; done
 
 # The static checks run anywhere; shell-boot needs a Wayland session and skips
 # itself without one.
