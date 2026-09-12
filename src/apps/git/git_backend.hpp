@@ -133,6 +133,13 @@ class GitBackend : public QObject {
     // restart and knew nothing of a fetch run in a terminal.
     Q_PROPERTY(qint64 lastFetchTime READ lastFetchTime NOTIFY syncChanged)
     Q_PROPERTY(QString remoteName READ remoteName NOTIFY syncChanged)
+    // HEAD: { hash, subject, body, time, canUndo }. canUndo while it is unpushed.
+    Q_PROPERTY(QVariantMap lastCommit READ lastCommit NOTIFY syncChanged)
+    // The remote as a web page (GitHub, GitLab, …), or empty.
+    Q_PROPERTY(QString webUrl READ webUrl NOTIFY syncChanged)
+    Q_PROPERTY(QString defaultBranch READ defaultBranch NOTIFY syncChanged)
+    // git config user.name / user.email for this repository.
+    Q_PROPERTY(QVariantMap identity READ identity NOTIFY syncChanged)
     Q_PROPERTY(QString selectedCommitSync READ selectedCommitSync NOTIFY syncChanged)
     // Signed-in hosting accounts, through the providers' own CLIs: gh for
     // GitHub, glab for GitLab. Each entry: provider, name, installed, login.
@@ -181,6 +188,24 @@ public:
     int behindCount() const { return m_behind; }
     qint64 lastFetchTime() const { return m_lastFetch; }
     QString remoteName() const { return m_remoteName; }
+    QVariantMap lastCommit() const { return m_lastCommit; }
+    QString webUrl() const { return m_webUrl; }
+    QString defaultBranch() const { return m_defaultBranch; }
+    QVariantMap identity() const { return m_identity; }
+
+    /** Take the last commit back; its changes stay staged, its message comes back. */
+    Q_INVOKABLE void undoLastCommit();
+    /** Throw away changes to files; a copy goes to the trash first. */
+    Q_INVOKABLE void discardFiles(const QStringList& paths);
+    Q_INVOKABLE void discardAll();
+    /** Add a pattern to .gitignore. */
+    Q_INVOKABLE void ignorePattern(const QString& pattern);
+    Q_INVOKABLE void revertCommit(const QString& hash);
+    Q_INVOKABLE void createBranchAt(const QString& name, const QString& hash);
+    Q_INVOKABLE void createTag(const QString& name, const QString& hash);
+    Q_INVOKABLE bool renameBranch(const QString& from, const QString& to);
+    Q_INVOKABLE void openOnWeb();
+    Q_INVOKABLE void openPullRequest();
     QString selectedCommitSync() const { return m_history->syncStateOf(m_selectedCommit); }
     QVariantList accounts() const { return m_accounts; }
 
@@ -272,6 +297,8 @@ signals:
     void busyChanged();
     /** A finished operation, for the window to show briefly. */
     void notice(const QString& message);
+    /** After an undo, for the commit fields. */
+    void restoreMessage(const QString& summary, const QString& description);
     void syncChanged();
     void accountsChanged();
     void commandFailed(const QString& message);
@@ -297,6 +324,10 @@ private:
     // The remote push and fetch talk to: the upstream's, else "origin", else
     // the first one configured.
     QString m_remoteName;
+    QVariantMap m_lastCommit;
+    QString m_webUrl;
+    QString m_defaultBranch;
+    QVariantMap m_identity;
 
     QVariantList m_accounts;
     int m_accountProbes = 0;

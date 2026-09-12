@@ -102,6 +102,17 @@ ApplicationWindow {
         Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(repoMenu.target) }
         Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(repoMenu.target) }
         MenuLine {}
+        Action {
+            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? "View on GitLab" : "View on GitHub"
+            enabled: GitBackend.webUrl !== ""
+            onTriggered: GitBackend.openOnWeb()
+        }
+        Action {
+            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? "Create merge request" : "Create pull request"
+            enabled: window.canOpenPr
+            onTriggered: GitBackend.openPullRequest()
+        }
+        MenuLine {}
         Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(repoMenu.target)) }
     }
     // A repository in the list, which may not be the open one: target is
@@ -131,6 +142,50 @@ ApplicationWindow {
             text: fileMenu.conflicted ? "Mark as resolved" : fileMenu.staged ? "Unstage" : "Stage"
             onTriggered: fileMenu.staged ? GitBackend.unstageFile(fileMenu.target) : GitBackend.stageFile(fileMenu.target)
         }
+        Action {
+            text: "Ignore file"
+            onTriggered: GitBackend.ignorePattern("/" + fileMenu.target)
+        }
+        Action {
+            readonly property string ext: {
+                const name = fileMenu.target.split("/").pop();
+                const i = name.lastIndexOf(".");
+                return i > 0 ? name.slice(i) : "";
+            }
+            text: ext !== "" ? "Ignore all " + ext + " files" : "Ignore all files like this"
+            enabled: ext !== ""
+            onTriggered: GitBackend.ignorePattern("*" + ext)
+        }
+        MenuLine {}
+        Action {
+            text: "Discard changes…"
+            onTriggered: {
+                const path = fileMenu.target;
+                window.ask({
+                    title: "Discard changes?",
+                    text: "Changes to " + path + " will be thrown away. A copy goes to the trash.",
+                    confirm: "Discard", destructive: true,
+                    accept: () => GitBackend.discardFiles([path])
+                });
+            }
+        }
+    }
+
+    ContextMenu {
+        id: changesMenu
+        Action { text: "Stage all"; onTriggered: GitBackend.stageAll() }
+        Action { text: "Unstage all"; onTriggered: GitBackend.unstageAll() }
+        MenuLine {}
+        Action {
+            text: "Discard all changes…"
+            enabled: GitBackend.changedFiles.length > 0
+            onTriggered: window.ask({
+                title: "Discard all changes?",
+                text: GitBackend.changedFiles.length + " changed files will be reset. Copies go to the trash.",
+                confirm: "Discard all", destructive: true,
+                accept: () => GitBackend.discardAll()
+            })
+        }
     }
     // A file of a commit: the version on disk now, which is what opens.
     ContextMenu {
@@ -146,6 +201,54 @@ ApplicationWindow {
         property string subject: ""
         Action { text: "Copy SHA"; onTriggered: GitBackend.copyText(commitMenu.target) }
         Action { text: "Copy message"; onTriggered: GitBackend.copyText(commitMenu.subject) }
+        MenuLine {}
+        Action {
+            text: "Revert changes in commit"
+            enabled: !window.busy
+            onTriggered: GitBackend.revertCommit(commitMenu.target)
+        }
+        Action {
+            text: "Create branch from commit…"
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: "Create branch", text: "A new branch starting at this commit.",
+                             input: true, placeholder: "Branch name", confirm: "Create branch",
+                             accept: v => GitBackend.createBranchAt(v, hash) });
+            }
+        }
+        Action {
+            text: "Create tag…"
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: "Create tag", text: "A tag on this commit.",
+                             input: true, placeholder: "Tag name, e.g. v1.0", confirm: "Create tag",
+                             accept: v => GitBackend.createTag(v, hash) });
+            }
+        }
+    }
+
+    // A pull request makes sense for a published branch that isn't the default one.
+    readonly property bool canOpenPr: GitBackend.webUrl !== "" && GitBackend.upstream !== ""
+                                      && GitBackend.branchName !== GitBackend.defaultBranch
+
+    // One dialog for confirmations and names:
+    // { title, text, input, value, placeholder, confirm, destructive, accept(value) }
+    property var dialog: null
+    function ask(spec) {
+        window.repoDropdownOpen = false;
+        window.accountsDropdownOpen = false;
+        window.dialog = spec;
+        dialogInput.text = spec.value || "";
+        if (spec.input) dialogInput.forceActiveFocus();
+    }
+    function closeDialog(accepted) {
+        const d = window.dialog;
+        window.dialog = null;
+        if (accepted && d && d.accept) {
+            const v = dialogInput.text.trim();
+            if (d.input && v === "") return;
+            d.accept(v);
+        }
     }
 
     // A branch switch waiting on what to do with uncommitted changes.
@@ -160,6 +263,15 @@ ApplicationWindow {
             text: "Merge into " + GitBackend.branchName
             enabled: !branchMenu.isCurrent && !GitBackend.mergeState.active
             onTriggered: { window.branchDropdownOpen = false; GitBackend.mergeBranch(branchMenu.target); }
+        }
+        Action {
+            text: "Rename…"
+            onTriggered: {
+                const from = branchMenu.target;
+                window.ask({ title: "Rename branch", text: "New name for " + from + ".",
+                             input: true, value: from, placeholder: "Branch name", confirm: "Rename",
+                             accept: v => GitBackend.renameBranch(from, v) });
+            }
         }
         MenuLine {}
         Action {
@@ -378,6 +490,16 @@ ApplicationWindow {
         onActivated: GitBackend.refresh()
     }
 
+    // GitHub Desktop's keys.
+    Shortcut { sequence: "Ctrl+1"; onActivated: window.currentTab = 0 }
+    Shortcut { sequence: "Ctrl+2"; onActivated: window.currentTab = 1 }
+    Shortcut { sequence: "Ctrl+T"; onActivated: { window.repoDropdownOpen = !window.repoDropdownOpen; window.branchDropdownOpen = false; } }
+    Shortcut { sequence: "Ctrl+B"; onActivated: { window.branchDropdownOpen = !window.branchDropdownOpen; window.repoDropdownOpen = false; } }
+    Shortcut { sequence: "Ctrl+P"; onActivated: if (!window.busy && GitBackend.hasRemote) GitBackend.push() }
+    Shortcut { sequence: "Ctrl+Shift+P"; onActivated: if (!window.busy && GitBackend.upstream !== "") GitBackend.pull() }
+    Shortcut { sequence: "Ctrl+Shift+F"; onActivated: if (!window.busy && GitBackend.hasRemote) GitBackend.fetch() }
+    Shortcut { sequence: "Ctrl+`"; onActivated: GitBackend.openTerminal("") }
+
     property int currentTab: 0 // 0: Changes, 1: History
     property string repoFilter: ""
     property string pendingDeleteBranch: ""
@@ -470,6 +592,15 @@ ApplicationWindow {
         return (words[0][0] + (words.length > 1 ? words[1][0] : "")).toUpperCase();
     }
     readonly property bool busy: GitBackend.busy !== ""
+
+    function commitNow() {
+        if (!window.hasRepo || window.busy || sumInput.text.trim() === "") return;
+        let msg = sumInput.text.trim();
+        if (descInput.text.trim()) msg += "\n\n" + descInput.text.trim();
+        GitBackend.commit(msg);
+        sumInput.text = "";
+        descInput.text = "";
+    }
     readonly property bool syncBusy: ["push", "publish", "pull", "fetch"].indexOf(GitBackend.busy) >= 0
 
     readonly property var githubAccount: GitBackend.accounts.find(a => a.provider === "github") || null
@@ -775,13 +906,47 @@ ApplicationWindow {
                                             color: window.colBorder
                                         }
 
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            acceptedButtons: Qt.RightButton
+                                            onClicked: window.showMenu(changesMenu, "")
+                                        }
+
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(10)
+                                            anchors.leftMargin: Design.s(8)
                                             anchors.rightMargin: Design.s(10)
+                                            spacing: Design.s(8)
+
+                                            // Stage everything, or nothing; a dash when it's mixed.
+                                            Rectangle {
+                                                readonly property int staged: GitBackend.changedFiles.filter(f => f.isStaged).length
+                                                readonly property int total: GitBackend.changedFiles.length
+                                                visible: total > 0
+                                                Layout.preferredWidth: Design.s(16)
+                                                Layout.preferredHeight: Design.s(16)
+                                                radius: Design.s(3)
+                                                color: staged > 0 ? window.colGreen : "transparent"
+                                                border.color: staged > 0 ? window.colGreen : window.colDim
+                                                border.width: 1
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: parent.staged > 0
+                                                    text: parent.staged === parent.total ? "✓" : "–"
+                                                    font.pixelSize: Design.s(10)
+                                                    font.bold: true
+                                                    color: Design.accentText
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: parent.staged === parent.total ? GitBackend.unstageAll() : GitBackend.stageAll()
+                                                }
+                                            }
 
                                             Text {
-                                                text: "Changed Files"
+                                                text: GitBackend.changedFiles.length === 0 ? "No changed files"
+                                                    : GitBackend.changedFiles.length + (GitBackend.changedFiles.length === 1 ? " changed file" : " changed files")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(11)
                                                 font.bold: true
@@ -1020,8 +1185,17 @@ ApplicationWindow {
                                     // so its separator is on top of it.
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: Design.s(130)
+                                        height: Design.s(130) + (lastCommitBar.visible ? Design.s(40) : 0)
+                                                + (identityWarning.visible ? Design.s(18) : 0)
                                         color: Design.tint(Design.ground, 0.90)
+
+                                        Connections {
+                                            target: GitBackend
+                                            function onRestoreMessage(summary, description) {
+                                                sumInput.text = summary;
+                                                descInput.text = description;
+                                            }
+                                        }
 
                                         Rectangle {
                                             anchors.left: parent.left
@@ -1035,6 +1209,81 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             anchors.margins: Design.s(10)
                                             spacing: Design.s(6)
+
+                                            // The latest commit, while it can still be taken back.
+                                            Rectangle {
+                                                id: lastCommitBar
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: Design.s(34)
+                                                visible: GitBackend.lastCommit.canUndo === true
+                                                radius: Design.s(5)
+                                                color: window.colBg
+                                                border.color: window.colBorder
+                                                border.width: 1
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: Design.s(8)
+                                                    anchors.rightMargin: Design.s(6)
+                                                    spacing: Design.s(8)
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 0
+                                                        Text {
+                                                            text: "Committed " + window.relTime(GitBackend.lastCommit.time)
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(9)
+                                                            color: window.colDim
+                                                        }
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: GitBackend.lastCommit.subject || ""
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(11)
+                                                            font.bold: true
+                                                            color: window.colFg
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.preferredWidth: undoText.implicitWidth + Design.s(16)
+                                                        Layout.preferredHeight: Design.s(22)
+                                                        radius: Design.s(4)
+                                                        opacity: window.busy ? 0.5 : 1
+                                                        color: undoArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent"
+                                                        border.color: window.colBorder
+                                                        border.width: 1
+                                                        Text {
+                                                            id: undoText
+                                                            anchors.centerIn: parent
+                                                            text: GitBackend.busy === "undo" ? "Undoing…" : "Undo"
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(10)
+                                                            font.bold: true
+                                                            color: window.colFg
+                                                        }
+                                                        MouseArea {
+                                                            id: undoArea
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            enabled: !window.busy
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: GitBackend.undoLastCommit()
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                id: identityWarning
+                                                Layout.fillWidth: true
+                                                visible: window.hasRepo && (!GitBackend.identity.name || !GitBackend.identity.email)
+                                                text: "Set your name and email: git config user.name / user.email"
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(9)
+                                                color: window.colOrange
+                                                elide: Text.ElideRight
+                                            }
 
                                             // Summary (Required)
                                             Rectangle {
@@ -1064,6 +1313,12 @@ ApplicationWindow {
                                                     color: window.colFg
                                                     selectByMouse: true
                                                     clip: true
+                                                    Keys.onPressed: (e) => {
+                                                        if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && (e.modifiers & Qt.ControlModifier)) {
+                                                            window.commitNow();
+                                                            e.accepted = true;
+                                                        }
+                                                    }
 
                                                     Text {
                                                         text: "Summary (required)"
@@ -1155,13 +1410,7 @@ ApplicationWindow {
                                                     anchors.fill: parent
                                                     hoverEnabled: true
                                                     cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: {
-                                                        let fullMsg = sumInput.text.trim();
-                                                        if (descInput.text.trim()) fullMsg += "\n\n" + descInput.text.trim();
-                                                        GitBackend.commit(fullMsg);
-                                                        sumInput.text = "";
-                                                        descInput.text = "";
-                                                    }
+                                                    onClicked: window.commitNow()
                                                 }
                                             }
                                         }
@@ -1435,6 +1684,106 @@ ApplicationWindow {
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(12)
                                         color: window.colDim
+                                    }
+
+                                    // What to do next, as GitHub Desktop suggests it.
+                                    ColumnLayout {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        Layout.topMargin: Design.s(8)
+                                        Layout.preferredWidth: Math.min(Design.s(460), diffList.width - Design.s(40))
+                                        spacing: Design.s(8)
+                                        visible: GitBackend.isRepo && GitBackend.changedFiles.length === 0
+
+                                        Repeater {
+                                            model: {
+                                                const items = [];
+                                                const remote = GitBackend.remoteName || "origin";
+                                                if (window.syncAction === "publish")
+                                                    items.push({ title: "Publish your branch", text: "Put " + GitBackend.branchName + " on " + remote + ".", button: "Publish branch", run: "push" });
+                                                else if (GitBackend.behindCount > 0)
+                                                    items.push({ title: "Pull " + GitBackend.behindCount + (GitBackend.behindCount === 1 ? " commit" : " commits") + " from " + remote, text: "They're on the remote and not here yet.", button: "Pull", run: "pull" });
+                                                else if (GitBackend.aheadCount > 0)
+                                                    items.push({ title: "Push " + GitBackend.aheadCount + (GitBackend.aheadCount === 1 ? " commit" : " commits") + " to " + remote, text: "They're only on this machine.", button: "Push", run: "push" });
+                                                if (window.canOpenPr)
+                                                    items.push({ title: "Create a pull request", text: "From " + GitBackend.branchName + " into " + GitBackend.defaultBranch + ".", button: "Create pull request", run: "pr" });
+                                                items.push({ title: "Open in the terminal", text: GitBackend.repoPath, button: "Terminal", run: "term" });
+                                                items.push({ title: "Show in Files", text: "Browse the repository's folder.", button: "Files", run: "files" });
+                                                if (GitBackend.webUrl !== "")
+                                                    items.push({ title: "View on the web", text: GitBackend.webUrl, button: "Open", run: "web" });
+                                                return items;
+                                            }
+                                            delegate: Rectangle {
+                                                required property var modelData
+                                                required property int index
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: Design.s(52)
+                                                radius: Design.s(8)
+                                                color: window.colBg
+                                                border.color: window.colBorder
+                                                border.width: 1
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: Design.s(14)
+                                                    anchors.rightMargin: Design.s(10)
+                                                    spacing: Design.s(10)
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: Design.s(2)
+                                                        Text {
+                                                            text: modelData.title
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(12)
+                                                            font.bold: true
+                                                            color: window.colFg
+                                                        }
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: modelData.text
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(10)
+                                                            color: window.colDim
+                                                            elide: Text.ElideMiddle
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        readonly property bool primary: index === 0 && ["push", "pull"].indexOf(modelData.run) >= 0
+                                                        Layout.preferredWidth: sugText.implicitWidth + Design.s(20)
+                                                        Layout.preferredHeight: Design.s(26)
+                                                        radius: Design.s(5)
+                                                        opacity: window.busy ? 0.5 : 1
+                                                        color: primary ? (sugArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
+                                                                       : (sugArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
+                                                        border.color: primary ? "transparent" : window.colBorder
+                                                        border.width: 1
+                                                        Text {
+                                                            id: sugText
+                                                            anchors.centerIn: parent
+                                                            text: modelData.button
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(11)
+                                                            font.bold: true
+                                                            color: parent.primary ? Design.accentText : window.colFg
+                                                        }
+                                                        MouseArea {
+                                                            id: sugArea
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            enabled: !window.busy
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                const r = modelData.run;
+                                                                if (r === "push") GitBackend.push();
+                                                                else if (r === "pull") GitBackend.pull();
+                                                                else if (r === "pr") GitBackend.openPullRequest();
+                                                                else if (r === "term") GitBackend.openTerminal("");
+                                                                else if (r === "files") GitBackend.openFileManager("");
+                                                                else if (r === "web") GitBackend.openOnWeb();
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -2142,8 +2491,17 @@ ApplicationWindow {
                                     color: window.colFg
                                     selectByMouse: true
                                     clip: true
+                                    // Enter opens an existing branch, or creates one with this name.
                                     onAccepted: {
-                                        if (GitBackend.createBranch(text)) {
+                                        const name = text.trim();
+                                        if (name === "") return;
+                                        if (GitBackend.branches.indexOf(name) >= 0) {
+                                            text = "";
+                                            if (name === GitBackend.branchName) return;
+                                            if (GitBackend.changedFiles.length > 0) { window.pendingSwitch = name; return; }
+                                            window.branchDropdownOpen = false;
+                                            GitBackend.switchBranch(name);
+                                        } else if (GitBackend.createBranch(name)) {
                                             text = "";
                                             window.branchDropdownOpen = false;
                                         }
@@ -2152,7 +2510,7 @@ ApplicationWindow {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: newBranchInput.text === ""
-                                        text: "New branch name"
+                                        text: "Filter, or type a new branch name"
                                         font: newBranchInput.font
                                         color: window.colDim
                                     }
@@ -2166,7 +2524,7 @@ ApplicationWindow {
                                     color: window.colGreen
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "Create"
+                                        text: "New"
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(10)
                                         font.bold: true
@@ -2193,7 +2551,11 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             clip: true
                             spacing: 1
-                            model: GitBackend.branches
+                            model: {
+                                const q = newBranchInput.text.trim().toLowerCase();
+                                return q === "" ? GitBackend.branches
+                                                : GitBackend.branches.filter(b => b.toLowerCase().indexOf(q) >= 0);
+                            }
 
                             delegate: Rectangle {
                                 id: branchRowItem
@@ -2716,6 +3078,121 @@ ApplicationWindow {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The dialog from window.ask().
+    Rectangle {
+        parent: window.contentItem
+        anchors.fill: parent
+        z: 95
+        visible: window.dialog !== null
+        color: Qt.rgba(0, 0, 0, 0.45)
+
+        MouseArea { anchors.fill: parent; onClicked: window.closeDialog(false) }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - Design.s(40), Design.s(400))
+            height: dialogCol.implicitHeight + Design.s(32)
+            radius: Design.s(10)
+            color: window.colHeader
+            border.color: window.colBorder
+            border.width: 1
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                id: dialogCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Design.s(16)
+                spacing: Design.s(10)
+
+                Text {
+                    text: window.dialog ? window.dialog.title : ""
+                    font.family: Design.font.sans
+                    font.pixelSize: Design.s(14)
+                    font.bold: true
+                    color: window.colFg
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: window.dialog ? (window.dialog.text || "") : ""
+                    font.family: Design.font.sans
+                    font.pixelSize: Design.s(11)
+                    color: window.colDim
+                    wrapMode: Text.Wrap
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Design.s(30)
+                    visible: window.dialog !== null && window.dialog.input === true
+                    radius: Design.s(5)
+                    color: window.colBg
+                    border.color: dialogInput.activeFocus ? window.colBlue : window.colBorder
+                    border.width: 1
+                    TextInput {
+                        id: dialogInput
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(8)
+                        anchors.rightMargin: Design.s(8)
+                        verticalAlignment: TextInput.AlignVCenter
+                        font.family: Design.font.mono
+                        font.pixelSize: Design.s(12)
+                        color: window.colFg
+                        selectByMouse: true
+                        clip: true
+                        onAccepted: window.closeDialog(true)
+                        Keys.onEscapePressed: window.closeDialog(false)
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: dialogInput.text === ""
+                            text: window.dialog ? (window.dialog.placeholder || "") : ""
+                            font: dialogInput.font
+                            color: window.colDim
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(8)
+                    Item { Layout.fillWidth: true }
+                    Repeater {
+                        model: ["cancel", "confirm"]
+                        delegate: Rectangle {
+                            required property string modelData
+                            readonly property bool isConfirm: modelData === "confirm"
+                            readonly property bool danger: isConfirm && window.dialog !== null && window.dialog.destructive === true
+                            Layout.preferredWidth: dlgBtnText.implicitWidth + Design.s(24)
+                            Layout.preferredHeight: Design.s(28)
+                            radius: Design.s(5)
+                            color: !isConfirm ? (dlgBtnArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
+                                 : danger ? (dlgBtnArea.containsMouse ? Qt.lighter(window.colRed, 1.1) : window.colRed)
+                                 : (dlgBtnArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
+                            border.color: isConfirm ? "transparent" : window.colBorder
+                            border.width: 1
+                            Text {
+                                id: dlgBtnText
+                                anchors.centerIn: parent
+                                text: parent.isConfirm ? (window.dialog ? (window.dialog.confirm || "OK") : "OK") : "Cancel"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(11)
+                                font.bold: parent.isConfirm
+                                color: parent.isConfirm ? Design.accentText : window.colFg
+                            }
+                            MouseArea {
+                                id: dlgBtnArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: window.closeDialog(parent.isConfirm)
                             }
                         }
                     }

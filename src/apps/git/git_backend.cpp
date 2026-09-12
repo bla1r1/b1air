@@ -634,10 +634,15 @@ void GitBackend::updateStatus() {
         // A staged rename reads "old -> new". Taken whole, that was the path
         // handed to git diff, which matched no file and showed nothing.
         const int arrow = filePath.indexOf(" -> ");
-        if (arrow >= 0) filePath = filePath.mid(arrow + 4);
+        QString oldPath;
+        if (arrow >= 0) {
+            oldPath = filePath.left(arrow);
+            filePath = filePath.mid(arrow + 4);
+        }
 
         QVariantMap item;
         item["path"] = filePath;
+        item["oldPath"] = oldPath;
         item["name"] = QFileInfo(filePath).fileName();
 
         char x = xy[0].toLatin1();
@@ -829,6 +834,54 @@ void GitBackend::updateSync() {
     // Configured to track a branch the remote no longer has.
     m_upstreamGone = hasRemote && upstream.isEmpty()
                      && m_branchInfo.value(m_branchName).toMap().value("gone").toBool();
+
+    // HEAD, the web address, the default branch and who commits.
+    {
+        QString out;
+        QVariantMap lc;
+        if (m_isRepo && gitOk(m_repoPath, {"log", "-1", "--format=%H%x1f%s%x1f%b%x1f%ct%x1f%P"}, nullptr, &out)) {
+            const QStringList f = out.split(QChar(0x1f));
+            if (f.size() >= 5) {
+                const QStringList parents = f[4].split(' ', Qt::SkipEmptyParts);
+                lc["hash"] = f[0];
+                lc["subject"] = f[1];
+                lc["body"] = f[2].trimmed();
+                lc["time"] = f[3].toLongLong();
+                // A merge or the first commit can't be undone softly; a pushed one shouldn't be.
+                lc["canUndo"] = parents.size() == 1 && (!hasRemote || unpushed.contains(f[0]));
+            }
+        }
+        m_lastCommit = lc;
+
+        QString url;
+        if (!remoteName.isEmpty() && gitOk(m_repoPath, {"remote", "get-url", remoteName}, nullptr, &out)) {
+            url = out.trimmed();
+            static const QRegularExpression scp("^[^@/]+@([^:]+):(.+)$");
+            const auto m = scp.match(url);
+            if (m.hasMatch()) url = "https://" + m.captured(1) + "/" + m.captured(2);
+            url.replace(QRegularExpression("^ssh://[^@]+@"), "https://");
+            url.replace(QRegularExpression("^git://"), "https://");
+            if (url.endsWith(".git")) url.chop(4);
+            if (!url.startsWith("http")) url.clear();
+        }
+        m_webUrl = url;
+
+        m_defaultBranch.clear();
+        if (!remoteName.isEmpty()
+            && gitOk(m_repoPath, {"symbolic-ref", "--short", "refs/remotes/" + remoteName + "/HEAD"}, nullptr, &out))
+            m_defaultBranch = out.trimmed().section('/', 1);
+        if (m_defaultBranch.isEmpty())
+            m_defaultBranch = m_branchInfo.contains("main") ? "main" : (m_branchInfo.contains("master") ? "master" : "");
+
+        QVariantMap id;
+        if (m_isRepo) {
+            gitOk(m_repoPath, {"config", "user.name"}, nullptr, &out);
+            id["name"] = out.trimmed();
+            gitOk(m_repoPath, {"config", "user.email"}, nullptr, &out);
+            id["email"] = out.trimmed();
+        }
+        m_identity = id;
+    }
 
     m_history->setUnpushed(unpushed, hasRemote);
     m_hasRemote = hasRemote;
@@ -1289,6 +1342,146 @@ void GitBackend::switchBranch(const QString& branch, const QString& changes) {
         if (stashed) gitOk(m_repoPath, QStringList() << "stash" << "pop");
         emit commandFailed(gitError(err, out, "Could not switch to " + branch));
     });
+}
+
+void GitBackend::undoLastCommit() {
+    if (!m_lastCommit.value("canUndo").toBool()) return;
+    const QString subject = m_lastCommit.value("subject").toString();
+    const QString body = m_lastCommit.value("body").toString();
+    runTask("undo", "Undoing commit…", {"reset", "--soft", "HEAD~1"},
+            [this, subject, body](bool ok, const QString& out, const QString& err) {
+        if (!ok) {
+            emit commandFailed(gitError(err, out, "Could not undo the commit"));
+            return;
+        }
+        emit restoreMessage(subject, body);
+        emit notice("Commit undone");
+    });
+}
+
+void GitBackend::discardFiles(const QStringList& paths) {
+    if (!m_isRepo || paths.isEmpty() || !m_busy.isEmpty()) return;
+
+    // Everything about to be thrown away is copied out and sent to the trash.
+    // Under the home directory: gio refuses to trash anything on /tmp.
+    const QString backup = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                         + "/b1air-git/discarded-" + QFileInfo(m_repoPath).fileName() + "-"
+                         + QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
+    QStringList restore;
+    for (const auto& v : m_changedFiles) {
+        const QVariantMap f = v.toMap();
+        const QString path = f.value("path").toString();
+        if (!paths.contains(path)) continue;
+        const QString abs = m_repoPath + "/" + path;
+        if (QFileInfo(abs).isFile()) {
+            QDir().mkpath(QFileInfo(backup + "/" + path).absolutePath());
+            QFile::copy(abs, backup + "/" + path);
+        }
+        const QString code = f.value("code").toString();
+        const QString status = f.value("status").toString();
+        if (code == "??") {
+            QFile::remove(abs);
+        } else if (status == "added") {
+            gitOk(m_repoPath, {"rm", "--cached", "-q", "-f", "--", path});
+            QFile::remove(abs);
+        } else if (status == "renamed") {
+            const QString old = f.value("oldPath").toString();
+            gitOk(m_repoPath, {"reset", "-q", "--", path, old});
+            QFile::remove(abs);
+            if (!old.isEmpty()) restore << old;
+        } else {
+            restore << path;
+        }
+    }
+    if (!restore.isEmpty()) {
+        QStringList args{"restore", "--source=HEAD", "--staged", "--worktree", "--"};
+        args << restore;
+        QString err;
+        if (!gitOk(m_repoPath, args, &err)) emit commandFailed(gitError(err, QString(), "Could not discard"));
+    }
+    if (QFileInfo::exists(backup) && QProcess::execute("gio", {"trash", backup}) != 0)
+        QProcess::execute("trash-put", {backup});
+    emit notice(paths.size() == 1 ? "Discarded changes to " + QFileInfo(paths.first()).fileName()
+                                  : "Discarded " + QString::number(paths.size()) + " files");
+    refresh();
+}
+
+void GitBackend::discardAll() {
+    QStringList paths;
+    for (const auto& v : m_changedFiles) paths << v.toMap().value("path").toString();
+    discardFiles(paths);
+}
+
+void GitBackend::ignorePattern(const QString& pattern) {
+    if (!m_isRepo || pattern.trimmed().isEmpty()) return;
+    QFile f(m_repoPath + "/.gitignore");
+    QString text;
+    if (f.open(QIODevice::ReadOnly)) {
+        text = QString::fromUtf8(f.readAll());
+        f.close();
+    }
+    if (text.split('\n').contains(pattern.trimmed())) return;
+    if (!text.isEmpty() && !text.endsWith('\n')) text += '\n';
+    text += pattern.trimmed() + '\n';
+    QSaveFile out(m_repoPath + "/.gitignore");
+    if (out.open(QIODevice::WriteOnly)) {
+        out.write(text.toUtf8());
+        out.commit();
+    }
+    emit notice("Added " + pattern.trimmed() + " to .gitignore");
+    refresh();
+}
+
+void GitBackend::revertCommit(const QString& hash) {
+    runTask("revert", "Reverting…", {"revert", "--no-edit", hash},
+            [this](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Reverted");
+        else emit commandFailed(gitError(err, out, "Could not revert that commit"));
+    });
+}
+
+void GitBackend::createBranchAt(const QString& name, const QString& hash) {
+    const QString n = name.trimmed();
+    if (n.isEmpty()) return;
+    runTask("checkout", "Creating " + n + "…", {"checkout", "-b", n, hash},
+            [this, n](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Switched to new branch " + n);
+        else emit commandFailed(gitError(err, out, "Could not create " + n));
+    });
+}
+
+void GitBackend::createTag(const QString& name, const QString& hash) {
+    const QString n = name.trimmed();
+    if (n.isEmpty() || !m_isRepo) return;
+    QString err;
+    if (gitOk(m_repoPath, {"tag", n, hash}, &err)) emit notice("Tagged " + n);
+    else emit commandFailed(gitError(err, QString(), "Could not create the tag"));
+    refresh();
+}
+
+bool GitBackend::renameBranch(const QString& from, const QString& to) {
+    const QString n = to.trimmed();
+    if (n.isEmpty() || from.isEmpty() || n == from) return false;
+    QString err;
+    if (!gitOk(m_repoPath, {"branch", "-m", from, n}, &err)) {
+        emit commandFailed(gitError(err, QString(), "Could not rename the branch"));
+        return false;
+    }
+    emit notice("Renamed " + from + " to " + n);
+    refresh();
+    return true;
+}
+
+void GitBackend::openOnWeb() {
+    if (!m_webUrl.isEmpty()) QDesktopServices::openUrl(QUrl(m_webUrl + (m_webUrl.contains("gitlab") ? "/-/tree/" : "/tree/") + m_branchName));
+}
+
+void GitBackend::openPullRequest() {
+    if (m_webUrl.isEmpty()) return;
+    const QString url = m_webUrl.contains("gitlab")
+        ? m_webUrl + "/-/merge_requests/new?merge_request%5Bsource_branch%5D=" + m_branchName
+        : m_webUrl + "/compare/" + m_branchName + "?expand=1";
+    QDesktopServices::openUrl(QUrl(url));
 }
 
 void GitBackend::resolveGitPaths() {
