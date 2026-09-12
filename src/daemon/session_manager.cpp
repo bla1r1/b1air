@@ -427,6 +427,12 @@ void SessionManager::run_autotiler() {
         std::cerr << "[b1air-tiling] no sway IPC connection; autotiling off\n";
         return;
     }
+    // Windows already open when the daemon starts.
+    {
+        const WindowInfo win = query.get_focused_window();
+        query.send_command(0, "[all] opacity 0.5");
+        if (win.id > 0) query.send_command(0, "[con_id=" + std::to_string(win.id) + "] opacity 1");
+    }
     events.subscribe_events({"window"}, [&](const std::string&, const std::string& payload) {
         if (!g_session_running) return;
         try {
@@ -438,6 +444,18 @@ void SessionManager::run_autotiler() {
                 ? ch->get<std::string>() : "";
             if (change != "focus" && change != "new")
                 return;
+
+            // Unfocused windows at 50%, the focused one opaque, as on Hyprland.
+            if (change == "focus") {
+                const auto con = evt.find("container");
+                if (con != evt.end() && con->is_object() && con->contains("id")
+                    && (*con)["id"].is_number_integer()) {
+                    query.send_command(0, "[all] opacity 0.5");
+                    query.send_command(0, "[con_id=" + std::to_string((*con)["id"].get<int64_t>())
+                                              + "] opacity 1");
+                }
+            }
+
             if (!SettingsManager::get_json_bool("autotiling", true)) return;
             const WindowInfo win = query.get_focused_window();
             if (win.app_class.empty() && win.title.empty()) return;
