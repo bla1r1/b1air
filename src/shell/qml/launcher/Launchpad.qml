@@ -97,6 +97,7 @@ PopupShell {
         { name: "Image Viewer", desc: "Lightweight Image & Media Viewer", icon: "b1air-view", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
         { name: "Text Editor", desc: "Minimal Text & Config Editor", icon: "b1air-text", app_id: "text-editor", cmd: "b1air-text", cat: "Utilities" },
         { name: "System Settings", desc: "Desktop Preferences & Appearance", icon: "b1air-settings", app_id: "preferences-system", cmd: "b1air-settings", cat: "System" },
+        { name: "Camera", desc: "Photos and video from the built-in camera", icon: "b1air-camera", app_id: "b1air-camera", cmd: "b1air-camera", cat: "Multimedia" },
     ]
 
     function categoryName(raw) {

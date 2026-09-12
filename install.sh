@@ -754,7 +754,7 @@ post_install_checks() {
     local commands=(sway swaylock fish starship eza bat fzf sddm
         b1air-daemon b1air-polkit-agent b1air-secret-service b1air-shell
         b1air-files b1air-settings b1air-monitor b1air-term b1air-text
-        b1air-view b1air-notes b1air-git)
+        b1air-view b1air-notes b1air-git b1air-camera)
     local missing=()
 
     for cmd in "${commands[@]}"; do

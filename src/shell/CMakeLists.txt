@@ -22,7 +22,7 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml QmlModels Quick WaylandClient DBus Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml QmlModels Quick WaylandClient DBus Network Multimedia)
 find_package(LayerShellQt REQUIRED)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -180,6 +180,28 @@ target_link_libraries(b1air-text PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    Qt6::WaylandClient
+    Threads::Threads
+)
+
+# ── b1air-camera (Camera: preview, stills and video) ─────────────────────────
+add_executable(b1air-camera
+    ../apps/camera/main.cpp
+)
+
+target_include_directories(b1air-camera PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../apps/camera
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+# Multimedia for the capture session; the QML side imports QtMultimedia.
+target_link_libraries(b1air-camera PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Multimedia
     Qt6::WaylandClient
     Threads::Threads
 )
