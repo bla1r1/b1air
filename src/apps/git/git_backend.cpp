@@ -17,6 +17,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <iterator>
+#include <memory>
 #include <iostream>
 
 GitBackend::GitBackend(QObject* parent) : QObject(parent), m_history(new HistoryModel(this)) {
@@ -736,7 +737,7 @@ QString GitBackend::stamp(const QString& statusOut) const {
 }
 
 void GitBackend::startPoll() {
-    if (!m_isRepo || m_pollProc) return;
+    if (!m_isRepo || m_pollProc || !m_busy.isEmpty()) return;
 
     m_pollProc = new QProcess(this);
     m_pollProc->setWorkingDirectory(m_repoPath);
@@ -1133,60 +1134,161 @@ void GitBackend::unstageAll() {
     refresh();
 }
 
+void GitBackend::runTask(const QString& kind, const QString& text, const QStringList& args,
+                         std::function<void(bool, const QString&, const QString&)> done) {
+    if (!m_isRepo) return;
+    if (!m_busy.isEmpty()) {
+        emit commandFailed(QStringLiteral("Wait for the current operation to finish"));
+        return;
+    }
+    m_busy = kind;
+    m_busyText = text;
+    m_busyLabel = text;
+    m_progress = -1;
+    emit busyChanged();
+
+    auto* proc = new QProcess(this);
+    proc->setWorkingDirectory(m_repoPath);
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    // No terminal to answer a prompt in; fail instead of hanging.
+    env.insert("GIT_TERMINAL_PROMPT", "0");
+    env.insert("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
+    env.insert("LC_ALL", "C.UTF-8");
+    proc->setProcessEnvironment(env);
+
+    auto err = std::make_shared<QString>();
+    connect(proc, &QProcess::readyReadStandardError, this, [this, proc, err]() {
+        const QString chunk = QString::fromUtf8(proc->readAllStandardError());
+        err->append(chunk);
+        // git --progress rewrites one line with \r: "Writing objects:  45% (9/20)".
+        static const QRegularExpression re("([A-Za-z][A-Za-z ]+):\\s+(\\d+)%");
+        auto it = re.globalMatch(chunk);
+        QString phase;
+        int pct = -1;
+        while (it.hasNext()) {
+            const auto m = it.next();
+            phase = m.captured(1).trimmed();
+            pct = m.captured(2).toInt();
+        }
+        if (pct >= 100) {
+            // Transfer done; what's left is waiting on the other side.
+            m_progress = -1;
+            m_busyText = m_busyLabel;
+            emit busyChanged();
+        } else if (pct >= 0) {
+            m_progress = pct;
+            m_busyText = phase + " " + QString::number(pct) + "%";
+            emit busyChanged();
+        }
+    });
+    connect(proc, &QProcess::finished, this, [this, proc, err, done](int code, QProcess::ExitStatus st) {
+        const QString out = QString::fromUtf8(proc->readAllStandardOutput());
+        err->append(QString::fromUtf8(proc->readAllStandardError()));
+        proc->deleteLater();
+        m_busy.clear();
+        m_busyText.clear();
+        m_progress = -1;
+        emit busyChanged();
+        const bool ok = st == QProcess::NormalExit && code == 0;
+        if (done) done(ok, out, *err);
+        refresh();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        proc->deleteLater();
+        m_busy.clear();
+        emit busyChanged();
+        emit commandFailed(QStringLiteral("Could not run git"));
+    });
+    proc->start("git", args);
+}
+
+namespace {
+// The useful part of git's stderr: progress lines and hints dropped.
+QString gitError(const QString& err, const QString& out, const QString& fallback) {
+    QStringList keep;
+    for (QString line : QString(err).replace('\r', '\n').split('\n', Qt::SkipEmptyParts)) {
+        line = line.trimmed();
+        if (line.startsWith("hint:") || line.contains('%') || line.startsWith("remote: Counting")
+            || line.startsWith("To ") || line.startsWith("From ")) continue;
+        for (const char* prefix : {"fatal: ", "error: "})
+            if (line.startsWith(QLatin1String(prefix))) line = line.mid(int(strlen(prefix)));
+        if (!line.isEmpty()) line[0] = line[0].toUpper();
+        keep << line;
+    }
+    if (keep.isEmpty() && !out.trimmed().isEmpty()) keep << out.trimmed().split('\n').first();
+    return keep.isEmpty() ? fallback : keep.mid(0, 3).join('\n');
+}
+} // namespace
+
 void GitBackend::commit(const QString& message) {
     if (message.trimmed().isEmpty()) return;
-    runGit(QStringList() << "commit" << "-m" << message);
-    refresh();
+    const QString branch = m_branchName;
+    runTask("commit", "Committing…", {"commit", "-m", message},
+            [this, branch](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Committed to " + branch);
+        else emit commandFailed(gitError(err, out, "Commit failed"));
+    });
 }
 
 void GitBackend::push() {
-    // A branch with no upstream is published: plain `git push` refuses it
-    // with "has no upstream branch", which is the state every new branch is in.
-    if (m_upstream.isEmpty() && !m_remoteName.isEmpty())
-        runGit(QStringList() << "push" << "--set-upstream" << m_remoteName << "HEAD");
-    else
-        runGit(QStringList() << "push");
-    refresh();
+    const QString remote = m_remoteName.isEmpty() ? QStringLiteral("origin") : m_remoteName;
+    const bool publish = m_upstream.isEmpty() && !m_remoteName.isEmpty();
+    // A new branch has no upstream, and plain `git push` refuses it.
+    const QStringList args = publish
+        ? QStringList{"push", "--progress", "--set-upstream", m_remoteName, "HEAD"}
+        : QStringList{"push", "--progress"};
+    const QString branch = m_branchName;
+    runTask(publish ? "publish" : "push",
+            publish ? "Publishing " + branch + "…" : "Pushing to " + remote + "…", args,
+            [this, publish, branch, remote](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice(publish ? "Published " + branch : "Pushed to " + remote);
+        else emit commandFailed(gitError(err, out, "Push failed"));
+    });
 }
 
 void GitBackend::pull() {
-    runGit(QStringList() << "pull" << "--prune");
-    refresh();
+    const QString remote = m_remoteName.isEmpty() ? QStringLiteral("origin") : m_remoteName;
+    runTask("pull", "Pulling from " + remote + "…", {"pull", "--progress", "--prune"},
+            [this, remote](bool ok, const QString& out, const QString& err) {
+        if (!ok) emit commandFailed(gitError(err, out, "Pull failed"));
+        else emit notice(out.contains("Already up to date") ? "Already up to date" : "Pulled from " + remote);
+    });
 }
 
 void GitBackend::fetch() {
-    // --prune: a branch deleted on the remote keeps its remote-tracking ref
-    // forever otherwise, and everything compared against it stays stale.
-    runGit(QStringList() << "fetch" << "--prune");
-    refresh();
+    const QString remote = m_remoteName.isEmpty() ? QStringLiteral("origin") : m_remoteName;
+    runTask("fetch", "Fetching " + remote + "…", {"fetch", "--progress", "--prune"},
+            [this, remote](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Fetched " + remote);
+        else emit commandFailed(gitError(err, out, "Fetch failed"));
+    });
 }
 
 void GitBackend::switchBranch(const QString& branch, const QString& changes) {
     if (branch.isEmpty() || !m_isRepo) return;
 
+    clearCommit();
     if (changes == QLatin1String("stash")) {
-        // Named after the branch being left, which is how it is found again:
-        // see the stash lookup in updateBranch().
+        // Named after the branch being left; that is how it is found again.
         QString err;
         if (!gitOk(m_repoPath, QStringList() << "stash" << "push" << "--include-untracked"
                                              << "-m" << QStringLiteral("b1air-git:") + m_branchName, &err)) {
             emit commandFailed(err.isEmpty() ? QStringLiteral("Could not stash the changes") : err);
             return;
         }
-        QString coErr;
-        if (!gitOk(m_repoPath, QStringList() << "checkout" << branch, &coErr)) {
-            // Put things back as they were rather than leaving the work stashed
-            // on a branch switch that did not happen.
-            gitOk(m_repoPath, QStringList() << "stash" << "pop");
-            emit commandFailed(coErr);
-        }
-    } else {
-        // "bring", or no changes to worry about. git refuses on its own when
-        // a carried change would be overwritten, and says which files.
-        runGit(QStringList() << "checkout" << branch);
     }
-    clearCommit();
-    refresh();
+    const bool stashed = changes == QLatin1String("stash");
+    runTask("checkout", "Switching to " + branch + "…", {"checkout", "--progress", branch},
+            [this, branch, stashed](bool ok, const QString& out, const QString& err) {
+        if (ok) {
+            emit notice("Switched to " + branch);
+            return;
+        }
+        // Don't leave the work stashed for a switch that didn't happen.
+        if (stashed) gitOk(m_repoPath, QStringList() << "stash" << "pop");
+        emit commandFailed(gitError(err, out, "Could not switch to " + branch));
+    });
 }
 
 void GitBackend::resolveGitPaths() {
@@ -1205,14 +1307,15 @@ void GitBackend::resolveGitPaths() {
 
 void GitBackend::mergeBranch(const QString& branch) {
     if (!m_isRepo || branch.isEmpty() || branch == m_branchName) return;
-    QString err, out;
-    if (!gitOk(m_repoPath, QStringList() << "merge" << "--no-edit" << branch, &err, &out)) {
-        // Conflicts are not an error here; the merge stays open for resolving.
-        if (!QFileInfo::exists(gitPath("MERGE_HEAD")))
-            emit commandFailed(err.isEmpty() ? out.trimmed() : err);
-    }
     clearCommit();
-    refresh();
+    const QString into = m_branchName;
+    runTask("merge", "Merging " + branch + "…", {"merge", "--no-edit", branch},
+            [this, branch, into](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Merged " + branch + " into " + into);
+        // Conflicts leave the merge open; the banner takes it from there.
+        else if (QFileInfo::exists(gitPath("MERGE_HEAD"))) emit notice("Merge has conflicts to resolve");
+        else emit commandFailed(gitError(err, out, "Merge failed"));
+    });
 }
 
 void GitBackend::commitMerge() {
@@ -1220,8 +1323,11 @@ void GitBackend::commitMerge() {
         emit commandFailed(QStringLiteral("Resolve the conflicts and stage those files first"));
         return;
     }
-    runGit(QStringList() << "commit" << "--no-edit");
-    refresh();
+    runTask("commit", "Committing merge…", {"commit", "--no-edit"},
+            [this](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Merge committed");
+        else emit commandFailed(gitError(err, out, "Commit failed"));
+    });
 }
 
 void GitBackend::abortMerge() {
@@ -1311,7 +1417,7 @@ void GitBackend::copyText(const QString& text) {
 // last fetch is more than a minute old.
 
 void GitBackend::startBackgroundFetch() {
-    if (!m_isRepo || !m_hasRemote || m_bgFetch) return;
+    if (!m_isRepo || !m_hasRemote || m_bgFetch || !m_busy.isEmpty()) return;
     // A fetch that failed — offline, a remote that wants a password — wrote
     // no FETCH_HEAD, so its age never drops; without a pause every focus of
     // the window would try again. Only after a failure: a successful fetch

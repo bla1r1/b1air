@@ -194,6 +194,7 @@ ApplicationWindow {
         property string caption: ""
         property string title: ""
         property string badge: ""
+        property bool spinning: false
         property bool dropdown: false
         property bool open: false
         // compact: icon and one line, sized to its text — for the tools on
@@ -212,8 +213,9 @@ ApplicationWindow {
         Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(110)
         Layout.fillWidth: !compact
         color: open ? Design.tint(Design.accent, 0.16)
+             : cellArea.pressed && enabled ? Design.tint(Design.text, 0.13)
              : cellArea.containsMouse && enabled ? Design.tint(Design.text, 0.07) : "transparent"
-        opacity: enabled ? 1.0 : 0.5
+        opacity: enabled || spinning ? 1.0 : 0.5
 
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
@@ -244,12 +246,34 @@ ApplicationWindow {
             height: parent.height
             spacing: Design.s(cell.compact ? 7 : 12)
 
-            Text {
-                text: cell.icon
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(cell.compact ? 14 : 17)
-                color: cell.open ? window.colBlue : window.colFg
+            Item {
                 Layout.alignment: Qt.AlignVCenter
+                implicitWidth: cellIcon.implicitWidth
+                implicitHeight: cellIcon.implicitHeight
+                Text {
+                    id: cellIcon
+                    anchors.centerIn: parent
+                    visible: !cell.spinning
+                    text: cell.icon
+                    font.family: Design.font.icon
+                    font.pixelSize: Design.s(cell.compact ? 14 : 17)
+                    color: cell.open ? window.colBlue : window.colFg
+                }
+                // A separate glyph, so the icon is never left at an angle.
+                Text {
+                    id: cellSpinner
+                    anchors.centerIn: parent
+                    visible: cell.spinning
+                    text: "󰝲"
+                    font.family: Design.font.icon
+                    font.pixelSize: cellIcon.font.pixelSize
+                    color: window.colBlue
+                    RotationAnimator on rotation {
+                        running: cellSpinner.visible
+                        from: 0; to: 360; duration: 900
+                        loops: Animation.Infinite
+                    }
+                }
             }
 
             ColumnLayout {
@@ -445,6 +469,9 @@ ApplicationWindow {
         if (words.length === 0) return "?";
         return (words[0][0] + (words.length > 1 ? words[1][0] : "")).toUpperCase();
     }
+    readonly property bool busy: GitBackend.busy !== ""
+    readonly property bool syncBusy: ["push", "publish", "pull", "fetch"].indexOf(GitBackend.busy) >= 0
+
     readonly property var githubAccount: GitBackend.accounts.find(a => a.provider === "github") || null
 
     Rectangle {
@@ -491,6 +518,40 @@ ApplicationWindow {
                     color: window.colBorder
                 }
 
+                // Progress of the running operation: fills when git reports a
+                // percentage, slides back and forth when it doesn't.
+                Item {
+                    id: progressLine
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 2
+                    visible: window.busy
+                    clip: true
+                    z: 2
+
+                    Rectangle {
+                        visible: GitBackend.progress >= 0
+                        height: parent.height
+                        width: parent.width * Math.max(0, GitBackend.progress) / 100
+                        color: window.colBlue
+                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                    }
+                    Rectangle {
+                        id: slider
+                        visible: GitBackend.progress < 0
+                        height: parent.height
+                        width: parent.width * 0.25
+                        radius: 1
+                        color: window.colBlue
+                        SequentialAnimation on x {
+                            running: progressLine.visible && GitBackend.progress < 0
+                            loops: Animation.Infinite
+                            NumberAnimation { from: -slider.width; to: progressLine.width; duration: 1100; easing.type: Easing.InOutQuad }
+                        }
+                    }
+                }
+
                 RowLayout {
                     anchors.fill: parent
                     anchors.bottomMargin: 1
@@ -517,11 +578,12 @@ ApplicationWindow {
                         // arbitrarily long, so this cell elides instead of
                         // pushing the rest of the bar along.
                         icon: ""
-                        caption: "Current branch"
+                        spinning: GitBackend.busy === "checkout" || GitBackend.busy === "merge"
+                        caption: spinning ? GitBackend.busyText : "Current branch"
                         title: window.hasRepo ? GitBackend.branchName : "—"
                         dropdown: true
                         open: window.branchDropdownOpen
-                        enabled: window.hasRepo
+                        enabled: window.hasRepo && !window.busy
                         onClicked: {
                             window.branchDropdownOpen = !window.branchDropdownOpen;
                             window.repoDropdownOpen = false;
@@ -531,7 +593,8 @@ ApplicationWindow {
 
                     ToolbarCell {
                         id: syncBtn
-                        enabled: window.syncAction !== "none"
+                        enabled: window.syncAction !== "none" && !window.busy
+                        spinning: window.syncBusy || GitBackend.fetching
                         icon: window.syncAction === "publish" ? "󰅧"
                             : window.syncAction === "pull" ? "󰁅"
                             : window.syncAction === "push" ? "󰁝" : "󰑐"
@@ -540,7 +603,8 @@ ApplicationWindow {
                              : window.syncAction === "push" ? "Push " + GitBackend.remoteName
                              : window.syncAction === "fetch" ? "Fetch " + GitBackend.remoteName
                              : "Fetch origin"
-                        caption: !window.hasRepo ? "No repository"
+                        caption: window.syncBusy ? GitBackend.busyText
+                               : !window.hasRepo ? "No repository"
                                : !GitBackend.hasRemote ? "This repository has no remote"
                                : GitBackend.fetching ? "Fetching…"
                                : GitBackend.upstreamGone ? "Deleted on " + GitBackend.remoteName + " — publish again?"
@@ -781,8 +845,9 @@ ApplicationWindow {
                                                 elide: Text.ElideRight
                                             }
                                             Text {
-                                                text: "Commit merge"
+                                                text: GitBackend.busy === "commit" ? "Committing…" : "Commit merge"
                                                 visible: parent.parent.conflicts === 0
+                                                enabled: !window.busy
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(11)
                                                 font.bold: true
@@ -1048,12 +1113,35 @@ ApplicationWindow {
                                                 Layout.fillWidth: true
                                                 height: Design.s(28)
                                                 radius: Design.s(5)
-                                                readonly property bool ready: window.hasRepo && sumInput.text.trim().length > 0
+                                                readonly property bool committing: GitBackend.busy === "commit"
+                                                readonly property bool ready: window.hasRepo && sumInput.text.trim().length > 0 && !window.busy
                                                 color: ready ? (commitArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue) : Design.tint(Design.accent, 0.20)
                                                 enabled: ready
 
+                                                Row {
+                                                    id: commitSpin
+                                                    anchors.centerIn: parent
+                                                    spacing: Design.s(6)
+                                                    visible: parent.committing
+                                                    Text {
+                                                        text: "󰝲"
+                                                        font.family: Design.font.icon
+                                                        font.pixelSize: Design.s(12)
+                                                        color: window.colFg
+                                                        RotationAnimator on rotation { running: commitSpin.visible; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
+                                                    }
+                                                    Text {
+                                                        text: "Committing…"
+                                                        font.family: Design.font.sans
+                                                        font.pixelSize: Design.s(11)
+                                                        font.bold: true
+                                                        color: window.colFg
+                                                    }
+                                                }
+
                                                 Text {
                                                     anchors.centerIn: parent
+                                                    visible: !parent.committing
                                                     text: window.hasRepo ? "Commit to " + GitBackend.branchName
                                                                          : "No repository open"
                                                     font.family: Design.font.sans
@@ -2633,6 +2721,75 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+
+    // What just happened, or what went wrong. Errors stay until clicked.
+    Connections {
+        target: GitBackend
+        function onNotice(message) { toast.show(message, false); }
+        function onCommandFailed(message) { toast.show(message, true); }
+    }
+
+    Rectangle {
+        id: toast
+        property bool isError: false
+        property string message: ""
+
+        function show(msg, err) {
+            toast.message = msg;
+            toast.isError = err;
+            hideTimer.interval = err ? 8000 : 2500;
+            hideTimer.restart();
+            toast.shown = true;
+        }
+        property bool shown: false
+
+        parent: window.contentItem
+        z: 100
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: parent.height - (shown ? height + Design.s(24) : -Design.s(10))
+        width: Math.min(parent.width - Design.s(40), toastRow.implicitWidth + Design.s(28))
+        height: toastRow.implicitHeight + Design.s(18)
+        radius: Design.s(10)
+        color: window.colHeader
+        border.color: isError ? window.colRed : window.colBorder
+        border.width: 1
+        opacity: shown ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+
+        Timer { id: hideTimer; onTriggered: toast.shown = false }
+
+        RowLayout {
+            id: toastRow
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, toast.parent.width - Design.s(68))
+            spacing: Design.s(10)
+            Text {
+                text: toast.isError ? "󰀦" : "󰄬"
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(15)
+                color: toast.isError ? window.colRed : window.colGreen
+                Layout.alignment: Qt.AlignTop
+            }
+            Text {
+                Layout.fillWidth: true
+                Layout.maximumWidth: Design.s(520)
+                text: toast.message
+                font.family: Design.font.sans
+                font.pixelSize: Design.s(12)
+                color: window.colFg
+                wrapMode: Text.Wrap
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: toast.shown = false
         }
     }
 }

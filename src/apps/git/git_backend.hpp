@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QSet>
 #include <QTimer>
+#include <functional>
 
 /**
  * The commit log of HEAD, read a page at a time.
@@ -93,6 +94,11 @@ class GitBackend : public QObject {
     // Every worktree of the repository: { path, branch, main, current }.
     Q_PROPERTY(QVariantList worktrees READ worktrees NOTIFY branchChanged)
     Q_PROPERTY(bool fetching READ fetching NOTIFY fetchingChanged)
+    // The operation in progress: push, publish, pull, fetch, commit, checkout,
+    // merge; empty when idle. progress is 0..100, or -1 when git gives none.
+    Q_PROPERTY(QString busy READ busy NOTIFY busyChanged)
+    Q_PROPERTY(QString busyText READ busyText NOTIFY busyChanged)
+    Q_PROPERTY(int progress READ progress NOTIFY busyChanged)
     Q_PROPERTY(QString statusSummary READ statusSummary NOTIFY statusChanged)
     Q_PROPERTY(QString selectedFile READ selectedFile NOTIFY selectedFileChanged)
     Q_PROPERTY(QVariantList changedFiles READ changedFiles NOTIFY statusChanged)
@@ -155,6 +161,9 @@ public:
     Q_INVOKABLE QString createWorktree(const QString& branch);
     Q_INVOKABLE void removeWorktree(const QString& path);
     bool fetching() const { return m_bgFetch != nullptr; }
+    QString busy() const { return m_busy; }
+    QString busyText() const { return m_busyText; }
+    int progress() const { return m_progress; }
     QString statusSummary() const { return m_statusSummary; }
     QString selectedFile() const { return m_selectedFile; }
     QVariantList changedFiles() const { return m_changedFiles; }
@@ -260,6 +269,9 @@ signals:
     void commitChanged();
     void commitDiffChanged();
     void fetchingChanged();
+    void busyChanged();
+    /** A finished operation, for the window to show briefly. */
+    void notice(const QString& message);
     void syncChanged();
     void accountsChanged();
     void commandFailed(const QString& message);
@@ -296,6 +308,14 @@ private:
     QVariantMap m_branchStash;
     bool m_upstreamGone = false;
     QVariantMap m_mergeState;
+
+    QString m_busy;
+    QString m_busyText;
+    QString m_busyLabel;
+    int m_progress = -1;
+    // Runs git without blocking the window. done gets success, stdout, stderr.
+    void runTask(const QString& kind, const QString& text, const QStringList& args,
+                 std::function<void(bool, const QString&, const QString&)> done);
     QVariantList m_worktrees;
     // Git's own paths for this checkout; in a worktree .git is a file.
     QHash<QString, QString> m_gitPaths;
