@@ -545,6 +545,13 @@ deploy_dotfiles() {
         gtk-update-icon-cache -q -t -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
     fi
 
+    # The desktop's own cursor theme (src/cursors), named by input.conf and the
+    # GTK settings. cp -a keeps its alias names as symlinks.
+    if [[ -d "$REPO_DIR/.local/share/icons/b1air-cursors" ]]; then
+        rm -rf "$HOME/.local/share/icons/b1air-cursors"
+        cp -a "$REPO_DIR/.local/share/icons/b1air-cursors" "$HOME/.local/share/icons/"
+    fi
+
     # Sync wallpapers. Added, not replaced: --delete here threw away every
     # wallpaper the user had put in the folder themselves, and the folder is
     # exactly the place they are invited to put them.

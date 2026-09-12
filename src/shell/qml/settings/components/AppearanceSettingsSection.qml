@@ -127,6 +127,48 @@ ColumnLayout {
 
 
     // ── 2. Compositor Effects ────────────────────────────────────────────────
+    // Other applications: GTK and Qt programs are not drawn by the shell, and
+    // did not follow the theme at all — they came up in stock Adwaita and a
+    // fixed Kvantum theme whatever was picked. The daemon recolours them from
+    // the palette, or pins them dark or light so nothing flashes white on a
+    // dark desktop (or the reverse). Programs already open need a restart to
+    // pick it up; GTK apps mostly follow at once.
+    Card {
+        title: "Other Applications"
+        subtitle: "Browsers, GTK and Qt programs: follow the theme, or stay dark or light"
+        icon: "\u{f0d73}"
+        accentColor: Design.sapphire
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+
+            Repeater {
+                model: [
+                    { id: "auto",  label: "Follow theme" },
+                    { id: "dark",  label: "Always dark" },
+                    { id: "light", label: "Always light" }
+                ]
+                Pill {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    label: modelData.label
+                    active: (Settings.appColorScheme || "auto") === modelData.id
+                    onClicked: {
+                        Settings.set("appColorScheme", modelData.id);
+                        appsApply.restart();
+                    }
+                }
+            }
+        }
+
+        Timer {
+            id: appsApply
+            interval: 400   // Settings.set() is not on disk yet at the click
+            onTriggered: Quickshell.execDetached(["b1air-daemon", "appearance", "apply"])
+        }
+    }
+
     Card {
         title: "Compositor Effects"
         subtitle: "Corner rounding, blur, shadows, and inactive window dimming"

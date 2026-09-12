@@ -539,10 +539,11 @@ int SessionManager::run_session() {
     mark("dbus-update-activation-environment done");
 
     // 3. GNOME / GTK Theme GSettings
-    run_status({"gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"});
-    run_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Tokyonight-Dark"});
-    run_status({"gsettings", "set", "org.gnome.desktop.interface", "icon-theme", "Papirus-Dark"});
-    mark("gsettings done");
+    // Through appearance_apply, from the theme and Appearance -> Other
+    // applications. This set gtk-theme to Tokyonight-Dark, which is not
+    // installed, so GTK apps fell back to stock Adwaita.
+    SystemControl::appearance_apply();
+    mark("appearance applied");
 
     // 4. Load Desktop Settings
     DesktopSettings settings = SettingsManager::load();

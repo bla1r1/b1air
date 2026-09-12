@@ -660,11 +660,19 @@ PanelWindow {
                             radius: Design.s(6)
                             color: pinArea.containsMouse ? Design.tint(Design.accent, 0.22) : "transparent"
 
+                            // The app's own icon, from its desktop entry, the
+                            // way running windows already get theirs. Pins
+                            // stored a generic name — Firefox was the
+                            // AdwaitaLegacy "web-browser" globe — so the pinned
+                            // row never looked like the apps it launches.
+                            // The stored icon is kept for pins no entry answers.
                             IconImage {
                                 anchors.centerIn: parent
                                 width: Design.s(17)
                                 height: Design.s(17)
-                                source: topBar.iconSource(modelData.icon)
+                                source: Apps.iconFor(modelData.id) !== ""
+                                    ? topBar.appIcon(modelData.id)
+                                    : topBar.iconSource(modelData.icon)
                                 mipmap: true
                             }
 

@@ -77,6 +77,7 @@ public:
     static bool window_restore(int64_t con_id = -1);
     static bool window_toggle_minimize();
     static bool window_maximize_toggle();
+    static bool appearance_apply();
     static bool window_float_all_toggle();
     static bool window_opacity_toggle();
     static int window_count_minimized();

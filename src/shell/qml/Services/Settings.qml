@@ -81,6 +81,9 @@ Singleton {
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
     // so the UI shows what the session actually booted with.
     readonly property alias themeName: data.themeName
+    // How other applications (GTK, Qt) are coloured: "auto" follows the
+    // theme, "dark" and "light" pin them. Applied by `b1air-daemon appearance`.
+    readonly property alias appColorScheme: data.appColorScheme
     readonly property alias accentName: data.accentName
     readonly property alias cornerRadius: data.cornerRadius
     readonly property alias blurEnabled: data.blurEnabled
@@ -162,6 +165,9 @@ Singleton {
     // Pointer & touchpad. Defaults mirror conf.d/input.conf.
     readonly property alias naturalScroll: data.naturalScroll
     readonly property alias tapToClick: data.tapToClick
+    // Two fingers pressed together click right (libinput "clickfinger"),
+    // rather than the bottom-right corner of the pad ("button_areas").
+    readonly property alias touchpadClickfinger: data.touchpadClickfinger
     readonly property alias dwt: data.dwt
     readonly property alias pointerAccel: data.pointerAccel
     readonly property alias accelProfile: data.accelProfile
@@ -445,6 +451,7 @@ Singleton {
         smartGaps: false,
         autotiling: true,
         themeName: "catppuccin-mocha",
+        appColorScheme: "auto",
         accentName: "",
         cornerRadius: 10,
         blurEnabled: true,
@@ -485,6 +492,7 @@ Singleton {
         touchpadNaturalSwipe: true,
         naturalScroll: false,
         tapToClick: true,
+        touchpadClickfinger: true,
         dwt: true,
         pointerAccel: 0.0,
         accelProfile: "flat",
@@ -559,6 +567,7 @@ Singleton {
             property bool smartGaps: false
             property bool autotiling: true
             property string themeName: "catppuccin-mocha"
+            property string appColorScheme: "auto"
             property string accentName: ""
             property int cornerRadius: 10
             property bool blurEnabled: true
@@ -605,6 +614,7 @@ Singleton {
             property bool touchpadNaturalSwipe: true
             property bool naturalScroll: false
             property bool tapToClick: true
+            property bool touchpadClickfinger: true
             property bool dwt: true
             property real pointerAccel: 0.0
             property string accelProfile: "flat"

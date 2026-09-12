@@ -2,6 +2,7 @@
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "settings_manager.hpp"
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include "secret_store.hpp"
 
@@ -1302,6 +1303,233 @@ std::string SystemControl::window_list_open_json() {
     }
     res += "]";
     return res;
+}
+
+// ── Other applications' colours ──────────────────────────────────────────────
+//
+// The shell and our own apps follow the theme picker; nothing else did. The
+// session set `gtk-theme Tokyonight-Dark`, a theme that is not installed, and
+// the shipped settings.ini names adw-gtk3-dark, also not installed — so GTK
+// apps drew stock Adwaita, dark only because of prefer-dark. Qt apps used
+// Kvantum's Tokyo-Night, fixed. Changing the theme changed none of them.
+//
+// This makes them follow: GTK through Adwaita (built into GTK, always there)
+// plus @define-color overrides in gtk.css; Qt through a Kvantum theme
+// generated from the palette. `appColorScheme` can pin them dark or light
+// instead; when that disagrees with the palette, they get the stock dark or
+// light look with only the accent carried over, since a dark palette cannot
+// be used as a light one.
+namespace {
+
+double channel(int v) {
+    const double c = v / 255.0;
+    return c <= 0.03928 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+}
+
+double luminance(const std::string& hex) {
+    if (hex.size() < 7 || hex[0] != '#') return 0.0;
+    try {
+        const int r = std::stoi(hex.substr(1, 2), nullptr, 16);
+        const int g = std::stoi(hex.substr(3, 2), nullptr, 16);
+        const int b = std::stoi(hex.substr(5, 2), nullptr, 16);
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    } catch (...) { return 0.0; }
+}
+
+// Replace (or add) `key=value` lines under [Settings] in a GTK settings.ini.
+void set_ini_keys(const std::string& path, const std::vector<std::pair<std::string, std::string>>& kv) {
+    std::ifstream in(path);
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(in, line)) lines.push_back(line);
+    if (lines.empty()) lines.push_back("[Settings]");
+    for (const auto& [k, v] : kv) {
+        bool done = false;
+        for (auto& l : lines)
+            if (l.rfind(k + "=", 0) == 0) { l = k + "=" + v; done = true; }
+        if (!done) lines.push_back(k + "=" + v);
+    }
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream out(path);
+    for (const auto& l : lines) out << l << "\n";
+}
+
+/**
+ * Write a file that may not be writable, without creating its directory.
+ *
+ * write_file() below calls create_directories() and std::rename, both of which
+ * throw or leave a stray .tmp behind when the target is a root-owned directory
+ * we only have group access to. /var/cache/wallpaper is exactly that: mode
+ * 2775 root:wallpaper, with this user and sddm both in the group. A machine
+ * where the group was never set up must lose the palette silently, not fail
+ * the whole appearance apply.
+ */
+bool write_file_best_effort(const std::string& path, const std::string& text) {
+    std::ofstream out(path, std::ios::trunc);
+    if (!out) return false;
+    out << text;
+    return out.good();
+}
+
+void write_file(const std::string& path, const std::string& text) {
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    const std::string tmp = path + ".tmp";
+    { std::ofstream out(tmp); out << text; }
+    std::rename(tmp.c_str(), path.c_str());
+}
+
+} // namespace
+
+bool SystemControl::appearance_apply() {
+    const char* home_env = std::getenv("HOME");
+    const std::string home = home_env ? home_env : "";
+
+    // The live palette, as Services/Theme publishes it.
+    nlohmann::json pal = nlohmann::json::object();
+    {
+        std::ifstream in(home + "/.config/b1air/theme.json");
+        if (in) { try { in >> pal; } catch (...) { pal = nlohmann::json::object(); } }
+    }
+    auto c = [&](const char* key, const char* fallback) {
+        return json_str(pal, key, fallback);
+    };
+    const std::string ground = c("ground", "#1a1b26");
+    const std::string accent = c("primary", c("blue", "#7aa2f7").c_str());
+    const std::string accentText = c("primaryText", "#16161e");
+
+    const bool paletteDark = luminance(ground) < 0.4;
+    std::string scheme = SettingsManager::get_json_string("appColorScheme");
+    if (scheme != "dark" && scheme != "light") scheme = "auto";
+    const bool dark = scheme == "dark" || (scheme == "auto" && paletteDark);
+    const bool usePalette = dark == paletteDark;
+
+    // GTK: the stock theme, dark or light, and the portal's colour scheme —
+    // which is what browsers, Electron and libadwaita apps read.
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "color-scheme",
+                           dark ? "prefer-dark" : "prefer-light"});
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme",
+                           dark ? "Adwaita-dark" : "Adwaita"});
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "icon-theme",
+                           dark ? "Papirus-Dark" : "Papirus"});
+    // The desktop's own cursor (src/cursors). gsettings is what GTK 4 and
+    // libadwaita apps read; sway takes it from input.conf.
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", "b1air-cursors"});
+    for (const char* dir : {"/.config/gtk-3.0/settings.ini", "/.config/gtk-4.0/settings.ini"}) {
+        set_ini_keys(home + dir, {{"gtk-theme-name", dark ? "Adwaita-dark" : "Adwaita"},
+                                  {"gtk-icon-theme-name", dark ? "Papirus-Dark" : "Papirus"},
+                                  {"gtk-application-prefer-dark-theme", dark ? "1" : "0"},
+                                  {"gtk-cursor-theme-name", "b1air-cursors"}});
+    }
+
+    std::string css =
+        "/* Generated by b1air (b1air-daemon appearance apply) from the active\n"
+        " * theme; rewritten whenever the theme or Settings -> Appearance ->\n"
+        " * Other applications changes, so edits here do not survive. */\n\n";
+    auto def = [&](const std::string& name, const std::string& value) {
+        css += "@define-color " + name + " " + value + ";\n";
+    };
+    def("accent_color", accent);
+    def("accent_bg_color", accent);
+    def("accent_fg_color", accentText);
+    def("theme_selected_bg_color", accent);
+    def("theme_selected_fg_color", accentText);
+    if (usePalette) {
+        const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
+        const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
+        const std::string text = c("text", "#c0caf5"), dim = c("textDim", text.c_str());
+        const std::string outline = c("outlineVariant", high.c_str());
+        def("window_bg_color", ground);   def("window_fg_color", text);
+        def("view_bg_color", lowest);     def("view_fg_color", text);
+        def("headerbar_bg_color", low);   def("headerbar_fg_color", text);
+        def("headerbar_backdrop_color", ground);
+        def("sidebar_bg_color", low);     def("sidebar_fg_color", text);
+        def("card_bg_color", mid);        def("card_fg_color", text);
+        def("popover_bg_color", low);     def("popover_fg_color", text);
+        def("dialog_bg_color", ground);   def("dialog_fg_color", text);
+        def("destructive_bg_color", c("red", "#f7768e"));
+        def("theme_bg_color", ground);    def("theme_fg_color", text);
+        def("theme_base_color", lowest);  def("theme_text_color", text);
+        def("theme_unfocused_bg_color", ground); def("theme_unfocused_fg_color", dim);
+        def("insensitive_fg_color", dim); def("borders", outline);
+    }
+    write_file(home + "/.config/gtk-3.0/gtk.css", css);
+    write_file(home + "/.config/gtk-4.0/gtk.css", css);
+
+    // Qt, through Kvantum (qt6ct is set to style=kvantum).
+    std::string kvTheme = dark ? "KvGnomeDark" : "KvGnome";
+    if (usePalette) {
+        kvTheme = "b1air";
+        const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
+        const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
+        const std::string highest = c("highest", high.c_str()), text = c("text", "#c0caf5");
+        const std::string outline = c("outline", c("textDim", text.c_str()).c_str());
+        // The shipped Tokyo-Night.kvconfig is the template: its widget
+        // settings stay, and only [GeneralColors] is written from the palette.
+        std::string base;
+        {
+            std::ifstream in(home + "/.config/Kvantum/Tokyo-Night/Tokyo-Night.kvconfig");
+            std::stringstream ss; ss << in.rdbuf(); base = ss.str();
+        }
+        const std::string colors =
+            "[GeneralColors]\n"
+            "window.color=" + low + "\nbase.color=" + lowest + "\nalt.base.color=" + ground + "\n"
+            "button.color=" + mid + "\nlight.color=" + highest + "\nmid.light.color=" + high + "\n"
+            "dark.color=" + lowest + "\nmid.color=" + high + "\n"
+            "highlight.color=" + accent + "\ninactive.highlight.color=" + accent + "\n"
+            "text.color=" + text + "\nwindow.text.color=" + text + "\nbutton.text.color=" + text + "\n"
+            "disabled.text.color=" + outline + "\ntooltip.text.color=" + text + "\n"
+            "highlight.text.color=" + accentText + "\n"
+            "link.color=" + c("sapphire", accent.c_str()) + "\nlink.visited.color=" + c("mauve", accent.c_str()) + "\n\n";
+        std::string out;
+        const size_t gc = base.find("[GeneralColors]");
+        if (gc == std::string::npos) {
+            out = "[%General]\nauthor=b1air\n\n" + colors + base;
+        } else {
+            const size_t next = base.find("\n[", gc + 1);
+            out = base.substr(0, gc) + colors + (next == std::string::npos ? "" : base.substr(next + 1));
+        }
+        write_file(home + "/.config/Kvantum/b1air/b1air.kvconfig", out);
+    }
+    set_ini_keys(home + "/.config/Kvantum/kvantum.kvconfig", {{"theme", kvTheme}});
+    // set_ini_keys puts a missing key under whatever section is last; the
+    // file has a single [General] section, so that is the right one.
+
+    // The login screen, which runs as another user entirely.
+    //
+    // The SDDM theme's colours were the same Tokyo Night hex values as the
+    // shell's, written out by hand in its default.conf — identical by
+    // coincidence and only until the theme was changed once, after which the
+    // desktop was one colour and the screen you log in through was another.
+    //
+    // sddm cannot read ~/.config/b1air/theme.json: it runs as the sddm user
+    // and $HOME is not readable to it. /var/cache/wallpaper already exists for
+    // exactly this problem — it is how the login background is shared — and
+    // sddm is a member of its group, so the palette goes beside the wallpaper.
+    //
+    // As QML rather than JSON, because the greeter can load a QML file with
+    // Qt.createComponent() and cannot read one with XMLHttpRequest unless
+    // QML_XHR_ALLOW_FILE_READ is set in sddm's own service environment. A
+    // generated file avoids needing that at all.
+    {
+        std::string qml =
+            "// Generated by b1air-daemon (appearance apply). Edits are lost.\n"
+            "// The active desktop palette, for the SDDM theme: see\n"
+            "// usr/share/sddm/themes/b1air/components/Palette.qml.\n"
+            "import QtQuick\n\nQtObject {\n";
+        for (const char* key : {"ground", "lowest", "low", "mid", "high", "highest",
+                                "text", "textDim", "outline", "outlineVariant",
+                                "primary", "primaryText", "primaryBox", "tertiary",
+                                "error", "errorText", "yellow", "green", "sapphire"}) {
+            if (!pal.contains(key) || !pal[key].is_string()) continue;
+            qml += std::string("    readonly property color ") + key + ": \""
+                 + pal[key].get<std::string>() + "\"\n";
+        }
+        // The scheme the rest of this function resolved, so the greeter shows
+        // the same light or dark face the session does.
+        qml += std::string("    readonly property bool dark: ") + (dark ? "true" : "false") + "\n}\n";
+        (void)write_file_best_effort("/var/cache/wallpaper/Palette.qml", qml);
+    }
+    return true;
 }
 
 // ── Hyprland's window controls, in sway ──────────────────────────────────────

@@ -10,7 +10,7 @@ Singleton {
     property var pinnedList: [
         { id: "b1air-files", name: "Files", icon: "b1air-files", cmd: "b1air-files" },
         { id: "b1air-term", name: "Terminal", icon: "b1air-term", cmd: "b1air-term" },
-        { id: "firefox", name: "Browser", icon: "web-browser", cmd: "firefox" }
+        { id: "firefox", name: "Browser", icon: "firefox", cmd: "firefox" }
     ]
 
     function isPinned(appIdOrName) {
@@ -37,7 +37,9 @@ Singleton {
             copy.splice(idx, 1);
         } else {
             copy.push({
-                id: app.name || "app",
+                // The desktop id when there is one, so the bar can find the
+                // app's real icon by it; the name was all this stored.
+                id: String(app.desktopFile || "").replace(/\.desktop$/, "") || app.name || "app",
                 name: app.name || "App",
                 icon: app.icon || "󰀻",
                 cmd: app.cmd || ""

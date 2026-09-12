@@ -50,6 +50,7 @@ static void print_usage(const char* prog) {
               << "  media-info                         Get full MPRIS & album art palette JSON for player\n"
               << "  weather [json|current|icon|temp]   Get live weather forecast JSON or current conditions\n"
               << "  schedule                           Get calendar schedule JSON\n"
+              << "  appearance apply                   Colour GTK and Qt apps from the theme (Appearance page)\n"
               << "  open-default {terminal|files|browser}\n"
               << "                                     Launch the app chosen in Settings -> Default Apps\n"
               << "  diary                              Open or create today's Obsidian diary note\n"
@@ -777,6 +778,8 @@ int main(int argc, char* argv[]) {
         } else {
             return SystemControl::caffeine_toggle() ? 0 : 1;
         }
+    } else if (cmd == "appearance") {
+        return SystemControl::appearance_apply() ? 0 : 1;
     } else if (cmd == "dbus-call") {
         return run_dbus_call(argc, argv);
     } else if (cmd == "open-default") {

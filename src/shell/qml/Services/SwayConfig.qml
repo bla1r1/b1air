@@ -78,6 +78,7 @@ Singleton {
         out += "input type:touchpad {\n";
         out += "    natural_scroll " + root._onOff(Settings.naturalScroll) + "\n";
         out += "    tap " + root._onOff(Settings.tapToClick) + "\n";
+        out += "    click_method " + (Settings.touchpadClickfinger ? "clickfinger" : "button_areas") + "\n";
         out += "    dwt " + root._onOff(Settings.dwt) + "\n";
         out += "    pointer_accel " + Number(Settings.pointerAccel || 0) + "\n";
         out += "}\n";

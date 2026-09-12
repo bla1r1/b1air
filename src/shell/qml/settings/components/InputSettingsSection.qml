@@ -17,6 +17,7 @@ ColumnLayout {
     readonly property bool naturalScroll: Settings.naturalScroll
     readonly property bool tapToClick: Settings.tapToClick
     readonly property bool dwt: Settings.dwt
+    readonly property bool clickfinger: Settings.touchpadClickfinger
     readonly property real pointerAccel: Settings.pointerAccel
     readonly property string accelProfile: Settings.accelProfile
     readonly property bool leftHanded: Settings.leftHanded
@@ -47,6 +48,17 @@ ColumnLayout {
     function setTapToClick(on) {
         Settings.set("tapToClick", on);
         Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "tap", on ? "enabled" : "disabled"]);
+        section._persist();
+    }
+
+    // A clickpad has no buttons, so libinput decides what a press is. Its
+    // default here was "button_areas" — right click only in the bottom-right
+    // corner — which made a two-finger press a left click, and no right-click
+    // menu anywhere could be opened the way people expect to open it.
+    function setClickfinger(on) {
+        Settings.set("touchpadClickfinger", on);
+        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "click_method",
+                                 on ? "clickfinger" : "button_areas"]);
         section._persist();
     }
 
@@ -153,6 +165,27 @@ ColumnLayout {
                 Toggle {
                     checked: section.tapToClick
                     onToggled: section.setTapToClick(!section.tapToClick)
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label { text: "Two-Finger Click for Right Click"; weight: Design.weight.semibold }
+                    Label { text: section.clickfinger ? "Press with two fingers anywhere for a right click, three for middle"
+                                                      : "Right click is the bottom-right corner of the pad"
+                            role: "caption"; dim: true }
+                }
+
+                Toggle {
+                    checked: section.clickfinger
+                    onToggled: section.setClickfinger(!section.clickfinger)
                 }
             }
 

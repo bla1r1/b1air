@@ -38,6 +38,9 @@ Singleton {
     function _publish(palette) {
         activeWriter.path = root.activeFile;
         activeWriter.setText(JSON.stringify(palette, null, 2));
+        // Other applications follow too (GTK through gtk.css, Qt through a
+        // generated Kvantum theme). After the write has landed, hence the beat.
+        appsRecolour.restart();
 
         // A theme that states its own accent takes it back from whatever the
         // picker was last set to; picking a swatch afterwards overrides it
@@ -52,6 +55,12 @@ Singleton {
         id: activeWriter
         printErrors: false
         atomicWrites: true
+    }
+
+    Timer {
+        id: appsRecolour
+        interval: 400
+        onTriggered: Quickshell.execDetached(["b1air-daemon", "appearance", "apply"])
     }
 
     // ── Built-in themes ──────────────────────────────────────────────────────

@@ -151,6 +151,10 @@ install: daemon-target polkit-target secret-target shell-target
 	install -m 644 ../.local/share/icons/hicolor/scalable/apps/b1air-*.svg \
 		$(HOME)/.local/share/icons/hicolor/scalable/apps/
 	-gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor >/dev/null 2>&1
+	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
+	# the seventy-odd alias names stay symlinks to the fifteen drawings.
+	rm -rf $(HOME)/.local/share/icons/b1air-cursors
+	cp -a ../.local/share/icons/b1air-cursors $(HOME)/.local/share/icons/
 	mkdir -p $(HOME)/.config/environment.d
 	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(HOME)/.config/environment.d/
 

@@ -1,2 +1,3 @@
 singleton Config Config.qml
 singleton Languages Languages.qml
+singleton Palette Palette.qml
