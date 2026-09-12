@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QProcess>
 #include <QAbstractListModel>
+#include <QHash>
 #include <QSet>
 #include <QTimer>
 
@@ -87,6 +88,10 @@ class GitBackend : public QObject {
     // restored here: { ref, files } or empty.
     Q_PROPERTY(QVariantMap branchStash READ branchStash NOTIFY branchChanged)
     Q_PROPERTY(bool upstreamGone READ upstreamGone NOTIFY syncChanged)
+    // { active, branch, conflicts } while a merge is in progress.
+    Q_PROPERTY(QVariantMap mergeState READ mergeState NOTIFY statusChanged)
+    // Every worktree of the repository: { path, branch, main, current }.
+    Q_PROPERTY(QVariantList worktrees READ worktrees NOTIFY branchChanged)
     Q_PROPERTY(bool fetching READ fetching NOTIFY fetchingChanged)
     Q_PROPERTY(QString statusSummary READ statusSummary NOTIFY statusChanged)
     Q_PROPERTY(QString selectedFile READ selectedFile NOTIFY selectedFileChanged)
@@ -138,6 +143,17 @@ public:
     QVariantMap branchInfo() const { return m_branchInfo; }
     QVariantMap branchStash() const { return m_branchStash; }
     bool upstreamGone() const { return m_upstreamGone; }
+    QVariantMap mergeState() const { return m_mergeState; }
+    QVariantList worktrees() const { return m_worktrees; }
+
+    /** Merge a branch into the current one. Conflicts leave the merge open. */
+    Q_INVOKABLE void mergeBranch(const QString& branch);
+    Q_INVOKABLE void commitMerge();
+    Q_INVOKABLE void abortMerge();
+
+    /** Check a branch out into a new worktree beside the main one. Returns its path. */
+    Q_INVOKABLE QString createWorktree(const QString& branch);
+    Q_INVOKABLE void removeWorktree(const QString& path);
     bool fetching() const { return m_bgFetch != nullptr; }
     QString statusSummary() const { return m_statusSummary; }
     QString selectedFile() const { return m_selectedFile; }
@@ -279,6 +295,12 @@ private:
     QVariantMap m_branchInfo;
     QVariantMap m_branchStash;
     bool m_upstreamGone = false;
+    QVariantMap m_mergeState;
+    QVariantList m_worktrees;
+    // Git's own paths for this checkout; in a worktree .git is a file.
+    QHash<QString, QString> m_gitPaths;
+    void resolveGitPaths();
+    QString gitPath(const QString& name) const { return m_gitPaths.value(name); }
 
     // Fetching in the background, so the branch and sync state follow the
     // remote without anyone pressing Fetch. See startBackgroundFetch().

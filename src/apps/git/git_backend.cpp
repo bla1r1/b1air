@@ -506,6 +506,8 @@ void GitBackend::openRepo(const QString& path) {
         }
     }
 
+    resolveGitPaths();
+
     // A commit belongs to the repository it was picked in.
     clearCommit();
     emit repoChanged();
@@ -549,7 +551,7 @@ void GitBackend::updateBranch() {
     // for-each-ref rather than `git branch`: one call gives each branch's
     // upstream and how it stands against it, "[gone]" included.
     const QString refs = runGit(QStringList() << "for-each-ref" << "refs/heads"
-                                              << "--format=%(refname:short)%1f%(upstream:short)%1f%(upstream:track)");
+                                              << "--format=%(refname:short)%1f%(upstream:short)%1f%(upstream:track)%1f%(worktreepath)");
     m_branches.clear();
     m_branchInfo.clear();
     static const QRegularExpression aheadRe("ahead (\\d+)"), behindRe("behind (\\d+)");
@@ -563,8 +565,26 @@ void GitBackend::updateBranch() {
         info["gone"] = track.contains("gone");
         info["ahead"] = aheadRe.match(track).captured(1).toInt();
         info["behind"] = behindRe.match(track).captured(1).toInt();
+        // Checked out in another worktree: git will not check it out here.
+        const QString wt = f.value(3).trimmed();
+        info["worktree"] = (!wt.isEmpty() && QDir::cleanPath(wt) != QDir::cleanPath(m_repoPath)) ? wt : QString();
         m_branches.append(name);
         m_branchInfo[name] = info;
+    }
+
+    m_worktrees.clear();
+    const QString wtOut = runGit(QStringList() << "worktree" << "list" << "--porcelain");
+    for (const auto& block : wtOut.split("\n\n", Qt::SkipEmptyParts)) {
+        QVariantMap wt;
+        for (const auto& line : block.split('\n', Qt::SkipEmptyParts)) {
+            if (line.startsWith("worktree ")) wt["path"] = line.mid(9);
+            else if (line.startsWith("branch refs/heads/")) wt["branch"] = line.mid(18);
+            else if (line == QLatin1String("detached")) wt["branch"] = QStringLiteral("detached");
+        }
+        if (wt.value("path").toString().isEmpty()) continue;
+        wt["main"] = m_worktrees.isEmpty();
+        wt["current"] = QDir::cleanPath(wt["path"].toString()) == QDir::cleanPath(m_repoPath);
+        m_worktrees.append(wt);
     }
 
     // A stash this app made when leaving the branch now checked out.
@@ -622,10 +642,13 @@ void GitBackend::updateStatus() {
         char x = xy[0].toLatin1();
         char y = xy[1].toLatin1();
 
-        item["isStaged"] = (x != ' ' && x != '?');
-        
+        const bool conflicted = x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D');
+        // A conflicted file is not staged until it is marked resolved.
+        item["isStaged"] = !conflicted && x != ' ' && x != '?';
+
         QString status = "modified";
-        if (x == 'A' || y == 'A' || x == '?' || y == '?') status = "added";
+        if (conflicted) status = "conflicted";
+        else if (x == 'A' || y == 'A' || x == '?' || y == '?') status = "added";
         else if (x == 'D' || y == 'D') status = "deleted";
         else if (x == 'R' || y == 'R') status = "renamed";
         
@@ -633,6 +656,20 @@ void GitBackend::updateStatus() {
         item["code"] = xy.trimmed();
 
         m_changedFiles.append(item);
+    }
+
+    int conflicts = 0;
+    for (const auto& v : m_changedFiles)
+        if (v.toMap().value("status") == QLatin1String("conflicted")) ++conflicts;
+    m_mergeState.clear();
+    if (QFileInfo::exists(gitPath("MERGE_HEAD"))) {
+        QFile msg(gitPath("MERGE_MSG"));
+        QString first;
+        if (msg.open(QIODevice::ReadOnly)) first = QString::fromUtf8(msg.readLine()).trimmed();
+        static const QRegularExpression nameRe("'([^']+)'");
+        m_mergeState["active"] = true;
+        m_mergeState["branch"] = nameRe.match(first).captured(1);
+        m_mergeState["conflicts"] = conflicts;
     }
 
     if (m_changedFiles.isEmpty()) {
@@ -672,23 +709,20 @@ QString GitBackend::stamp(const QString& statusOut) const {
         h.addData(QByteArray::number(fi.size()));
         h.addData(QByteArray::number(fi.lastModified().toMSecsSinceEpoch()));
     };
-    const QString gitDir = m_repoPath + "/.git";
-    addFile(gitDir + "/logs/HEAD");
-    addFile(gitDir + "/HEAD");
-    addFile(gitDir + "/refs/heads");
-    addFile(gitDir + "/packed-refs");
-    // A push or fetch typed in a terminal moves only the remote-tracking ref,
-    // which is what the pushed/unpushed marks and the arrows' counts follow.
-    addFile(gitDir + "/FETCH_HEAD");
-    // Every ref directory, so a branch created or deleted anywhere — including
-    // a nested name like fix/thing, or a remote branch pruned — is noticed.
-    // Only refs/heads' own mtime was watched, which misses both.
-    QDirIterator refsIt(gitDir + "/refs", QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    addFile(gitPath("logs/HEAD"));
+    addFile(gitPath("HEAD"));
+    addFile(gitPath("packed-refs"));
+    addFile(gitPath("FETCH_HEAD"));
+    addFile(gitPath("MERGE_HEAD"));
+    addFile(gitPath("worktrees"));
+    const QString refs = gitPath("refs");
+    QDirIterator refsIt(refs, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
     while (refsIt.hasNext()) addFile(refsIt.next());
-    addFile(gitDir + "/refs/stash");
+    addFile(refs + "/heads");
+    addFile(refs + "/stash");
     if (!m_upstream.isEmpty()) {
-        addFile(gitDir + "/refs/remotes/" + m_upstream);
-        addFile(gitDir + "/logs/refs/remotes/" + m_upstream);
+        addFile(refs + "/remotes/" + m_upstream);
+        addFile(gitPath("logs") + "/refs/remotes/" + m_upstream);
     }
     for (const auto& line : statusOut.split('\n', Qt::SkipEmptyParts)) {
         if (line.size() < 4) continue;
@@ -788,7 +822,7 @@ void GitBackend::updateSync() {
         else if (remotes.contains("origin")) remoteName = "origin";
         else if (!remotes.isEmpty()) remoteName = remotes.first().trimmed();
     }
-    const QFileInfo fetchHead(m_repoPath + "/.git/FETCH_HEAD");
+    const QFileInfo fetchHead(gitPath("FETCH_HEAD"));
     m_lastFetch = m_isRepo && fetchHead.exists() ? fetchHead.lastModified().toSecsSinceEpoch() : 0;
     m_remoteName = remoteName;
     // Configured to track a branch the remote no longer has.
@@ -1152,6 +1186,76 @@ void GitBackend::switchBranch(const QString& branch, const QString& changes) {
         runGit(QStringList() << "checkout" << branch);
     }
     clearCommit();
+    refresh();
+}
+
+void GitBackend::resolveGitPaths() {
+    m_gitPaths.clear();
+    if (!m_isRepo) return;
+    static const QStringList names = {"HEAD", "logs/HEAD", "logs", "FETCH_HEAD", "MERGE_HEAD",
+                                      "MERGE_MSG", "packed-refs", "refs", "worktrees"};
+    QStringList args{"rev-parse"};
+    for (const auto& n : names) args << "--git-path" << n;
+    QString out;
+    if (!gitOk(m_repoPath, args, nullptr, &out)) return;
+    const QStringList lines = out.split('\n', Qt::SkipEmptyParts);
+    for (int i = 0; i < names.size() && i < lines.size(); ++i)
+        m_gitPaths[names[i]] = QDir(m_repoPath).absoluteFilePath(lines[i].trimmed());
+}
+
+void GitBackend::mergeBranch(const QString& branch) {
+    if (!m_isRepo || branch.isEmpty() || branch == m_branchName) return;
+    QString err, out;
+    if (!gitOk(m_repoPath, QStringList() << "merge" << "--no-edit" << branch, &err, &out)) {
+        // Conflicts are not an error here; the merge stays open for resolving.
+        if (!QFileInfo::exists(gitPath("MERGE_HEAD")))
+            emit commandFailed(err.isEmpty() ? out.trimmed() : err);
+    }
+    clearCommit();
+    refresh();
+}
+
+void GitBackend::commitMerge() {
+    if (m_mergeState.value("conflicts").toInt() > 0) {
+        emit commandFailed(QStringLiteral("Resolve the conflicts and stage those files first"));
+        return;
+    }
+    runGit(QStringList() << "commit" << "--no-edit");
+    refresh();
+}
+
+void GitBackend::abortMerge() {
+    runGit(QStringList() << "merge" << "--abort");
+    refresh();
+}
+
+QString GitBackend::createWorktree(const QString& branch) {
+    if (!m_isRepo || branch.isEmpty() || m_worktrees.isEmpty()) return QString();
+    const QFileInfo mainWt(m_worktrees.first().toMap().value("path").toString());
+    QString safe = branch;
+    safe.replace('/', '-');
+    const QString base = mainWt.absolutePath() + "/" + mainWt.fileName() + "-" + safe;
+    QString path = base;
+    for (int n = 2; QFileInfo::exists(path); ++n) path = base + "-" + QString::number(n);
+
+    QString err;
+    if (!gitOk(m_repoPath, QStringList() << "worktree" << "add" << path << branch, &err)) {
+        emit commandFailed(err.isEmpty() ? QStringLiteral("Could not create the worktree") : err);
+        return QString();
+    }
+    refresh();
+    return path;
+}
+
+void GitBackend::removeWorktree(const QString& path) {
+    if (!m_isRepo || path.isEmpty()) return;
+    QString err;
+    // git refuses a worktree with uncommitted changes, and says so.
+    if (!gitOk(m_repoPath, QStringList() << "worktree" << "remove" << path, &err)) {
+        emit commandFailed(err.isEmpty() ? QStringLiteral("Could not remove the worktree") : err);
+        return;
+    }
+    forgetRepo(path);
     refresh();
 }
 

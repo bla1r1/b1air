@@ -119,6 +119,7 @@ ApplicationWindow {
     ContextMenu {
         id: fileMenu
         property bool staged: false
+        property bool conflicted: false
         Action { text: "Open"; onTriggered: GitBackend.openFile(fileMenu.target) }
         Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(fileMenu.target) }
         Action { text: "Open folder in Terminal"; onTriggered: GitBackend.openTerminal(fileMenu.target) }
@@ -127,7 +128,7 @@ ApplicationWindow {
         Action { text: "Copy relative path"; onTriggered: GitBackend.copyText(fileMenu.target) }
         MenuLine {}
         Action {
-            text: fileMenu.staged ? "Unstage" : "Stage"
+            text: fileMenu.conflicted ? "Mark as resolved" : fileMenu.staged ? "Unstage" : "Stage"
             onTriggered: fileMenu.staged ? GitBackend.unstageFile(fileMenu.target) : GitBackend.stageFile(fileMenu.target)
         }
     }
@@ -149,6 +150,43 @@ ApplicationWindow {
 
     // A branch switch waiting on what to do with uncommitted changes.
     property string pendingSwitch: ""
+    property string pendingRemoveWorktree: ""
+
+    ContextMenu {
+        id: branchMenu
+        property string worktree: ""
+        readonly property bool isCurrent: branchMenu.target === GitBackend.branchName
+        Action {
+            text: "Merge into " + GitBackend.branchName
+            enabled: !branchMenu.isCurrent && !GitBackend.mergeState.active
+            onTriggered: { window.branchDropdownOpen = false; GitBackend.mergeBranch(branchMenu.target); }
+        }
+        MenuLine {}
+        Action {
+            text: branchMenu.worktree !== "" ? "Open its worktree" : "Open in new worktree"
+            enabled: !branchMenu.isCurrent
+            onTriggered: {
+                const path = branchMenu.worktree !== "" ? branchMenu.worktree
+                                                        : GitBackend.createWorktree(branchMenu.target);
+                if (path !== "") { window.branchDropdownOpen = false; GitBackend.openRepo(path); }
+            }
+        }
+    }
+
+    ContextMenu {
+        id: worktreeMenu
+        property bool removable: false
+        Action { text: "Open"; onTriggered: { window.branchDropdownOpen = false; GitBackend.openRepo(worktreeMenu.target); } }
+        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(worktreeMenu.target) }
+        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(worktreeMenu.target) }
+        MenuLine {}
+        Action { text: "Copy path"; onTriggered: GitBackend.copyText(worktreeMenu.target) }
+        Action {
+            text: "Remove worktree…"
+            enabled: worktreeMenu.removable
+            onTriggered: { window.branchDropdownOpen = true; window.pendingRemoveWorktree = worktreeMenu.target; }
+        }
+    }
 
     component ToolbarCell: Rectangle {
         id: cell
@@ -300,6 +338,7 @@ ApplicationWindow {
             window.branchDropdownOpen = false;
             window.accountsDropdownOpen = false;
             window.pendingSwitch = "";
+            window.pendingRemoveWorktree = "";
             window.pendingDeleteBranch = "";
             window.pendingTrashRepo = "";
         }
@@ -378,14 +417,17 @@ ApplicationWindow {
     // set, which is what the letters were standing in for. Same colours as
     // before; the word is in the tooltip.
     function statusIcon(st) {
+        if (st === "conflicted") return "";
         return st === "added" ? "" : st === "deleted" ? ""
              : st === "renamed" ? "" : "";
     }
     function statusColor(st) {
+        if (st === "conflicted") return window.colRed;
         return st === "added" ? window.colGreen : st === "deleted" ? window.colRed
              : st === "renamed" ? window.colCyan : window.colOrange;
     }
     function statusWord(st) {
+        if (st === "conflicted") return "Conflicted";
         return st === "added" ? "Added" : st === "deleted" ? "Deleted"
              : st === "renamed" ? "Renamed" : "Modified";
     }
@@ -713,6 +755,50 @@ ApplicationWindow {
                                         }
                                     }
 
+                                    // A merge waiting to be finished or aborted.
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Design.s(34)
+                                        visible: GitBackend.mergeState.active === true
+                                        readonly property int conflicts: GitBackend.mergeState.conflicts || 0
+                                        color: conflicts > 0 ? Design.tint(Design.danger, 0.14) : Design.tint(Design.ok, 0.14)
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(10)
+                                            anchors.rightMargin: Design.s(10)
+                                            spacing: Design.s(10)
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: "Merging " + (GitBackend.mergeState.branch || "") + " — "
+                                                      + (parent.parent.conflicts > 0
+                                                         ? parent.parent.conflicts + (parent.parent.conflicts === 1 ? " conflict" : " conflicts")
+                                                         : "ready")
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                font.bold: true
+                                                color: parent.parent.conflicts > 0 ? window.colRed : window.colGreen
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                text: "Commit merge"
+                                                visible: parent.parent.conflicts === 0
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                font.bold: true
+                                                color: window.colGreen
+                                                MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.commitMerge() }
+                                            }
+                                            Text {
+                                                text: "Abort"
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                color: window.colDim
+                                                MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.abortMerge() }
+                                            }
+                                        }
+                                    }
+
                                     // Changes this app stashed when leaving
                                     // this branch, offered back on return.
                                     Rectangle {
@@ -853,6 +939,7 @@ ApplicationWindow {
                                                     GitBackend.selectFile(modelData.path);
                                                     if (mouse.button === Qt.RightButton) {
                                                         fileMenu.staged = modelData.isStaged;
+                                                        fileMenu.conflicted = modelData.status === "conflicted";
                                                         window.showMenu(fileMenu, modelData.path);
                                                     }
                                                 }
@@ -1592,6 +1679,7 @@ ApplicationWindow {
                         window.branchDropdownOpen = false;
                         window.accountsDropdownOpen = false;
                         window.pendingSwitch = "";
+                        window.pendingRemoveWorktree = "";
                         window.pendingDeleteBranch = "";
                         window.pendingTrashRepo = "";
                     }
@@ -1918,9 +2006,11 @@ ApplicationWindow {
                     anchors.left: parent.left
                     anchors.leftMargin: Math.max(0, Math.min(branchBtn.x, parent.width - width))
                     width: Math.min(Design.s(300), parent.width - Design.s(8))
-                    // Taller while it asks what to do with changes, so the
-                    // question does not squeeze the list to nothing.
-                    height: Design.s(window.pendingSwitch !== "" ? 440 : 300)
+                    height: Math.min(parent.height - Design.s(8),
+                                     Design.s(300)
+                                     + (window.pendingSwitch !== "" ? Design.s(140) : 0)
+                                     + (window.pendingRemoveWorktree !== "" ? Design.s(60) : 0)
+                                     + (GitBackend.worktrees.length > 1 ? Design.s(30 + 30 * GitBackend.worktrees.length) : 0))
                     radius: Design.s(8)
                     color: window.colHeader
                     border.color: window.colGreen
@@ -2032,8 +2122,22 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        const wt = (GitBackend.branchInfo[branchRowItem.modelData] || {}).worktree || "";
+                                        if (mouse.button === Qt.RightButton) {
+                                            branchMenu.worktree = wt;
+                                            branchMenu.target = branchRowItem.modelData;
+                                            branchMenu.popup();
+                                            return;
+                                        }
                                         if (branchRowItem.isCurrent) return;
+                                        // Checked out elsewhere: open that worktree instead.
+                                        if (wt !== "") {
+                                            window.branchDropdownOpen = false;
+                                            GitBackend.openRepo(wt);
+                                            return;
+                                        }
                                         // Uncommitted work: ask first, below.
                                         if (GitBackend.changedFiles.length > 0) {
                                             window.pendingSwitch = branchRowItem.modelData;
@@ -2064,7 +2168,8 @@ ApplicationWindow {
                                     Text {
                                         readonly property var info: GitBackend.branchInfo[branchRowItem.modelData] || ({})
                                         visible: text !== ""
-                                        text: info.gone ? "deleted on remote"
+                                        text: info.worktree ? "in worktree"
+                                            : info.gone ? "deleted on remote"
                                             : !info.upstream ? "local only"
                                             : (info.behind > 0 ? info.behind + "↓ " : "") + (info.ahead > 0 ? info.ahead + "↑" : "")
                                         font.family: Design.font.sans
@@ -2109,6 +2214,130 @@ ApplicationWindow {
                                                 // act on.
                                                 if (!GitBackend.deleteBranch(branchRowItem.modelData, false))
                                                     window.pendingDeleteBranch = branchRowItem.modelData;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Worktrees, only when there is more than the main one.
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            visible: GitBackend.worktrees.length > 1
+
+                            Text {
+                                text: "Worktrees"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(12)
+                                font.bold: true
+                                color: window.colGreen
+                                bottomPadding: Design.s(4)
+                            }
+
+                            Repeater {
+                                model: GitBackend.worktrees
+                                delegate: Rectangle {
+                                    id: wtRow
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Design.s(30)
+                                    radius: Design.s(4)
+                                    color: modelData.current ? Design.tint(Design.ok, 0.25)
+                                         : (wtArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Design.s(6)
+                                        anchors.rightMargin: Design.s(6)
+                                        spacing: Design.s(6)
+                                        Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colGreen }
+                                        Text {
+                                            text: wtRow.modelData.branch || ""
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(11)
+                                            font.bold: wtRow.modelData.current
+                                            color: window.colFg
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: wtRow.modelData.path
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(9)
+                                            color: window.colDim
+                                            elide: Text.ElideLeft
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: wtArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: (mouse) => {
+                                            if (mouse.button === Qt.RightButton) {
+                                                worktreeMenu.removable = !wtRow.modelData.main && !wtRow.modelData.current;
+                                                worktreeMenu.target = wtRow.modelData.path;
+                                                worktreeMenu.popup();
+                                                return;
+                                            }
+                                            if (wtRow.modelData.current) return;
+                                            const path = wtRow.modelData.path;
+                                            window.branchDropdownOpen = false;
+                                            GitBackend.openRepo(path);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(52)
+                            visible: window.pendingRemoveWorktree !== ""
+                            radius: Design.s(5)
+                            color: Design.tint(Design.danger, 0.15)
+                            border.color: window.colRed
+                            border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: Design.s(6)
+                                spacing: Design.s(4)
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "Remove the worktree at " + window.pendingRemoveWorktree + "?"
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(9)
+                                    color: window.colFg
+                                    elide: Text.ElideMiddle
+                                }
+                                RowLayout {
+                                    spacing: Design.s(10)
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        text: "Cancel"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        color: window.colDim
+                                        MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: window.pendingRemoveWorktree = "" }
+                                    }
+                                    Text {
+                                        text: "Remove"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        font.bold: true
+                                        color: window.colRed
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(4)
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                const path = window.pendingRemoveWorktree;
+                                                window.pendingRemoveWorktree = "";
+                                                GitBackend.removeWorktree(path);
                                             }
                                         }
                                     }
