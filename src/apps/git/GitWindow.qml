@@ -1,4 +1,5 @@
 import QtQuick
+import QtCore
 import QtQuick.Controls
 import QtQuick.Window
 import QtQuick.Layouts
@@ -9,7 +10,9 @@ ApplicationWindow {
     title: GitBackend.repoName ? "Git — " + GitBackend.repoName : "Git"
     width: Design.s(1040)
     height: Design.s(680)
-    minimumWidth: 700
+    // Low enough for a window tiled to half a small screen; the layout
+    // follows the width from there (sidebar, toolbar cells, file lists).
+    minimumWidth: 480
     minimumHeight: 450
     visible: true
     color: "transparent"
@@ -47,6 +50,239 @@ ApplicationWindow {
     // was never called from anywhere in the UI, so a repo changed in a terminal
     // stayed stale on screen until the window was closed and reopened.
     // b1air-monitor already uses F5 for exactly this.
+    // ── Right-click menus ──────────────────────────────────────────────────
+    // One of each, at window level, handed the path it is about before it
+    // opens. A Menu per list row would be a few hundred popups in History.
+    component ContextMenu: Menu {
+        id: menu
+        property string target: ""
+        padding: Design.s(4)
+        background: Rectangle {
+            implicitWidth: Design.s(210)
+            color: window.colHeader
+            border.color: window.colBorder
+            border.width: 1
+            radius: Design.s(8)
+        }
+        delegate: MenuItem {
+            id: menuItem
+            implicitHeight: Design.s(28)
+            contentItem: Text {
+                leftPadding: Design.s(8)
+                text: menuItem.text
+                font.family: Design.font.sans
+                font.pixelSize: Design.s(12)
+                color: menuItem.enabled ? window.colFg : window.colDim
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            background: Rectangle {
+                radius: Design.s(5)
+                color: menuItem.highlighted ? Design.tint(Design.accent, 0.20) : "transparent"
+            }
+        }
+    }
+    component MenuLine: MenuSeparator {
+        contentItem: Rectangle { implicitHeight: 1; color: window.colBorder }
+        topPadding: Design.s(3)
+        bottomPadding: Design.s(3)
+    }
+
+    function showMenu(menu, target) {
+        window.repoDropdownOpen = false;
+        window.branchDropdownOpen = false;
+        window.accountsDropdownOpen = false;
+        menu.target = target;
+        menu.popup();
+    }
+
+    // The repository itself.
+    ContextMenu {
+        id: repoMenu
+        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(repoMenu.target) }
+        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(repoMenu.target) }
+        MenuLine {}
+        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(repoMenu.target)) }
+    }
+    // A repository in the list, which may not be the open one: target is
+    // its absolute path, and the actions go straight to the tools.
+    ContextMenu {
+        id: repoListMenu
+        Action { text: "Open"; onTriggered: { GitBackend.openRepo(repoListMenu.target); } }
+        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(repoListMenu.target) }
+        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(repoListMenu.target) }
+        MenuLine {}
+        Action { text: "Copy path"; onTriggered: GitBackend.copyText(repoListMenu.target) }
+    }
+    // A changed file. Stage and unstage are already a click on the checkbox;
+    // here too because a right-click is where people look for them.
+    ContextMenu {
+        id: fileMenu
+        property bool staged: false
+        Action { text: "Open"; onTriggered: GitBackend.openFile(fileMenu.target) }
+        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(fileMenu.target) }
+        Action { text: "Open folder in Terminal"; onTriggered: GitBackend.openTerminal(fileMenu.target) }
+        MenuLine {}
+        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(fileMenu.target)) }
+        Action { text: "Copy relative path"; onTriggered: GitBackend.copyText(fileMenu.target) }
+        MenuLine {}
+        Action {
+            text: fileMenu.staged ? "Unstage" : "Stage"
+            onTriggered: fileMenu.staged ? GitBackend.unstageFile(fileMenu.target) : GitBackend.stageFile(fileMenu.target)
+        }
+    }
+    // A file of a commit: the version on disk now, which is what opens.
+    ContextMenu {
+        id: commitFileMenu
+        Action { text: "Open"; onTriggered: GitBackend.openFile(commitFileMenu.target) }
+        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(commitFileMenu.target) }
+        MenuLine {}
+        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(commitFileMenu.target)) }
+        Action { text: "Copy relative path"; onTriggered: GitBackend.copyText(commitFileMenu.target) }
+    }
+    ContextMenu {
+        id: commitMenu
+        property string subject: ""
+        Action { text: "Copy SHA"; onTriggered: GitBackend.copyText(commitMenu.target) }
+        Action { text: "Copy message"; onTriggered: GitBackend.copyText(commitMenu.subject) }
+    }
+
+    // A branch switch waiting on what to do with uncommitted changes.
+    property string pendingSwitch: ""
+
+    component ToolbarCell: Rectangle {
+        id: cell
+        property string icon: ""
+        property string caption: ""
+        property string title: ""
+        property string badge: ""
+        property bool dropdown: false
+        property bool open: false
+        // compact: icon and one line, sized to its text — for the tools on
+        // the right, which are not the three cells of the original.
+        property bool compact: false
+        property bool leftDivider: false
+        signal clicked()
+        signal rightClicked()
+
+        Layout.fillHeight: true
+        // The three main cells share the bar's width up to their natural
+        // size, rather than holding a fixed 250 each: in a window tiled to half
+        // a 1920 screen they did not fit, and the last one was cut off.
+        Layout.preferredWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(250)
+        Layout.maximumWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(250)
+        Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(110)
+        Layout.fillWidth: !compact
+        color: open ? Design.tint(Design.accent, 0.16)
+             : cellArea.containsMouse && enabled ? Design.tint(Design.text, 0.07) : "transparent"
+        opacity: enabled ? 1.0 : 0.5
+
+        Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+
+        // Right divider, and a left one where a group starts after a gap.
+        Rectangle {
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 1
+            color: window.colBorder
+        }
+        Rectangle {
+            visible: cell.leftDivider
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 1
+            color: window.colBorder
+        }
+
+        // Not anchors.fill: a compact cell takes its width from this row, and
+        // a row that also filled the cell would make that width depend on
+        // itself.
+        RowLayout {
+            id: cellRow
+            x: Design.s(cell.compact ? 12 : 14)
+            width: cell.compact ? implicitWidth : cell.width - Design.s(26)
+            height: parent.height
+            spacing: Design.s(cell.compact ? 7 : 12)
+
+            Text {
+                text: cell.icon
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(cell.compact ? 14 : 17)
+                color: cell.open ? window.colBlue : window.colFg
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: !cell.compact
+                Layout.alignment: Qt.AlignVCenter
+                spacing: Design.s(1)
+
+                Text {
+                    visible: !cell.compact
+                    Layout.fillWidth: true
+                    text: cell.caption
+                    font.family: Design.font.sans
+                    font.pixelSize: Design.s(10)
+                    color: window.colDim
+                    elide: Text.ElideRight
+                }
+                RowLayout {
+                    Layout.fillWidth: !cell.compact
+                    spacing: Design.s(6)
+                    Text {
+                        Layout.fillWidth: !cell.compact
+                        text: cell.title
+                        font.family: Design.font.sans
+                        font.pixelSize: Design.s(cell.compact ? 12 : 13)
+                        font.weight: cell.compact ? Font.Normal : Font.DemiBold
+                        color: window.colFg
+                        elide: Text.ElideRight
+                    }
+                    Rectangle {
+                        visible: cell.badge !== ""
+                        Layout.preferredWidth: badgeText.implicitWidth + Design.s(10)
+                        Layout.preferredHeight: Design.s(16)
+                        radius: height / 2
+                        color: Design.tint(Design.text, 0.14)
+                        Text {
+                            id: badgeText
+                            anchors.centerIn: parent
+                            text: cell.badge
+                            font.family: Design.font.sans
+                            font.pixelSize: Design.s(10)
+                            font.weight: Font.DemiBold
+                            color: window.colFg
+                        }
+                    }
+                }
+            }
+
+            Text {
+                visible: cell.dropdown
+                text: cell.open ? "󰅃" : "󰅀"
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(12)
+                color: window.colDim
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+
+        MouseArea {
+            id: cellArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: cell.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: (mouse) => {
+                if (!cell.enabled) return;
+                if (mouse.button === Qt.RightButton) cell.rightClicked();
+                else cell.clicked();
+            }
+        }
+    }
+
     Shortcut {
         sequence: "Escape"
         onActivated: window.close()
@@ -58,13 +294,116 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Escape"
+        onActivated: {
+            window.repoDropdownOpen = false;
+            window.branchDropdownOpen = false;
+            window.accountsDropdownOpen = false;
+            window.pendingSwitch = "";
+            window.pendingDeleteBranch = "";
+            window.pendingTrashRepo = "";
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+O"
+        onActivated: GitBackend.pickRepoFolder()
+    }
+
+    Shortcut {
         sequence: "Ctrl+R"
         onActivated: GitBackend.refresh()
     }
 
     property int currentTab: 0 // 0: Changes, 1: History
+    property string repoFilter: ""
+    property string pendingDeleteBranch: ""
+    // Deleting a repository is not something to do on one click, so the row
+    // asks first and names what it is about to move to the trash.
+    property string pendingTrashRepo: ""
+    readonly property string homePath: StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "")
+    readonly property var filteredRepos: {
+        const q = window.repoFilter.trim().toLowerCase();
+        if (q === "") return GitBackend.repos;
+        return GitBackend.repos.filter(r => r.name.toLowerCase().includes(q)
+                                         || r.path.toLowerCase().includes(q));
+    }
+    // Read from the repository (FETCH_HEAD), so it survives a restart and
+    // counts a fetch made in a terminal.
+    readonly property string lastFetchText: {
+        if (!window.hasRepo) return "No repository";
+        if (!GitBackend.lastFetchTime) return "Never fetched";
+        return "Last fetched " + window.relTime(GitBackend.lastFetchTime);
+    }
+    // The one action the sync cell offers, GitHub Desktop's order: a branch
+    // with no upstream is published; with commits to pull, pulling comes
+    // first, since a push would be refused; then push; otherwise fetch.
+    readonly property string syncAction: !window.hasRepo || !GitBackend.hasRemote ? "none"
+        : GitBackend.upstream === "" ? "publish"
+        : GitBackend.behindCount > 0 ? "pull"
+        : GitBackend.aheadCount > 0 ? "push" : "fetch"
     property bool repoDropdownOpen: false
     property bool branchDropdownOpen: false
+    property bool accountsDropdownOpen: false
+
+    // "3 weeks ago", "1 month ago". The history used git's own %cr, which
+    // keeps counting weeks until the tenth — a commit from two months back
+    // read "9 weeks ago". Here weeks stop at four.
+    // windowNow ticks once a minute so "just now" does not stay just now.
+    property real windowNow: Date.now()
+    Timer {
+        interval: 60000
+        running: true
+        repeat: true
+        onTriggered: window.windowNow = Date.now()
+    }
+    function relTime(t) {
+        if (!t) return "";
+        const plural = (n, unit) => n + " " + unit + (n === 1 ? "" : "s") + " ago";
+        const sec = Math.max(0, Math.floor(window.windowNow / 1000 - t));
+        if (sec < 60) return "just now";
+        const min = Math.floor(sec / 60);
+        if (min < 60) return plural(min, "minute");
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return plural(hr, "hour");
+        const days = Math.floor(hr / 24);
+        if (days < 7) return days === 1 ? "yesterday" : plural(days, "day");
+        if (days < 28) return plural(Math.floor(days / 7), "week");
+        const months = Math.max(1, Math.floor(days / 30.44));
+        if (months < 12) return plural(months, "month");
+        return plural(Math.max(1, Math.floor(days / 365.25)), "year");
+    }
+
+    // A file's state as an icon rather than a letter: the Octicons git diff
+    // set, which is what the letters were standing in for. Same colours as
+    // before; the word is in the tooltip.
+    function statusIcon(st) {
+        return st === "added" ? "" : st === "deleted" ? ""
+             : st === "renamed" ? "" : "";
+    }
+    function statusColor(st) {
+        return st === "added" ? window.colGreen : st === "deleted" ? window.colRed
+             : st === "renamed" ? window.colCyan : window.colOrange;
+    }
+    function statusWord(st) {
+        return st === "added" ? "Added" : st === "deleted" ? "Deleted"
+             : st === "renamed" ? "Renamed" : "Modified";
+    }
+    // "Blair and Claude", "Blair and 2 others" — how GitHub Desktop names a
+    // commit with co-authors. Only the author was shown before, so a commit
+    // written together credited one person.
+    function people(author, coAuthors) {
+        const co = (coAuthors || []).filter(n => n !== author);
+        if (co.length === 0) return author || "";
+        if (co.length === 1) return author + " and " + co[0];
+        return author + " and " + co.length + " others";
+    }
+    function initials(name) {
+        const words = (name || "?").split(/[\s._-]+/).filter(w => w.length > 0);
+        if (words.length === 0) return "?";
+        return (words[0][0] + (words.length > 1 ? words[1][0] : "")).toUpperCase();
+    }
+    readonly property var githubAccount: GitBackend.accounts.find(a => a.provider === "github") || null
 
     Rectangle {
         id: windowFrame
@@ -83,17 +422,22 @@ ApplicationWindow {
             spacing: 0
 
             // ══════════════════════════════════════════════════════════════════
-            // GITHUB DESKTOP TOP TOOLBAR (42px)
+            // TOOLBAR — GitHub Desktop's
             // ══════════════════════════════════════════════════════════════════
+            // Flush cells the full height of the bar, divided by a hairline,
+            // square, with the open one lit — the shape GitHub Desktop has. The
+            // bar before this was a row of rounded, outlined pills with gaps
+            // between them and two loose arrow buttons for push and pull, which
+            // read as a web form rather than that app. The arrows are gone into
+            // the third cell, which is one action at a time as in the original:
+            // Publish branch, Pull origin, Push origin, or Fetch origin.
+            //
             // A full border on a bar that spans the window draws its left and
-            // right edges directly on top of the frame's own, and its top edge
-            // on nothing at all. What separates a bar from what is under it is
-            // one line, so that is what it has. The same correction is made to
-            // every header inside the panels below — the window used to be a
-            // grid of hairline boxes because each one drew four sides.
+            // right edges on top of the frame's own; what separates the bar from
+            // what is under it is one line, so that is what it has.
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(42)
+                Layout.preferredHeight: Design.s(50)
                 color: window.colHeader
                 z: 20
 
@@ -107,236 +451,89 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Design.s(12)
-                    anchors.rightMargin: Design.s(12)
-                    spacing: Design.s(8)
+                    anchors.bottomMargin: 1
+                    spacing: 0
 
-                    // 1. Current Repository Selector
-                    Rectangle {
+                    ToolbarCell {
                         id: repoBtn
-                        width: repoRow.implicitWidth + Design.s(20)
-                        height: Design.s(28)
-                        radius: Design.s(6)
-                        color: repoArea.containsMouse || window.repoDropdownOpen ? Design.tint(Design.accent, 0.18) : Design.tint(Design.raised, 0.60)
-                        border.color: window.repoDropdownOpen ? window.colBlue : window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: repoRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(6)
-                            Text {
-                                text: "󰊢"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(13)
-                                color: window.colBlue
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: "Current Repository:"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(10)
-                                color: window.colDim
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: GitBackend.repoName
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(12)
-                                font.bold: true
-                                color: window.colFg
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: window.repoDropdownOpen ? "󰅃" : "󰅀"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                color: window.colDim
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        MouseArea {
-                            id: repoArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                window.repoDropdownOpen = !window.repoDropdownOpen;
-                                window.branchDropdownOpen = false;
-                            }
+                        icon: "󰊢"
+                        caption: "Current repository"
+                        title: GitBackend.repoName || "No repository"
+                        dropdown: true
+                        open: window.repoDropdownOpen
+                        onRightClicked: if (window.hasRepo) window.showMenu(repoMenu, "")
+                        onClicked: {
+                            window.repoDropdownOpen = !window.repoDropdownOpen;
+                            window.branchDropdownOpen = false;
+                            window.accountsDropdownOpen = false;
                         }
                     }
 
-                    // 2. Current Branch Selector
-                    Rectangle {
+                    ToolbarCell {
                         id: branchBtn
-                        width: branchRow.implicitWidth + Design.s(20)
-                        height: Design.s(28)
-                        radius: Design.s(6)
-                        color: branchArea.containsMouse || window.branchDropdownOpen ? Design.tint(Design.ok, 0.18) : Design.tint(Design.raised, 0.60)
-                        border.color: window.branchDropdownOpen ? window.colGreen : window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: branchRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(6)
-                            Text {
-                                text: ""
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(13)
-                                color: window.colGreen
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: "Current Branch:"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(10)
-                                color: window.colDim
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: GitBackend.branchName
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                font.bold: true
-                                color: window.colGreen
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: window.branchDropdownOpen ? "󰅃" : "󰅀"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                color: window.colDim
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        MouseArea {
-                            id: branchArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                window.branchDropdownOpen = !window.branchDropdownOpen;
-                                window.repoDropdownOpen = false;
-                            }
-                        }
-                    }
-
-                    // 3. Fetch / Push / Pull Action Pill
-                    Rectangle {
-                        id: syncBtn
-                        width: syncRow.implicitWidth + Design.s(20)
-                        height: Design.s(28)
-                        radius: Design.s(6)
-                        color: syncArea.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.raised, 0.60)
-                        border.color: window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: syncRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(6)
-                            Text {
-                                text: "󰑐"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(12)
-                                color: window.colBlue
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: "Fetch origin"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(11)
-                                font.bold: true
-                                color: window.colFg
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        opacity: window.hasRepo ? 1.0 : 0.45
+                        // The branch name is the one value here that can be
+                        // arbitrarily long, so this cell elides instead of
+                        // pushing the rest of the bar along.
+                        icon: ""
+                        caption: "Current branch"
+                        title: window.hasRepo ? GitBackend.branchName : "—"
+                        dropdown: true
+                        open: window.branchDropdownOpen
                         enabled: window.hasRepo
-
-                        MouseArea {
-                            id: syncArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: GitBackend.fetch()
+                        onClicked: {
+                            window.branchDropdownOpen = !window.branchDropdownOpen;
+                            window.repoDropdownOpen = false;
+                            window.accountsDropdownOpen = false;
                         }
                     }
 
-                    // Push / Pull Quick Actions
-                    Row {
-                        spacing: Design.s(4)
-                        Layout.alignment: Qt.AlignVCenter
-
-                        Rectangle {
-                            width: Design.s(28); height: Design.s(28); radius: Design.s(6)
-                            color: pushArea.containsMouse ? Design.tint(Design.mauve, 0.25) : "transparent"
-                            border.color: pushArea.containsMouse ? window.colPurple : window.colBorder
-                            border.width: 1
-                            opacity: window.hasRepo ? 1.0 : 0.45
-                            enabled: window.hasRepo
-                            Text { anchors.centerIn: parent; text: "󰜮"; font.family: Design.font.mono; font.pixelSize: Design.s(13); color: window.colPurple }
-                            MouseArea { id: pushArea; anchors.fill: parent; hoverEnabled: true; cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: GitBackend.push() }
-                        }
-
-                        Rectangle {
-                            width: Design.s(28); height: Design.s(28); radius: Design.s(6)
-                            opacity: window.hasRepo ? 1.0 : 0.45
-                            enabled: window.hasRepo
-                            color: pullArea.containsMouse ? Design.tint(Design.sapphire, 0.25) : "transparent"
-                            border.color: pullArea.containsMouse ? window.colCyan : window.colBorder
-                            border.width: 1
-                            Text { anchors.centerIn: parent; text: "󰜱"; font.family: Design.font.mono; font.pixelSize: Design.s(13); color: window.colCyan }
-                            MouseArea { id: pullArea; anchors.fill: parent; hoverEnabled: true; cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: GitBackend.pull() }
+                    ToolbarCell {
+                        id: syncBtn
+                        enabled: window.syncAction !== "none"
+                        icon: window.syncAction === "publish" ? "󰅧"
+                            : window.syncAction === "pull" ? "󰁅"
+                            : window.syncAction === "push" ? "󰁝" : "󰑐"
+                        title: window.syncAction === "publish" ? "Publish branch"
+                             : window.syncAction === "pull" ? "Pull " + GitBackend.remoteName
+                             : window.syncAction === "push" ? "Push " + GitBackend.remoteName
+                             : window.syncAction === "fetch" ? "Fetch " + GitBackend.remoteName
+                             : "Fetch origin"
+                        caption: !window.hasRepo ? "No repository"
+                               : !GitBackend.hasRemote ? "This repository has no remote"
+                               : GitBackend.fetching ? "Fetching…"
+                               : GitBackend.upstreamGone ? "Deleted on " + GitBackend.remoteName + " — publish again?"
+                               : window.syncAction === "publish" ? "Publish this branch to " + GitBackend.remoteName
+                               : window.lastFetchText
+                        // Counts beside the title, as the original draws them:
+                        // what is waiting in each direction.
+                        badge: (GitBackend.behindCount > 0 ? GitBackend.behindCount + "↓" : "")
+                             + (GitBackend.behindCount > 0 && GitBackend.aheadCount > 0 ? " " : "")
+                             + (GitBackend.aheadCount > 0 && window.syncAction !== "publish" ? GitBackend.aheadCount + "↑" : "")
+                        onClicked: {
+                            if (window.syncAction === "pull") GitBackend.pull();
+                            else if (window.syncAction === "push" || window.syncAction === "publish") GitBackend.push();
+                            else GitBackend.fetch();
                         }
                     }
 
-                    Item { Layout.fillWidth: true }
+                    Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
 
-                    // Quick External Tools
-                    Row {
-                        spacing: Design.s(4)
-                        Layout.alignment: Qt.AlignVCenter
-
-                        Rectangle {
-                            width: termRow.implicitWidth + Design.s(14)
-                            height: Design.s(26)
-                            radius: Design.s(6)
-                            color: termArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent"
-                            border.color: window.colBorder
-                            border.width: 1
-
-                            Row {
-                                id: termRow
-                                anchors.centerIn: parent
-                                spacing: Design.s(5)
-                                Text { text: "󰞷"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colFg }
-                                Text { text: "Terminal"; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: window.colFg }
-                            }
-                            MouseArea { id: termArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.openTerminal() }
-                        }
-
-                        Rectangle {
-                            width: filesRow.implicitWidth + Design.s(14)
-                            height: Design.s(26)
-                            radius: Design.s(6)
-                            color: filesArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent"
-                            border.color: window.colBorder
-                            border.width: 1
-
-                            Row {
-                                id: filesRow
-                                anchors.centerIn: parent
-                                spacing: Design.s(5)
-                                Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colFg }
-                                Text { text: "Files"; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: window.colFg }
-                            }
-                            MouseArea { id: filesArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.openFileManager() }
+                    // Beyond the original: accounts. Terminal and Files were
+                    // two more cells here; they moved to the right-click menus
+                    // (on the repository, a file, a commit), where they open
+                    // the thing clicked rather than always the repository root.
+                    ToolbarCell {
+                        id: accountsBtn
+                        compact: true
+                        leftDivider: true
+                        icon: "󰀉"
+                        title: window.githubAccount && window.githubAccount.login ? window.githubAccount.login : "Accounts"
+                        open: window.accountsDropdownOpen
+                        onClicked: {
+                            window.accountsDropdownOpen = !window.accountsDropdownOpen;
+                            window.repoDropdownOpen = false;
+                            window.branchDropdownOpen = false;
+                            if (window.accountsDropdownOpen) GitBackend.refreshAccounts();
                         }
                     }
                 }
@@ -361,7 +558,10 @@ ApplicationWindow {
                     // it: Files and the monitor are rounded cards with room
                     // around them.
                     Rectangle {
-                        Layout.preferredWidth: Design.s(320)
+                        // A share of the window, within bounds, rather than a
+                        // fixed 320: tiled to half a screen the diff beside it
+                        // was left with too little room to read.
+                        Layout.preferredWidth: Math.round(Math.max(Design.s(210), Math.min(Design.s(340), window.width * 0.28)))
                         Layout.fillHeight: true
                         radius: Design.s(Design.radius.card)
                         color: window.colDark
@@ -433,7 +633,13 @@ ApplicationWindow {
                                         MouseArea {
                                             anchors.fill: parent
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: window.currentTab = 1
+                                            onClicked: {
+                                                window.currentTab = 1;
+                                                // Open on the newest commit rather
+                                                // than an empty panel.
+                                                if (GitBackend.selectedCommit === "" && GitBackend.history.count > 0)
+                                                    GitBackend.selectCommit(GitBackend.history.hashAt(0));
+                                            }
                                         }
                                     }
                                 }
@@ -507,6 +713,66 @@ ApplicationWindow {
                                         }
                                     }
 
+                                    // Changes this app stashed when leaving
+                                    // this branch, offered back on return.
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Design.s(34)
+                                        visible: GitBackend.branchStash.ref !== undefined
+                                        color: Design.tint(Design.accent, 0.12)
+
+                                        property bool confirmDiscard: false
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(10)
+                                            anchors.rightMargin: Design.s(10)
+                                            spacing: Design.s(8)
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: parent.parent.confirmDiscard ? "Delete the stash for good?"
+                                                    : "Stashed changes (" + (GitBackend.branchStash.files || 0) + ")"
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                font.bold: true
+                                                color: parent.parent.confirmDiscard ? window.colRed : window.colBlue
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                text: parent.parent.confirmDiscard ? "Delete" : "Restore"
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                font.bold: true
+                                                color: parent.parent.confirmDiscard ? window.colRed : window.colGreen
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    anchors.margins: -Design.s(4)
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        const bar = parent.parent.parent;
+                                                        if (bar.confirmDiscard) GitBackend.discardStash();
+                                                        else GitBackend.restoreStash();
+                                                        bar.confirmDiscard = false;
+                                                    }
+                                                }
+                                            }
+                                            Text {
+                                                text: parent.parent.confirmDiscard ? "Keep" : "Discard"
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(11)
+                                                color: window.colDim
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    anchors.margins: -Design.s(4)
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    // Discarding loses work, so it
+                                                    // asks once, in place.
+                                                    onClicked: parent.parent.parent.confirmDiscard = !parent.parent.parent.confirmDiscard
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     // Changed Files ListView
                                     ListView {
                                         id: changedList
@@ -558,13 +824,12 @@ ApplicationWindow {
                                                     }
                                                 }
 
-                                                // File Status Badge (M, A, D)
+                                                // File state icon
                                                 Text {
-                                                    text: modelData.status === "added" ? "A" : (modelData.status === "deleted" ? "D" : "M")
+                                                    text: window.statusIcon(modelData.status)
                                                     font.family: Design.font.mono
-                                                    font.pixelSize: Design.s(10)
-                                                    font.bold: true
-                                                    color: modelData.status === "added" ? window.colGreen : (modelData.status === "deleted" ? window.colRed : window.colOrange)
+                                                    font.pixelSize: Design.s(13)
+                                                    color: window.statusColor(modelData.status)
                                                 }
 
                                                 // File Name
@@ -583,8 +848,18 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: GitBackend.selectFile(modelData.path)
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: (mouse) => {
+                                                    GitBackend.selectFile(modelData.path);
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        fileMenu.staged = modelData.isStaged;
+                                                        window.showMenu(fileMenu, modelData.path);
+                                                    }
+                                                }
                                             }
+                                            ToolTip.visible: fArea.containsMouse
+                                            ToolTip.delay: 800
+                                            ToolTip.text: window.statusWord(modelData.status) + (modelData.isStaged ? ", staged" : "")
                                         }
                                     }
 
@@ -729,13 +1004,19 @@ ApplicationWindow {
                                     id: historyList
                                     anchors.fill: parent
                                     clip: true
-                                    model: GitBackend.commitHistory
+                                    model: GitBackend.history
                                     spacing: 1
+                                    ScrollBar.vertical: ScrollBar {}
 
+                                    // The rows were hover-only: nothing
+                                    // happened on click, so a commit's files
+                                    // and changes could not be seen at all.
                                     delegate: Rectangle {
                                         width: historyList.width
                                         height: Design.s(52)
-                                        color: hArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent"
+                                        readonly property bool isSelected: GitBackend.selectedCommit === model.fullHash
+                                        color: isSelected ? Design.tint(Design.accent, 0.18)
+                                                          : (hArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
                                         border.color: Design.tint(Design.accent, 0.08)
                                         border.width: 1
 
@@ -748,22 +1029,38 @@ ApplicationWindow {
                                                 Layout.fillWidth: true
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: modelData.message || "Commit"
+                                                    text: model.message || "Commit"
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(11)
                                                     font.bold: true
                                                     color: window.colFg
                                                     elide: Text.ElideRight
                                                 }
+                                                // Pushed or not. A cloud with a
+                                                // tick when a remote has it, an
+                                                // upload arrow in the warning
+                                                // colour when only this
+                                                // machine does.
+                                                Text {
+                                                    visible: model.sync !== ""
+                                                    text: model.sync === "local" ? "󰅧" : "󰅠"
+                                                    font.family: Design.font.mono
+                                                    font.pixelSize: Design.s(13)
+                                                    color: model.sync === "local" ? window.colOrange : window.colDim
+                                                    opacity: model.sync === "local" ? 1.0 : 0.6
+                                                }
                                                 Rectangle {
                                                     width: Design.s(54); height: Design.s(18); radius: Design.s(3)
                                                     color: Design.tint(Design.accent, 0.15)
-                                                    Text { anchors.centerIn: parent; text: modelData.hash || ""; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colBlue }
+                                                    Text { anchors.centerIn: parent; text: model.hash || ""; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colBlue }
                                                 }
                                             }
 
                                             Text {
-                                                text: (modelData.author || "User") + " • " + (modelData.date || "")
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                                text: window.people(model.author || "User", model.coAuthors) + " • " + window.relTime(model.time)
+                                                      + (model.sync === "local" ? " • not pushed" : "")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(10)
                                                 color: window.colDim
@@ -774,7 +1071,20 @@ ApplicationWindow {
                                             id: hArea
                                             anchors.fill: parent
                                             hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            onClicked: (mouse) => {
+                                                GitBackend.selectCommit(model.fullHash);
+                                                if (mouse.button === Qt.RightButton) {
+                                                    commitMenu.subject = model.message;
+                                                    window.showMenu(commitMenu, model.fullHash);
+                                                }
+                                            }
                                         }
+                                        ToolTip.visible: hArea.containsMouse
+                                        ToolTip.delay: 800
+                                        ToolTip.text: model.sync === "local" ? "Not pushed — on no remote yet"
+                                                    : model.sync === "pushed" ? "Pushed" : "This repository has no remote"
                                     }
                                 }
                             }
@@ -791,9 +1101,74 @@ ApplicationWindow {
                         border.width: 1
                         clip: true
 
+                        // One diff row, shared by the working-tree diff and a
+                        // commit's: two copies of this delegate would drift.
+                        Component {
+                            id: diffRowDelegate
+
+                            Rectangle {
+                                width: ListView.view ? ListView.view.width : 0
+                                height: Math.max(20, diffLineText.implicitHeight + 4)
+
+                                color: {
+                                    if (modelData.type === "add") return Design.tint(Design.ok, 0.14);
+                                    if (modelData.type === "del") return Design.tint(Design.danger, 0.16);
+                                    if (modelData.type === "header") return Design.tint(Design.accent, 0.12);
+                                    return "transparent";
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 0
+
+                                    // Old Line Num
+                                    // Layout.preferredWidth, not width: a
+                                    // RowLayout ignores width, so both number
+                                    // columns shrank to their text and the
+                                    // new-line number sat on top of the old.
+                                    Text {
+                                        Layout.preferredWidth: Design.s(42)
+                                        text: modelData.oldLine || ""
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(11)
+                                        color: window.colDim
+                                        rightPadding: 8
+                                    }
+
+                                    // New Line Num
+                                    Text {
+                                        Layout.preferredWidth: Design.s(42)
+                                        text: modelData.newLine || ""
+                                        horizontalAlignment: Text.AlignRight
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(11)
+                                        color: window.colDim
+                                        rightPadding: 8
+                                    }
+
+                                    // Line Content
+                                    Text {
+                                        id: diffLineText
+                                        Layout.fillWidth: true
+                                        text: modelData.text || ""
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(11)
+                                        color: {
+                                            if (modelData.type === "add") return window.colGreen;
+                                            if (modelData.type === "del") return window.colRed;
+                                            if (modelData.type === "header") return window.colBlue;
+                                            return window.colFg;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 0
+                            visible: window.currentTab === 0
 
                             // Diff File Header Bar
                             // Names the file being shown, and nothing else. It
@@ -856,60 +1231,7 @@ ApplicationWindow {
                                 Layout.fillHeight: true
                                 clip: true
                                 model: GitBackend.currentDiff
-
-                                delegate: Rectangle {
-                                    width: diffList.width
-                                    height: Math.max(20, diffLineText.implicitHeight + 4)
-
-                                    color: {
-                                        if (modelData.type === "add") return Design.tint(Design.ok, 0.14);
-                                        if (modelData.type === "del") return Design.tint(Design.danger, 0.16);
-                                        if (modelData.type === "header") return Design.tint(Design.accent, 0.12);
-                                        return "transparent";
-                                    }
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        spacing: 0
-
-                                        // Old Line Num
-                                        Text {
-                                            width: Design.s(42)
-                                            text: modelData.oldLine || ""
-                                            horizontalAlignment: Text.AlignRight
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.s(11)
-                                            color: window.colDim
-                                            rightPadding: 8
-                                        }
-
-                                        // New Line Num
-                                        Text {
-                                            width: Design.s(42)
-                                            text: modelData.newLine || ""
-                                            horizontalAlignment: Text.AlignRight
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.s(11)
-                                            color: window.colDim
-                                            rightPadding: 8
-                                        }
-
-                                        // Line Content
-                                        Text {
-                                            id: diffLineText
-                                            Layout.fillWidth: true
-                                            text: modelData.text || ""
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.s(11)
-                                            color: {
-                                                if (modelData.type === "add") return window.colGreen;
-                                                if (modelData.type === "del") return window.colRed;
-                                                if (modelData.type === "header") return window.colBlue;
-                                                return window.colFg;
-                                            }
-                                        }
-                                    }
-                                }
+                                delegate: diffRowDelegate
 
                                 // Empty State when clean
                                 ColumnLayout {
@@ -942,18 +1264,349 @@ ApplicationWindow {
                                 }
                             }
                         }
+
+                        // ── A commit from History ─────────────────────────────
+                        // With the History tab up this panel used to go on
+                        // showing the working-tree diff, which has nothing to
+                        // do with the commit list beside it. Now: what the
+                        // commit is, the files it touched, and the diff of the
+                        // one picked.
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+                            visible: window.currentTab === 1
+
+                            // Commit header: subject, author, date, hash, body.
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: commitHead.implicitHeight + Design.s(20)
+                                visible: GitBackend.selectedCommit !== ""
+                                color: Design.tint(Design.ground, 0.8)
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    height: 1
+                                    color: window.colBorder
+                                }
+
+                                ColumnLayout {
+                                    id: commitHead
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: Design.s(14)
+                                    anchors.rightMargin: Design.s(14)
+                                    spacing: Design.s(4)
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: GitBackend.commitInfo.subject || ""
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(13)
+                                        font.bold: true
+                                        color: window.colFg
+                                        elide: Text.ElideRight
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Design.s(8)
+
+                                        // One initial-disc per person, the
+                                        // author first, overlapping as the
+                                        // original stacks its avatars. The
+                                        // full list is in the tooltip.
+                                        Row {
+                                            id: peopleRow
+                                            spacing: -Design.s(5)
+                                            readonly property var names: [GitBackend.commitInfo.author || ""]
+                                                .concat((GitBackend.commitInfo.coAuthors || [])
+                                                        .filter(n => n !== GitBackend.commitInfo.author))
+                                            Repeater {
+                                                model: peopleRow.names
+                                                delegate: Rectangle {
+                                                    required property string modelData
+                                                    required property int index
+                                                    z: peopleRow.names.length - index
+                                                    width: Design.s(20); height: width; radius: width / 2
+                                                    color: [window.colBlue, window.colPurple, window.colGreen, window.colOrange, window.colCyan][index % 5]
+                                                    border.color: Design.tint(Design.ground, 0.8)
+                                                    border.width: 2
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: window.initials(parent.modelData)
+                                                        font.family: Design.font.sans
+                                                        font.pixelSize: Design.s(8)
+                                                        font.bold: true
+                                                        color: Design.accentText
+                                                    }
+                                                }
+                                            }
+                                            // A handler, not a MouseArea: an
+                                            // Item child of a Row is laid out
+                                            // by it, and one sized to the Row
+                                            // widens the Row it is sized to —
+                                            // the layout pass never ends.
+                                            HoverHandler { id: peopleHover }
+                                            ToolTip.visible: peopleHover.hovered
+                                            ToolTip.delay: 300
+                                            ToolTip.text: peopleRow.names.join("\n")
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: window.people(GitBackend.commitInfo.author || "", GitBackend.commitInfo.coAuthors) + "  •  "
+                                                  + (GitBackend.commitInfo.date || "") + "  •  "
+                                                  + (GitBackend.commitInfo.hash || "") + "  •  "
+                                                  + GitBackend.commitFiles.length
+                                                  + (GitBackend.commitFiles.length === 1 ? " file" : " files")
+                                                  + (GitBackend.selectedCommitSync === "local" ? "  •  not pushed"
+                                                     : GitBackend.selectedCommitSync === "pushed" ? "  •  pushed" : "")
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(11)
+                                            color: window.colDim
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        visible: text !== ""
+                                        text: GitBackend.commitInfo.body || ""
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(11)
+                                        color: window.colFg
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 4
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 0
+                                visible: GitBackend.selectedCommit !== ""
+
+                                // The commit's files.
+                                ListView {
+                                    id: commitFileList
+                                    Layout.preferredWidth: Math.round(Math.max(Design.s(150), Math.min(Design.s(260), window.width * 0.2)))
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    model: GitBackend.commitFiles
+                                    spacing: 1
+                                    ScrollBar.vertical: ScrollBar {}
+
+                                    delegate: Rectangle {
+                                        id: commitFileRow
+                                        width: commitFileList.width
+                                        height: Design.s(30)
+                                        readonly property bool isSelected: GitBackend.commitFile === modelData.path
+                                        color: isSelected ? Design.tint(Design.accent, 0.18)
+                                                          : (cfArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(10)
+                                            anchors.rightMargin: Design.s(8)
+                                            spacing: Design.s(8)
+
+                                            Text {
+                                                text: window.statusIcon(modelData.status)
+                                                font.family: Design.font.mono
+                                                font.pixelSize: Design.s(13)
+                                                color: window.statusColor(modelData.status)
+                                            }
+
+                                            // The name first, the directory
+                                            // after it dimmed: in a narrow
+                                            // column a middle-elided full path
+                                            // hides exactly the part that
+                                            // tells two files apart.
+                                            Text {
+                                                Layout.maximumWidth: commitFileRow.width * 0.6
+                                                text: modelData.name
+                                                font.family: Design.font.mono
+                                                font.pixelSize: Design.s(11)
+                                                color: window.colFg
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: modelData.path.substring(0, modelData.path.length - modelData.name.length)
+                                                font.family: Design.font.mono
+                                                font.pixelSize: Design.s(10)
+                                                color: window.colDim
+                                                elide: Text.ElideLeft
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: cfArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            onClicked: (mouse) => {
+                                                GitBackend.selectCommitFile(modelData.path);
+                                                if (mouse.button === Qt.RightButton) {
+                                                    window.showMenu(commitFileMenu, modelData.path);
+                                                }
+                                            }
+                                        }
+
+                                        ToolTip.visible: cfArea.containsMouse
+                                        ToolTip.delay: 600
+                                        ToolTip.text: window.statusWord(modelData.status) + ": "
+                                                      + (modelData.oldPath ? modelData.oldPath + " → " + modelData.path
+                                                                           : modelData.path)
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: window.colBorder
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    spacing: 0
+
+                                    // The path of the file shown, in full —
+                                    // the list beside it has room only for
+                                    // the name.
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: Design.s(30)
+                                        visible: GitBackend.commitFile !== ""
+                                        color: Design.tint(Design.ground, 0.4)
+
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.bottom: parent.bottom
+                                            height: 1
+                                            color: window.colBorder
+                                        }
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(12)
+                                            anchors.rightMargin: Design.s(12)
+                                            verticalAlignment: Text.AlignVCenter
+                                            text: GitBackend.commitFile
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(11)
+                                            font.bold: true
+                                            color: window.colFg
+                                            elide: Text.ElideMiddle
+                                        }
+                                    }
+
+                                    ListView {
+                                        id: commitDiffList
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        clip: true
+                                        model: GitBackend.commitDiff
+                                        delegate: diffRowDelegate
+                                        ScrollBar.vertical: ScrollBar {}
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            visible: GitBackend.commitDiff.length === 0
+                                            // A rename with identical content
+                                            // has no hunks; say what happened
+                                            // to it instead of "nothing".
+                                            readonly property var shown: GitBackend.commitFiles.find(f => f.path === GitBackend.commitFile)
+                                            text: GitBackend.commitFiles.length === 0
+                                                  ? "This commit changes no files"
+                                                  : (shown && shown.oldPath)
+                                                    ? "Renamed from " + shown.oldPath + ", content unchanged"
+                                                    : "No textual changes in this file"
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(12)
+                                            color: window.colDim
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Nothing picked yet.
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignCenter
+                                Layout.fillHeight: true
+                                spacing: Design.s(12)
+                                visible: GitBackend.selectedCommit === ""
+
+                                Item { Layout.fillHeight: true }
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "󰜘"
+                                    font.family: Design.font.mono
+                                    font.pixelSize: Design.s(48)
+                                    color: window.colDim
+                                }
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: GitBackend.isRepo ? "Select a commit" : "No Git Repository Open"
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(14)
+                                    font.bold: true
+                                    color: window.colFg
+                                }
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: GitBackend.isRepo ? "Its files and changes appear here."
+                                                            : "Select a repository from the top menu or open a folder."
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(12)
+                                    color: window.colDim
+                                }
+                                Item { Layout.fillHeight: true }
+                            }
+                        }
                     }
                 }
 
                 // ══════════════════════════════════════════════════════════════
+                // Clicking outside a popup closes it.
+                //
+                // Nothing sat behind these, so once one was open the only way
+                // to dismiss it was to find the button that opened it — every
+                // other click went to whatever was underneath and the popup
+                // stayed. Below the popups (z 50) and above the workspace, so
+                // it catches the clicks they do not.
+                MouseArea {
+                    anchors.fill: parent
+                    z: 40
+                    visible: window.repoDropdownOpen || window.branchDropdownOpen || window.accountsDropdownOpen
+                    onClicked: {
+                        window.repoDropdownOpen = false;
+                        window.branchDropdownOpen = false;
+                        window.accountsDropdownOpen = false;
+                        window.pendingSwitch = "";
+                        window.pendingDeleteBranch = "";
+                        window.pendingTrashRepo = "";
+                    }
+                }
+
                 // REPOSITORY SELECTOR DROPDOWN POPUP
                 // ══════════════════════════════════════════════════════════════
+                // Hangs from its cell, flush with its left edge, as the
+                // original's does.
                 Rectangle {
                     anchors.top: parent.top
                     anchors.left: parent.left
-                    anchors.leftMargin: Design.s(12)
-                    width: Design.s(380)
-                    height: Design.s(280)
+                    anchors.leftMargin: repoBtn.x
+                    width: Math.min(Design.s(420), parent.width - repoBtn.x - Design.s(8))
+                    height: Design.s(330)
                     radius: Design.s(8)
                     color: window.colHeader
                     border.color: window.colBlue
@@ -966,18 +1619,66 @@ ApplicationWindow {
                         anchors.margins: Design.s(10)
                         spacing: Design.s(8)
 
-                        Text {
-                            text: "Switch Local Repository"
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(12)
-                            font.bold: true
-                            color: window.colBlue
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Repositories"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(12)
+                                font.bold: true
+                                color: window.colBlue
+                            }
+                            // No "rescan": the list is what has been opened
+                            // here, on purpose. Searching the disk both missed
+                            // the repository in use and filled the list with
+                            // whatever else it found.
+                            Text {
+                                text: GitBackend.repos.length + (GitBackend.repos.length === 1 ? " repository" : " repositories")
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(10)
+                                color: window.colDim
+                            }
                         }
 
-                        // Path Input Field
+                        // Open a folder the way every other application does.
+                        // The only way in used to be typing a path into a text
+                        // field, with no browser of any kind.
                         Rectangle {
                             Layout.fillWidth: true
-                            height: Design.s(30)
+                            Layout.preferredHeight: Design.s(30)
+                            radius: Design.s(5)
+                            color: openArea.containsMouse ? Design.tint(Design.accent, 0.30) : Design.tint(Design.accent, 0.18)
+                            border.color: window.colBlue
+                            border.width: 1
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: Design.s(6)
+                                Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
+                                Text {
+                                    text: "Open repository…"
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(11)
+                                    font.bold: true
+                                    color: window.colFg
+                                }
+                            }
+
+                            MouseArea {
+                                id: openArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: GitBackend.pickRepoFolder()
+                            }
+                        }
+
+                        // Filter, which doubles as the old path field: a path
+                        // typed in full still opens on Enter.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(28)
                             radius: Design.s(5)
                             color: window.colBg
                             border.color: window.colBorder
@@ -985,33 +1686,148 @@ ApplicationWindow {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
+                                anchors.leftMargin: Design.s(8)
+                                anchors.rightMargin: Design.s(8)
                                 spacing: Design.s(6)
 
+                                Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colDim }
+
                                 TextInput {
-                                    id: customPathInput
+                                    id: repoFilterInput
                                     Layout.fillWidth: true
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(11)
                                     color: window.colFg
-                                    text: GitBackend.repoPath
                                     selectByMouse: true
+                                    clip: true
+                                    onTextChanged: window.repoFilter = text
                                     onAccepted: {
-                                        GitBackend.openRepo(customPathInput.text);
+                                        if (text.startsWith("/") || text.startsWith("~")) {
+                                            GitBackend.addRepo(text.replace("~", window.homePath));
+                                            window.repoDropdownOpen = false;
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: repoFilterInput.text === ""
+                                        text: "Filter, or type a path"
+                                        font: repoFilterInput.font
+                                        color: window.colDim
+                                    }
+                                }
+                            }
+                        }
+
+                        ListView {
+                            id: repoList
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            spacing: 1
+                            model: window.filteredRepos
+
+                            delegate: Rectangle {
+                                id: repoRowItem
+                                required property var modelData
+                                width: repoList.width
+                                height: Design.s(34)
+                                radius: Design.s(4)
+                                readonly property bool isCurrent: modelData.path === GitBackend.repoPath
+                                color: repoItemArea.containsMouse ? Design.tint(Design.accent, 0.20)
+                                     : (isCurrent ? Design.tint(Design.accent, 0.10) : "transparent")
+
+                                MouseArea {
+                                    id: repoItemArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            window.showMenu(repoListMenu, repoRowItem.modelData.path);
+                                            return;
+                                        }
+                                        GitBackend.openRepo(repoRowItem.modelData.path);
                                         window.repoDropdownOpen = false;
                                     }
                                 }
 
-                                Rectangle {
-                                    width: Design.s(44); height: Design.s(20); radius: Design.s(3)
-                                    color: window.colBlue
-                                    Text { anchors.centerIn: parent; text: "Open"; font.bold: true; font.pixelSize: Design.s(10); color: "#101014" }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            GitBackend.openRepo(customPathInput.text);
-                                            window.repoDropdownOpen = false;
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(8)
+                                    anchors.rightMargin: Design.s(4)
+                                    spacing: Design.s(8)
+
+                                    Text { text: "󰊢"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Text {
+                                            text: repoRowItem.modelData.name
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(11)
+                                            font.bold: true
+                                            color: window.colFg
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: repoRowItem.modelData.path
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(9)
+                                            color: window.colDim
+                                            elide: Text.ElideMiddle
+                                        }
+                                    }
+
+                                    // Two different things, so two buttons:
+                                    // take it off the list, or delete the
+                                    // working tree. Only the first is one
+                                    // click; the second asks below, by name.
+                                    Rectangle {
+                                        Layout.preferredWidth: Design.s(22)
+                                        Layout.preferredHeight: Design.s(22)
+                                        radius: Design.s(4)
+                                        visible: repoItemArea.containsMouse || trashArea.containsMouse || forgetArea.containsMouse
+                                        color: trashArea.containsMouse ? Design.tint(Design.danger, 0.30) : "transparent"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "󰩹"
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(11)
+                                            color: trashArea.containsMouse ? window.colRed : window.colDim
+                                        }
+                                        MouseArea {
+                                            id: trashArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            // Never straight to the deletion:
+                                            // the confirmation strip below
+                                            // names the directory first.
+                                            onClicked: window.pendingTrashRepo = repoRowItem.modelData.path
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: Design.s(22)
+                                        Layout.preferredHeight: Design.s(22)
+                                        radius: Design.s(4)
+                                        visible: repoItemArea.containsMouse || trashArea.containsMouse || forgetArea.containsMouse
+                                        color: forgetArea.containsMouse ? Design.tint(Design.warn, 0.30) : "transparent"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "✕"
+                                            font.pixelSize: Design.s(11)
+                                            color: forgetArea.containsMouse ? window.colFg : window.colDim
+                                        }
+                                        MouseArea {
+                                            id: forgetArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: GitBackend.forgetRepo(repoRowItem.modelData.path)
                                         }
                                     }
                                 }
@@ -1019,44 +1835,74 @@ ApplicationWindow {
                         }
 
                         Text {
-                            text: "Discovered Repositories:"
+                            Layout.fillWidth: true
+                            visible: window.filteredRepos.length === 0
+                            text: GitBackend.repos.length === 0
+                                ? "Nothing here yet — open a repository with the button above."
+                                : "Nothing matches that filter."
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(10)
                             color: window.colDim
+                            wrapMode: Text.WordWrap
                         }
 
-                        // Discovered Repos List
-                        ListView {
-                            id: discoveredList
+                        // Deleting the working tree, asked for explicitly and
+                        // by name. It goes to the trash rather than being
+                        // removed: a repository is somebody's work, and the
+                        // file manager beside it treats delete the same way.
+                        Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            model: GitBackend.discoverRepos()
+                            Layout.preferredHeight: Design.s(56)
+                            visible: window.pendingTrashRepo !== ""
+                            radius: Design.s(5)
+                            color: Design.tint(Design.danger, 0.15)
+                            border.color: window.colRed
+                            border.width: 1
 
-                            delegate: Rectangle {
-                                width: discoveredList.width
-                                height: Design.s(32)
-                                radius: Design.s(4)
-                                color: discArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: Design.s(6)
+                                spacing: Design.s(4)
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: Design.s(6)
-                                    spacing: Design.s(8)
-
-                                    Text { text: "󰊢"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
-                                    Text { text: modelData.name; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colFg }
-                                    Text { text: modelData.path; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "Move " + window.pendingTrashRepo + " to the trash? This deletes the whole working tree."
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(9)
+                                    color: window.colFg
+                                    wrapMode: Text.WordWrap
                                 }
 
-                                MouseArea {
-                                    id: discArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        GitBackend.openRepo(modelData.path);
-                                        window.repoDropdownOpen = false;
+                                RowLayout {
+                                    spacing: Design.s(6)
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        text: "Cancel"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        color: window.colDim
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(4)
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: window.pendingTrashRepo = ""
+                                        }
+                                    }
+                                    Text {
+                                        text: "Move to trash"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        font.bold: true
+                                        color: window.colRed
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(4)
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                GitBackend.trashRepo(window.pendingTrashRepo);
+                                                window.pendingTrashRepo = "";
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1070,9 +1916,11 @@ ApplicationWindow {
                 Rectangle {
                     anchors.top: parent.top
                     anchors.left: parent.left
-                    anchors.leftMargin: Design.s(180)
-                    width: Design.s(260)
-                    height: Design.s(220)
+                    anchors.leftMargin: Math.max(0, Math.min(branchBtn.x, parent.width - width))
+                    width: Math.min(Design.s(300), parent.width - Design.s(8))
+                    // Taller while it asks what to do with changes, so the
+                    // question does not squeeze the list to nothing.
+                    height: Design.s(window.pendingSwitch !== "" ? 440 : 300)
                     radius: Design.s(8)
                     color: window.colHeader
                     border.color: window.colGreen
@@ -1086,11 +1934,79 @@ ApplicationWindow {
                         spacing: Design.s(8)
 
                         Text {
-                            text: "Switch Branch"
+                            text: "Branches"
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(12)
                             font.bold: true
                             color: window.colGreen
+                        }
+
+                        // Creating a branch needed a terminal before this.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(28)
+                            radius: Design.s(5)
+                            color: window.colBg
+                            border.color: window.colBorder
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(8)
+                                anchors.rightMargin: Design.s(4)
+                                spacing: Design.s(6)
+
+                                TextInput {
+                                    id: newBranchInput
+                                    Layout.fillWidth: true
+                                    font.family: Design.font.mono
+                                    font.pixelSize: Design.s(11)
+                                    color: window.colFg
+                                    selectByMouse: true
+                                    clip: true
+                                    onAccepted: {
+                                        if (GitBackend.createBranch(text)) {
+                                            text = "";
+                                            window.branchDropdownOpen = false;
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: newBranchInput.text === ""
+                                        text: "New branch name"
+                                        font: newBranchInput.font
+                                        color: window.colDim
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: Design.s(52)
+                                    Layout.preferredHeight: Design.s(20)
+                                    radius: Design.s(3)
+                                    opacity: newBranchInput.text.trim() === "" ? 0.4 : 1.0
+                                    color: window.colGreen
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Create"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        font.bold: true
+                                        color: window.colBg
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: newBranchInput.text.trim() !== ""
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: {
+                                            if (GitBackend.createBranch(newBranchInput.text)) {
+                                                newBranchInput.text = "";
+                                                window.branchDropdownOpen = false;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         ListView {
@@ -1098,23 +2014,18 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
+                            spacing: 1
                             model: GitBackend.branches
 
                             delegate: Rectangle {
+                                id: branchRowItem
+                                required property var modelData
                                 width: branchList.width
                                 height: Design.s(28)
                                 radius: Design.s(4)
-                                color: modelData === GitBackend.branchName ? Design.tint(Design.ok, 0.25) : (bArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: Design.s(6)
-                                    spacing: Design.s(6)
-
-                                    Text { text: ""; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colGreen }
-                                    Text { text: modelData; font.family: Design.font.mono; font.pixelSize: Design.s(11); font.bold: modelData === GitBackend.branchName; color: window.colFg; Layout.fillWidth: true }
-                                    Text { text: "✓"; font.pixelSize: Design.s(11); font.bold: true; color: window.colGreen; visible: modelData === GitBackend.branchName }
-                                }
+                                readonly property bool isCurrent: modelData === GitBackend.branchName
+                                color: isCurrent ? Design.tint(Design.ok, 0.25)
+                                     : (bArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
 
                                 MouseArea {
                                     id: bArea
@@ -1122,8 +2033,370 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        GitBackend.switchBranch(modelData);
+                                        if (branchRowItem.isCurrent) return;
+                                        // Uncommitted work: ask first, below.
+                                        if (GitBackend.changedFiles.length > 0) {
+                                            window.pendingSwitch = branchRowItem.modelData;
+                                            return;
+                                        }
+                                        GitBackend.switchBranch(branchRowItem.modelData);
                                         window.branchDropdownOpen = false;
+                                    }
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(6)
+                                    anchors.rightMargin: Design.s(4)
+                                    spacing: Design.s(6)
+
+                                    Text { text: ""; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colGreen }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: branchRowItem.modelData
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(11)
+                                        font.bold: branchRowItem.isCurrent
+                                        color: window.colFg
+                                        elide: Text.ElideMiddle
+                                    }
+                                    // Where it stands against its remote.
+                                    Text {
+                                        readonly property var info: GitBackend.branchInfo[branchRowItem.modelData] || ({})
+                                        visible: text !== ""
+                                        text: info.gone ? "deleted on remote"
+                                            : !info.upstream ? "local only"
+                                            : (info.behind > 0 ? info.behind + "↓ " : "") + (info.ahead > 0 ? info.ahead + "↑" : "")
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(9)
+                                        color: info.gone ? window.colOrange : window.colDim
+                                    }
+                                    Text {
+                                        text: "✓"
+                                        font.pixelSize: Design.s(11)
+                                        font.bold: true
+                                        color: window.colGreen
+                                        visible: branchRowItem.isCurrent
+                                    }
+
+                                    // Not offered for the branch you are on:
+                                    // git refuses that one, and a button whose
+                                    // only outcome is an error message is worse
+                                    // than no button.
+                                    Rectangle {
+                                        Layout.preferredWidth: Design.s(20)
+                                        Layout.preferredHeight: Design.s(20)
+                                        radius: Design.s(4)
+                                        visible: !branchRowItem.isCurrent && (bArea.containsMouse || delArea.containsMouse)
+                                        color: delArea.containsMouse ? Design.tint(Design.danger, 0.30) : "transparent"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "✕"
+                                            font.pixelSize: Design.s(10)
+                                            color: delArea.containsMouse ? window.colRed : window.colDim
+                                        }
+                                        MouseArea {
+                                            id: delArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                // Plain delete first. git refuses
+                                                // one whose work is not merged
+                                                // anywhere, and that refusal is
+                                                // turned into the question below
+                                                // rather than an error nobody can
+                                                // act on.
+                                                if (!GitBackend.deleteBranch(branchRowItem.modelData, false))
+                                                    window.pendingDeleteBranch = branchRowItem.modelData;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Uncommitted changes and a different branch picked:
+                        // GitHub Desktop's question.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: switchCol.implicitHeight + Design.s(12)
+                            visible: window.pendingSwitch !== ""
+                            radius: Design.s(5)
+                            color: Design.tint(Design.accent, 0.12)
+                            border.color: window.colBlue
+                            border.width: 1
+
+                            ColumnLayout {
+                                id: switchCol
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: Design.s(6)
+                                spacing: Design.s(4)
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "You have " + GitBackend.changedFiles.length
+                                          + (GitBackend.changedFiles.length === 1 ? " changed file" : " changed files")
+                                          + " on " + GitBackend.branchName + "."
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(10)
+                                    font.bold: true
+                                    color: window.colFg
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                // A fixed model, the wording computed in
+                                // the row: a model built from pendingSwitch
+                                // was rebuilt — its rows destroyed — the
+                                // moment a click cleared it, and the click
+                                // handler died halfway through.
+                                Repeater {
+                                    model: ["stash", "bring"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        readonly property string title: modelData === "stash"
+                                            ? "Leave my changes on " + GitBackend.branchName
+                                            : "Bring my changes to " + window.pendingSwitch
+                                        readonly property string detail: modelData === "stash"
+                                            ? "They are stashed, and offered back when you return."
+                                            : "They come along, uncommitted."
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Design.s(36)
+                                        radius: Design.s(4)
+                                        color: optArea.containsMouse ? Design.tint(Design.accent, 0.22) : window.colBg
+                                        ColumnLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(8)
+                                            anchors.rightMargin: Design.s(8)
+                                            spacing: 0
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: parent.parent.title
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(10)
+                                                font.bold: true
+                                                color: window.colFg
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: parent.parent.detail
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(9)
+                                                color: window.colDim
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: optArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                const branch = window.pendingSwitch;
+                                                const mode = parent.modelData;
+                                                window.pendingSwitch = "";
+                                                window.branchDropdownOpen = false;
+                                                GitBackend.switchBranch(branch, mode);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    Layout.alignment: Qt.AlignRight
+                                    text: "Cancel"
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(10)
+                                    color: window.colDim
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        anchors.margins: -Design.s(4)
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: window.pendingSwitch = ""
+                                    }
+                                }
+                            }
+                        }
+
+                        // The second question, asked only when git said no.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(52)
+                            visible: window.pendingDeleteBranch !== ""
+                            radius: Design.s(5)
+                            color: Design.tint(Design.danger, 0.15)
+                            border.color: window.colRed
+                            border.width: 1
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: Design.s(6)
+                                spacing: Design.s(4)
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "\"" + window.pendingDeleteBranch + "\" is not merged anywhere. Deleting it loses its commits."
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(9)
+                                    color: window.colFg
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                RowLayout {
+                                    spacing: Design.s(6)
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        text: "Cancel"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        color: window.colDim
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(4)
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: window.pendingDeleteBranch = ""
+                                        }
+                                    }
+                                    Text {
+                                        text: "Delete anyway"
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(10)
+                                        font.bold: true
+                                        color: window.colRed
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -Design.s(4)
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                GitBackend.deleteBranch(window.pendingDeleteBranch, true);
+                                                window.pendingDeleteBranch = "";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ACCOUNTS POPUP
+                // ══════════════════════════════════════════════════════════════
+                // One row per hosting service. Signing in runs the service's
+                // own CLI in a terminal; with the CLI missing the row says so
+                // and offers nothing, rather than a button that cannot work.
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.leftMargin: Math.max(0, Math.min(accountsBtn.x, parent.width - width))
+                    width: Design.s(300)
+                    height: accCol.implicitHeight + Design.s(20)
+                    radius: Design.s(8)
+                    color: window.colHeader
+                    border.color: window.colBlue
+                    border.width: 1
+                    z: 50
+                    visible: window.accountsDropdownOpen
+
+                    ColumnLayout {
+                        id: accCol
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: Design.s(10)
+                        spacing: Design.s(8)
+
+                        Text {
+                            text: "Accounts"
+                            font.family: Design.font.sans
+                            font.pixelSize: Design.s(12)
+                            font.bold: true
+                            color: window.colBlue
+                        }
+
+                        Repeater {
+                            model: GitBackend.accounts
+
+                            delegate: Rectangle {
+                                id: accItem
+                                required property var modelData
+                                readonly property bool signedIn: !!modelData.login
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Design.s(46)
+                                radius: Design.s(6)
+                                color: window.colBg
+                                border.color: window.colBorder
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(10)
+                                    anchors.rightMargin: Design.s(8)
+                                    spacing: Design.s(10)
+
+                                    Text {
+                                        text: accItem.modelData.provider === "github" ? "" : ""
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(18)
+                                        color: accItem.modelData.provider === "gitlab" ? window.colOrange : window.colFg
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Text {
+                                            text: accItem.modelData.name
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(12)
+                                            font.bold: true
+                                            color: window.colFg
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: !accItem.modelData.installed ? accItem.modelData.cli + " is not installed"
+                                                : accItem.signedIn ? "Signed in as " + accItem.modelData.login
+                                                : "Not signed in"
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(10)
+                                            color: accItem.signedIn ? window.colGreen : window.colDim
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: accItem.modelData.installed
+                                        Layout.preferredWidth: accBtnText.implicitWidth + Design.s(16)
+                                        Layout.preferredHeight: Design.s(24)
+                                        radius: Design.s(5)
+                                        color: accBtnArea.containsMouse
+                                               ? (accItem.signedIn ? Design.tint(Design.danger, 0.25) : Qt.lighter(window.colBlue, 1.1))
+                                               : (accItem.signedIn ? "transparent" : window.colBlue)
+                                        border.color: accItem.signedIn ? window.colBorder : "transparent"
+                                        border.width: 1
+                                        Text {
+                                            id: accBtnText
+                                            anchors.centerIn: parent
+                                            text: accItem.signedIn ? "Sign out" : "Sign in"
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(11)
+                                            font.bold: !accItem.signedIn
+                                            color: accItem.signedIn ? window.colFg : Design.accentText
+                                        }
+                                        MouseArea {
+                                            id: accBtnArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (accItem.signedIn) GitBackend.signOut(accItem.modelData.provider);
+                                                else {
+                                                    GitBackend.signIn(accItem.modelData.provider);
+                                                    window.accountsDropdownOpen = false;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

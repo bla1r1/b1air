@@ -628,6 +628,107 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 spacing: 0
 
+                // ── Folder chooser bar ───────────────────────────────────────
+                //
+                // Only in `--pick-folder` mode, where another application asked
+                // for a directory and this file manager is answering. The apps
+                // used to raise Qt's own FolderDialog for this: a window that
+                // looks like nothing else on this desktop, with its own idea of
+                // Favourites and its own keys.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Design.s(44)
+                    visible: window.isNative && FilesBackend.pickMode
+                    color: Design.tint(Design.accent, 0.16)
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 1
+                        color: Design.accent
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(12)
+                        anchors.rightMargin: Design.s(12)
+                        spacing: Design.s(10)
+
+                        Text {
+                            text: "󰉋"
+                            font.family: Design.font.mono
+                            font.pixelSize: Design.s(15)
+                            color: Design.accent
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text {
+                                text: "Choose a folder"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(9)
+                                color: Design.textDim
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: window.currentPath
+                                font.family: Design.font.mono
+                                font.pixelSize: Design.s(11)
+                                font.bold: true
+                                color: Design.text
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Design.s(70)
+                            Layout.preferredHeight: Design.s(26)
+                            radius: Design.s(5)
+                            color: cancelPickArea.containsMouse ? Design.hover : "transparent"
+                            border.color: Design.line
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Cancel"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(11)
+                                color: Design.textDim
+                            }
+                            MouseArea {
+                                id: cancelPickArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: FilesBackend.cancelPick()
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Design.s(120)
+                            Layout.preferredHeight: Design.s(26)
+                            radius: Design.s(5)
+                            color: confirmPickArea.containsMouse ? Design.accentAlt : Design.accent
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Choose this folder"
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(11)
+                                font.bold: true
+                                color: Design.accentText
+                            }
+                            MouseArea {
+                                id: confirmPickArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: FilesBackend.confirmPick()
+                            }
+                        }
+                    }
+                }
+
                 // ── Top Navigation Bar (46px) ────────────────────────────────
                 Rectangle {
                     Layout.fillWidth: true

@@ -10,6 +10,12 @@
 int main(int argc, char* argv[]) {
     // Force Wayland, high performance rendering & basic render loop (0% idle CPU)
     setenv("QT_QPA_PLATFORM", "wayland;xcb", 1);
+    // The software renderer, unless the environment asks for another. This
+    // window is text, lines and flat rectangles — nothing the GPU draws better
+    // — and bringing up OpenGL cost about 20 MB of the process's memory for the
+    // driver and its buffers: measured on this machine's Intel GPU, 54 MB PSS
+    // with OpenGL against 34 MB without, same repository, same window.
+    setenv("QT_QUICK_BACKEND", "software", 0);
     setenv("QSG_RHI_BACKEND", "opengl", 1);
     setenv("QSG_RENDER_LOOP", "basic", 1);
     setenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1", 1);
@@ -30,7 +36,11 @@ int main(int argc, char* argv[]) {
     // Launched from the menu there is no argument, and the repo path stayed
     // empty — runGit() then early-returns for every call, so the whole window
     // came up blank and no button did anything.
-    gitBackend.openRepo(argc > 1 ? QString::fromUtf8(argv[1]) : QDir::currentPath());
+    // Without an argument, startupRepo(): the working directory when that is a
+    // repository, otherwise the last one open. This line used to open the
+    // working directory unconditionally, which from the launcher is $HOME —
+    // so the last repository was never restored.
+    gitBackend.openRepo(argc > 1 ? QString::fromUtf8(argv[1]) : gitBackend.startupRepo());
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {

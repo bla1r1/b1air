@@ -5,6 +5,7 @@
 #include <QUrl>
 #include <QDesktopServices>
 #include <QJsonArray>
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
@@ -425,6 +426,21 @@ bool FileManagerBackend::createFolder(const QString& name) {
         return true;
     }
     return false;
+}
+
+void FileManagerBackend::confirmPick() {
+    if (m_pickResultPath.isEmpty()) return;
+    QFile f(m_pickResultPath);
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(currentPath().toUtf8());
+        f.close();
+    }
+    QCoreApplication::quit();
+}
+
+void FileManagerBackend::cancelPick() {
+    // Leaving the file absent is how the caller learns nothing was chosen.
+    QCoreApplication::quit();
 }
 
 bool FileManagerBackend::deleteItem(const QString& path) {

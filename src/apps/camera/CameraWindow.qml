@@ -144,7 +144,7 @@ ApplicationWindow {
                     anchors.rightMargin: Design.s(10)
                     spacing: Design.s(8)
 
-                    Icon { text: "\u{f03d}"; role: "body"; color: Design.sapphire }
+                    Icon { text: "\u{f0567}"; role: "body"; color: Design.sapphire }
                     Label { text: "Camera"; weight: Design.weight.bold }
 
                     Item { Layout.fillWidth: true }
@@ -163,7 +163,7 @@ ApplicationWindow {
                     }
 
                     IconButton {
-                        icon: "\u{f0b45}"      // folder
+                        icon: "\u{f0770}"      // folder
                         hoverTone: Design.accent
                         onClicked: Qt.openUrlExternally("file://" + window.shotsDir)
                     }
@@ -289,7 +289,7 @@ ApplicationWindow {
                         Icon {
                             anchors.centerIn: parent
                             visible: window.lastShot === ""
-                            text: "\u{f0210}"
+                            text: "\u{f02e9}"
                             role: "body"
                             color: Design.textFaint
                         }

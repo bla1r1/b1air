@@ -43,6 +43,28 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    // `--pick-folder <file> [start]`: another application wants a directory
+    // chosen. The chooser bar appears, and the path is written to <file> when
+    // it is confirmed — see FileManagerBackend::confirmPick(). Parsed before
+    // the positional argument below, which is the ordinary "open here" case.
+    QStringList args;
+    for (int i = 1; i < argc; ++i) args << QString::fromUtf8(argv[i]);
+    const int pickAt = args.indexOf(QStringLiteral("--pick-folder"));
+    if (pickAt >= 0) {
+        if (pickAt + 1 >= args.size()) {
+            std::cerr << "[b1air-files] --pick-folder needs a file to write the result to\n";
+            return 2;
+        }
+        backend.setPickResultPath(args.at(pickAt + 1));
+        app.setApplicationDisplayName("Choose a folder");
+        if (pickAt + 2 < args.size()) {
+            const QFileInfo start(args.at(pickAt + 2));
+            if (start.isDir()) backend.setCurrentPath(start.absoluteFilePath());
+        }
+        args.clear();   // nothing else on the line is a path to open
+        argc = 1;
+    }
+
     if (argc > 1) {
         // Desktop entries use %U, so callers (Firefox "Open Containing
         // Folder", xdg-open, etc.) pass a file:// URI, not a bare path.

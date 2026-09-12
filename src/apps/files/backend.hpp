@@ -29,6 +29,11 @@ class FileManagerBackend : public QObject {
     Q_PROPERTY(QVariantList places READ places CONSTANT)
     Q_PROPERTY(QString diskFreeSpace READ diskFreeSpace NOTIFY diskInfoChanged)
     Q_PROPERTY(QString diskTotalSpace READ diskTotalSpace NOTIFY diskInfoChanged)
+    // Folder-chooser mode: `b1air-files --pick-folder <file> [start]`. Another
+    // application needs a directory chosen, and this desktop has a file
+    // manager — so it is used, rather than each app raising Qt's own dialog,
+    // which looks and behaves like nothing else here.
+    Q_PROPERTY(bool pickMode READ pickMode CONSTANT)
 
 public:
     explicit FileManagerBackend(QObject* parent = nullptr);
@@ -40,6 +45,12 @@ public:
     // every Favorites entry then pointed inside it and the breadcrumb
     // labelled it "~".
     QString homePath() const { return QDir::homePath(); }
+
+    bool pickMode() const { return !m_pickResultPath.isEmpty(); }
+    void setPickResultPath(const QString& path) { m_pickResultPath = path; }
+    /** Write the current directory where the caller is waiting for it, and go. */
+    Q_INVOKABLE void confirmPick();
+    Q_INVOKABLE void cancelPick();
     void setCurrentPath(const QString& path);
 
     bool canGoBack() const;
@@ -106,6 +117,7 @@ signals:
     void errorOccurred(const QString& message);
 
 private:
+    QString m_pickResultPath;   // non-empty only in --pick-folder mode
     QString formatSize(qint64 bytes) const;
     QString uniqueExtractDir(const QFileInfo& archive) const;
     bool extractWithLibarchive(const QString& archivePath, const QString& destDir, QString* error);
