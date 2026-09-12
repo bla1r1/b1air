@@ -60,7 +60,23 @@ TARGET_SHELL = shell/build/b1air-shell
 TARGET_POLKIT = b1air-polkit-agent
 TARGET_SECRET = b1air-secret-service
 TARGET_CONTROLLER = ../tools/controller
+# Where the suite is installed.
+#
+# PREFIX is the binary directory and DESTDIR the data root under it — desktop
+# entries, icons, the QML the apps search. Defaults are the per-user paths, so
+# a developer's `make install` never needs root and never touches a system
+# directory. install.sh passes the system ones:
+#
+#     make install PREFIX=/usr/local/bin DATADIR=/usr/share QMLDIR=/usr/share/b1air-shell/qml
+#
+# The apps were the only part of the suite that could not be installed for
+# everyone: b1air-daemon and b1air-shell already went to /usr/local/bin, while
+# b1air-files, -term, -git and the rest stayed in one user's home, so a second
+# account on the same machine had a desktop whose applications were missing.
 PREFIX ?= $(HOME)/.local/bin
+DATADIR ?= $(HOME)/.local/share
+QMLDIR ?= $(HOME)/.config/b1air-shell
+CONFDIR ?= $(HOME)/.config
 
 DAEMON_SRCS = daemon/main.cpp daemon/daemon_dbus.cpp daemon/sway_ipc.cpp daemon/focustime_db.cpp daemon/user_manager.cpp daemon/system_control.cpp daemon/settings_manager.cpp daemon/session_manager.cpp daemon/secret_store.cpp
 DAEMON_OBJS = $(DAEMON_SRCS:.cpp=.o)
@@ -120,43 +136,43 @@ install: daemon-target polkit-target secret-target shell-target
 	install -m 755 $(TARGET_DAEMON) $(PREFIX)/$(TARGET_DAEMON)
 	install -m 755 $(TARGET_POLKIT) $(PREFIX)/$(TARGET_POLKIT)
 	install -m 755 $(TARGET_SECRET) $(PREFIX)/$(TARGET_SECRET)
-	mkdir -p $(HOME)/.config/b1air-shell
-	rsync -a shell/qml/ $(HOME)/.config/b1air-shell/
+	mkdir -p $(QMLDIR)
+	rsync -a shell/qml/ $(QMLDIR)/
 	# The app windows live beside their backends under apps/, and the search
 	# path expects every window in one directory — so they are copied in here
 	# rather than kept as a second copy in the shell tree. Overwriting, not
 	# `cp -n`: a stale file in this directory shadows the installed one for
 	# ever, because it is searched before /usr/share/b1air-shell/qml.
 	find apps -maxdepth 2 -name '*Window.qml' \
-		-exec install -m 644 {} $(HOME)/.config/b1air-shell/ \;
+		-exec install -m 644 {} $(QMLDIR)/ \;
 	# The plugin-free Quickshell module tree the standalone apps import ahead of
 	# the real one. Deliberately not under .config/b1air-shell: the `quickshell`
 	# process searches there, and it must keep finding the real module.
-	mkdir -p $(HOME)/.local/share/b1air-qs-compat
-	rsync -a compat/qml/ $(HOME)/.local/share/b1air-qs-compat/
+	mkdir -p $(DATADIR)/b1air-qs-compat
+	rsync -a compat/qml/ $(DATADIR)/b1air-qs-compat/
 	# Desktop entries, with the binary's full path. They said `Exec=b1air-term`
 	# and relied on ~/.local/bin being on PATH, which is true inside the sway
 	# session and false in KDE or GNOME — where the apps did not start from the
 	# menu at all. environment.d fixes PATH for systemd-started sessions; the
 	# full path fixes it for everything else.
-	mkdir -p $(HOME)/.local/share/applications
+	mkdir -p $(DATADIR)/applications
 	for f in ../.local/share/applications/b1air-*.desktop; do \
 		sed -e 's|^Exec=b1air-|Exec=$(PREFIX)/b1air-|' -e 's|^TryExec=b1air-|TryExec=$(PREFIX)/b1air-|' \
-			"$$f" > $(HOME)/.local/share/applications/$$(basename "$$f"); \
+			"$$f" > $(DATADIR)/applications/$$(basename "$$f"); \
 	done
-	-update-desktop-database $(HOME)/.local/share/applications >/dev/null 2>&1
+	-update-desktop-database $(DATADIR)/applications >/dev/null 2>&1
 	# The suite's own icons, looked up by the entries' Icon=b1air-<app>. An SVG
 	# dropped in with the same name replaces one at the next install.
-	mkdir -p $(HOME)/.local/share/icons/hicolor/scalable/apps
+	mkdir -p $(DATADIR)/icons/hicolor/scalable/apps
 	install -m 644 ../.local/share/icons/hicolor/scalable/apps/b1air-*.svg \
-		$(HOME)/.local/share/icons/hicolor/scalable/apps/
-	-gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor >/dev/null 2>&1
+		$(DATADIR)/icons/hicolor/scalable/apps/
+	-gtk-update-icon-cache -q -t -f $(DATADIR)/icons/hicolor >/dev/null 2>&1
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
-	rm -rf $(HOME)/.local/share/icons/b1air-cursors
-	cp -a ../.local/share/icons/b1air-cursors $(HOME)/.local/share/icons/
-	mkdir -p $(HOME)/.config/environment.d
-	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(HOME)/.config/environment.d/
+	rm -rf $(DATADIR)/icons/b1air-cursors
+	cp -a ../.local/share/icons/b1air-cursors $(DATADIR)/icons/
+	mkdir -p $(CONFDIR)/environment.d
+	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/
 
 # The static checks run anywhere; shell-boot needs a Wayland session and skips
 # itself without one.

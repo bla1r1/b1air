@@ -179,6 +179,10 @@ arch_packages() {
         networkmanager bluez bluez-utils
         # Display Manager (SDDM) & Qt6 Components
         sddm qt6-declarative qt6-wayland qt6-svg qt6-virtualkeyboard
+        # b1air-camera is a QtMultimedia CaptureSession, and the ffmpeg backend
+        # is what actually talks to /dev/video0 — without it the app starts,
+        # finds no camera and shows an empty preview.
+        qt6-multimedia qt6-multimedia-ffmpeg
         # Theming & Fonts
         # adw-gtk-theme provides adw-gtk3-dark, which .config/gtk-{2,3,4}
         # have always asked for and nothing installed — GTK apps silently fell
@@ -667,14 +671,54 @@ build_b1air_suite() {
         if [[ "${B1AIR_CLEAN_BUILD:-0}" == "1" ]]; then
             make -C "$REPO_DIR/src" clean >/dev/null 2>&1 || true
         fi
-        make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" \
-            PREFIX="${HOME}/.local/bin" install || {
+        make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" || {
             err "Failed to build b1air-daemon — see the compiler output above."; exit 1; }
-        if sudo install -m 755 "$REPO_DIR/src/b1air-daemon" /usr/local/bin/b1air-daemon 2>/dev/null; then
-            ok "b1air-daemon installed to /usr/local/bin/b1air-daemon"
+
+        # Installed for every user, not just this one.
+        #
+        # b1air-daemon and b1air-shell already went to /usr/local/bin while the
+        # nine applications stayed in one user's ~/.local/bin — so a second
+        # account on the same machine got a desktop whose apps were all
+        # missing, and the desktop entries pointed into a home directory it
+        # could not read. Everything goes to the same place now.
+        #
+        # Built above as this user and installed here as root: `sudo make`
+        # would leave the object files and the CMake tree owned by root, and
+        # the next ordinary build would fail on its own artefacts.
+        #
+        # environment.d stays in the user's home either way — it is a per-user
+        # PATH file, and /usr/local/bin needs no help being on PATH.
+        B1AIR_PREFIX="/usr/local/bin"
+        if sudo make -C "$REPO_DIR/src" install \
+                PREFIX=/usr/local/bin \
+                DATADIR=/usr/share \
+                QMLDIR=/usr/share/b1air-shell/qml \
+                CONFDIR="$HOME/.config" >/dev/null; then
+            sudo chown -R "$USER" "$HOME/.config/environment.d" 2>/dev/null || true
+            ok "b1air suite installed system-wide to /usr/local/bin"
         else
-            ok "b1air-daemon installed to ~/.local/bin/b1air-daemon"
+            warn "No root for a system-wide install; falling back to ~/.local."
+            B1AIR_PREFIX="${HOME}/.local/bin"
+            make -C "$REPO_DIR/src" PREFIX="${HOME}/.local/bin" install || {
+                err "Failed to install the b1air suite."; exit 1; }
+            ok "b1air suite installed to ~/.local/bin"
         fi
+
+        # The one line every keybind, autostart entry and unit resolves the
+        # binaries through. Written to match where they actually landed, so a
+        # fallback install does not leave 39 keybinds pointing at /usr/local.
+        local swayvars="$HOME/.config/sway/conf.d/variables.conf"
+        if [[ -f "$swayvars" ]]; then
+            sed -i "s|^set \$b1airBin .*|set \$b1airBin ${B1AIR_PREFIX}|" "$swayvars"
+            ok "sway resolves the suite through ${B1AIR_PREFIX}"
+        fi
+        local unit
+        for unit in "$HOME/.config/systemd/user/b1air-daemon.service" \
+                    "$HOME/.config/systemd/user/b1air-shell.service"; do
+            [[ -f "$unit" ]] || continue
+            sed -i "s|ExecStart=.*/b1air-|ExecStart=${B1AIR_PREFIX}/b1air-|; \
+                    s|ExecReload=.*/b1air-|ExecReload=${B1AIR_PREFIX}/b1air-|" "$unit"
+        done
 
         # 2. Native b1air-shell
         if [[ -d "$REPO_DIR/src/shell" ]]; then
@@ -730,12 +774,10 @@ build_b1air_suite() {
                 fi
             fi
 
-            if sudo install -m 755 "$REPO_DIR/src/shell/build/b1air-shell" /usr/local/bin/b1air-shell 2>/dev/null; then
-                ok "b1air-shell installed to /usr/local/bin/b1air-shell"
-            elif [[ -f "$REPO_DIR/src/shell/build/b1air-shell" ]]; then
-                install -m 755 "$REPO_DIR/src/shell/build/b1air-shell" "${HOME}/.local/bin/b1air-shell"
-                ok "b1air-shell installed to ~/.local/bin/b1air-shell"
-            fi
+            # b1air-shell is installed by `make install` above, along with
+            # every other binary — it used to be copied separately here, which
+            # is how it could end up in /usr/local/bin while the apps beside it
+            # were in a home directory.
         fi
     fi
 }
@@ -846,6 +888,16 @@ main() {
         warn "Skipping dotfiles deployment."
     fi
     step default-shell  configure_default_shell
+
+    # The login screen reads the desktop palette from /var/cache/wallpaper
+    # (see usr/share/sddm/themes/b1air/components/Palette.qml). Nothing has
+    # written it yet on a fresh machine, so the very first login would show the
+    # theme's built-in fallback colours rather than the ones just installed.
+    if command -v b1air-daemon >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/b1air-daemon" ]]; then
+        "$(command -v b1air-daemon || echo "$HOME/.local/bin/b1air-daemon")" appearance >/dev/null 2>&1 \
+            && ok "Login screen palette published to /var/cache/wallpaper" \
+            || warn "Could not publish the login screen palette; it will follow the first theme change."
+    fi
 
     # ponytail: verify BEFORE enabling the display manager — a graphical login on a
     # half-installed system locks the user out of the desktop they cannot yet run
