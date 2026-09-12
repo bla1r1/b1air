@@ -58,6 +58,8 @@ ShellRoot {
         id: lockUI
         property bool failed: false
         property bool authenticating: false
+        // The eye button: show what has been typed.
+        property bool peek: false
         property string statusText: "Locked"
     }
 
@@ -637,6 +639,7 @@ ShellRoot {
                                     Keys.onPressed: (event) => {
                                         if (event.key === Qt.Key_Escape) {
                                             screenRoot.inputActive = false;
+                                            lockUI.peek = false;
                                             text = "";
                                             passModel.clear();
                                             event.accepted = true;
@@ -652,6 +655,7 @@ ShellRoot {
                                             lockUI.statusText = "Authenticating...";
                                             lockUI.failed = false;
                                             pam.respond(text);
+                                            lockUI.peek = false;
                                             text = ""; 
                                             oldText = "";
                                             passModel.clear();
@@ -702,7 +706,7 @@ ShellRoot {
                                 Item {
                                     anchors.fill: parent
                                     anchors.leftMargin: 20 * screenRoot.sc
-                                    anchors.rightMargin: 20 * screenRoot.sc
+                                    anchors.rightMargin: (peekBtn.visible ? 54 : 20) * screenRoot.sc
                                     clip: true
 
                                     Row {
@@ -717,9 +721,10 @@ ShellRoot {
                                             model: passModel
                                             // Render text directly as the delegate to avoid circular layout loops
                                             delegate: Text {
-                                                text: model.isDot ? "•" : model.charStr
+                                                readonly property bool dot: model.isDot && !lockUI.peek
+                                                text: dot ? "•" : model.charStr
                                                 font.family: Design.font.mono
-                                                font.pixelSize: model.isDot ? (32 * screenRoot.sc) : (24 * screenRoot.sc)
+                                                font.pixelSize: dot ? (32 * screenRoot.sc) : (24 * screenRoot.sc)
                                                 font.weight: Design.weight.semibold
                                                 color: lockUI.failed ? Design.danger : (lockUI.authenticating ? Design.warn : Design.text)
                                                 verticalAlignment: Text.AlignVCenter
@@ -738,6 +743,36 @@ ShellRoot {
                                                 }
                                             }
                                         }
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: peekBtn
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 10 * screenRoot.sc
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 40 * screenRoot.sc
+                                    height: width
+                                    radius: height / 2
+                                    visible: inputField.text.length > 0 && !lockUI.authenticating
+                                    color: peekMa.containsMouse ? Qt.rgba(Design.text.r, Design.text.g, Design.text.b, 0.10) : "transparent"
+                                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: lockUI.peek ? "\uf070" : "\uf06e"
+                                        font.family: Design.font.icon
+                                        font.pixelSize: 22 * screenRoot.sc
+                                        color: lockUI.peek ? Design.accent : Design.textDim
+                                        Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+                                    }
+
+                                    MouseArea {
+                                        id: peekMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: lockUI.peek = !lockUI.peek
                                     }
                                 }
                             }
