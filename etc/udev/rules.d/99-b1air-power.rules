@@ -1,0 +1,17 @@
+# Battery charge control, writable without a password prompt.
+#
+# The charge limit and the charge behaviour live in sysfs as root-owned 0644
+# files, so setting either one from the Power settings page means escalating
+# for a one-byte write — a polkit dialog every time a slider moves, which is
+# not a setting anyone would use twice.
+#
+# The `power` group already exists on Arch (gid 98) and has no other purpose
+# here; install.sh puts the desktop's user in it. Group-writable is the same
+# arrangement TLP and the KDE power applet rely on.
+#
+# ATTR{} cannot change a file's mode, only its contents, so the permissions are
+# set with an explicit RUN — the device path is $sys/$devpath, not a name that
+# can be guessed, because the node is BAT0 on one machine and BAT1 or battery
+# on another.
+SUBSYSTEM=="power_supply", KERNEL=="BAT*", ACTION=="add|change", \
+    RUN+="/bin/sh -c 'for f in charge_control_end_threshold charge_control_start_threshold charge_behaviour; do [ -e /sys/$devpath/$$f ] && chgrp power /sys/$devpath/$$f && chmod 664 /sys/$devpath/$$f; done; exit 0'"

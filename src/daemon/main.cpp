@@ -76,6 +76,8 @@ static void print_usage(const char* prog) {
               << "  game-mode {on|off|toggle|status}   Control zero-overhead gaming optimizations\n"
               << "  power {lock|logout|suspend|reboot|shutdown}\n"
               << "                                     Execute session power state transitions\n"
+              << "  battery [status|limit <20-100>|behaviour <auto|inhibit-charge|force-discharge>]\n"
+              << "                                     Charge limit and charging behaviour, per pack\n"
               << "  capture [--geometry <geom>] [--edit] [--delay <s>] [--full|--area|--window]\n"
               << "                                     Capture screen, copy to clipboard & annotate\n"
               << "  record [toggle|stop] [--geometry <geom>] [--desk-vol <v>] [--mic-vol <v>]\n"
@@ -766,6 +768,27 @@ int main(int argc, char* argv[]) {
         } else {
             return SystemControl::power_profile_set(sub) ? 0 : 1;
         }
+    } else if (cmd == "battery") {
+        std::string sub = (argc >= 3) ? argv[2] : "status";
+        if (sub == "status" || sub == "get") {
+            std::cout << SystemControl::battery_status_json() << "\n";
+            return 0;
+        } else if (sub == "limit") {
+            if (argc < 4) {
+                std::cerr << "Usage: " << argv[0] << " battery limit <20-100>\n";
+                return 1;
+            }
+            return SystemControl::battery_limit_set(std::atoi(argv[3])) ? 0 : 1;
+        } else if (sub == "behaviour" || sub == "behavior") {
+            if (argc < 4) {
+                std::cerr << "Usage: " << argv[0]
+                          << " battery behaviour <auto|inhibit-charge|force-discharge>\n";
+                return 1;
+            }
+            return SystemControl::battery_behaviour_set(argv[3]) ? 0 : 1;
+        }
+        std::cerr << "Unknown battery command: " << sub << "\n";
+        return 1;
     } else if (cmd == "caffeine" || cmd == "idle-inhibit") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
         if (sub == "status" || sub == "get") {

@@ -230,6 +230,79 @@ ColumnLayout {
         }
     }
 
+    // ── 3.2 Charge control ───────────────────────────────────────────────────
+    // A laptop that lives on mains sits at 100% and ages for it. The kernel has
+    // had a charge limit and a charge behaviour for this hardware all along —
+    // two sysfs files per pack — and nothing in this desktop exposed either, so
+    // the only way to use them was to echo into /sys as root.
+    Card {
+        visible: Power.hasChargeLimit || Power.hasChargeBehaviour
+        title: "Charge control"
+        subtitle: "Keep the battery off a full charge, so it ages more slowly"
+        icon: "\u{f0084}"
+        accentColor: Design.teal
+
+        Toggle {
+            visible: Power.hasChargeLimit
+            label: "Limit the charge"
+            subtitle: "Stop charging below full. 100% means no limit."
+            checked: Power.chargeLimit < 100
+            onToggled: Power.setChargeLimit(Power.chargeLimit < 100 ? 100 : 80)
+        }
+
+        Stepper {
+            visible: Power.hasChargeLimit && Power.chargeLimit < 100
+            label: "Stop charging at"
+            valueText: Power.chargeLimit + "%"
+            // Not below 50: the pack would spend its life nearly empty, which
+            // trades one kind of wear for another.
+            onDecrement: Power.setChargeLimit(Math.max(50, Power.chargeLimit - 5))
+            onIncrement: Power.setChargeLimit(Math.min(100, Power.chargeLimit + 5))
+        }
+
+        SectionLabel {
+            visible: Power.hasChargeBehaviour
+            text: "While plugged in"
+            Layout.topMargin: Design.s(Design.space.sm)
+        }
+
+        RowLayout {
+            visible: Power.hasChargeBehaviour
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+
+            Repeater {
+                model: [
+                    { id: "auto",            label: "Charge" },
+                    { id: "inhibit-charge",  label: "Hold" },
+                    { id: "force-discharge", label: "Discharge" }
+                ]
+
+                Pill {
+                    required property var modelData
+                    // Only what this hardware actually offers: the file lists
+                    // its own options, and a button for one the kernel would
+                    // refuse is a control that does nothing.
+                    visible: Power.chargeBehaviourOptions.indexOf(modelData.id) >= 0
+                    label: modelData.label
+                    active: Power.chargeBehaviour === modelData.id
+                    onClicked: Power.setChargeBehaviour(modelData.id)
+                }
+            }
+        }
+
+        Label {
+            visible: (Power.hasChargeLimit || Power.hasChargeBehaviour) && !Power.chargeWritable
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            dim: true
+            text: "These files belong to root on this machine, so a change will ask "
+                + "for a password. Re-running the installer puts you in the `power` "
+                + "group and installs the udev rule that makes it direct."
+        }
+    }
+
     // ── 3.5 Low battery ──────────────────────────────────────────────────────
     Card {
         visible: Power.hasBattery

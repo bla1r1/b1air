@@ -671,6 +671,146 @@ bool SystemControl::power_profile_set(const std::string& profile) {
     return changed;
 }
 
+// ── Battery charge control ───────────────────────────────────────────────────
+//
+// What KDE's power applet calls a charge limit: the percentage the pack stops
+// charging at, so a laptop that lives on mains does not sit at 100% and age.
+// Plus charge_behaviour, which is the same idea from the other end — hold the
+// charge where it is, or run the machine down off the battery on purpose.
+//
+// Both are sysfs files under each power supply, root-owned 0644 by default;
+// etc/udev/rules.d/99-b1air-power.rules hands the `power` group write access
+// so the settings page does not raise an authentication dialog per keystroke.
+
+namespace {
+
+/** Every battery node, in listing order: BAT0, BAT1, battery, … */
+std::vector<std::filesystem::path> battery_nodes() {
+    std::vector<std::filesystem::path> out;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator("/sys/class/power_supply", ec)) {
+        const std::string n = e.path().filename().string();
+        if (n.rfind("BAT", 0) == 0 || n.rfind("battery", 0) == 0) out.push_back(e.path());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+std::string read_trimmed(const std::filesystem::path& p) {
+    std::ifstream in(p);
+    if (!in) return "";
+    std::string s;
+    std::getline(in, s);
+    while (!s.empty() && (s.back() == '\n' || s.back() == ' ')) s.pop_back();
+    return s;
+}
+
+/**
+ * Write one sysfs attribute, escalating only if we have to.
+ *
+ * With the udev rule in place the direct write succeeds and nothing is
+ * prompted. Without it — a machine installed before the rule, or one where
+ * udev has not re-triggered — pkexec asks once rather than the setting simply
+ * not working, which is how this would otherwise fail: silently, with the
+ * slider snapping back on the next poll.
+ */
+bool write_sysfs(const std::filesystem::path& p, const std::string& value) {
+    if (access(p.c_str(), W_OK) == 0) {
+        std::ofstream out(p);
+        if (out) { out << value; if (out.good()) return true; }
+    }
+    return run_argv_with_stdin({"pkexec", "tee", p.string()}, value);
+}
+
+} // namespace
+
+/**
+ * Every pack, its limit and its behaviour, as JSON for the settings page.
+ *
+ * `charge_behaviour` reads as a menu with the active entry in brackets —
+ * "[auto] inhibit-charge force-discharge" — so the current value has to be
+ * picked out of it rather than used as it stands.
+ */
+std::string SystemControl::battery_status_json() {
+    nlohmann::json out = nlohmann::json::object();
+    nlohmann::json packs = nlohmann::json::array();
+    bool any_limit = false, any_behaviour = false;
+    for (const auto& node : battery_nodes()) {
+        nlohmann::json p = nlohmann::json::object();
+        p["name"] = node.filename().string();
+
+        const std::string end = read_trimmed(node / "charge_control_end_threshold");
+        if (!end.empty()) {
+            try { p["limit"] = std::stoi(end); any_limit = true; } catch (...) {}
+            p["limitWritable"] = access((node / "charge_control_end_threshold").c_str(), W_OK) == 0;
+        }
+        const std::string start = read_trimmed(node / "charge_control_start_threshold");
+        if (!start.empty()) { try { p["limitStart"] = std::stoi(start); } catch (...) {} }
+
+        const std::string beh = read_trimmed(node / "charge_behaviour");
+        if (!beh.empty()) {
+            any_behaviour = true;
+            nlohmann::json options = nlohmann::json::array();
+            std::string active;
+            std::stringstream ss(beh);
+            std::string word;
+            while (ss >> word) {
+                if (word.size() > 2 && word.front() == '[' && word.back() == ']') {
+                    active = word.substr(1, word.size() - 2);
+                    options.push_back(active);
+                } else {
+                    options.push_back(word);
+                }
+            }
+            p["behaviour"] = active;
+            p["behaviourOptions"] = options;
+            p["behaviourWritable"] = access((node / "charge_behaviour").c_str(), W_OK) == 0;
+        }
+        p["capacity"] = read_trimmed(node / "capacity");
+        p["status"] = read_trimmed(node / "status");
+        packs.push_back(p);
+    }
+    out["batteries"] = packs;
+    out["hasLimit"] = any_limit;
+    out["hasBehaviour"] = any_behaviour;
+    return out.dump();
+}
+
+/** Set the charge limit on every pack. 100 is "no limit", not "off". */
+bool SystemControl::battery_limit_set(int percent) {
+    if (percent < 20 || percent > 100) return false;   // below 20 the pack may never charge
+    bool any = false;
+    for (const auto& node : battery_nodes()) {
+        const auto endp = node / "charge_control_end_threshold";
+        if (!std::filesystem::exists(endp)) continue;
+        // The start threshold has to move first when it would otherwise sit
+        // above the new end: the kernel rejects start >= end, and the write
+        // would fail with nothing to say why.
+        const auto startp = node / "charge_control_start_threshold";
+        if (std::filesystem::exists(startp)) {
+            const std::string cur = read_trimmed(startp);
+            int start = 0;
+            try { start = std::stoi(cur); } catch (...) {}
+            if (start >= percent) (void)write_sysfs(startp, std::to_string(std::max(0, percent - 5)));
+        }
+        any = write_sysfs(endp, std::to_string(percent)) || any;
+    }
+    return any;
+}
+
+/** auto, inhibit-charge or force-discharge, on every pack that offers it. */
+bool SystemControl::battery_behaviour_set(const std::string& behaviour) {
+    if (behaviour != "auto" && behaviour != "inhibit-charge" && behaviour != "force-discharge")
+        return false;
+    bool any = false;
+    for (const auto& node : battery_nodes()) {
+        const auto p = node / "charge_behaviour";
+        if (!std::filesystem::exists(p)) continue;
+        any = write_sysfs(p, behaviour) || any;
+    }
+    return any;
+}
+
 // ── Caffeine / Idle Inhibitor (Stay Awake Mode) ──────────────────────────────
 bool SystemControl::caffeine_is_active() {
     return (access(runtime_path("caffeine.state").c_str(), F_OK) == 0);

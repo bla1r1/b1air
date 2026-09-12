@@ -56,6 +56,11 @@ Singleton {
     readonly property alias batteryLowPercent: data.batteryLowPercent
     readonly property alias batteryCriticalPercent: data.batteryCriticalPercent
     readonly property alias batteryCriticalAction: data.batteryCriticalAction
+    // Charge control, as KDE's power applet has it: the percentage the packs
+    // stop charging at, and what the charger does while plugged in. Stored so
+    // the desktop can put them back after a reboot — sysfs forgets both.
+    readonly property alias chargeLimit: data.chargeLimit
+    readonly property alias chargeBehaviour: data.chargeBehaviour
     readonly property alias dimOnLock: data.dimOnLock
     readonly property alias dimTimeout: data.dimTimeout
     readonly property alias lockTimeout: data.lockTimeout
@@ -435,6 +440,8 @@ Singleton {
         batteryLowPercent: 15,
         batteryCriticalPercent: 5,
         batteryCriticalAction: "suspend",
+        chargeLimit: 100,
+        chargeBehaviour: "auto",
         dimOnLock: true,
         dimTimeout: 240,
         lockTimeout: 300,
@@ -549,6 +556,8 @@ Singleton {
             property int batteryLowPercent: 15
             property int batteryCriticalPercent: 5
             property string batteryCriticalAction: "suspend"
+            property int chargeLimit: 100
+            property string chargeBehaviour: "auto"
             property bool dimOnLock: true
             property int dimTimeout: 240
             property int lockTimeout: 300

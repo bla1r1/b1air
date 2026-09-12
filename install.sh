@@ -746,6 +746,14 @@ configure_remote_desktop_permissions() {
     sudo udevadm control --reload-rules >/dev/null 2>&1 || true
     sudo udevadm trigger --name-match=uinput >/dev/null 2>&1 || true
     sudo usermod -aG input "$USER" >/dev/null 2>&1 || true
+
+    # Battery charge control without a password prompt. The sysfs files are
+    # root-owned 0644, so without this the charge limit on the Power page
+    # raises a polkit dialog for every change — 99-b1air-power.rules hands
+    # them to the `power` group, which exists on Arch already.
+    sudo groupadd -f power >/dev/null 2>&1 || true
+    sudo usermod -aG power "$USER" >/dev/null 2>&1 || true
+    sudo udevadm trigger --subsystem-match=power_supply >/dev/null 2>&1 || true
 }
 
 post_install_checks() {

@@ -249,6 +249,75 @@ Singleton {
         }
     }
 
+    // ── Charge control ───────────────────────────────────────────────────────
+    // The charge limit and charging behaviour, as KDE's power applet has them.
+    // Read through the daemon rather than from sysfs directly: the values live
+    // in one file per pack, this machine has two, and charge_behaviour reads as
+    // a menu ("[auto] inhibit-charge force-discharge") rather than a value.
+    property bool hasChargeLimit: false
+    property bool hasChargeBehaviour: false
+    property int chargeLimit: 100
+    property string chargeBehaviour: "auto"
+    property var chargeBehaviourOptions: []
+    // False when the udev rule is not in place, so the page can say why a
+    // change would ask for a password instead of letting it fail quietly.
+    property bool chargeWritable: false
+
+    Process {
+        id: chargeReader
+        command: ["b1air-daemon", "battery", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let d = {};
+                try { d = JSON.parse(this.text); } catch (e) { return; }
+                root.hasChargeLimit = d.hasLimit === true;
+                root.hasChargeBehaviour = d.hasBehaviour === true;
+                const packs = d.batteries || [];
+                if (packs.length === 0) return;
+                // Every pack is set together, so the first one that reports a
+                // value describes the machine.
+                for (const p of packs) {
+                    if (p.limit !== undefined) {
+                        root.chargeLimit = p.limit;
+                        root.chargeWritable = p.limitWritable === true;
+                        break;
+                    }
+                }
+                for (const p of packs) {
+                    if (p.behaviour !== undefined && p.behaviour !== "") {
+                        root.chargeBehaviour = p.behaviour;
+                        root.chargeBehaviourOptions = p.behaviourOptions || [];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    function refreshCharge() { chargeReader.running = true; }
+
+    function setChargeLimit(pct) {
+        root.chargeLimit = pct;                    // optimistic; the read confirms
+        Settings.set("chargeLimit", pct);
+        Quickshell.execDetached(["b1air-daemon", "battery", "limit", String(pct)]);
+        chargeConfirm.restart();
+    }
+
+    function setChargeBehaviour(name) {
+        root.chargeBehaviour = name;
+        Settings.set("chargeBehaviour", name);
+        Quickshell.execDetached(["b1air-daemon", "battery", "behaviour", name]);
+        chargeConfirm.restart();
+    }
+
+    // sysfs does not settle under the write instantly, and a read fired in the
+    // same tick reports the old value and snaps the control back.
+    Timer {
+        id: chargeConfirm
+        interval: 600
+        onTriggered: root.refreshCharge()
+    }
+
     // ── Uptime ───────────────────────────────────────────────────────────────
     property int upHours: 0
     property int upMins: 0
@@ -279,7 +348,10 @@ Singleton {
     // ── Consumers ────────────────────────────────────────────────────────────
 
     property int _users: 0
-    function acquire() { root._users++; }
+    function acquire() {
+        root._users++;
+        if (root._users === 1) root.refreshCharge();
+    }
     function release() { if (root._users > 0) root._users--; }
 
     // ── Writes ───────────────────────────────────────────────────────────────

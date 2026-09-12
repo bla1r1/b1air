@@ -64,6 +64,14 @@ public:
     static std::string power_profile_get();
     static bool power_profile_set(const std::string& profile);
 
+    // Battery charge control: the limit the pack stops charging at, and what
+    // the charger does while it is plugged in. Both are per-pack sysfs files,
+    // and this machine has two packs — a single number would have described
+    // whichever one was listed first.
+    static std::string battery_status_json();
+    static bool battery_limit_set(int percent);
+    static bool battery_behaviour_set(const std::string& behaviour);
+
     // Caffeine / Idle Inhibitor (Stay Awake Mode)
     static bool caffeine_is_active();
     static bool caffeine_toggle();
