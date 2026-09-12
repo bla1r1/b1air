@@ -19,7 +19,12 @@ public:
         Q_ASSERT(uri == QLatin1String("B1air.Daemon"));
         qmlRegisterSingletonType<B1airDaemon>(
             uri, 1, 0, "Daemon",
-            [](QQmlEngine*, QJSEngine*) -> QObject* { return new B1airDaemon(); });
+            [](QQmlEngine* engine, QJSEngine*) -> QObject* {
+                auto* d = new B1airDaemon();
+                // trimMemory() needs the engine that hosts the shell.
+                d->setEngine(engine);
+                return d;
+            });
     }
 };
 

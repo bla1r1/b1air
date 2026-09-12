@@ -18,6 +18,8 @@
 #include <QDBusConnection>
 #include <functional>
 
+class QQmlEngine;
+
 class B1airDaemon : public QObject {
     Q_OBJECT
 
@@ -33,6 +35,40 @@ public:
     explicit B1airDaemon(QObject* parent = nullptr);
 
     bool cameraInUse() const { return m_cameraInUse; }
+
+    void setEngine(QQmlEngine* engine) { m_engine = engine; }
+
+    /**
+     * Give back memory the shell is holding for surfaces no longer on screen.
+     *
+     * A popup that has been opened once leaves memory behind after it closes —
+     * measured on the GPU renderer, a shell that had opened each popup once sat
+     * 70 MB above a fresh one and stayed there. This is what Qt can be asked to
+     * release, and it is not most of it: measured the same way, a call here
+     * recovered about 10 MB. The rest is live — the services those popups
+     * started, and their data — which is what recycling (below) is for.
+     * In the order that lets each call free what the one before released:
+     *
+     *   collectGarbage       JS objects still pinning destroyed items
+     *   trimComponentCache   compiled components nothing instantiates now
+     *   releaseResources     each window's scene-graph caches, rebuilt on the
+     *                        next frame for the windows that draw one
+     *   malloc_trim          freed heap back to the kernel
+     *
+     * Cheap to call, but not free — a window draws its next frame from cold —
+     * so the shell calls it when idle, not on every close.
+     */
+    Q_INVOKABLE void trimMemory();
+
+    /** This process's proportional set size, in MB; -1 when unreadable. */
+    Q_INVOKABLE int memoryMB() const;
+
+    /**
+     * Whether this process was started by b1air-daemon's supervisor, which
+     * restarts it when it exits. The shell only recycles itself when this is
+     * true: a shell started any other way would exit and stay gone.
+     */
+    Q_INVOKABLE bool supervised() const;
 
     /**
      * A palette in Design.applyPalette()'s shape, derived from an image.
@@ -174,4 +210,7 @@ private:
     QDBusConnection m_bus;
     bool m_available = false;
     bool m_cameraInUse = false;
+
+private:
+    QQmlEngine* m_engine = nullptr;
 };

@@ -364,7 +364,7 @@ set_target_properties(b1air-daemon-qml PROPERTIES
 )
 
 target_include_directories(b1air-daemon-qml PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../qmlplugin)
-target_link_libraries(b1air-daemon-qml PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::DBus)
+target_link_libraries(b1air-daemon-qml PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus)
 
 add_custom_command(TARGET b1air-daemon-qml POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

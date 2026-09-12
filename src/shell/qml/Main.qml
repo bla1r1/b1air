@@ -115,6 +115,51 @@ Scope {
     // Turns B1air.Daemon call failures into notifications.
     DaemonErrors {}
 
+    // ── Recycling ────────────────────────────────────────────────────────────
+    // The shell grows with use and does not shrink. Measured on this desktop:
+    // 135 MB when it starts, 190 MB after every popup has been opened once, and
+    // 330 MB after twelve hours of ordinary use. Almost none of that is
+    // reclaimable from inside — freeing the heap gave back nothing, Qt's cache
+    // calls about 10 MB — because it is live: services started by the popups,
+    // their device and network lists, compiled QML.
+    //
+    // A fresh process is the only thing that returns it, so the shell starts
+    // one when nobody can see it happen: long idle, which by then means the
+    // screen is off (swayidle blanks it at 10 minutes), and only when all of
+    // this holds —
+    //   · it has actually grown (a fresh shell is not restarted for nothing),
+    //   · it has been up an hour — otherwise a shell that starts large would
+    //     be restarted every fifteen minutes through a night of idle,
+    //   · the daemon's supervisor started it and will start the next one,
+    //   · nothing is open, no toast is showing, and no focus timer is running,
+    //     since that timer lives only in memory.
+    // Notification history and the clipboard are on disk and come back.
+    IdleMonitor {
+        id: recycleIdle
+        timeout: 15 * 60
+        // A video playing or anything else inhibiting idle is someone watching.
+        respectInhibitors: true
+        onIsIdleChanged: if (isIdle) rootScope.maybeRecycle()
+    }
+
+    readonly property int recycleAboveMB: 260
+    readonly property real startedAt: Date.now()
+
+    function maybeRecycle() {
+        // memoryMB and supervised arrived with this change, in the plugin —
+        // which install.sh copies with sudo and `make install` does not. A
+        // shell running new QML against the old plugin skips this rather than
+        // throwing on every idle.
+        if (typeof Daemon.memoryMB !== "function" || typeof Daemon.supervised !== "function") return;
+        if (Date.now() - rootScope.startedAt < 60 * 60 * 1000) return;
+        const mb = Daemon.memoryMB();
+        if (mb < rootScope.recycleAboveMB) return;
+        if (!Daemon.supervised()) return;
+        if (masterWindow.isVisible || Notifications.activeToasts.count > 0 || Focus.active) return;
+        console.log("[b1air-shell] recycling after idle at " + mb + " MB");
+        Qt.quit();
+    }
+
     // One bar per screen.
     //
     // TopBar was instantiated once, and a PanelWindow with no screen set lands
@@ -702,6 +747,10 @@ Scope {
             if (!masterWindow.isVisible) {
                 widgetStack.clear();
                 masterWindow.loadedWidget = "";
+                // What Qt can release once the surface is gone; see
+                // B1airDaemon::trimMemory for what that is and is not.
+                if (typeof Daemon.trimMemory === "function")
+                    Qt.callLater(() => Daemon.trimMemory());
             }
         }
     }

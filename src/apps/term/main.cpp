@@ -13,6 +13,17 @@
 #include "terminal_item.hpp"
 
 int main(int argc, char* argv[]) {
+    // The software renderer unless the environment names another. Nothing in
+    // this window needs the GPU — no shader effects, no layers — and OpenGL
+    // cost a large share of its memory: measured on this machine's Intel
+    // GPU, 47 MB PSS with OpenGL against 33 MB without, same window.
+    // It draws with QQuickPaintedItem, which paints into an image on the
+    // CPU either way; OpenGL only added a texture copy of that image, and
+    // 300,000 lines of output cost the same CPU time in both.
+    // The image viewer and the camera keep the GPU; they scale images and
+    // video.
+    setenv("QT_QUICK_BACKEND", "software", 0);
+
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     // Ui/Design loads ~/.config/b1air/theme.json over XMLHttpRequest;

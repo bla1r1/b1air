@@ -39,6 +39,14 @@
 #include "qs_services.hpp"
 
 int main(int argc, char* argv[]) {
+    // The software renderer unless the environment names another. Nothing in
+    // this window needs the GPU — no shader effects, no layers — and OpenGL
+    // cost a large share of its memory: measured on this machine's Intel
+    // GPU, 103 MB PSS with OpenGL against 75 MB without, same window.
+    // The image viewer and the camera keep the GPU; they scale images and
+    // video.
+    setenv("QT_QUICK_BACKEND", "software", 0);
+
     // Prefer the panel already on screen.
     //
     // With the desktop up, the settings belong inside it: same window manager

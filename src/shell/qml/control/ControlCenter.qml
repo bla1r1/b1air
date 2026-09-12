@@ -1127,40 +1127,64 @@ PopupShell {
     }
 
     // ── Mini-settings pages ──────────────────────────────────────────────────
-    WifiMiniView {
+    // Built when opened, not with the Control Center: all five were created
+    // every time it opened, hidden behind the tile grid. Measured on a fresh
+    // shell, opening the Control Center added 36 MB that stayed after it
+    // closed.
+    Loader {
         anchors.fill: parent
-        visible: center.currentView === "wifi"
-        onBackClicked: center.currentView = "main"
-        onOpenFullSettings: center.openFull("settings", "network")
+        active: center.currentView === "wifi"
+        sourceComponent: Component {
+            WifiMiniView {
+                onBackClicked: center.currentView = "main"
+                onOpenFullSettings: center.openFull("settings", "network")
+            }
+        }
     }
 
-    BluetoothMiniView {
+    Loader {
         anchors.fill: parent
-        visible: center.currentView === "bluetooth"
-        onBackClicked: center.currentView = "main"
-        onOpenFullSettings: center.openFull("settings", "bluetooth")
+        active: center.currentView === "bluetooth"
+        sourceComponent: Component {
+            BluetoothMiniView {
+                onBackClicked: center.currentView = "main"
+                onOpenFullSettings: center.openFull("settings", "bluetooth")
+            }
+        }
     }
 
-    SoundMiniView {
+    Loader {
         anchors.fill: parent
-        visible: center.currentView === "sound"
-        onBackClicked: center.currentView = "main"
-        onOpenFullSettings: center.openFull("settings", "audio")
+        active: center.currentView === "sound"
+        sourceComponent: Component {
+            SoundMiniView {
+                onBackClicked: center.currentView = "main"
+                onOpenFullSettings: center.openFull("settings", "audio")
+            }
+        }
     }
 
-    PowerMiniView {
+    Loader {
         anchors.fill: parent
-        visible: center.currentView === "power"
-        onBackClicked: center.currentView = "main"
-        onOpenFullSettings: center.openFull("settings", "power")
+        active: center.currentView === "power"
+        sourceComponent: Component {
+            PowerMiniView {
+                onBackClicked: center.currentView = "main"
+                onOpenFullSettings: center.openFull("settings", "power")
+            }
+        }
     }
 
-    NotificationsMiniView {
+    Loader {
         anchors.fill: parent
-        visible: center.currentView === "notifications"
-        onBackClicked: center.currentView = "main"
-        // Notification rules live on the Screen Time & DND page.
-        onOpenFullSettings: center.openFull("settings", "focus")
+        active: center.currentView === "notifications"
+        sourceComponent: Component {
+            NotificationsMiniView {
+                onBackClicked: center.currentView = "main"
+                // Notification rules live on the Screen Time & DND page.
+                onOpenFullSettings: center.openFull("settings", "focus")
+            }
+        }
     }
 
     Component.onCompleted: {

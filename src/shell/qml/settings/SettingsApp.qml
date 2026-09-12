@@ -329,141 +329,297 @@ Item {
                 width: pageScroll.availableWidth
                 spacing: Design.s(Design.space.lg)
 
-                Sections.UserSettingsSection {
+                // One page exists at a time. Every section used to be built
+                // whenever Settings opened — all 25, 24 of them hidden — and a
+                // section is not cheap: 13 do work on load, 8 hold processes,
+                // and Wallpaper reads a directory of images. Measured on a fresh shell, opening
+                // Settings added 48 MB that stayed after it closed. Leaving a
+                // page now drops it; its values live in Settings, not in it.
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "user"
+                    active: app.page === "user"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.UserSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.WindowSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "windows"
+                    active: app.page === "windows"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WindowSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.AppearanceSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "appearance"
+                    active: app.page === "appearance"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.AppearanceSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.ThemeSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "theme"
+                    active: app.page === "theme"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.ThemeSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.MonitorSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "monitors"
+                    active: app.page === "monitors"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.MonitorSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.BarSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "bar"
+                    active: app.page === "bar"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.BarSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.WidgetsSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "widgets"
+                    active: app.page === "widgets"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WidgetsSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.CaptureSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "capture"
+                    active: app.page === "capture"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.CaptureSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.DefaultAppsSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "defaultapps"
+                    active: app.page === "defaultapps"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.DefaultAppsSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.GameModeSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "gamemode"
+                    active: app.page === "gamemode"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.GameModeSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.MaintenanceSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "maintenance"
+                    active: app.page === "maintenance"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.MaintenanceSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.NightLightSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "nightlight"
+                    active: app.page === "nightlight"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.NightLightSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.NetworkSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "network"
+                    active: app.page === "network"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.NetworkSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.RemoteSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "remote"
+                    active: app.page === "remote"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.RemoteSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.BluetoothSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "bluetooth"
+                    active: app.page === "bluetooth"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.BluetoothSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.AudioSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "audio"
+                    active: app.page === "audio"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.AudioSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.PowerSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "power"
+                    active: app.page === "power"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.PowerSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.FocusSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "focus"
+                    active: app.page === "focus"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.FocusSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.InputSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "input"
+                    active: app.page === "input"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.InputSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
                 // Reads and writes Settings itself, like every other section.
                 // Passing the values through here is how the remove button came
                 // to send an index to a handler comparing layout codes.
-                Sections.KeyboardSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "keyboard"
+                    active: app.page === "keyboard"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.KeyboardSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.ShortcutsSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "shortcuts"
+                    active: app.page === "shortcuts"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.ShortcutsSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.WallpaperSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "wallpaper"
-                    wallpaperDir: Settings.wallpaperDir
-                    onWallpaperDirChangedByUser: v => Settings.set("wallpaperDir", v)
+                    active: app.page === "wallpaper"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WallpaperSettingsSection {
+                            width: parent ? parent.width : 0
+                            wallpaperDir: Settings.wallpaperDir
+                            onWallpaperDirChangedByUser: v => Settings.set("wallpaperDir", v)
+                        }
+                    }
                 }
 
-                Sections.StartupSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "startup"
+                    active: app.page === "startup"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.StartupSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
                 }
 
-                Sections.WeatherSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "weather"
-                    apiKey: Settings.weatherApiKey
-                    cityId: Settings.weatherCityId
-                    unit: Settings.weatherUnit
-                    onApiKeyChangedByUser: v => Settings.setWeatherApiKey(v)
-                    onCityIdChangedByUser: v => Settings.set("weatherCityId", v)
-                    onUnitChangedByUser: v => Settings.set("weatherUnit", v)
+                    active: app.page === "weather"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WeatherSettingsSection {
+                            width: parent ? parent.width : 0
+                            apiKey: Settings.weatherApiKey
+                            cityId: Settings.weatherCityId
+                            unit: Settings.weatherUnit
+                            onApiKeyChangedByUser: v => Settings.setWeatherApiKey(v)
+                            onCityIdChangedByUser: v => Settings.set("weatherCityId", v)
+                            onUnitChangedByUser: v => Settings.set("weatherUnit", v)
+                        }
+                    }
                 }
 
-                Sections.AboutSettingsSection {
+                Loader {
                     Layout.fillWidth: true
-                    visible: app.page === "about"
-                    onNavigate: id => app.open(id)
+                    active: app.page === "about"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.AboutSettingsSection {
+                            width: parent ? parent.width : 0
+                            onNavigate: id => app.open(id)
+                        }
+                    }
                 }
 
                 Item { Layout.fillHeight: true }

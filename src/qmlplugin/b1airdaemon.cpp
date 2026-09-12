@@ -1,4 +1,9 @@
 #include "b1airdaemon.hpp"
+#include <QFile>
+#include <malloc.h>
+#include <QGuiApplication>
+#include <QQmlEngine>
+#include <QQuickWindow>
 #include <cmath>
 #include <QUrl>
 #include <QImage>
@@ -422,4 +427,46 @@ QVariantMap B1airDaemon::paletteFromImage(const QString& path) const {
     out["green"]     = tone(120, 0.45, 0.72);
 
     return out;
+}
+
+void B1airDaemon::trimMemory() {
+    if (m_engine) {
+        m_engine->collectGarbage();
+        m_engine->trimComponentCache();
+    }
+    for (QWindow* w : QGuiApplication::topLevelWindows()) {
+        if (auto* qw = qobject_cast<QQuickWindow*>(w))
+            qw->releaseResources();
+    }
+    malloc_trim(0);
+}
+
+int B1airDaemon::memoryMB() const {
+    QFile f(QStringLiteral("/proc/self/smaps_rollup"));
+    if (!f.open(QIODevice::ReadOnly)) return -1;
+    // readAll, not atEnd/readLine: a /proc file reports a size of 0, so atEnd()
+    // is true before anything is read and the loop never ran.
+    for (const QByteArray& line : f.readAll().split('\n')) {
+        if (line.startsWith("Pss:")) {
+            // "Pss:  123456 kB"
+            const QList<QByteArray> parts = line.simplified().split(' ');
+            if (parts.size() >= 2) return int(parts[1].toLongLong() / 1024);
+        }
+    }
+    return -1;
+}
+
+bool B1airDaemon::supervised() const {
+    QFile stat(QStringLiteral("/proc/self/stat"));
+    if (!stat.open(QIODevice::ReadOnly)) return false;
+    // The command name is in parentheses and may contain spaces; the parent
+    // pid is the second field after the closing one.
+    const QByteArray s = stat.readAll();
+    const int close = s.lastIndexOf(')');
+    if (close < 0) return false;
+    const QList<QByteArray> fields = s.mid(close + 2).split(' ');
+    if (fields.size() < 2) return false;
+    QFile comm(QStringLiteral("/proc/%1/comm").arg(QString::fromLatin1(fields[1])));
+    if (!comm.open(QIODevice::ReadOnly)) return false;
+    return comm.readAll().trimmed() == "b1air-daemon";
 }
