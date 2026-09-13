@@ -56,12 +56,15 @@ ColumnLayout {
 
     Process {
         id: updateChecker
-        command: ["bash", "-c", "checkupdates 2>/dev/null | wc -l || echo 0"]
+        // The daemon knows every package manager (pacman, apt, dnf, zypper)
+        // plus the AUR; this used to call Arch's checkupdates directly.
+        command: ["b1air-daemon", "updates"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
                 section.isChecking = false;
-                const count = parseInt(this.text.trim(), 10) || 0;
+                let count = 0;
+                try { count = parseInt(JSON.parse(this.text.trim()).alt, 10) || 0; } catch (e) {}
                 section.updateCount = count;
                 section.statusText = count > 0 ? (count + " package updates available") : "System packages are up to date";
             }
@@ -106,11 +109,23 @@ ColumnLayout {
     }
 
     function cleanPackageCache() {
-        Quickshell.execDetached(["b1air-term", "-e", "fish", "-lc", "sudo paccache -rk2; or sudo pacman -Sc --noconfirm; printf '\\nDone! Press enter to exit\\n'; read"]);
+        Quickshell.execDetached(["b1air-term", "-e", "bash", "-lc",
+            "if command -v pacman >/dev/null; then sudo paccache -rk2 || sudo pacman -Sc --noconfirm; " +
+            "elif command -v apt-get >/dev/null; then sudo apt-get clean; " +
+            "elif command -v dnf >/dev/null; then sudo dnf clean packages; " +
+            "elif command -v zypper >/dev/null; then sudo zypper clean --all; fi; " +
+            "printf '\\nDone! Press enter to exit\\n'; read -r _"]);
     }
 
     function cleanOrphanPackages() {
-        Quickshell.execDetached(["b1air-term", "-e", "fish", "-lc", "set orphans (pacman -Qtdq); if test (count $orphans) -gt 0; sudo pacman -Rns $orphans; else; echo 'No orphan packages found.'; end; printf '\\nPress enter to exit\\n'; read"]);
+        Quickshell.execDetached(["b1air-term", "-e", "bash", "-lc",
+            "if command -v pacman >/dev/null; then o=$(pacman -Qtdq); " +
+            "if [ -n \"$o\" ]; then sudo pacman -Rns $o; else echo 'No orphan packages found.'; fi; " +
+            "elif command -v apt-get >/dev/null; then sudo apt-get autoremove; " +
+            "elif command -v dnf >/dev/null; then sudo dnf autoremove; " +
+            "elif command -v zypper >/dev/null; then zypper packages --unneeded; " +
+            "echo 'Review the list above and remove what you do not need with: sudo zypper rm <name>'; fi; " +
+            "printf '\\nPress enter to exit\\n'; read -r _"]);
     }
 
     // ── 1. Desktop Environment Updates ───────────────────────────────────────
@@ -254,7 +269,7 @@ ColumnLayout {
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
     Card {
         title: "Disk Sweeper & Storage Maintenance"
-        subtitle: "Free up storage by clearing pacman cache, systemd journals, and thumbnail cache"
+        subtitle: "Free up storage by clearing the package cache, systemd journals, and thumbnail cache"
         icon: "\u{f014}"
         accentColor: Design.mauve
 

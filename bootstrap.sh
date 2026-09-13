@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # bootstrap.sh — One-line Bootstrap for DotsFiles Setup
+# (Arch, Debian/Ubuntu, Fedora, openSUSE)
 # =============================================================================
 set -euo pipefail
 
@@ -35,13 +36,33 @@ if [[ ! "$BRANCH" =~ ^[A-Za-z0-9_][A-Za-z0-9._/-]*$ ]]; then
     exit 1
 fi
 
-if [[ ! -f /etc/arch-release ]]; then
-    echo "[ERROR] Unsupported distribution. DotsFiles is crafted for Arch Linux."
-    exit 1
-fi
+# The installer's lib/distro.sh is not on disk yet, so this is the same
+# detection in miniature: just enough to get git and rsync installed.
+detect_family() {
+    local word
+    for word in $(. /etc/os-release 2>/dev/null && echo "${ID:-} ${ID_LIKE:-}"); do
+        case "$word" in
+            arch|archarm|endeavouros|manjaro|cachyos|garuda)    echo arch;     return ;;
+            debian|ubuntu|linuxmint|pop|elementary|zorin|neon)   echo debian;   return ;;
+            fedora|nobara|ultramarine)                           echo fedora;   return ;;
+            opensuse|opensuse-tumbleweed|opensuse-slowroll|suse) echo opensuse; return ;;
+        esac
+    done
+    [[ -f /etc/arch-release ]] && echo arch
+    return 0
+}
 
+FAMILY="$(detect_family)"
 echo "[INFO] Installing base bootstrap dependencies (git, rsync)..."
-sudo pacman -S --needed --noconfirm git rsync
+case "$FAMILY" in
+    arch)     sudo pacman -S --needed --noconfirm git rsync ;;
+    debian)   sudo apt-get update && sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y git rsync ca-certificates ;;
+    fedora)   sudo dnf install -y git rsync ;;
+    opensuse) sudo zypper -n install git rsync ;;
+    *)
+        echo "[ERROR] Unsupported distribution. DotsFiles supports Arch, Debian/Ubuntu, Fedora and openSUSE (and derivatives)."
+        exit 1 ;;
+esac
 
 if [[ -d "$TARGET_DIR/.git" ]]; then
     echo "[INFO] Updating existing repository in $TARGET_DIR..."

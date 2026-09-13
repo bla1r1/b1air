@@ -18,6 +18,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QLibraryInfo>
 #include <QQmlApplicationEngine>
 #include <QString>
 #include <QStringList>
@@ -45,7 +46,9 @@ inline QStringList qml_dirs(const QString& app_dir) {
     dirs << home + "/.config/b1air-shell"
          << home + "/.config/quickshell"
          << "/usr/share/b1air-shell/qml"
-         << "/usr/lib/qt6/qml";
+         // Qt's own QML directory: /usr/lib/qt6/qml on Arch, but under
+         // /usr/lib/<triplet> on Debian and /usr/lib64 on Fedora/openSUSE.
+         << QLibraryInfo::path(QLibraryInfo::QmlImportsPath);
     return dirs;
 }
 

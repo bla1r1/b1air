@@ -1,0 +1,70 @@
+# Debian 13 (trixie) and newer, Ubuntu 25.04 and newer, and their derivatives.
+# Format: see lib/distro.sh. `?name` = optional.
+#
+# Quickshell is not packaged here; install.sh builds it from source with the
+# dependencies in packages/quickshell-build/debian.txt. The compositor is plain
+# sway (swayFX is not packaged either), so blur and rounded corners are off.
+
+# Core & build
+build-essential git rsync curl unzip xz-utils jq cmake ninja-build ccache pkgconf
+libssl-dev libsystemd-dev libpolkit-agent-1-dev libarchive-dev polkitd ca-certificates
+
+# Qt 6 development (the b1air suite is built on this machine)
+qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev
+qt6-svg-dev liblayershellqtinterface-dev ?qmake6
+
+# Qt 6 runtime: platform plugins and the QML modules the shell and greeter import
+qt6-wayland libqt6svg6 ?qt6-svg-plugins layer-shell-qt
+qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts
+qml6-module-qtquick-window qml6-module-qtquick-templates qml6-module-qtquick-effects
+qml6-module-qtquick-shapes qml6-module-qtquick-dialogs qml6-module-qtqml-workerscript
+qml6-module-qtcore qml6-module-qt-labs-folderlistmodel qml6-module-qtmultimedia
+qml6-module-qtquick-virtualkeyboard qt6-virtualkeyboard-plugin
+?qt6-ffmpeg-multimedia-plugin
+
+# Wayland session
+sway swaybg swayidle swaylock xwayland
+xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+?wayvnc
+
+# Shell & CLI (Debian names the bat binary batcat; install.sh links bat to it)
+fish fzf bat zoxide btop ?eza ?starship ?fastfetch
+
+# Applications
+?firefox-esr ?firefox
+
+# Clipboard & screenshots
+wl-clipboard grim slurp ?satty
+
+# Audio & media
+# canberra-gtk-play (event sounds) lives in gnome-session-canberra on Debian.
+pipewire wireplumber pipewire-pulse playerctl sound-theme-freedesktop
+?gnome-session-canberra ffmpeg gifsicle
+
+# System & hardware
+upower brightnessctl ddcutil libnotify-bin mesa-utils
+
+# Network & Bluetooth
+network-manager bluez
+
+# Display manager
+sddm
+
+# Theming & fonts (JetBrains Mono Nerd Font is fetched by install.sh)
+?qt6-style-kvantum ?qt-style-kvantum ?adw-gtk3 papirus-icon-theme
+fonts-noto-core fonts-noto-color-emoji fonts-noto-cjk fonts-firacode ?fonts-fira-sans
+fonts-liberation fontconfig
+
+# Tools the shell and daemon call out to
+imagemagick tesseract-ocr tesseract-ocr-eng zbar-tools qrencode
+power-profiles-daemon pamixer poppler-utils gocryptfs ?easyeffects
+xdg-utils ?wlsunset ?snapper
+
+# Storage & archives
+udisks2 gvfs ntfs-3g libarchive-tools
+
+# Desktop plumbing
+xdg-user-dirs qt5ct qt6ct cups desktop-file-utils gtk-update-icon-cache whiptail
+
+# Input method
+fcitx5 fcitx5-frontend-qt6 fcitx5-frontend-gtk3 ?fcitx5-config-qt

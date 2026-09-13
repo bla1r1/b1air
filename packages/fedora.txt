@@ -1,0 +1,65 @@
+# Fedora 40 and newer, and derivatives.
+# Format: see lib/distro.sh. `?name` = optional.
+#
+# Quickshell comes from the errornointernet/quickshell COPR, or is built from
+# source when that is unavailable. swayFX is in Fedora's own repositories and
+# install.sh picks it over sway.
+
+# Core & build
+gcc-c++ make git rsync curl unzip xz jq cmake ninja-build ccache pkgconf-pkg-config
+openssl-devel systemd-devel polkit-devel libarchive-devel polkit
+
+# Qt 6 development
+qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwayland-devel qt6-qtmultimedia-devel
+qt6-qtsvg-devel layer-shell-qt-devel
+
+# Qt 6 runtime
+qt6-qtwayland qt6-qtsvg qt6-qtdeclarative qt6-qtmultimedia qt6-qtvirtualkeyboard layer-shell-qt
+
+# Wayland session
+swaybg swayidle swaylock xorg-x11-server-Xwayland
+xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+?wayvnc
+
+# Shell & CLI (starship and eza are fetched by install.sh when missing)
+fish fzf bat zoxide btop fastfetch ?eza ?starship
+
+# Applications
+?firefox
+
+# Clipboard & screenshots
+wl-clipboard grim slurp ?satty
+
+# Audio & media
+pipewire wireplumber pipewire-pulseaudio playerctl libcanberra libcanberra-gtk3 sound-theme-freedesktop
+?ffmpeg-free ?gifsicle
+
+# System & hardware
+upower brightnessctl ddcutil libnotify mesa-demos
+
+# Network & Bluetooth
+NetworkManager bluez
+
+# Display manager
+sddm
+
+# Theming & fonts (JetBrains Mono Nerd Font is fetched by install.sh)
+kvantum ?adw-gtk3-theme papirus-icon-theme
+google-noto-sans-fonts google-noto-emoji-fonts google-noto-sans-cjk-fonts
+?mozilla-fira-sans-fonts liberation-fonts fontconfig
+
+# Tools the shell and daemon call out to
+ImageMagick tesseract tesseract-langpack-eng zbar qrencode
+# Fedora 41+ ships tuned-ppd, which provides the same D-Bus API and conflicts
+# with power-profiles-daemon — so this one is optional.
+?power-profiles-daemon pamixer poppler-utils ?gocryptfs ?easyeffects
+xdg-utils ?wlsunset ?snapper
+
+# Storage & archives
+udisks2 gvfs ntfs-3g bsdtar
+
+# Desktop plumbing
+xdg-user-dirs qt5ct qt6ct cups desktop-file-utils gtk-update-icon-cache newt
+
+# Input method
+fcitx5 fcitx5-qt fcitx5-gtk ?fcitx5-configtool

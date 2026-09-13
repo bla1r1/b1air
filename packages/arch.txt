@@ -1,0 +1,56 @@
+# Arch Linux (and derivatives) — official repositories.
+# Format: see lib/distro.sh. `?name` = optional. The compositor (swayfx from the
+# AUR, or sway with --no-aur) is chosen by install.sh, not listed here.
+
+# Core & build
+base-devel git rsync curl unzip jq cmake ccache openssl polkit pkgconf
+
+# Wayland session
+swaybg swayidle swaylock xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk xorg-xwayland
+layer-shell-qt wayvnc
+# Every QML file imports Quickshell; without it b1air-shell starts and dies.
+quickshell
+
+# Shell & CLI
+fish starship eza bat fzf zoxide fastfetch btop
+
+# Applications (b1air-files/-view replace Thunar/imv; there is no bundled browser)
+firefox
+
+# Clipboard & screenshots
+wl-clipboard grim slurp satty
+
+# Audio & media
+pipewire wireplumber pipewire-pulse playerctl libcanberra sound-theme-freedesktop ffmpeg gifsicle noise-suppression-for-voice
+
+# System & hardware
+upower brightnessctl ddcutil pacman-contrib libnotify
+# glxinfo: the session turns compositor effects off on a software rasterizer.
+mesa-utils
+
+# Network & Bluetooth
+networkmanager bluez bluez-utils
+
+# Display manager & Qt 6
+sddm qt6-declarative qt6-wayland qt6-svg qt6-virtualkeyboard
+# b1air-camera is a QtMultimedia CaptureSession; the ffmpeg backend talks to /dev/video0.
+qt6-multimedia qt6-multimedia-ffmpeg
+
+# Theming & fonts (adw-gtk-theme provides the adw-gtk3-dark the GTK configs name)
+kvantum adw-gtk-theme
+noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-jetbrains-mono-nerd ttf-fira-sans ttf-liberation
+papirus-icon-theme
+
+# Tools the shell and daemon call out to
+imagemagick tesseract tesseract-data-eng zbar qrencode
+power-profiles-daemon pamixer poppler gocryptfs easyeffects
+xdg-utils wlsunset snapper
+
+# Storage & archives (libarchive powers extraction in b1air-files)
+udisks2 gvfs ntfs-3g libarchive
+
+# Desktop plumbing
+xdg-user-dirs qt5ct qt6ct cups
+
+# Input method
+fcitx5 fcitx5-qt fcitx5-gtk fcitx5-configtool

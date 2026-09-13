@@ -1,0 +1,8 @@
+# Build dependencies for Quickshell from source on Fedora (used only when the
+# COPR is unavailable). Crash handler (cpptrace) is disabled in the build.
+cmake ninja-build pkgconf-pkg-config git gcc-c++
+qt6-qtbase-devel qt6-qtbase-private-devel qt6-qtdeclarative-devel ?qt6-qtdeclarative-private-devel
+qt6-qtwayland-devel ?qt6-qtwayland-private-devel qt6-qtshadertools-devel qt6-qtsvg-devel
+spirv-tools cli11-devel libdrm-devel mesa-libgbm-devel mesa-libEGL-devel vulkan-headers
+wayland-devel wayland-protocols-devel libxcb-devel
+pipewire-devel pam-devel polkit-devel glib2-devel jemalloc-devel

@@ -1,0 +1,8 @@
+# Build dependencies for Quickshell from source on openSUSE (used only when the
+# repositories carry no quickshell). Crash handler (cpptrace) is disabled.
+cmake ninja pkgconf git gcc-c++
+qt6-base-devel qt6-base-private-devel qt6-declarative-devel qt6-declarative-private-devel
+qt6-wayland-devel ?qt6-wayland-private-devel qt6-shadertools-devel qt6-svg-devel
+spirv-tools cli11-devel libdrm-devel libgbm-devel Mesa-libEGL-devel vulkan-headers
+wayland-devel wayland-protocols-devel libxcb-devel
+pipewire-devel pam-devel polkit-devel glib2-devel jemalloc-devel

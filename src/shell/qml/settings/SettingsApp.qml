@@ -54,7 +54,7 @@ Item {
         { isHeader: true, label: "SYSTEM" },
         { id: "user",        icon: "\u{f007}",  label: "User Profile",     color: Design.mauve,    tags: "user profile avatar name username password account hostname" },
         { id: "remote",      icon: "\u{f0379}", label: "Remote Desktop",   color: Design.blue,     tags: "remote desktop vnc rdp ssh anydesk screen sharing wayvnc" },
-        { id: "maintenance", icon: "\u{f0187}", label: "Maintenance",      color: Design.green,    tags: "maintenance clean disk cache logs cleanup packages pacman trim system" },
+        { id: "maintenance", icon: "\u{f0187}", label: "Maintenance",      color: Design.green,    tags: "maintenance clean disk cache logs cleanup packages pacman apt dnf zypper trim system" },
         { id: "about",       icon: "\u{f035b}", label: "About System",     color: Design.mauve,    tags: "about system version kernel arch sway quickshell specs hardware cpu ram" }
     ]
 

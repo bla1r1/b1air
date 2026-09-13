@@ -4,10 +4,13 @@
 
 ![b1air Desktop Environment](https://raw.githubusercontent.com/bla1r1/DotsFiles/main/.wallpapers/tokyo-night.jpg)
 
-**A keyboard-driven Wayland desktop for Arch Linux.**  
+**A keyboard-driven Wayland desktop for Linux — Arch, Debian/Ubuntu, Fedora and openSUSE.**  
 *Built with SwayFX, Qt6/QML, a native C++20 core daemon, and Tokyo Night styling.*
 
-[![Platform: Arch Linux](https://img.shields.io/badge/Arch_Linux-Ready-1793d1?style=flat-square&logo=archlinux&logoColor=white)](https://archlinux.org)
+[![Arch Linux](https://img.shields.io/badge/Arch_Linux-Ready-1793d1?style=flat-square&logo=archlinux&logoColor=white)](https://archlinux.org)
+[![Debian / Ubuntu](https://img.shields.io/badge/Debian_13+_/_Ubuntu_25.04+-Supported-a81d33?style=flat-square&logo=debian&logoColor=white)](https://debian.org)
+[![Fedora](https://img.shields.io/badge/Fedora_40+-Supported-51a2da?style=flat-square&logo=fedora&logoColor=white)](https://fedoraproject.org)
+[![openSUSE](https://img.shields.io/badge/openSUSE_Tumbleweed-Experimental-73ba25?style=flat-square&logo=opensuse&logoColor=white)](https://www.opensuse.org)
 [![Compositor: SwayFX](https://img.shields.io/badge/SwayFX-0.6-005577?style=flat-square&logo=wayland&logoColor=white)](https://github.com/WillPower3309/swayfx)
 [![UI: Qt6 / QML](https://img.shields.io/badge/Shell-Qt6_QML-41cd52?style=flat-square&logo=qt&logoColor=white)](https://qt.io)
 [![Core: C++20](https://img.shields.io/badge/Daemon-C++20-00599c?style=flat-square&logo=c%2B%2B&logoColor=white)](https://isocpp.org)
@@ -20,7 +23,7 @@
 
 ## Overview
 
-b1air is a unified desktop setup for Arch Linux designed around keyboard efficiency, low latency, and a consistent dark theme across all applications.
+b1air is a unified desktop setup for Linux designed around keyboard efficiency, low latency, and a consistent dark theme across all applications.
 
 Key components:
 * **Compositor**: SwayFX with hardware-accelerated rounded corners, soft shadows, and selective blur. Window chrome, the greeter and the Qt/Kvantum application theme use Tokyo Night (`#1a1b26`); the Qt6/QML shell and the native apps share one design system built on a Catppuccin Mocha palette (`Ui/Design.qml`).
@@ -49,16 +52,40 @@ Matches the desktop Tokyo Night theme with digital clock, user avatar synchroniz
 
 ## Installation
 
+### Supported distributions
+
+| Family | Versions | Quickshell | Compositor |
+| :--- | :--- | :--- | :--- |
+| **Arch** (EndeavourOS, Manjaro, CachyOS, …) | rolling | official repo | swayFX (AUR), or sway with `--no-aur` |
+| **Debian / Ubuntu** (Mint, Pop!_OS, …) | Debian 13+, Ubuntu 25.04+ | built from source | sway |
+| **Fedora** (Nobara, …) | 40+ | COPR `errornointernet/quickshell`, else source | swayFX |
+| **openSUSE** *(experimental)* | Tumbleweed / Slowroll | repo if present, else source | swayFX if present, else sway |
+
+The family is detected from `/etc/os-release`; derivatives are matched through
+`ID_LIKE`, and `--distro arch|debian|fedora|opensuse` overrides it. The desktop
+needs **Qt 6.6 or newer**, which is why Debian 12 and Ubuntu 24.04 (Qt 6.4) are
+not supported — the installer checks this before installing anything.
+
+On plain sway (no swayFX) there is no blur, no rounded corners and no shadows;
+the installer comments those swayFX-only lines out of your deployed
+`~/.config/sway/conf.d`, so sway starts without config errors. Everything else
+works the same.
+
+Package lists live in [`packages/`](packages) — one file per family, `?name`
+marks a package that may not exist on every release and is skipped if absent.
+
 Remote access is disabled and bound to localhost by default. For the background
 VM preview workflow only, explicitly start the session with `B1AIR_DEV_MODE=1`;
 this enables LAN binding and development-only prompt-free screencasting.
 
 ### Option 1: One-Line Installer
 
-Run the bootstrap script on an Arch Linux installation:
+The bootstrap script refuses to run an unpinned checkout, so pass the commit
+you have reviewed:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/bla1r1/DotsFiles/main/bootstrap.sh)
+DOTFILES_COMMIT=<40-character commit hash> \
+  bash <(curl -fsSL https://raw.githubusercontent.com/bla1r1/DotsFiles/main/bootstrap.sh)
 ```
 
 ### Option 2: Manual Clone
@@ -80,9 +107,22 @@ For an interactive menu:
 # Deploy dotfiles and compile C++ tools without reinstalling packages
 ./install.sh --skip-packages
 
+# Arch: no AUR (plain sway). Others: no downloads from upstream releases
+# (JetBrainsMono Nerd Font, starship, eza)
+./install.sh --no-aur
+
+# Force the distribution family when detection gets it wrong
+./install.sh --distro debian
+
 # Preview actions without changing the system
 ./install.sh --dry-run
 ```
+
+Environment variables: `QUICKSHELL_REF` (tag built from source, default
+`v0.3.1`), `B1AIR_QUICKSHELL_FROM_SOURCE=1` (build Quickshell even where a
+package exists), `B1AIR_SKIP_QT_CHECK=1` (skip the Qt version check).
+
+An interrupted install resumes where it stopped; `--restart` starts over.
 
 ---
 
@@ -148,34 +188,32 @@ b1air-daemon game-mode toggle      # Switch between power-save and low-latency m
 
 ```text
 DotsFiles/
-├── .config/                   # User configurations (SwayFX, b1air-term, Fish, Kvantum)
+├── .config/                   # User configurations (SwayFX, Fish, Kvantum, GTK/Qt, portals)
 │   ├── fish/                  # Fish shell with Tokyo Night theme
 │   ├── sway/                  # SwayFX compositor keybinds, rules, look & feel
-│   ├── systemd/               # Systemd user services for b1air session
+│   ├── systemd/               # Systemd user services for the b1air session
 │   └── xdg-desktop-portal-wlr # Unattended screencast configuration
+├── .local/share/              # Desktop entries, app icons and the b1air cursor theme
+├── .wallpapers/               # Wallpapers offered in Settings
 ├── src/                       # Compiled C++20 desktop suite & Qt6 shell
-│   ├── main.cpp               # b1air-daemon CLI dispatcher
-│   ├── session_manager.cpp    # Autotiling & desktop session supervisor
-│   ├── settings_manager.cpp   # Persistent JSON settings engine
-│   ├── system_control.cpp     # Hardware controls, GameMode, WayVNC, Polkit
-│   ├── user_manager.cpp       # POSIX user & SDDM avatar synchronizer
-│   ├── focustime_db.cpp       # SQLite screen time analytics engine
-│   ├── sway_ipc.cpp           # Direct Sway UNIX domain socket client
-│   ├── Makefile               # Unified C++20 build pipeline
-│   └── shell/                 # Qt6/QML desktop shell (Settings, Launcher, Popups)
+│   ├── daemon/                # b1air-daemon, polkit agent and secret service
+│   ├── shell/                 # Qt6/QML desktop shell (TopBar, launcher, popups, Settings)
+│   ├── apps/                  # b1air-files, -term, -text, -view, -notes, -git, -monitor, -camera
+│   ├── qmlplugin/             # B1air.Daemon QML module
+│   ├── compat/                # Quickshell compatibility layer for the standalone apps
+│   ├── cursors/               # Sources of the b1air cursor theme
+│   ├── third_party/           # Vendored SQLite, nlohmann/json, libvterm
+│   └── Makefile               # Unified build & install
 ├── usr/                       # System session files
 │   ├── bin/b1air-session      # Wayland session launch wrapper
 │   └── share/                 # SDDM greeter, wayland-sessions, and portal configs
-├── etc/                       # System-wide configurations
-│   ├── sddm.conf              # SDDM display manager config
-│   └── tiny-dfr/              # MacBook Touch Bar daemon config
-├── tools/                     # Development & remote control utilities
-│   ├── controller.cpp         # C++ web deck for testing desktop windows
-│   └── controller.sh          # Terminal single-key interactive controller
-├── docs/                      # Technical documentation
-│   └── ROADMAP.md             # Milestone roadmap & feature specs (M0-M14)
+├── etc/                       # System-wide configurations (SDDM, udev rules, tiny-dfr)
+├── lib/distro.sh              # Distribution detection & package-manager layer
+├── packages/                  # Package lists per distribution family
+├── tools/                     # Development utilities (smoke tests, controller)
+├── docs/ROADMAP.md            # Milestone roadmap & feature specs
 ├── bootstrap.sh               # One-line remote installer
-├── install.sh                 # Arch Linux installation engine
+├── install.sh                 # Installation engine (Arch, Debian/Ubuntu, Fedora, openSUSE)
 ├── install-ui.sh              # Interactive Whiptail TUI installer
 ├── update-dotfiles.sh         # Environment updater & config sync manager
 ├── LICENSE                    # GNU General Public License v2.0

@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
 # =============================================================================
-# DotsFiles Installation & Setup Script (Arch Linux / Sway)
+# DotsFiles Installation & Setup Script (Sway / b1air desktop)
+#
+# Supported: Arch Linux, Debian 13+ / Ubuntu 25.04+, Fedora 40+, and
+# (experimentally) openSUSE Tumbleweed — plus their derivatives. The package
+# lists live in packages/, the distribution layer in lib/distro.sh.
 # =============================================================================
 set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/distro.sh
+source "$REPO_DIR/lib/distro.sh"
+
 # The daemon's dotfiles_sync/status/sys look for the repo by guessing among a
 # few hardcoded paths, so a clone anywhere else silently made those features
 # "repo not found" forever. Record the real path once, here, where the
 # installer already knows it — no more guessing needed downstream.
 REPO_PATH_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/b1air/dotfiles-repo"
 BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
+
+# Quickshell is built from source where no distribution packages it. Pinned to
+# a release tag: Quickshell uses private Qt API, and an arbitrary master
+# commit is not something to hand an installer.
+QUICKSHELL_REPO="${QUICKSHELL_REPO:-https://github.com/quickshell-mirror/quickshell.git}"
+QUICKSHELL_REF="${QUICKSHELL_REF:-v0.3.1}"
+QT_MIN_VERSION="6.6"
 
 DISTRO=""
 SKIP_PACKAGES=0
@@ -66,10 +80,14 @@ ${BOLD}DotsFiles Automated Installer${RESET}
 Usage: $0 [options]
 
 Options:
-  --skip-packages   Skip pacman package installation
+  --distro <family> Force the distribution family: ${B1AIR_FAMILIES// /, }
+                    (detected from /etc/os-release by default)
+  --skip-packages   Skip package installation
   --skip-dotfiles   Skip deploying ~/.config, desktop entries, wallpapers, SDDM theme
   --skip-services   Skip enabling system services (NetworkManager, bluetooth, SDDM)
-  --no-aur          Skip AUR packages (use standard sway/swaylock)
+  --no-aur          Arch: skip AUR packages (plain sway instead of swayfx).
+                    Other distributions: skip downloads from upstream releases
+                    (Nerd Font, starship, eza). Quickshell is always installed.
   --dry-run         Simulate installation without making system changes
   --restart         Ignore saved progress and run every step from scratch
   -h, --help        Show this help message and exit
@@ -79,12 +97,12 @@ EOF
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --distro)        DISTRO="$2"; shift 2 ;;
+            --distro)        DISTRO="${2:-}"; shift 2 ;;
             --distro=*)      DISTRO="${1#--distro=}"; shift ;;
             --skip-packages) SKIP_PACKAGES=1; shift ;;
             --skip-dotfiles) SKIP_DOTFILES=1; shift ;;
             --skip-services) SKIP_SERVICES=1; shift ;;
-            --no-aur)        NO_AUR=1; shift ;;
+            --no-aur|--no-extras) NO_AUR=1; shift ;;
             --dry-run)       DRY_RUN=1; shift ;;
             --restart)       RESTART=1; shift ;;
             -h|--help)       usage; exit 0 ;;
@@ -92,13 +110,15 @@ parse_args() {
         esac
     done
 
+    [[ -n "$DISTRO" ]] || DISTRO="$(detect_distro)"
     if [[ -z "$DISTRO" ]]; then
-        if [[ -f /etc/arch-release ]]; then
-            DISTRO="arch"
-        else
-            err "Unsupported system. DotsFiles is optimized for Arch Linux."
-            exit 1
-        fi
+        err "Unsupported system: $(distro_pretty_name)."
+        err "Supported families: ${B1AIR_FAMILIES}. If yours is a derivative of one, pass --distro <family>."
+        exit 1
+    fi
+    if [[ " $B1AIR_FAMILIES " != *" $DISTRO "* ]]; then
+        err "Unknown --distro '$DISTRO'. Expected one of: ${B1AIR_FAMILIES}."
+        exit 1
     fi
 }
 
@@ -107,28 +127,109 @@ ensure_sudo() {
     sudo -v
 }
 
-pkg_install() {
-    local to_install=()
-    for pkg in "$@"; do
-        if ! pacman -Qi "$pkg" >/dev/null 2>&1; then
-            to_install+=("$pkg")
+# ── Preflight ────────────────────────────────────────────────────────────────
+
+# Quickshell and the suite need Qt 6.6 or newer. On Debian-family systems that
+# rules out Debian 12 and Ubuntu 24.04 (Qt 6.4), and finding that out from the
+# candidate version costs nothing — rather than after installing a few hundred
+# packages and failing in the middle of a compile.
+preflight_checks() {
+    [[ "${B1AIR_SKIP_QT_CHECK:-0}" == "1" ]] && return 0
+    [[ "$DISTRO" == "debian" ]] || return 0
+    command -v apt-cache >/dev/null 2>&1 || return 0
+
+    local candidate
+    candidate="$(apt-cache policy qt6-base-dev 2>/dev/null \
+        | awk '/Candidate:/ {print $2; exit}' | sed -E 's/^[0-9]+://; s/[^0-9.].*$//')"
+    if [[ -z "$candidate" || "$candidate" == "(none)" ]]; then
+        warn "Could not determine the Qt version in your repositories (run 'sudo apt-get update'?). Continuing."
+        return 0
+    fi
+    if ! version_ge "$candidate" "$QT_MIN_VERSION"; then
+        err "$(distro_pretty_name) ships Qt ${candidate}; the b1air desktop needs Qt ${QT_MIN_VERSION} or newer."
+        err "Use Debian 13 (trixie) or newer, or Ubuntu 25.04 or newer. Set B1AIR_SKIP_QT_CHECK=1 to try anyway."
+        exit 1
+    fi
+    ok "Qt ${candidate} available (>= ${QT_MIN_VERSION})."
+}
+
+# ── Packages ─────────────────────────────────────────────────────────────────
+
+# Installs every listed package that is not there yet. Required packages go in
+# one transaction and abort the install when it fails; optional ones are
+# filtered to what the repositories actually carry, and a failing transaction
+# is retried package by package so one conflict does not lose the rest.
+install_package_set() {
+    local list="$1" pkg
+    local required=() optional=() missing_required=() to_optional=() unavailable=()
+
+    mapfile -t required < <(read_package_list "$list" required)
+    mapfile -t optional < <(read_package_list "$list" optional)
+
+    for pkg in "${required[@]}"; do
+        pkg_installed "$DISTRO" "$pkg" || missing_required+=("$pkg")
+    done
+    for pkg in "${optional[@]}"; do
+        pkg_installed "$DISTRO" "$pkg" && continue
+        if pkg_available "$DISTRO" "$pkg"; then
+            to_optional+=("$pkg")
+        else
+            unavailable+=("$pkg")
         fi
     done
 
-    if [[ ${#to_install[@]} -gt 0 ]]; then
-        log "Installing ${#to_install[@]} official package(s)..."
+    if [[ ${#missing_required[@]} -gt 0 ]]; then
+        log "Installing ${#missing_required[@]} package(s) from $(basename "$list")..."
         if [[ "$DRY_RUN" -eq 1 ]]; then
-            log "Would install: ${to_install[*]}"
+            log "Would install: ${missing_required[*]}"
         else
             # ponytail: a swallowed failure here means a "successful" install with nothing installed
-            sudo pacman -Sy --needed --noconfirm "${to_install[@]}" || {
+            pm_install "$DISTRO" "${missing_required[@]}" || {
                 err "Package installation failed — fix the error above and re-run (progress is saved)."
                 exit 1; }
         fi
     fi
+
+    if [[ ${#to_optional[@]} -gt 0 ]]; then
+        log "Installing ${#to_optional[@]} optional package(s)..."
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            log "Would install (optional): ${to_optional[*]}"
+        elif ! pm_install "$DISTRO" "${to_optional[@]}"; then
+            warn "Optional packages failed as a group; retrying one at a time."
+            for pkg in "${to_optional[@]}"; do
+                pm_install "$DISTRO" "$pkg" || unavailable+=("$pkg")
+            done
+        fi
+    fi
+
+    [[ ${#unavailable[@]} -eq 0 ]] \
+        || warn "Not available here, skipped (the desktop works without them): ${unavailable[*]}"
+}
+
+# install_one_of <pkg...> — the first candidate the repositories carry.
+install_one_of() {
+    local pkg
+    for pkg in "$@"; do
+        pkg_installed "$DISTRO" "$pkg" && return 0
+    done
+    for pkg in "$@"; do
+        pkg_available "$DISTRO" "$pkg" || continue
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would install: $pkg"; return 0; fi
+        pm_install "$DISTRO" "$pkg" && return 0
+    done
+    return 1
+}
+
+install_packages() {
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        log "Refreshing package databases..."
+        pm_refresh "$DISTRO" || warn "Could not refresh the package databases; continuing with what is cached."
+    fi
+    install_package_set "$REPO_DIR/packages/${DISTRO}.txt"
 }
 
 enable_multilib_repo() {
+    [[ "$DISTRO" == "arch" ]] || return 0
     # ponytail: 32-bit repo, needed later for steam/wine; it only exists on x86_64
     [[ "$(uname -m)" == "x86_64" ]] || { log "Skipping [multilib]: not available on $(uname -m)."; return 0; }
 
@@ -151,89 +252,181 @@ enable_multilib_repo() {
     # ponytail: no -Sy here; the packages step syncs databases anyway
 }
 
-arch_packages() {
-    local pkgs=(
-        # Core & Build
-        base-devel git rsync curl unzip jq cmake ccache openssl polkit
-        # Wayland Compositor & Shell
-        swaybg swayidle swaylock xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk xorg-xwayland
-        layer-shell-qt wayvnc
-        # Every QML file imports Quickshell; without it b1air-shell starts and dies.
-        quickshell
-        # Modern CLI & Shell
-        fish starship eza bat fzf zoxide fastfetch btop
-        # GUI Applications
-        # b1air-files and b1air-view replace the old Thunar/Imv entries.
-        # Keep Firefox: there is no bundled browser replacement.
-        firefox
-        # Clipboard & Screenshots
-        wl-clipboard grim slurp satty
-        # Audio & Media
-        pipewire wireplumber pipewire-pulse playerctl libcanberra sound-theme-freedesktop ffmpeg gifsicle noise-suppression-for-voice
-        # System & Hardware
-        upower brightnessctl ddcutil pacman-contrib libnotify
-        # glxinfo: the session auto-tunes compositor effects off on a software
-        # rasterizer, and without this the check silently never fires.
-        mesa-utils
-        # Network & Bluetooth
-        networkmanager bluez bluez-utils
-        # Display Manager (SDDM) & Qt6 Components
-        sddm qt6-declarative qt6-wayland qt6-svg qt6-virtualkeyboard
-        # b1air-camera is a QtMultimedia CaptureSession, and the ffmpeg backend
-        # is what actually talks to /dev/video0 — without it the app starts,
-        # finds no camera and shows an empty preview.
-        qt6-multimedia qt6-multimedia-ffmpeg
-        # Theming & Fonts
-        # adw-gtk-theme provides adw-gtk3-dark, which .config/gtk-{2,3,4}
-        # have always asked for and nothing installed — GTK apps silently fell
-        # back to stock Adwaita.
-        kvantum adw-gtk-theme
-        noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-jetbrains-mono-nerd ttf-fira-sans
-        ttf-liberation
-        papirus-icon-theme
-        # Utilities & Tools
-        # sqlite is no longer here: SQLite is compiled into the binaries from
-        # src/third_party/sqlite, so the desktop no longer depends on whichever
-        # libsqlite3 the distribution ships. Nothing in the project calls the
-        # sqlite3 CLI either. nlohmann-json went the same way — it was a
-        # package requirement for one header file, now carried in
-        # src/third_party/nlohmann.
-        imagemagick tesseract tesseract-data-eng zbar qrencode
-        # Tools the shell shells out to. Without these the button exists, the
-        # command does not, and the action fails for no visible reason.
-        power-profiles-daemon pamixer poppler gocryptfs easyeffects
-        # xdg-open, xdg-mime and xdg-settings: Default Apps reads and writes
-        # the handlers through them, and Files opens everything with xdg-open.
-        # They were relied on without being asked for — present on most
-        # systems as somebody else's dependency, which is not the same as
-        # installed.
-        xdg-utils
-        wlsunset snapper
-        # Storage & archives: removable media, phones, NTFS volumes.
-        #
-        # libarchive powers the extraction built into b1air-files, and is
-        # already on any Arch system because pacman links it — listed anyway,
-        # because relying on somebody else's dependency is not the same as
-        # asking for it.
-        #
-        # 7zip used to be here as "the CLI fallback for formats libarchive
-        # can't handle". There is no such fallback: extractWithLibarchive is
-        # the only extraction path in the file manager, and "7z" appears in the
-        # source three times, every one of them as a file extension in an icon
-        # table. Measured before removing it — bsdtar, which is libarchive's
-        # own front end, lists and extracts a .7z here on its own, and this
-        # build carries zlib, lzma, bz2, lz4 and zstd.
-        udisks2 gvfs ntfs-3g libarchive
-        # Desktop plumbing every DE ships: XDG user directories, Qt platform
-        # theming (this repo already ships qt5ct/qt6ct configs), printing.
-        xdg-user-dirs qt5ct qt6ct cups
-        # Input method — the CJK fonts below are useless without a way to type.
-        fcitx5 fcitx5-qt fcitx5-gtk fcitx5-configtool
-    )
-
-    [[ "$NO_AUR" -eq 1 ]] && pkgs+=(sway)
-    echo "${pkgs[@]}"
+# The compositor. swayFX where it can be had, plain sway otherwise — the
+# session config is the same, minus the effects (see strip_swayfx_directives).
+install_compositor() {
+    case "$DISTRO" in
+        arch)
+            # swayfx comes from the AUR step; --no-aur means plain sway.
+            [[ "$NO_AUR" -eq 1 ]] && install_one_of sway
+            return 0 ;;
+        debian)
+            # Listed in packages/debian.txt: there is no swayfx package.
+            return 0 ;;
+    esac
+    if pkg_installed "$DISTRO" sway && ! pkg_installed "$DISTRO" swayfx; then
+        log "Plain sway is already installed; keeping it (install swayfx yourself for blur and rounded corners)."
+        return 0
+    fi
+    if install_one_of swayfx; then
+        ok "Compositor: swayfx"
+    elif install_one_of sway; then
+        warn "swayfx is not in your repositories — using plain sway (no blur or rounded corners)."
+    else
+        err "Neither swayfx nor sway could be installed."; exit 1
+    fi
 }
+
+# ── Quickshell ───────────────────────────────────────────────────────────────
+
+install_quickshell() {
+    if command -v quickshell >/dev/null 2>&1 && [[ "${B1AIR_QUICKSHELL_FROM_SOURCE:-0}" != "1" ]]; then
+        ok "Quickshell already installed: $(quickshell --version 2>/dev/null | head -n1)"
+        return 0
+    fi
+
+    if [[ "${B1AIR_QUICKSHELL_FROM_SOURCE:-0}" != "1" ]]; then
+        case "$DISTRO" in
+            arch)
+                install_one_of quickshell && return 0 ;;
+            fedora)
+                log "Enabling the errornointernet/quickshell COPR..."
+                if [[ "$DRY_RUN" -eq 1 ]]; then
+                    log "Would run: dnf copr enable errornointernet/quickshell; dnf install quickshell"
+                    return 0
+                fi
+                if sudo dnf install -y 'dnf-command(copr)' \
+                    && sudo dnf copr enable -y errornointernet/quickshell \
+                    && sudo dnf install -y quickshell; then
+                    return 0
+                fi
+                warn "COPR install failed; building Quickshell from source instead." ;;
+            opensuse)
+                install_one_of quickshell && return 0 ;;
+        esac
+    fi
+
+    build_quickshell_from_source
+}
+
+build_quickshell_from_source() {
+    log "Building Quickshell ${QUICKSHELL_REF} from source..."
+    local deps="$REPO_DIR/packages/quickshell-build/${DISTRO}.txt"
+    [[ -f "$deps" ]] && install_package_set "$deps"
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would clone $QUICKSHELL_REPO@$QUICKSHELL_REF, build it and install to /usr/local"
+        return 0
+    fi
+
+    local qt_version
+    qt_version="$(qt_query QT_VERSION || true)"
+    if [[ -n "$qt_version" ]] && ! version_ge "$qt_version" "$QT_MIN_VERSION"; then
+        err "Qt ${qt_version} is too old for Quickshell (needs ${QT_MIN_VERSION}+)."; exit 1
+    fi
+
+    local src="${XDG_CACHE_HOME:-$HOME/.cache}/b1air/quickshell-src"
+    rm -rf "$src"
+    mkdir -p "$(dirname "$src")"
+    git clone --depth 1 --branch "$QUICKSHELL_REF" "$QUICKSHELL_REPO" "$src" >&2 || {
+        err "Could not clone Quickshell from $QUICKSHELL_REPO."; exit 1; }
+
+    # The crash handler needs cpptrace, which no distribution here packages.
+    # The QML module goes where Qt looks for it, not under /usr/local.
+    cmake -S "$src" -B "$src/build" -GNinja \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DINSTALL_QMLDIR="$(qt_qml_dir)" \
+        -DCRASH_HANDLER=OFF \
+        -DDISTRIBUTOR="b1air DotsFiles installer (source build)" >&2 || {
+        err "Quickshell configure failed — a build dependency is missing (see above)."; exit 1; }
+    cmake --build "$src/build" >&2 || { err "Quickshell build failed."; exit 1; }
+    sudo cmake --install "$src/build" >&2 || { err "Quickshell install failed."; exit 1; }
+    rm -rf "$src"
+    hash -r
+    command -v quickshell >/dev/null 2>&1 || { err "Quickshell installed but not on PATH."; exit 1; }
+    ok "Quickshell ${QUICKSHELL_REF} installed to /usr/local"
+}
+
+# ── Extras the non-Arch repositories lack ────────────────────────────────────
+#
+# On Arch these come from the official repositories or the AUR. Elsewhere they
+# come from the projects' own GitHub releases, into /usr/local — and only when
+# nothing already provides them.
+
+github_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo x86_64 ;;
+        aarch64|arm64) echo aarch64 ;;
+        *) return 1 ;;
+    esac
+}
+
+# fetch_release_binary <name> <url> — a tarball holding the binary at its root.
+fetch_release_binary() {
+    local name="$1" url="$2" tmp
+    command -v "$name" >/dev/null 2>&1 && return 0
+    if [[ "$DRY_RUN" -eq 1 ]]; then log "Would download $name from $url"; return 0; fi
+    tmp="$(mktemp -d)"
+    if curl -fsSL "$url" -o "$tmp/archive.tar.gz" \
+        && tar -xzf "$tmp/archive.tar.gz" -C "$tmp" \
+        && [[ -f "$(find "$tmp" -type f -name "$name" | head -n1)" ]]; then
+        sudo install -m 755 "$(find "$tmp" -type f -name "$name" | head -n1)" "/usr/local/bin/$name"
+        ok "Installed $name to /usr/local/bin"
+    else
+        warn "Could not download $name; install it yourself for the full shell experience."
+    fi
+    rm -rf "$tmp"
+}
+
+install_nerd_font() {
+    local fonts
+    fonts="$(fc-list 2>/dev/null)"
+    grep -qi "JetBrainsMono Nerd" <<< "$fonts" && return 0
+    local dest="/usr/local/share/fonts/JetBrainsMonoNerd" tmp
+    if [[ "$DRY_RUN" -eq 1 ]]; then log "Would install JetBrainsMono Nerd Font to $dest"; return 0; fi
+    tmp="$(mktemp -d)"
+    if curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz" \
+            -o "$tmp/font.tar.xz" \
+        && tar -xJf "$tmp/font.tar.xz" -C "$tmp"; then
+        sudo install -d -m 755 "$dest"
+        sudo find "$tmp" -maxdepth 1 -name '*.ttf' -exec install -m 644 {} "$dest/" \;
+        sudo fc-cache -f "$dest" >/dev/null 2>&1 || true
+        ok "Installed JetBrainsMono Nerd Font"
+    else
+        warn "Could not download JetBrainsMono Nerd Font; icons in the terminal will be missing."
+    fi
+    rm -rf "$tmp"
+}
+
+install_extras() {
+    [[ "$DISTRO" == "arch" ]] && return 0
+
+    # Debian ships bat as `batcat` (a name clash with an older package); the
+    # fish config and the post-install check both say `bat`.
+    if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would link /usr/local/bin/bat -> batcat"
+        else sudo ln -sf "$(command -v batcat)" /usr/local/bin/bat; fi
+    fi
+
+    if [[ "$NO_AUR" -eq 1 ]]; then
+        warn "Skipping upstream downloads (--no-aur): Nerd Font, starship, eza."
+        return 0
+    fi
+
+    install_nerd_font
+    local arch
+    if arch="$(github_arch)"; then
+        fetch_release_binary starship \
+            "https://github.com/starship/starship/releases/latest/download/starship-${arch}-unknown-linux-musl.tar.gz"
+        fetch_release_binary eza \
+            "https://github.com/eza-community/eza/releases/latest/download/eza_${arch}-unknown-linux-gnu.tar.gz"
+    else
+        warn "No prebuilt starship/eza for $(uname -m); skipping."
+    fi
+}
+
+# ── GPU drivers ──────────────────────────────────────────────────────────────
 
 # Display-controller vendors present on the PCI bus, read straight from sysfs:
 # lspci would mean depending on pciutils, which is the same trap that left the
@@ -265,6 +458,22 @@ nvidia_package_for_kernel() {
     esac
 }
 
+# gpu_packages <vendor> — what to install for it on this family. Empty output
+# means nothing safe to install automatically.
+gpu_packages() {
+    case "$DISTRO:$1" in
+        arch:nvidia)     echo "$(nvidia_package_for_kernel) nvidia-utils" ;;
+        arch:amd)        echo "vulkan-radeon libva-mesa-driver" ;;
+        arch:intel)      echo "vulkan-intel intel-media-driver" ;;
+        debian:amd)      echo "mesa-vulkan-drivers mesa-va-drivers" ;;
+        debian:intel)    echo "mesa-vulkan-drivers intel-media-va-driver" ;;
+        fedora:amd)      echo "mesa-vulkan-drivers mesa-va-drivers" ;;
+        fedora:intel)    echo "mesa-vulkan-drivers intel-media-driver" ;;
+        opensuse:amd)    echo "libvulkan_radeon" ;;
+        opensuse:intel)  echo "libvulkan_intel intel-media-driver" ;;
+    esac
+}
+
 install_gpu_drivers() {
     local virt
     virt="$(systemd-detect-virt 2>/dev/null || echo none)"
@@ -273,45 +482,33 @@ install_gpu_drivers() {
         return 0
     fi
 
-    local vendors pkgs=()
+    local vendors
     vendors="$(gpu_vendors)"
     if [[ -z "$vendors" ]]; then
         warn "No PCI display controller recognised; leaving graphics drivers alone."
         return 0
     fi
 
-    local vendor nv
+    local vendor pkgs pkg
     while read -r vendor; do
         [[ -n "$vendor" ]] || continue
-        case "$vendor" in
-            nvidia)
-                nv="$(nvidia_package_for_kernel)"
-                log "NVIDIA GPU detected — installing ${nv} for kernel $(uname -r)."
-                pkgs+=("$nv" nvidia-utils) ;;
-            amd)
-                log "AMD GPU detected — installing Vulkan and VA-API userspace."
-                pkgs+=(vulkan-radeon libva-mesa-driver) ;;
-            intel)
-                log "Intel GPU detected — installing Vulkan and VA-API userspace."
-                pkgs+=(vulkan-intel intel-media-driver) ;;
-        esac
+        pkgs="$(gpu_packages "$vendor")"
+        if [[ -z "$pkgs" ]]; then
+            # NVIDIA outside Arch lives in non-free / RPM Fusion / Packman and
+            # needs Secure Boot decisions an installer should not make.
+            warn "${vendor^^} GPU detected — install its driver with your distribution's tool" \
+                 "(Ubuntu: 'sudo ubuntu-drivers install'; Debian: nvidia-driver from non-free;" \
+                 "Fedora: akmod-nvidia from RPM Fusion; openSUSE: the NVIDIA repository)."
+            continue
+        fi
+        log "${vendor^^} GPU detected — installing: ${pkgs}"
+        for pkg in $pkgs; do
+            install_one_of "$pkg" || warn "Could not install $pkg (not in the enabled repositories?)."
+        done
     done <<< "$vendors"
-
-    pkg_install "${pkgs[@]}"
 }
 
-aur_packages() {
-    local pkgs=(
-        swayfx
-        # Screen recording: the daemon calls wl-screenrec; AUR-only.
-        wl-screenrec
-        # .config/gtk-{2,3,4} have always named catppuccin-cursors-mocha as the
-        # cursor theme and nothing installed it, so every pointer in the session
-        # fell back to the stock one. AUR-only.
-        catppuccin-cursors-mocha
-    )
-    echo "${pkgs[@]}"
-}
+# ── AUR (Arch only) ──────────────────────────────────────────────────────────
 
 ensure_aur_helper() {
     command -v yay  >/dev/null 2>&1 && { echo "yay";  return; }
@@ -349,8 +546,7 @@ ensure_aur_helper() {
 install_aur_packages() {
     local aur_helper="$1"
     local pkgs=()
-    # shellcheck disable=SC2207
-    pkgs=($(aur_packages))
+    mapfile -t pkgs < <(read_package_list "$REPO_DIR/packages/arch-aur.txt" required)
 
     log "Installing AUR packages with ${aur_helper}..."
     for pkg in "${pkgs[@]}"; do
@@ -502,6 +698,12 @@ deploy_dotfiles() {
         if [[ ! -f "$HOME/.config/sway/settings.json" ]]; then
             cp "$REPO_DIR/.config/sway/settings.json" "$HOME/.config/sway/settings.json"
         fi
+
+        # Plain sway rejects every blur/shadow/corner line with a swaynag bar.
+        if ! have_swayfx; then
+            strip_swayfx_directives "$HOME/.config/sway/conf.d"
+            ok "Plain sway: swayFX-only effects commented out in ~/.config/sway/conf.d"
+        fi
     fi
 
     # Where Settings → Appearance → Theme keeps user themes. Created here so
@@ -563,9 +765,6 @@ deploy_dotfiles() {
         rsync -a "$REPO_DIR/.wallpapers/" "$HOME/.wallpapers/"
     fi
 
-    # Build and install b1air-daemon C++ suite
-    build_b1air_suite
-
     # deploy_sddm_theme was only ever called from the DRY_RUN branch above —
     # a real install never called it at all, so /usr/share/sddm/themes/b1air
     # and /etc/sddm.conf were never deployed on any machine that actually ran
@@ -582,64 +781,94 @@ deploy_dotfiles() {
 }
 
 configure_default_shell() {
+    local fish
+    fish="$(command -v fish 2>/dev/null || true)"
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would set the login shell to /usr/bin/fish"
+        log "Would set the login shell to ${fish:-fish}"
         return 0
     fi
-    if [[ ! -x /usr/bin/fish ]]; then
+    if [[ -z "$fish" ]]; then
         warn "Fish is not installed; keeping the current login shell."
         return 0
     fi
-    if ! grep -Fxq /usr/bin/fish /etc/shells 2>/dev/null; then
-        warn "/usr/bin/fish is not listed in /etc/shells; keeping the current login shell."
+    if ! grep -Fxq "$fish" /etc/shells 2>/dev/null; then
+        warn "$fish is not listed in /etc/shells; keeping the current login shell."
         return 0
     fi
     local current_shell
     current_shell="$(getent passwd "$USER" | cut -d: -f7)"
-    if [[ "$current_shell" != "/usr/bin/fish" ]]; then
-        chsh -s /usr/bin/fish "$USER" || sudo usermod -s /usr/bin/fish "$USER" || warn "Could not set Fish as the login shell."
+    if [[ "$current_shell" != "$fish" ]]; then
+        chsh -s "$fish" "$USER" || sudo usermod -s "$fish" "$USER" || warn "Could not set Fish as the login shell."
     fi
 }
 
+# enable_first_unit <unit...> — unit names differ between distributions
+# (vboxservice vs virtualbox-guest-utils, vmtoolsd vs open-vm-tools).
+enable_first_unit() {
+    local unit
+    for unit in "$@"; do
+        sudo systemctl enable --now "$unit" 2>/dev/null && return 0
+    done
+    return 0
+}
+
 detect_and_install_vm_guest_tools() {
-    if command -v systemd-detect-virt >/dev/null 2>&1; then
-        local virt
-        virt="$(systemd-detect-virt 2>/dev/null || true)"
-        if [[ -n "$virt" && "$virt" != "none" ]]; then
-            log "Detected Virtual Machine environment: $virt"
-            case "$virt" in
-                kvm|qemu|bochs)
-                    pkg_install qemu-guest-agent spice-vdagent
-                    if [[ "$DRY_RUN" -eq 0 ]]; then
-                        sudo systemctl enable --now qemu-guest-agent 2>/dev/null || true
-                        # spice-vdagentd is the system side of clipboard/resolution
-                        # sync; without it, spice-vdagent in the session has nothing
-                        # to talk to and host<->guest copy-paste silently never works.
-                        sudo systemctl enable --now spice-vdagentd 2>/dev/null || true
-                    fi
-                    ;;
-                oracle)
-                    pkg_install virtualbox-guest-utils
-                    if [[ "$DRY_RUN" -eq 0 ]]; then
-                        sudo systemctl enable --now vboxservice 2>/dev/null || true
-                    fi
-                    ;;
-                vmware)
-                    pkg_install open-vm-tools
-                    if [[ "$DRY_RUN" -eq 0 ]]; then
-                        sudo systemctl enable --now vmtoolsd 2>/dev/null || true
-                    fi
-                    ;;
-            esac
-            pkg_install mesa
-        fi
+    command -v systemd-detect-virt >/dev/null 2>&1 || return 0
+    local virt
+    virt="$(systemd-detect-virt 2>/dev/null || true)"
+    [[ -n "$virt" && "$virt" != "none" ]] || return 0
+
+    log "Detected Virtual Machine environment: $virt"
+    case "$virt" in
+        kvm|qemu|bochs)
+            install_one_of qemu-guest-agent || warn "qemu-guest-agent not available."
+            install_one_of spice-vdagent || warn "spice-vdagent not available."
+            if [[ "$DRY_RUN" -eq 0 ]]; then
+                enable_first_unit qemu-guest-agent
+                # spice-vdagentd is the system side of clipboard/resolution
+                # sync; without it, spice-vdagent in the session has nothing
+                # to talk to and host<->guest copy-paste silently never works.
+                enable_first_unit spice-vdagentd
+            fi
+            ;;
+        oracle)
+            install_one_of virtualbox-guest-utils virtualbox-guest-additions virtualbox-guest-tools \
+                || warn "VirtualBox guest tools not available (Debian: enable contrib)."
+            [[ "$DRY_RUN" -eq 0 ]] && enable_first_unit vboxservice virtualbox-guest-utils
+            ;;
+        vmware)
+            install_one_of open-vm-tools || warn "open-vm-tools not available."
+            [[ "$DRY_RUN" -eq 0 ]] && enable_first_unit vmtoolsd open-vm-tools
+            ;;
+    esac
+    # The software rasterizer the session falls back to in a VM.
+    install_one_of mesa libgl1-mesa-dri mesa-dri-drivers Mesa-dri || true
+}
+
+# Another display manager (GDM on Ubuntu and Fedora Workstation, LightDM on
+# Mint) owns display-manager.service, and `systemctl enable sddm` refuses to
+# replace that alias. Take it over explicitly, and say so.
+enable_sddm() {
+    local current
+    current="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+    if [[ -n "$current" && "$(basename "$current")" != "sddm.service" ]]; then
+        warn "Switching the display manager from $(basename "$current" .service) to SDDM."
+        sudo systemctl disable "$(basename "$current")" 2>/dev/null || true
+        sudo systemctl enable --force sddm || return 1
+    else
+        sudo systemctl enable sddm || return 1
+    fi
+    # Debian's own record of the default display manager, read by its
+    # maintainer scripts; left stale it would hand the alias back on upgrade.
+    if [[ -f /etc/X11/default-display-manager ]]; then
+        command -v sddm | sudo tee /etc/X11/default-display-manager >/dev/null
     fi
 }
 
 enable_services() {
     log "Enabling system services..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would enable: NetworkManager, bluetooth, sddm"
+        log "Would enable: NetworkManager, bluetooth, power-profiles-daemon, cups, sddm"
         return 0
     fi
 
@@ -647,10 +876,13 @@ enable_services() {
     sudo systemctl enable bluetooth || warn "Failed to enable Bluetooth"
     # Installed above, but inert until enabled: the shell's power-profile
     # switch talks to this daemon, and printing needs the cups socket.
-    sudo systemctl enable power-profiles-daemon || warn "Failed to enable power-profiles-daemon"
+    # (Fedora 41+ provides the same service through tuned-ppd.)
+    sudo systemctl enable power-profiles-daemon 2>/dev/null \
+        || sudo systemctl enable tuned 2>/dev/null \
+        || warn "Failed to enable a power-profiles service"
     sudo systemctl enable cups.socket || warn "Failed to enable CUPS"
     # ponytail: SDDM last and strict — enabling it early boots the user into a broken session
-    sudo systemctl enable sddm || { err "Failed to enable SDDM."; exit 1; }
+    enable_sddm || { err "Failed to enable SDDM."; exit 1; }
 }
 
 build_b1air_suite() {
@@ -733,7 +965,7 @@ build_b1air_suite() {
             # The QML plugin has to sit on Qt's import path for quickshell to
             # find it; ~/.local is not on that path, so this one needs root.
             local qml_dest
-            qml_dest="$(qmake6 -query QT_INSTALL_QML 2>/dev/null || echo /usr/lib/qt6/qml)"
+            qml_dest="$(qt_qml_dir)"
             if [[ -d "$REPO_DIR/src/shell/build/qml/B1air" ]]; then
                 sudo cp -r "$REPO_DIR/src/shell/build/qml/B1air" "$qml_dest/" \
                     && ok "B1air.Daemon QML module installed to $qml_dest" \
@@ -799,22 +1031,33 @@ configure_remote_desktop_permissions() {
 }
 
 post_install_checks() {
+    [[ "$DRY_RUN" -eq 1 ]] && { log "Would verify the installed commands."; return 0; }
     log "Running environment verification..."
     # ponytail: every app must be present — this gate is what keeps SDDM off a broken system
-    local commands=(sway swaylock fish starship eza bat fzf sddm
+    local commands=(sway swaylock sddm quickshell
         b1air-daemon b1air-polkit-agent b1air-secret-service b1air-shell
         b1air-files b1air-settings b1air-monitor b1air-term b1air-text
         b1air-view b1air-notes b1air-git b1air-camera)
-    local missing=()
+    # The terminal niceties the fish config uses when present. Missing ones
+    # cost a prettier prompt, not a working desktop.
+    local recommended=(fish starship eza bat fzf)
+    local missing=() missing_recommended=() cmd
 
     for cmd in "${commands[@]}"; do
         if ! command -v "$cmd" >/dev/null 2>&1 && ! [[ -x "$HOME/.local/bin/$cmd" ]]; then
             missing+=("$cmd")
         fi
     done
+    for cmd in "${recommended[@]}"; do
+        command -v "$cmd" >/dev/null 2>&1 || missing_recommended+=("$cmd")
+    done
 
-    # ponytail: an existing binary proves nothing if its QML module is absent
-    [[ -d /usr/lib/qt6/qml/Quickshell ]] || missing+=("Quickshell QML module")
+    # An existing binary proves little if its QML module is absent — but where
+    # the module lands differs between packagings, so this one only warns.
+    local qml_dir
+    qml_dir="$(qt_qml_dir)"
+    [[ -d "$qml_dir/Quickshell" ]] || warn "No Quickshell QML module under $qml_dir; if the shell fails to start, reinstall Quickshell."
+    [[ ${#missing_recommended[@]} -eq 0 ]] || warn "Recommended but missing: ${missing_recommended[*]}"
 
     if [[ ${#missing[@]} -eq 0 ]]; then
         ok "All essential commands verified."
@@ -857,19 +1100,26 @@ record_repo_path() {
 
 main() {
     parse_args "$@"
-    log "Operating as distro: ${DISTRO}"
+    log "Operating as distro family: ${DISTRO} ($(distro_pretty_name))"
     ensure_sudo
     init_state
     record_repo_path
 
     if [[ "$SKIP_PACKAGES" -eq 0 ]]; then
+        preflight_checks
         step multilib   enable_multilib_repo
-        step packages   pkg_install $(arch_packages)
+        step packages   install_packages
+        step compositor install_compositor
+        step quickshell install_quickshell
         step gpu        install_gpu_drivers
-        if [[ "$NO_AUR" -eq 0 ]]; then
-            step aur    aur_step
+        if [[ "$DISTRO" == "arch" ]]; then
+            if [[ "$NO_AUR" -eq 0 ]]; then
+                step aur    aur_step
+            else
+                warn "Skipping AUR packages (--no-aur)."
+            fi
         else
-            warn "Skipping AUR packages (--no-aur)."
+            step extras install_extras
         fi
         step vm-tools   detect_and_install_vm_guest_tools
     else

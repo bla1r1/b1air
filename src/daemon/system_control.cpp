@@ -3117,24 +3117,40 @@ bool SystemControl::night_light_auto() {
 }
 
 // ── System Updates ───────────────────────────────────────────────────────────
+//
+// One line of output per pending update from the distribution's repositories,
+// whichever package manager this is. All of them read cached metadata and need
+// no root: checkupdates syncs into its own temporary database, `apt-get -s`
+// only simulates, and dnf and zypper refresh into the user's cache.
+static const char* const kPendingUpdatesCmd =
+    "if command -v checkupdates >/dev/null 2>&1; then checkupdates; "
+    "elif command -v apt-get >/dev/null 2>&1; then apt-get -s -o Debug::NoLocking=1 upgrade | grep '^Inst '; "
+    "elif command -v dnf >/dev/null 2>&1; then dnf -q check-update | grep -E '^[^[:space:]]+[.][^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+$'; "
+    "elif command -v zypper >/dev/null 2>&1; then zypper -q list-updates | grep '^v '; "
+    "fi";
+
 std::string SystemControl::get_updates_json(bool /*force*/) {
-    int arch_updates = 0;
+    int system_updates = 0;
     int aur_updates = 0;
 
-    std::string arch_str = exec_cmd("checkupdates 2>/dev/null | wc -l");
-    try { arch_updates = std::stoi(arch_str); } catch (...) { arch_updates = 0; }
+    std::string sys_str = exec_cmd(std::string("{ ") + kPendingUpdatesCmd + "; } 2>/dev/null | wc -l");
+    try { system_updates = std::stoi(sys_str); } catch (...) { system_updates = 0; }
 
-    std::string aur_str = exec_cmd("yay -Qua 2>/dev/null | wc -l");
+    // The AUR exists only on Arch; elsewhere neither helper is installed and
+    // this counts nothing.
+    std::string aur_str = exec_cmd("{ if command -v yay >/dev/null 2>&1; then yay -Qua; "
+                                   "elif command -v paru >/dev/null 2>&1; then paru -Qua; fi; } 2>/dev/null | wc -l");
     try { aur_updates = std::stoi(aur_str); } catch (...) { aur_updates = 0; }
 
-    int total = arch_updates + aur_updates;
+    int total = system_updates + aur_updates;
     if (total == 0) {
         return "{\"text\":\"\",\"alt\":\"0\",\"tooltip\":\"Packages are up to date\",\"class\":\"green\"}";
     }
 
     std::string cls = (total > 50) ? "red" : ((total > 0) ? "yellow" : "green");
-    std::string tooltip = std::to_string(arch_updates) + " System | " + std::to_string(aur_updates) + " AUR";
-    return "{\"text\":\" " + std::to_string(total) + "\",\"alt\":\"" + std::to_string(total) + "\",\"tooltip\":\"" + tooltip + "\",\"class\":\"" + cls + "\"}";
+    std::string tooltip = std::to_string(system_updates) + " System";
+    if (aur_updates > 0) tooltip += " | " + std::to_string(aur_updates) + " AUR";
+    return "{\"text\":\" " + std::to_string(total) + "\",\"alt\":\"" + std::to_string(total) + "\",\"tooltip\":\"" + tooltip + "\",\"class\":\"" + cls + "\"}";
 }
 
 // ── Default applications ─────────────────────────────────────────────────────
@@ -3162,7 +3178,7 @@ bool SystemControl::open_default(const std::string& kind) {
 
 bool SystemControl::launch_system_upgrade() {
     // Used to hardcode "yay -Syu", which fails outright on a --no-aur install
-    // with no AUR helper. dotfiles_sys() already has the yay/paru/pacman
+    // with no AUR helper. dotfiles_sys() already has the package-manager
     // fallback chain for exactly this upgrade; reuse it instead of a second,
     // narrower copy that only some install profiles could actually run.
     return dotfiles_sys();
@@ -3714,14 +3730,23 @@ bool SystemControl::dotfiles_sync() {
     std::string repo = find_dotfiles_repo();
     if (repo.empty()) return false;
     std::string script = "bash " + shell_quote(repo + "/update-dotfiles.sh") + " --repo-dir " + shell_quote(repo) + "; printf '\\nPress Enter to close...\\n'; read -r _";
-    return util::spawn_detached({"b1air-term", "-e", "fish", "-lc", script});
+    // bash, not fish: `read -r` is not a fish builtin option, so the window
+    // closed on an error instead of waiting for Enter.
+    return util::spawn_detached({"b1air-term", "-e", "bash", "-lc", script});
 }
 
 bool SystemControl::dotfiles_sys() {
+    // Was handed to `fish -lc`, which has no `if ...; then ...; fi`: the
+    // upgrade window printed a syntax error and never ran anything.
     const std::string script = "if command -v yay >/dev/null 2>&1; then yay -Syu; "
                               "elif command -v paru >/dev/null 2>&1; then paru -Syu; "
-                              "else sudo pacman -Syu; fi; printf '\\nPress Enter to close...\\n'; read -r _";
-    return util::spawn_detached({"b1air-term", "-e", "fish", "-lc", script});
+                              "elif command -v pacman >/dev/null 2>&1; then sudo pacman -Syu; "
+                              "elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get upgrade; "
+                              "elif command -v dnf >/dev/null 2>&1; then sudo dnf upgrade --refresh; "
+                              "elif command -v zypper >/dev/null 2>&1; then sudo zypper refresh && sudo zypper dup; "
+                              "else echo 'No supported package manager found.'; fi; "
+                              "printf '\\nPress Enter to close...\\n'; read -r _";
+    return util::spawn_detached({"b1air-term", "-e", "bash", "-lc", script});
 }
 
 // ── Screen Capture, Recording & QR Scanner ───────────────────────────────────
@@ -4728,8 +4753,13 @@ bool SystemControl::voice_memo() {
 // ── Milestone 4: Privacy, Security & System Health Maintenance ────────────────
 
 std::string SystemControl::disk_sweeper_scan() {
-    std::string pacman_cache = exec_cmd("du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1");
-    if (pacman_cache.empty()) pacman_cache = "0 B";
+    // The package cache of whichever manager this is; du totals the ones that
+    // exist and complains about the rest on stderr. The JSON key keeps its old
+    // name because the Settings page reads it.
+    std::string pacman_cache = exec_cmd("du -shc /var/cache/pacman/pkg /var/cache/apt/archives "
+                                        "/var/cache/dnf /var/cache/libdnf5 /var/cache/zypp/packages "
+                                        "2>/dev/null | tail -n1 | cut -f1");
+    if (pacman_cache.empty() || pacman_cache == "0") pacman_cache = "0 B";
 
     const char* home = std::getenv("HOME");
     std::string user_cache = "0 B";
@@ -4750,7 +4780,12 @@ std::string SystemControl::disk_sweeper_scan() {
     std::string journal = exec_cmd("journalctl --disk-usage 2>/dev/null | grep -oE '[0-9\\.]+[M|G|K]B' | head -1");
     if (journal.empty()) journal = "< 50 MB";
 
-    std::string orphans = exec_cmd("pacman -Qtdq 2>/dev/null | wc -l");
+    std::string orphans = exec_cmd(
+        "{ if command -v pacman >/dev/null 2>&1; then pacman -Qtdq; "
+        "elif command -v apt-get >/dev/null 2>&1; then apt-get -s -o Debug::NoLocking=1 autoremove | grep '^Remv '; "
+        "elif command -v dnf >/dev/null 2>&1; then dnf -q repoquery --unneeded; "
+        "elif command -v zypper >/dev/null 2>&1; then zypper -q packages --unneeded | grep '^i'; "
+        "fi; } 2>/dev/null | wc -l");
     if (orphans.empty()) orphans = "0";
 
     std::ostringstream json;
@@ -4792,7 +4827,10 @@ bool SystemControl::disk_sweeper_clean() {
         done.push_back("journal");
 
     if (run_argv_status({"sudo", "-n", "paccache", "-rk2"})
-        || run_argv_status({"sudo", "-n", "pacman", "-Sc", "--noconfirm"}))
+        || run_argv_status({"sudo", "-n", "pacman", "-Sc", "--noconfirm"})
+        || run_argv_status({"sudo", "-n", "apt-get", "clean"})
+        || run_argv_status({"sudo", "-n", "dnf", "clean", "packages"})
+        || run_argv_status({"sudo", "-n", "zypper", "clean", "--all"}))
         done.push_back("package cache");
 
     std::string summary = "Cleaned: ";

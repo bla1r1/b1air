@@ -404,7 +404,7 @@ PopupShell {
                         ColumnLayout {
                             spacing: Design.s(Design.space.xxs)
                             Label { text: "System-wide Upgrade"; role: "subhead"; weight: Design.weight.semibold }
-                            Label { text: "Runs pacman and yay to update all core system and AUR packages"; dim: true }
+                            Label { text: "Runs your package manager (and the AUR helper on Arch) to update every package"; dim: true }
                         }
                     }
 

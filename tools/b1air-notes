@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-export QT_QPA_PLATFORM="wayland;xcb"
-export QSG_RENDER_LOOP="basic"
-exec /usr/local/bin/b1air-notes "$@"

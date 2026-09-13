@@ -1,0 +1,8 @@
+# Arch Linux — AUR packages, installed with yay/paru unless --no-aur.
+
+# Blur, rounded corners and shadows; plain sway is used with --no-aur.
+swayfx
+# Screen recording: the daemon calls wl-screenrec.
+wl-screenrec
+# The cursor theme .config/gtk-{2,3,4} and b1air-session name.
+catppuccin-cursors-mocha

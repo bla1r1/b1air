@@ -52,7 +52,7 @@ ColumnLayout {
           names: ["firefox", "chrome", "google-chrome", "google-chrome-stable", "chromium", "brave",
                   "brave-browser", "zen", "zen-browser", "vivaldi", "librewolf", "floorp",
                   "qutebrowser", "epiphany"],
-          missing: "No web browser found. Install one with: sudo pacman -S firefox" },
+          missing: "No web browser found. Install one (e.g. Firefox) with your package manager." },
         { kind: "terminal", title: "Terminal", subtitle: "What Mod+T opens",
           icon: "\u{f120}", tone: Design.green,
           mimes: ["x-scheme-handler/terminal"],
@@ -63,7 +63,7 @@ ColumnLayout {
           icon: "\u{f07c}", tone: Design.peach,
           mimes: ["inode/directory"],
           names: ["b1air-files", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm", "pcmanfm-qt"],
-          missing: "No file manager found. Install one with: sudo pacman -S thunar" },
+          missing: "No file manager found. b1air-files is built with the rest of the desktop." },
         { kind: "editor", title: "Text Editor", subtitle: "Plain text, Markdown and JSON files",
           icon: "\u{f121}", tone: Design.mauve,
           mimes: ["text/plain", "text/markdown", "application/json"],
@@ -74,7 +74,7 @@ ColumnLayout {
           icon: "\u{f008}", tone: Design.teal,
           mimes: ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac"],
           names: ["mpv", "vlc", "celluloid", "audacious", "totem", "haruna"],
-          missing: "No media player found. Install one with: sudo pacman -S mpv" }
+          missing: "No media player found. Install one (e.g. mpv) with your package manager." }
     ]
 
     /** The command's binary name: "/usr/bin/foo --bar %U" -> "foo". */

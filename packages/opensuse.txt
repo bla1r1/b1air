@@ -1,0 +1,63 @@
+# openSUSE Tumbleweed / Slowroll. Experimental: less tested than the others.
+# Format: see lib/distro.sh. `?name` = optional.
+#
+# Quickshell is installed from the repositories when they have it and built
+# from source otherwise. swayFX is used when the repositories carry it.
+
+# Core & build
+gcc-c++ make git rsync curl unzip xz jq cmake ninja ccache pkgconf
+libopenssl-devel systemd-devel polkit-devel libarchive-devel polkit
+
+# Qt 6 development
+qt6-base-devel qt6-declarative-devel qt6-wayland-devel qt6-multimedia-devel
+qt6-svg-devel layer-shell-qt6-devel
+
+# Qt 6 runtime
+qt6-wayland qt6-svg qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports
+?layer-shell-qt6
+
+# Wayland session
+swaybg swayidle swaylock xwayland
+xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+?wayvnc
+
+# Shell & CLI
+fish fzf bat zoxide btop fastfetch eza starship
+
+# Applications
+?MozillaFirefox
+
+# Clipboard & screenshots
+wl-clipboard grim slurp ?satty
+
+# Audio & media
+pipewire wireplumber pipewire-pulseaudio playerctl libcanberra0 ?canberra-gtk-play sound-theme-freedesktop
+?ffmpeg ?gifsicle
+
+# System & hardware
+upower brightnessctl ddcutil libnotify-tools Mesa-demo-x
+
+# Network & Bluetooth
+NetworkManager bluez
+
+# Display manager
+sddm-qt6
+
+# Theming & fonts
+kvantum-qt6 ?adw-gtk3 papirus-icon-theme
+noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts liberation-fonts
+?jetbrains-mono-fonts fontconfig
+
+# Tools the shell and daemon call out to
+ImageMagick tesseract-ocr tesseract-ocr-traineddata-english zbar qrencode
+?power-profiles-daemon pamixer poppler-tools ?gocryptfs ?easyeffects
+xdg-utils ?wlsunset ?snapper
+
+# Storage & archives
+udisks2 gvfs ntfs-3g bsdtar
+
+# Desktop plumbing
+xdg-user-dirs ?qt5ct ?qt6ct cups desktop-file-utils gtk3-tools newt
+
+# Input method
+fcitx5 fcitx5-qt6 fcitx5-gtk3 ?fcitx5-configtool

@@ -6,6 +6,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_SCRIPT="$REPO_DIR/install.sh"
+# shellcheck source=lib/distro.sh
+source "$REPO_DIR/lib/distro.sh"
 LOG="$HOME/.dotfiles-install-$(date +%Y%m%d-%H%M%S).log"
 
 # Colors
@@ -35,16 +37,34 @@ fi
 mkdir -p "$(dirname "$LOG")"
 echo "Install log: $LOG" | tee "$LOG"
 
+DISTRO="$(detect_distro)"
+if [[ -z "$DISTRO" ]]; then
+    err "Unsupported system: $(distro_pretty_name). Supported families: ${B1AIR_FAMILIES}."
+    err "For a derivative of one of them, run ./install.sh --distro <family> instead."
+    exit 1
+fi
+
 if ! command -v whiptail >/dev/null 2>&1; then
     log "Installing whiptail dialog library..."
-    sudo pacman -S --needed --noconfirm libnewt
+    [[ "$DISTRO" == "debian" ]] && sudo apt-get update -qq
+    pm_install "$DISTRO" "$(whiptail_package "$DISTRO")"
+fi
+
+if [[ "$DISTRO" == "arch" ]]; then
+    PACKAGES_LABEL="Install official Arch packages (Sway, Shell, GUI, Fonts, SDDM)"
+    EXTRAS_LABEL="Install AUR packages (swayfx blur, wl-screenrec, cursors)"
+    EXTRAS_SHORT="AUR Packages (swayfx, themes)"
+else
+    PACKAGES_LABEL="Install distribution packages (Sway, Qt 6, Quickshell, Fonts, SDDM)"
+    EXTRAS_LABEL="Download extras from upstream (Nerd Font, starship, eza)"
+    EXTRAS_SHORT="Upstream extras (Nerd Font, starship, eza)"
 fi
 
 # ── Welcome banner ────────────────────────────────────────────────────────────
 whiptail --title "DotsFiles Setup" --msgbox \
 "Welcome to the DotsFiles Interactive Installer!
 
-System detected : Arch Linux
+System detected : $(distro_pretty_name) [${DISTRO}]
 Log destination : $LOG
 
 Controls:
@@ -75,8 +95,8 @@ NO_AUR=0
 
 while true; do
     CHECKLIST_ARGS=(
-        "packages"  "Install official Arch packages (Sway, Shell, GUI, Fonts, SDDM)" ON
-        "aur"       "Install AUR packages (swayfx blur, swaylock-effects, themes)"    ON
+        "packages"  "$PACKAGES_LABEL" ON
+        "aur"       "$EXTRAS_LABEL"   ON
         "dotfiles"  "Deploy ~/.config, wallpapers, and b1air SDDM theme"             ON
         "services"  "Enable core system services (NetworkManager, Bluetooth, SDDM)"   ON
     )
@@ -106,8 +126,8 @@ while true; do
 
     # Build confirmation message
     confirm_msg="Your selected components:\n\n"
-    [[ "$SKIP_PACKAGES" -eq 0 ]] && confirm_msg+="  ✔ Official Arch Packages & Fonts\n" || confirm_msg+="  ✘ Skip Official Packages\n"
-    [[ "$NO_AUR"        -eq 0 ]] && confirm_msg+="  ✔ AUR Packages (swayfx, themes)\n"  || confirm_msg+="  ✘ Skip AUR Packages\n"
+    [[ "$SKIP_PACKAGES" -eq 0 ]] && confirm_msg+="  ✔ Distribution Packages & Fonts\n" || confirm_msg+="  ✘ Skip Distribution Packages\n"
+    [[ "$NO_AUR"        -eq 0 ]] && confirm_msg+="  ✔ ${EXTRAS_SHORT}\n"  || confirm_msg+="  ✘ Skip ${EXTRAS_SHORT}\n"
     [[ "$SKIP_DOTFILES" -eq 0 ]] && confirm_msg+="  ✔ Dotfiles & Tokyo Night SDDM Theme\n" || confirm_msg+="  ✘ Skip Dotfiles\n"
     [[ "$SKIP_SERVICES" -eq 0 ]] && confirm_msg+="  ✔ Core Services (NM, Bluetooth, SDDM)\n" || confirm_msg+="  ✘ Skip Services\n"
     confirm_msg+="\nReady to start installation?"
@@ -126,7 +146,7 @@ if ! groups "$USER" | grep -q '\binput\b'; then
 fi
 
 # ── Build args and launch install.sh ──────────────────────────────────────────
-ARGS=()
+ARGS=(--distro "$DISTRO")
 [[ "$SKIP_PACKAGES" -eq 1 ]] && ARGS+=(--skip-packages)
 [[ "$NO_AUR"        -eq 1 ]] && ARGS+=(--no-aur)
 [[ "$SKIP_DOTFILES" -eq 1 ]] && ARGS+=(--skip-dotfiles)

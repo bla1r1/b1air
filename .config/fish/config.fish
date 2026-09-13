@@ -67,7 +67,10 @@ if status is-interactive
         alias ll 'ls -lha --color=auto'
     end
 
-    # File reading (bat)
+    # File reading (bat). Debian and Ubuntu install it as `batcat`.
+    if not type -q bat; and type -q batcat
+        alias bat batcat
+    end
     if type -q bat
         alias cat 'bat --style=plain --paging=never'
         alias preview 'bat --style=numbers --color=always'
