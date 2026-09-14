@@ -23,14 +23,25 @@ inline std::string home_dir() {
 // `make install` deploys the QML to ~/.config/b1air-shell, while older setups
 // kept it in ~/.config/quickshell. Checking only the latter meant a fresh
 // install had no lock screen and four dead IPC entry points, all failing
-// silently. Returns an empty string when neither location has the file.
+// silently.
+//
+// install.sh installs the suite system-wide, and with it the QML to
+// /usr/share/b1air-shell/qml — which this never looked in. A fresh install
+// therefore had no shell ("Main.qml not found; the shell cannot start"), no
+// Quickshell lock screen and no screenshot overlay; only machines that still
+// carried a ~/.config copy from an older install worked. The per-user copies
+// stay first so a `make install` without root still wins. Returns an empty
+// string when no location has the file.
 inline std::string qml_entry(const char* name) {
     const std::string home = home_dir();
-    if (home.empty()) return {};
-    for (const char* dir : {"/.config/b1air-shell/", "/.config/quickshell/"}) {
-        std::string path = home + dir + name;
-        if (access(path.c_str(), R_OK) == 0) return path;
+    if (!home.empty()) {
+        for (const char* dir : {"/.config/b1air-shell/", "/.config/quickshell/"}) {
+            std::string path = home + dir + name;
+            if (access(path.c_str(), R_OK) == 0) return path;
+        }
     }
+    std::string path = std::string("/usr/share/b1air-shell/qml/") + name;
+    if (access(path.c_str(), R_OK) == 0) return path;
     return {};
 }
 

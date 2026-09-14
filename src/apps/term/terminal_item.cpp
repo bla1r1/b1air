@@ -7,12 +7,14 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QStyleHints>
 #include <pty.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <csignal>
 #include <cmath>
 #include <algorithm>
 #include <cstring>
@@ -195,6 +197,18 @@ void TerminalItem::launch(const QString &command, const QString &workingDir) {
         setsid();
         ioctl(slaveFd, TIOCSCTTY, 0);
 
+        // Signal dispositions and the signal mask survive exec. Whatever this
+        // process inherited — a launcher that ignored SIGINT/SIGQUIT, as a
+        // non-interactive shell does for a background job, or a mask Qt's
+        // threads set — would otherwise reach every program run in the
+        // terminal, and Ctrl+C or Ctrl+\ would print ^C and do nothing.
+        for (int sig = 1; sig < NSIG; ++sig) {
+            if (sig != SIGKILL && sig != SIGSTOP) ::signal(sig, SIG_DFL);
+        }
+        sigset_t none;
+        sigemptyset(&none);
+        sigprocmask(SIG_SETMASK, &none, nullptr);
+
         dup2(slaveFd, 0);
         dup2(slaveFd, 1);
         dup2(slaveFd, 2);
@@ -226,6 +240,10 @@ void TerminalItem::launch(const QString &command, const QString &workingDir) {
     // Parent
     close(slaveFd);
 
+    m_drainTimer.setSingleShot(true);
+    m_drainTimer.setInterval(0);
+    connect(&m_drainTimer, &QTimer::timeout, this, &TerminalItem::onPtyRead, Qt::UniqueConnection);
+
     m_notifier = new QSocketNotifier(m_masterFd, QSocketNotifier::Read, this);
     connect(m_notifier, &QSocketNotifier::activated, this, &TerminalItem::onPtyRead);
 
@@ -235,28 +253,77 @@ void TerminalItem::launch(const QString &command, const QString &workingDir) {
 void TerminalItem::onPtyRead() {
     if (m_masterFd < 0) return;
 
+    // A bounded helping per turn of the event loop. This used to read until
+    // the pty was empty and parse everything it read, and a program writing
+    // faster than libvterm parses — a build, `cat` of a large file, `yes` —
+    // never let it be empty: the GUI thread stayed in here, the window stopped
+    // painting, and Ctrl+C could not even reach the child. Measured with
+    // `yes`: 40 of 40 stack samples inside this function. Bounding the reads
+    // alone was not enough — one 8 KB read of `yes` is four thousand scrolls
+    // for libvterm — so the parsing is metered too, in small slices, and
+    // whatever is left waits for the next turn.
+    constexpr qsizetype kMaxBacklog = 64 * 1024;
+    constexpr qsizetype kSlice = 512;
+    constexpr qint64 kBudgetNs = 8'000'000;   // half a frame at 60 Hz
+    QElapsedTimer budget;
+    budget.start();
+
+    // 1. What the pty has, up to the backlog cap.
+    bool childGone = false;
     char buf[8192];
-    while (true) {
-        ssize_t n = read(m_masterFd, buf, sizeof(buf));
+    while (m_pending.size() < kMaxBacklog) {
+        const ssize_t n = read(m_masterFd, buf, sizeof(buf));
         if (n > 0) {
-            vterm_input_write(m_vt, buf, n);
-        } else {
-            if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                break; // read all currently available bytes
-            }
-            // The child has gone. This used to emit and leave the notifier
-            // armed on a pty whose reads now fail at once, so it fired again
-            // on every turn of the event loop — processFinished arrived over
-            // and over, and TermWindow closed a tab for each one: typing
-            // `exit` in one tab could take its neighbours with it, and the
-            // emits could land on an item QML was already destroying.
-            childExited();
-            return;
+            m_pending.append(buf, n);
+            continue;
         }
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;   // drained
+        // A signal arriving mid-read is not the child exiting; treating it as
+        // one closed the tab.
+        if (n < 0 && errno == EINTR) continue;
+        childGone = true;
+        break;
     }
+
+    // 2. Parse in slices until the backlog is gone or the budget is spent.
+    // A child that has exited gets its last output parsed in full.
+    qsizetype offset = 0;
+    while (offset < m_pending.size() && (childGone || budget.nsecsElapsed() < kBudgetNs)) {
+        const qsizetype n = std::min(kSlice, m_pending.size() - offset);
+        vterm_input_write(m_vt, m_pending.constData() + offset, static_cast<size_t>(n));
+        offset += n;
+    }
+    m_pending.remove(0, offset);
 
     vterm_screen_flush_damage(m_vts);
     restartBlink();
+
+    if (childGone) {
+        // The child has gone. This used to emit and leave the notifier armed
+        // on a pty whose reads now fail at once, so it fired again on every
+        // turn of the event loop — processFinished arrived over and over, and
+        // TermWindow closed a tab for each one: typing `exit` in one tab could
+        // take its neighbours with it, and the emits could land on an item QML
+        // was already destroying.
+        childExited();
+        return;
+    }
+
+    // 3. A backlog left over: stop reading the pty until it is parsed — the
+    // child then blocks on a full pty, which is the flow control a terminal
+    // should have — and come back on the next turn of the event loop, after
+    // input, resizes and painting have had theirs.
+    //
+    // Measured under `seq 1 999999999`, from a sway resize to the window
+    // acknowledging it: over 10 s before (never, in practice), 10–40 ms now.
+    // That acknowledgement is what sway waits for before it lays out a new
+    // window beside this one.
+    if (!m_pending.isEmpty()) {
+        if (m_notifier) m_notifier->setEnabled(false);
+        if (!m_drainTimer.isActive()) m_drainTimer.start();
+    } else if (m_notifier) {
+        m_notifier->setEnabled(true);
+    }
 }
 
 void TerminalItem::updatePtySize() {

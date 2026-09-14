@@ -50,14 +50,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Quickshell IPC fallback if the daemon's D-Bus service is down.
-        // ~/.config/b1air-shell is where `make install` deploys the QML;
-        // ~/.config/quickshell is the older location, kept for compat.
-        QString qsMain;
-        for (const QString& dir : {QDir::homePath() + "/.config/b1air-shell",
-                                    QDir::homePath() + "/.config/quickshell"}) {
-            if (QFile::exists(dir + "/Main.qml")) { qsMain = dir + "/Main.qml"; break; }
-        }
+        // Quickshell IPC fallback if the daemon's D-Bus service is down. The
+        // same search as the shell itself, so a system-wide install (QML in
+        // /usr/share/b1air-shell/qml) is found too.
+        const QString qsMain = b1air::app::find_window_qml("Main.qml", QString());
         if (qsMain.isEmpty()) return 1;
 
         // close() and forceReload() take no arguments at all — passing
@@ -104,7 +100,6 @@ int main(int argc, char* argv[]) {
     // Same policy as the apps, from the same header: a checkout in $HOME is
     // consulted only under B1AIR_DEV_MODE=1, so a stale clone cannot quietly
     // outrank the installed QML.
-    QString homePath = QDir::homePath();
     b1air::app::add_import_paths(engine, QString());
 
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
@@ -113,8 +108,6 @@ int main(int argc, char* argv[]) {
         }
     });
     QString mainQml = b1air::app::find_window_qml("Main.qml", QString());
-    if (mainQml.isEmpty() && QFile::exists(homePath + "/DotsFiles/.config/quickshell/Main.qml"))
-        mainQml = homePath + "/DotsFiles/.config/quickshell/Main.qml";
 
     if (mainQml.isEmpty()) {
         std::cerr << "[b1air-shell] Error: Main.qml not found in any search path!\n";

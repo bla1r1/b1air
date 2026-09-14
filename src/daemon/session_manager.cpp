@@ -516,6 +516,9 @@ int SessionManager::run_session() {
     }
 
     const char* swaysock = std::getenv("SWAYSOCK");
+    // Before the guess below: only a session sway itself started has a
+    // compositor whose exit should end it.
+    const std::string session_swaysock = (swaysock && *swaysock) ? swaysock : "";
     if (!swaysock || strlen(swaysock) == 0) {
         std::error_code ec;
         const std::filesystem::path run_user = std::filesystem::path("/run/user") / std::to_string(getuid());
@@ -802,8 +805,27 @@ int SessionManager::run_session() {
     bool camera_was = false;
     auto camera_checked = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 
+    // The compositor this session was started in. When it exits (logout,
+    // crash, `swaymsg exit`) nothing signals the daemon: it is a child of a
+    // shell sway spawned, re-parented to init, and logind keeps it alive. It
+    // went on running — and on the next login a second daemon started beside
+    // it, both setting opacity and split direction on every focus change.
+    // Only when started under sway (session_swaysock, taken before SWAYSOCK
+    // is guessed above): otherwise the daemon runs on its own on purpose and
+    // has no compositor to outlive.
+
     // Main session loop processing D-Bus messages with kernel epoll (0% CPU)
+    auto sway_checked = std::chrono::steady_clock::now();
     while (g_session_running) {
+        if (!session_swaysock.empty()
+            && std::chrono::steady_clock::now() - sway_checked >= std::chrono::seconds(2)) {
+            sway_checked = std::chrono::steady_clock::now();
+            if (access(session_swaysock.c_str(), F_OK) != 0) {
+                std::cerr << "[b1air-session] sway is gone (" << session_swaysock << "); ending the session.\n";
+                g_session_running = 0;
+                break;
+            }
+        }
         if (dbus) {
             const auto now = std::chrono::steady_clock::now();
             if (now - camera_checked >= std::chrono::seconds(2)) {

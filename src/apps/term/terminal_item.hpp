@@ -4,6 +4,7 @@
 #include <QFont>
 #include <QFontMetricsF>
 #include <QSocketNotifier>
+#include <QByteArray>
 #include <QColor>
 #include <QTimer>
 #include <vterm.h>
@@ -115,6 +116,9 @@ private:
     VTerm *m_vt = nullptr;
     VTermScreen *m_vts = nullptr;
     QSocketNotifier *m_notifier = nullptr;
+    // Output read from the pty but not yet parsed — see onPtyRead().
+    QByteArray m_pending;
+    QTimer m_drainTimer;
 
     QFont m_font;
     qreal m_cellWidth = 10.0;
