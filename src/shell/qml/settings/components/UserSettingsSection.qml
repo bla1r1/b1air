@@ -81,10 +81,7 @@ ColumnLayout {
         loadUserInfo();
     }
 
-    // ── 1. Header ────────────────────────────────────────────────────────────
-    SectionLabel {
-        text: "User Profile & Account"
-    }
+    // (The page title is in the Settings header bar now.)
 
     // ── 2. Profile Overview Card ─────────────────────────────────────────────
     Card {
@@ -134,7 +131,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
 
-                RowLayout {
+                ButtonRow {
                     spacing: Design.s(Design.space.sm)
 
                     ActionButton {
@@ -205,6 +202,7 @@ ColumnLayout {
                 }
 
                 ActionButton {
+                    Layout.fillWidth: false
                     icon: "\u{f00c}"
                     label: "Save"
                     tone: Design.sapphire
@@ -220,7 +218,7 @@ ColumnLayout {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(1)
-                color: Design.border
+                color: Design.line
             }
 
             // Default Shell
@@ -263,7 +261,7 @@ ColumnLayout {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(1)
-                color: Design.border
+                color: Design.line
             }
 
             // Assigned Groups
@@ -285,68 +283,46 @@ ColumnLayout {
         }
     }
 
-    // ── 4. Desktop Environment & SDDM Badges Card ────────────────────────────
+    // ── 4. Session & login screen ────────────────────────────────────────────
+    //
+    // Both badges were constants — "b1air (SwayFX)" and "b1air SDDM Theme" —
+    // shown whatever was running, plain sway included. They are read now.
+    property string compositorName: "…"
+    property string greeterTheme: "…"
+    Process {
+        running: true
+        command: ["sh", "-c",
+            "p=$(pgrep -x sway | head -n1); " +
+            "if [ -n \"$p\" ]; then \"$(readlink -f /proc/$p/exe)\" --version 2>/dev/null | head -n1; else echo 'not sway'; fi; " +
+            "cat /etc/sddm.conf /etc/sddm.conf.d/*.conf 2>/dev/null | sed -n 's/^Current=//p' | tail -n1"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = this.text.trim().split("\n");
+                const v = (lines[0] || "").trim();
+                section.compositorName = v.toLowerCase().startsWith("swayfx") ? "swayFX " + (v.split(" ")[2] || "")
+                                       : v.startsWith("sway") ? "sway " + (v.split(" ")[2] || "")
+                                       : "—";
+                section.greeterTheme = (lines[1] || "").trim() || "SDDM default";
+            }
+        }
+    }
+
     Card {
-        title: "Desktop Session & SDDM Greeter"
-        subtitle: "Integrated b1air environment status"
+        title: "Session & Login Screen"
+        subtitle: "What draws this desktop, and what greets you before it"
         icon: "\u{f108}"
         accentColor: Design.green
 
-        ColumnLayout {
+        RowLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+            Label { text: "Compositor"; Layout.fillWidth: true }
+            Badge { text: section.compositorName; color: Design.green }
+        }
 
-            RowLayout {
-                Layout.fillWidth: true
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: "Desktop Environment"
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: "Active window manager and native C++20 daemons"
-                        dim: true
-                    }
-                }
-
-                Badge {
-                    text: "b1air (SwayFX)"
-                    color: Design.green
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.border
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: "SDDM Greeter Theme"
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: "Active login screen with shared wallpaper caching"
-                        dim: true
-                    }
-                }
-
-                Badge {
-                    text: "b1air SDDM Theme"
-                    color: Design.sapphire
-                }
-            }
+        RowLayout {
+            Layout.fillWidth: true
+            Label { text: "Login screen theme"; Layout.fillWidth: true }
+            Badge { text: section.greeterTheme; color: Design.sapphire }
         }
     }
 

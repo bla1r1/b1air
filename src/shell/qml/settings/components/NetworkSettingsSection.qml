@@ -289,7 +289,7 @@ ColumnLayout {
 
             Toggle {
                 label: "Wi-Fi"
-                subtitle: Network.wifi.power === "on" ? "Enabled" : "Disabled"
+                subtitle: "Scan for and join wireless networks"
                 checked: Network.wifi.power === "on"
                 onToggled: Network.toggleWifi()
             }

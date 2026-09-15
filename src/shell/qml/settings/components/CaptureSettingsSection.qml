@@ -142,7 +142,7 @@ ColumnLayout {
             }
         }
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 

@@ -3142,15 +3142,19 @@ std::string SystemControl::get_updates_json(bool /*force*/) {
                                    "elif command -v paru >/dev/null 2>&1; then paru -Qua; fi; } 2>/dev/null | wc -l");
     try { aur_updates = std::stoi(aur_str); } catch (...) { aur_updates = 0; }
 
+    // Which package manager answered, for the windows that name it.
+    const std::string manager = exec_cmd(
+        "for m in pacman apt-get dnf zypper; do command -v $m >/dev/null 2>&1 && { echo ${m%-get}; break; }; done");
+
     int total = system_updates + aur_updates;
     if (total == 0) {
-        return "{\"text\":\"\",\"alt\":\"0\",\"tooltip\":\"Packages are up to date\",\"class\":\"green\"}";
+        return "{\"text\":\"\",\"alt\":\"0\",\"tooltip\":\"Packages are up to date\",\"class\":\"green\",\"manager\":\"" + json_escape(manager) + "\",\"system\":0,\"aur\":0}";
     }
 
     std::string cls = (total > 50) ? "red" : ((total > 0) ? "yellow" : "green");
     std::string tooltip = std::to_string(system_updates) + " System";
     if (aur_updates > 0) tooltip += " | " + std::to_string(aur_updates) + " AUR";
-    return "{\"text\":\" " + std::to_string(total) + "\",\"alt\":\"" + std::to_string(total) + "\",\"tooltip\":\"" + tooltip + "\",\"class\":\"" + cls + "\"}";
+    return "{\"text\":\" " + std::to_string(total) + "\",\"alt\":\"" + std::to_string(total) + "\",\"tooltip\":\"" + tooltip + "\",\"class\":\"" + cls + "\",\"manager\":\"" + json_escape(manager) + "\",\"system\":" + std::to_string(system_updates) + ",\"aur\":" + std::to_string(aur_updates) + "}";
 }
 
 // ── Default applications ─────────────────────────────────────────────────────
@@ -3682,7 +3686,16 @@ std::string SystemControl::dotfiles_status_json() {
     // Was run_argv_detached — fire-and-forget, so the reads just below could
     // (and often would) run before the fetch actually landed, showing a
     // stale remote_hash right after opening the updater. Block on it.
-    (void)exec_cmd("git -C " + shell_quote(repo) + " fetch --quiet origin 2>&1");
+    //
+    // Never prompt: the daemon has no terminal, and a remote that wants a
+    // password or an unknown SSH host key would hang the check — and the
+    // updater window waiting on it — until the fetch gave up. A failed fetch
+    // is reported (fetch_ok) so the window can say the answer may be stale
+    // instead of claiming "up to date".
+    const std::string fetch_out = exec_cmd(
+        "GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C " + shell_quote(repo) +
+        " fetch --quiet origin 2>&1; echo \"rc=$?\"");
+    const bool fetch_ok = fetch_out.size() >= 4 && fetch_out.compare(fetch_out.size() - 4, 4, "rc=0") == 0;
 
     std::string branch = exec_cmd("git -C " + shell_quote(repo) + " rev-parse --abbrev-ref HEAD 2>/dev/null");
     if (branch.empty()) branch = "main";
@@ -3723,13 +3736,43 @@ std::string SystemControl::dotfiles_status_json() {
 
     bool update_available = (!remote_hash.empty() && behind > 0);
 
-    return "{\"ok\":true,\"repo_dir\":\"" + json_escape(repo) + "\",\"branch\":\"" + json_escape(branch) + "\",\"local_hash\":\"" + local_hash + "\",\"remote_hash\":\"" + remote_hash + "\",\"remote_ref\":\"" + json_escape(remote_ref) + "\",\"remote_message\":\"" + json_escape(remote_message) + "\",\"behind\":" + std::to_string(behind) + ",\"ahead\":" + std::to_string(ahead) + ",\"update_available\":" + (update_available ? "true" : "false") + "}";
+    // What an update would bring: one line per incoming commit, newest first.
+    // Only the newest subject used to be shown, so ten incoming changes and
+    // one looked the same.
+    std::string incoming = "[";
+    if (behind > 0) {
+        const std::string log = exec_cmd("git -C " + shell_quote(repo) +
+                                         " log --no-merges -n 30 --pretty=format:%h%x1f%s " +
+                                         shell_quote("HEAD.." + remote_ref) + " 2>/dev/null");
+        std::istringstream lines(log);
+        std::string line;
+        bool first = true;
+        while (std::getline(lines, line)) {
+            const size_t sep = line.find('\x1f');
+            if (sep == std::string::npos) continue;
+            incoming += std::string(first ? "" : ",") + "{\"hash\":\"" + json_escape(line.substr(0, sep)) +
+                        "\",\"subject\":\"" + json_escape(line.substr(sep + 1)) + "\"}";
+            first = false;
+        }
+    }
+    incoming += "]";
+
+    // Uncommitted edits to tracked files make `git pull --ff-only` refuse, so
+    // the window warns before the update rather than the update failing.
+    const bool dirty = !exec_cmd("git -C " + shell_quote(repo) + " status --porcelain -uno 2>/dev/null").empty();
+
+    return "{\"ok\":true,\"fetch_ok\":" + std::string(fetch_ok ? "true" : "false") +
+           ",\"dirty\":" + (dirty ? "true" : "false") + ",\"incoming\":" + incoming + ","
+           "\"repo_dir\":\"" + json_escape(repo) + "\",\"branch\":\"" + json_escape(branch) + "\",\"local_hash\":\"" + local_hash + "\",\"remote_hash\":\"" + remote_hash + "\",\"remote_ref\":\"" + json_escape(remote_ref) + "\",\"remote_message\":\"" + json_escape(remote_message) + "\",\"behind\":" + std::to_string(behind) + ",\"ahead\":" + std::to_string(ahead) + ",\"update_available\":" + (update_available ? "true" : "false") + "}";
 }
 
 bool SystemControl::dotfiles_sync() {
     std::string repo = find_dotfiles_repo();
     if (repo.empty()) return false;
-    std::string script = "bash " + shell_quote(repo + "/update-dotfiles.sh") + " --repo-dir " + shell_quote(repo) + "; printf '\\nPress Enter to close...\\n'; read -r _";
+    // --pull: update-dotfiles.sh leaves git alone unless asked, and this never
+    // asked — so "Update" rebuilt and redeployed the commit already checked
+    // out, and the updater still said N changes behind afterwards.
+    std::string script = "bash " + shell_quote(repo + "/update-dotfiles.sh") + " --pull --repo-dir " + shell_quote(repo) + "; printf '\\nPress Enter to close...\\n'; read -r _";
     // bash, not fish: `read -r` is not a fish builtin option, so the window
     // closed on an error instead of waiting for Enter.
     return util::spawn_detached({"b1air-term", "-e", "bash", "-lc", script});

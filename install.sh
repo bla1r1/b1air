@@ -937,20 +937,10 @@ build_b1air_suite() {
         fi
 
         # The one line every keybind, autostart entry and unit resolves the
-        # binaries through. Written to match where they actually landed, so a
+        # binaries through, written to match where they actually landed, so a
         # fallback install does not leave 39 keybinds pointing at /usr/local.
-        local swayvars="$HOME/.config/sway/conf.d/variables.conf"
-        if [[ -f "$swayvars" ]]; then
-            sed -i "s|^set \$b1airBin .*|set \$b1airBin ${B1AIR_PREFIX}|" "$swayvars"
-            ok "sway resolves the suite through ${B1AIR_PREFIX}"
-        fi
-        local unit
-        for unit in "$HOME/.config/systemd/user/b1air-daemon.service" \
-                    "$HOME/.config/systemd/user/b1air-shell.service"; do
-            [[ -f "$unit" ]] || continue
-            sed -i "s|ExecStart=.*/b1air-|ExecStart=${B1AIR_PREFIX}/b1air-|; \
-                    s|ExecReload=.*/b1air-|ExecReload=${B1AIR_PREFIX}/b1air-|" "$unit"
-        done
+        render_config_tree "$HOME/.config" "$B1AIR_PREFIX"
+        ok "sway and the user units resolve the suite through ${B1AIR_PREFIX}"
 
         # 2. Native b1air-shell
         if [[ -d "$REPO_DIR/src/shell" ]]; then

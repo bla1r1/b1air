@@ -31,6 +31,7 @@
 #include <QFile>
 #include <QFileSystemWatcher>
 #include <QObject>
+#include <QtQml/qqmlparserstatus.h>
 #include <QProcess>
 #include <QQmlEngine>
 #include <QQmlListProperty>
@@ -105,8 +106,14 @@ private:
 
 // ── Quickshell.Io: Process ───────────────────────────────────────────────────
 
-class Process : public QObject {
+// QQmlParserStatus so that `running: true` waits for the rest of the
+// declaration. QML assigns properties in source order, and a Process written
+// `running: true` before `command:` (Settings → About has one) used to start
+// with an empty command, do nothing, and leave its page at "Loading..." —
+// only in the standalone apps; real Quickshell defers the same way.
+class Process : public QObject, public QQmlParserStatus {
     Q_OBJECT
+    Q_INTERFACES(QQmlParserStatus)
     Q_PROPERTY(bool running READ running WRITE setRunning NOTIFY runningChanged)
     Q_PROPERTY(QVariantList command READ command WRITE setCommand NOTIFY commandChanged)
     Q_PROPERTY(QObject* stdout READ stdoutSink WRITE setStdoutSink NOTIFY stdoutSinkChanged)
@@ -139,6 +146,9 @@ public:
     Q_INVOKABLE void write(const QString& data);
     Q_INVOKABLE void signal(int sig);
 
+    void classBegin() override { m_complete = false; }
+    void componentComplete() override;
+
 signals:
     void runningChanged();
     void commandChanged();
@@ -160,6 +170,9 @@ private:
     QString m_cwd;
     bool m_running = false;
     bool m_stdinEnabled = true;
+    // True for a Process made from C++; QML clears it in classBegin().
+    bool m_complete = true;
+    bool m_startWhenComplete = false;
 };
 
 // ── Quickshell.Io: FileView and its JSON adapter ─────────────────────────────
@@ -190,9 +203,17 @@ class FileView : public QObject {
     Q_PROPERTY(bool watchChanges READ watchChanges WRITE setWatchChanges NOTIFY watchChangesChanged)
     Q_PROPERTY(bool atomicWrites READ atomicWrites WRITE setAtomicWrites NOTIFY atomicWritesChanged)
     Q_PROPERTY(bool printErrors READ printErrors WRITE setPrintErrors NOTIFY printErrorsChanged)
+    // Quickshell's switch between asynchronous and blocking loads. Loading here
+    // is always synchronous, so the value is only stored — but it must exist:
+    // Services/Theme sets it, and an unknown property made the whole Services
+    // module fail to load, which took b1air-settings down with it.
+    Q_PROPERTY(bool blockLoading READ blockLoading WRITE setBlockLoading NOTIFY blockLoadingChanged)
 
 public:
     explicit FileView(QObject* parent = nullptr);
+
+    bool blockLoading() const { return m_blockLoading; }
+    void setBlockLoading(bool b) { if (b != m_blockLoading) { m_blockLoading = b; emit blockLoadingChanged(); } }
 
     QString path() const { return m_path; }
     void setPath(const QString& p);
@@ -221,6 +242,7 @@ signals:
     void watchChangesChanged();
     void atomicWritesChanged();
     void printErrorsChanged();
+    void blockLoadingChanged();
     void loaded();
     void loadFailed();
     void fileChanged();
@@ -236,6 +258,7 @@ private:
     bool m_watch = false;
     bool m_atomic = false;
     bool m_printErrors = true;
+    bool m_blockLoading = false;
     bool m_writing = false;
 };
 

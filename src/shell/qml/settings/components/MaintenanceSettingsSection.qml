@@ -17,7 +17,8 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     property int updateCount: 0
-    property string statusText: "Checking for updates..."
+    property string statusText: "Checking for updates…"
+    property string manager: ""
     property string transferStatus: ""
 
     // The daemon does the work; both buttons name the same file in the home
@@ -50,9 +51,28 @@ ColumnLayout {
     }
     property bool isChecking: false
 
-    property string dotfilesLocal: "..."
-    property string dotfilesRemote: "..."
-    property bool dotfilesUpdateAvail: false
+    // Desktop (this repository) — the same fields the Updates popup reads.
+    property bool dotChecking: true
+    property bool dotFound: true
+    property bool dotFetchOk: true
+    property bool dotDirty: false
+    property int dotBehind: 0
+    property int dotAhead: 0
+    property string dotBranch: ""
+    property string dotHash: ""
+    property string dotRemote: ""
+    property var dotIncoming: []
+    readonly property bool dotfilesUpdateAvail: !dotChecking && dotBehind > 0
+    readonly property bool dotCanUpdate: dotfilesUpdateAvail && !dotDirty && dotAhead === 0
+    readonly property string managerName: {
+        switch (section.manager) {
+            case "pacman": return "pacman / AUR";
+            case "apt":    return "APT";
+            case "dnf":    return "DNF";
+            case "zypper": return "zypper";
+            default:       return "the package manager";
+        }
+    }
 
     Process {
         id: updateChecker
@@ -64,7 +84,11 @@ ColumnLayout {
             onStreamFinished: {
                 section.isChecking = false;
                 let count = 0;
-                try { count = parseInt(JSON.parse(this.text.trim()).alt, 10) || 0; } catch (e) {}
+                try {
+                    const d = JSON.parse(this.text.trim());
+                    count = parseInt(d.alt, 10) || 0;
+                    section.manager = d.manager || "";
+                } catch (e) {}
                 section.updateCount = count;
                 section.statusText = count > 0 ? (count + " package updates available") : "System packages are up to date";
             }
@@ -77,21 +101,27 @@ ColumnLayout {
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
-                try {
-                    let data = JSON.parse(this.text.trim());
-                    if (data.ok) {
-                        section.dotfilesLocal = data.branch + "@" + data.local_hash;
-                        section.dotfilesRemote = data.remote_hash ? (data.branch + "@" + data.remote_hash) : "up to date";
-                        section.dotfilesUpdateAvail = !!data.update_available;
-                    }
-                } catch (e) {}
+                section.dotChecking = false;
+                let data;
+                try { data = JSON.parse(this.text.trim()); } catch (e) { data = { ok: false }; }
+                section.dotFound = !!data.ok;
+                if (!data.ok) return;
+                section.dotFetchOk = data.fetch_ok !== false;
+                section.dotDirty = !!data.dirty;
+                section.dotBehind = data.behind || 0;
+                section.dotAhead = data.ahead || 0;
+                section.dotBranch = data.branch || "";
+                section.dotHash = data.local_hash || "";
+                section.dotRemote = data.remote_ref || "";
+                section.dotIncoming = data.incoming || [];
             }
         }
     }
 
     function checkNow() {
         section.isChecking = true;
-        section.statusText = "Checking repositories...";
+        section.statusText = "Checking for updates…";
+        section.dotChecking = true;
         updateChecker.running = true;
         dotfilesChecker.running = true;
     }
@@ -129,9 +159,15 @@ ColumnLayout {
     }
 
     // ── 1. Desktop Environment Updates ───────────────────────────────────────
+    //
+    // It said "Desktop environment is up to date" from the moment the page
+    // opened, beside "Local: ... • Remote: ..." that had not been read yet, and
+    // "Sync UI & Packages" ran an update that did not pull. It now says what
+    // the check found once it has, lists what an update would bring, and the
+    // button pulls (and says why it cannot, when it cannot).
     Card {
-        title: "Desktop Environment & Dotfiles"
-        subtitle: "Synchronize sway, quickshell, and configs with GitHub upstream"
+        title: "Desktop Updates"
+        subtitle: "This desktop's own code and configuration" + (section.dotRemote ? ", from " + section.dotRemote : "")
         icon: "\u{f021}"
         accentColor: section.dotfilesUpdateAvail ? Design.ok : Design.sapphire
 
@@ -142,25 +178,68 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: section.dotfilesUpdateAvail ? "New UI update available" : "Desktop environment is up to date"; weight: Design.weight.semibold }
-                Label { text: "Local: " + section.dotfilesLocal + " • Remote: " + section.dotfilesRemote; role: "caption"; dim: true }
+                Label {
+                    text: section.dotChecking ? "Checking…"
+                          : !section.dotFound ? "Repository not found — run install.sh from your clone once"
+                          : section.dotBehind > 0 ? (section.dotBehind === 1 ? "1 new change" : section.dotBehind + " new changes")
+                          : section.dotFetchOk ? "Up to date" : "Could not reach the remote"
+                    weight: Design.weight.semibold
+                    color: section.dotfilesUpdateAvail ? Design.ok : Design.text
+                }
+                Label {
+                    visible: !section.dotChecking && section.dotFound
+                    text: "On " + section.dotBranch + " at " + section.dotHash
+                          + (section.dotAhead > 0 ? " · " + section.dotAhead + " local commit(s) not pushed" : "")
+                    role: "caption"
+                    dim: true
+                }
             }
 
             Pill {
                 label: "Check"
                 icon: "\u{f021}"
-                onClicked: dotfilesChecker.running = true
+                onClicked: section.checkNow()
             }
         }
 
-        RowLayout {
+        // The first few incoming changes; the Updates popup lists them all.
+        Repeater {
+            model: section.dotIncoming.slice(0, 5)
+            delegate: RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.sm)
+                Label { text: modelData.hash; role: "caption"; isMono: true; dim: true }
+                Label { Layout.fillWidth: true; text: modelData.subject; role: "caption"; elide: Text.ElideRight }
+            }
+        }
+        Label {
+            visible: section.dotIncoming.length > 5
+            text: "…and " + (section.dotIncoming.length - 5) + " more"
+            role: "caption"
+            dim: true
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: section.dotfilesUpdateAvail && !section.dotCanUpdate
+            text: section.dotDirty
+                  ? "You have uncommitted edits in the dotfiles clone. Commit or stash them first — the update will not overwrite them."
+                  : "Your clone has commits the remote does not, so it cannot simply move forward. Merge or rebase it yourself."
+            role: "caption"
+            color: Design.warn
+            wrapMode: Text.WordWrap
+        }
+
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
             ActionButton {
-                icon: "\u{f021}"
-                label: "Sync UI & Packages"
-                tone: section.dotfilesUpdateAvail ? Design.ok : Design.sapphire
+                icon: "\u{f06b0}"
+                label: section.dotCanUpdate ? "Update now" : "Nothing to update"
+                tone: section.dotCanUpdate ? Design.ok : Design.textDim
+                enabled: section.dotCanUpdate
                 onActivated: section.runDotfilesUpdate()
             }
 
@@ -200,7 +279,7 @@ ColumnLayout {
             wrapMode: Text.WordWrap
         }
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
@@ -222,8 +301,8 @@ ColumnLayout {
 
     // ── 2. System Packages Updates ───────────────────────────────────────────
     Card {
-        title: "Arch Linux & AUR Packages"
-        subtitle: "Manage Pacman and AUR repositories"
+        title: "System Packages"
+        subtitle: "Kernel, drivers and applications, managed by " + section.managerName
         icon: "\u{f0187}"
         accentColor: section.updateCount > 0 ? Design.peach : Design.green
 
@@ -245,7 +324,7 @@ ColumnLayout {
             }
         }
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
@@ -273,7 +352,7 @@ ColumnLayout {
         icon: "\u{f014}"
         accentColor: Design.mauve
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
@@ -298,20 +377,32 @@ ColumnLayout {
     }
 
     // ── 4. System Restore Points & Snapshots (M4) ─────────────────────────────
+    // Which snapshot tool exists, so the button is not offered where it can
+    // only fail ("timeshift" first: the daemon tries it first too).
+    property string snapshotTool: ""
+    Process {
+        running: true
+        command: ["sh", "-c", "command -v timeshift >/dev/null && echo timeshift || { command -v snapper >/dev/null && echo snapper; } || true"]
+        stdout: StdioCollector { onStreamFinished: section.snapshotTool = this.text.trim() }
+    }
+
     Card {
-        title: "Btrfs & Timeshift Restore Points"
-        subtitle: "Create automatic system snapshots prior to major updates and package changes"
+        title: "Restore Points"
+        subtitle: section.snapshotTool !== ""
+                  ? "Snapshot the system with " + section.snapshotTool + " before a big update"
+                  : "Snapshots need timeshift, or snapper on a Btrfs root — neither is installed"
         icon: "\u{f0c7}"
         accentColor: Design.teal
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
             ActionButton {
                 icon: "\u{f0c7}"
-                label: "Create Pre-Update Restore Point"
+                label: "Create Restore Point"
                 tone: Design.teal
+                enabled: section.snapshotTool !== ""
                 onActivated: Cmd.run(["b1air-daemon", "snapshot", "create", "Manual user snapshot"], "Create snapshot")
             }
         }
@@ -324,7 +415,7 @@ ColumnLayout {
         icon: "\u{f023}"
         accentColor: Design.peach
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 

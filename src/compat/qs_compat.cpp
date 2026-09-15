@@ -96,7 +96,19 @@ void Process::setWorkingDirectory(const QString& d) {
     emit workingDirectoryChanged();
 }
 
+void Process::componentComplete() {
+    m_complete = true;
+    if (m_startWhenComplete) {
+        m_startWhenComplete = false;
+        start();
+    }
+}
+
 void Process::setRunning(bool r) {
+    if (!m_complete) {
+        m_startWhenComplete = r;
+        return;
+    }
     if (r == m_running)
         return;
     if (r)

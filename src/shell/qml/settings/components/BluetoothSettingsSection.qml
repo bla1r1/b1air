@@ -48,7 +48,7 @@ ColumnLayout {
 
             Toggle {
                 label: "Bluetooth"
-                subtitle: Network.bluetooth.power === "on" ? "Enabled" : "Disabled"
+                subtitle: "Turn the adapter on to find, pair and connect devices"
                 checked: Network.bluetooth.power === "on"
                 onToggled: Network.toggleBluetooth()
             }

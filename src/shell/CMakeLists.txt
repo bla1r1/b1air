@@ -207,12 +207,10 @@ target_link_libraries(b1air-camera PRIVATE
 )
 
 # ── b1air-settings (the desktop's settings panel, hosted without quickshell) ──
-qt_wrap_cpp(B1AIR_SETTINGS_MOC ../compat/qs_compat.hpp ../compat/qs_services.hpp)
 add_executable(b1air-settings
     ../apps/settings/main.cpp
     ../compat/qs_compat.cpp
     ../compat/qs_services.cpp
-    ${B1AIR_SETTINGS_MOC}
 )
 target_include_directories(b1air-settings PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../apps/settings
@@ -222,6 +220,10 @@ target_include_directories(b1air-settings PRIVATE
 )
 target_link_libraries(b1air-settings PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::WaylandClient Qt6::DBus Threads::Threads)
+# After the target, with TARGET: moc then gets its include paths, which it
+# needs to resolve Q_INTERFACES(QQmlParserStatus) in qs_compat.hpp.
+qt_wrap_cpp(B1AIR_SETTINGS_MOC ../compat/qs_compat.hpp ../compat/qs_services.hpp TARGET b1air-settings)
+target_sources(b1air-settings PRIVATE ${B1AIR_SETTINGS_MOC})
 
 # ── b1air-term (Native Terminal Emulator) ────────────────────────────────────
 #

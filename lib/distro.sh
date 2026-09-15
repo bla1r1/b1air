@@ -195,3 +195,37 @@ strip_swayfx_directives() {
             "$f"
     done
 }
+
+# ── Where the suite is installed, and configs that point there ───────────────
+#
+# install.sh puts the b1air binaries in /usr/local/bin when it has root and in
+# ~/.local/bin when it does not. The sway config and the systemd user units
+# name that directory in one place each ($b1airBin, ExecStart/ExecReload), and
+# the copies in this repository say ~/.local/bin. So every deployment of
+# .config has to be "rendered" for this machine — or an update that copies the
+# repository's variables.conf over the installed one leaves autostart and every
+# key binding pointing at an empty directory: no daemon, no shell.
+
+b1air_install_prefix() {
+    if [[ -x /usr/local/bin/b1air-daemon ]]; then
+        echo /usr/local/bin
+    else
+        echo "$HOME/.local/bin"
+    fi
+}
+
+# render_config_tree <dir mirroring ~/.config> <prefix>
+render_config_tree() {
+    local dir="$1" prefix="$2" unit
+    local vars="$dir/sway/conf.d/variables.conf"
+    if [[ -f "$vars" ]]; then
+        sed -i "s|^set \$b1airBin .*|set \$b1airBin ${prefix}|" "$vars"
+    fi
+    for unit in "$dir"/systemd/user/b1air-*.service; do
+        [[ -f "$unit" ]] || continue
+        sed -i "s|^ExecStart=.*/b1air-|ExecStart=${prefix}/b1air-|; s|^ExecReload=.*/b1air-|ExecReload=${prefix}/b1air-|" "$unit"
+    done
+    if ! have_swayfx; then
+        strip_swayfx_directives "$dir/sway/conf.d"
+    fi
+}

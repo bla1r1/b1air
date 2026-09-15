@@ -82,7 +82,7 @@ ColumnLayout {
             label: "Remote Desktop Server"
             subtitle: section.vncRunning
                 ? "Active (Listening on " + (section.devMode ? section.localIp : "127.0.0.1") + ":" + section.vncPort + ")"
-                : "Stopped"
+                : "Lets a VNC client see and control this desktop"
             checked: section.vncRunning
             onToggled: {
                 if (!section.vncRunning) {
@@ -217,7 +217,7 @@ ColumnLayout {
                 }
             }
 
-            RowLayout {
+            ButtonRow {
                 spacing: Design.s(Design.space.sm)
 
                 ActionButton {

@@ -20,6 +20,17 @@ ColumnLayout {
 
     spacing: Design.s(Design.space.xs)
 
+    // Full width by default, so the centred content is centred in whatever
+    // holds it. Inside a Card (Settings → Sound: "Nothing is playing", "No
+    // output devices") it sat against the card's left edge, as wide as its
+    // hint: a layout's maximum width is its children's, and a child without
+    // fillWidth maxes out at its preferred width — so with no stretching child
+    // here, neither this nor a card holding only this could grow. The title
+    // row stretches now (its text stays centred).
+    Layout.fillWidth: true
+    Layout.topMargin: Design.s(Design.space.sm)
+    Layout.bottomMargin: Design.s(Design.space.sm)
+
     Icon {
         Layout.alignment: Qt.AlignHCenter
         Layout.bottomMargin: Design.s(Design.space.xs)
@@ -30,7 +41,7 @@ ColumnLayout {
     }
 
     Label {
-        Layout.alignment: Qt.AlignHCenter
+        Layout.fillWidth: true
         text: root.title
         role: "body"
         weight: Design.weight.semibold
@@ -40,7 +51,7 @@ ColumnLayout {
 
     Label {
         Layout.alignment: Qt.AlignHCenter
-        Layout.maximumWidth: Design.s(240)
+        Layout.maximumWidth: Design.s(320)
         visible: root.hint !== ""
         text: root.hint
         role: "caption"

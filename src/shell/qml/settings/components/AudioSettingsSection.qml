@@ -133,34 +133,18 @@ ColumnLayout {
 
     Card {
         title: "Sound"
-        subtitle: Audio.masterMute ? "Audio output is currently muted / disabled" : "Audio output is active"
+        subtitle: "The master switch for everything this computer plays"
         icon: Audio.masterMute ? "\u{f075f}" : "\u{f057e}"
         accentColor: Design.teal
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-
-                Label {
-                    text: "Audio Output"
-                    weight: Design.weight.semibold
-                }
-
-                Label {
-                    text: Audio.masterMute ? "Disabled / Muted" : "Enabled"
-                    role: "caption"
-                    dim: true
-                }
-            }
-
-            Toggle {
-                checked: !Audio.masterMute
-                onToggled: Audio.toggleMasterMute()
-            }
+        // One Toggle row, as everywhere else — this was a hand-built row
+        // around a bare Toggle, with "Enabled" under the label repeating what
+        // the switch already shows.
+        Toggle {
+            label: "Sound output"
+            subtitle: Audio.masterMute ? "Muted — the volume levels below are kept" : "Off mutes everything; volume levels are kept"
+            checked: !Audio.masterMute
+            onToggled: Audio.toggleMasterMute()
         }
     }
 

@@ -62,8 +62,8 @@ ColumnLayout {
         accentColor: Design.yellow
 
         Toggle {
-            label: "Night Light State"
-            subtitle: section.nightLightEnabled ? "Enabled" : "Disabled"
+            label: "Night Light"
+            subtitle: "Shift the screen towards warm colours to go easier on the eyes at night"
             checked: section.nightLightEnabled
             onToggled: section.applyTemp(!section.nightLightEnabled, section.tempK)
         }

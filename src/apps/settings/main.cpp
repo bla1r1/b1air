@@ -46,6 +46,11 @@ int main(int argc, char* argv[]) {
     // The image viewer and the camera keep the GPU; they scale images and
     // video.
     setenv("QT_QUICK_BACKEND", "software", 0);
+    // Ui/Design reads ~/.config/b1air/theme.json over XMLHttpRequest, which
+    // Qt 6 refuses on file:// unless this is set. The other apps set it
+    // themselves; this one relied on b1air-session, so started from anywhere
+    // else it drew the built-in palette instead of the chosen theme.
+    setenv("QML_XHR_ALLOW_FILE_READ", "1", 0);
 
     // Prefer the panel already on screen.
     //

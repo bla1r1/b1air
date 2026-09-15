@@ -92,20 +92,51 @@ ensure_backup_dir() {
 }
 
 # ── 1. Git Pull Upstream ──────────────────────────────────────────────────────
+#
+# Stops the update when the pull cannot happen. It used to warn "Continuing
+# with local files" and go on to rebuild and redeploy the commit already
+# checked out, so an update that fetched nothing still ended in "✓ Update
+# completed successfully!".
 pull_upstream() {
     [[ "$SKIP_PULL" -eq 0 ]] || return 0
     [[ -d "$REPO_DIR/.git" ]] || return 0
 
-    log "Checking for git updates in $REPO_DIR..."
+    log "Checking for updates in $REPO_DIR..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "Would run: git -C '$REPO_DIR' pull --ff-only"
         return 0
     fi
 
-    if git -C "$REPO_DIR" pull --ff-only 2>/dev/null; then
-        ok "Git repository is up to date."
+    local before upstream changes
+    before="$(git -C "$REPO_DIR" rev-parse HEAD)"
+    if ! upstream="$(git -C "$REPO_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
+        warn "Branch '$(git -C "$REPO_DIR" branch --show-current)' tracks no remote branch; nothing to pull."
+        return 0
+    fi
+
+    changes="$(git -C "$REPO_DIR" status --porcelain --untracked-files=no)"
+    if [[ -n "$changes" ]]; then
+        err "Update stopped: these files in $REPO_DIR have local changes:"
+        printf '%s\n' "$changes" | sed 's/^/        /' >&2
+        err "Commit or stash them (git -C '$REPO_DIR' stash), then update again."
+        exit 1
+    fi
+
+    if ! GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" fetch --quiet; then
+        err "Update stopped: could not reach the remote for $upstream (offline, or it needs credentials)."
+        exit 1
+    fi
+    if ! git -C "$REPO_DIR" merge --ff-only --quiet "$upstream" 2>/dev/null; then
+        err "Update stopped: this checkout has commits that $upstream does not, so it cannot be fast-forwarded."
+        err "Nothing was changed. Look at it with: git -C '$REPO_DIR' log --oneline --graph HEAD $upstream -n 20"
+        exit 1
+    fi
+
+    if [[ "$(git -C "$REPO_DIR" rev-parse HEAD)" == "$before" ]]; then
+        ok "Already up to date with $upstream."
     else
-        warn "Could not cleanly fast-forward repository. Continuing with local files."
+        ok "Updated to $(git -C "$REPO_DIR" rev-parse --short HEAD). New since last time:"
+        git -C "$REPO_DIR" log --no-merges --pretty='        %h  %s' "$before..HEAD" | head -n 30
     fi
 }
 
@@ -217,22 +248,21 @@ sync_configs() {
     local created_count=0
     local skipped_count=0
 
-    # On plain sway the deployed conf.d has its swayFX-only lines commented out
-    # (see strip_swayfx_directives). Compare against a copy treated the same
-    # way, or every update would "change" those files back and break sway.
-    local fx_free=""
-    if [[ -d "$src_root/sway/conf.d" ]] && ! have_swayfx; then
-        fx_free="$(mktemp -d)"
-        cp -a "$src_root/sway/conf.d/." "$fx_free/"
-        strip_swayfx_directives "$fx_free"
-    fi
+    # Compare and copy the repository's .config as it would be deployed on
+    # this machine: the binary directory install.sh chose, and on plain sway
+    # the swayFX-only lines commented out (see render_config_tree). Copying
+    # the raw files put back ~/.local/bin and the effects lines on every
+    # update — with a system-wide install that was no daemon, no shell and
+    # no working key bindings after the next login.
+    local rendered
+    rendered="$(mktemp -d)"
+    cp -a "$src_root/." "$rendered/"
+    render_config_tree "$rendered" "$(b1air_install_prefix)"
+    src_root="$rendered"
 
     while IFS= read -r -d '' src_file; do
         local rel_path="${src_file#"$src_root"/}"
         local dst_file="$dst_root/$rel_path"
-        if [[ -n "$fx_free" && "$rel_path" == sway/conf.d/*.conf && -f "$fx_free/${rel_path#sway/conf.d/}" ]]; then
-            src_file="$fx_free/${rel_path#sway/conf.d/}"
-        fi
 
         # 1. Skip protected user state files if destination already exists
         if [[ -f "$dst_file" ]] && is_protected "$rel_path"; then
@@ -269,7 +299,7 @@ sync_configs() {
             created_count=$((created_count + 1))
         fi
     done < <(find "$src_root" -type f -print0)
-    [[ -n "$fx_free" ]] && rm -rf "$fx_free"
+    rm -rf "$rendered"
 
     # Wallpapers sync (non-destructive)
     if [[ -d "$REPO_DIR/.wallpapers" ]]; then

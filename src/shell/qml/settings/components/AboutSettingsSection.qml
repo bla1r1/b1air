@@ -24,12 +24,12 @@ ColumnLayout {
     signal navigate(string page)
     spacing: Design.s(Design.space.lg)
 
-    property string kernelVer: "Linux"
-    property string osName: "Arch Linux"
-    property string hostName: "hostname"
-    property string memInfo: "Loading..."
+    property string kernelVer: "…"
+    property string osName: "…"
+    property string hostName: "…"
+    property string memInfo: "…"
     property string uptimeStr: ""
-    property string swayVer: "Sway"
+    property string swayVer: "…"
     property string suiteVersion: "…"
 
     // The version comes over D-Bus, and when that call fails — the daemon not
@@ -81,7 +81,7 @@ ColumnLayout {
         // So line four of the output was empty and "Memory Usage" on this page
         // had no value at all. Nothing reported the failure; awk's complaint
         // went to a stderr nobody reads.
-        command: ["bash", "-c", "printf '%s\\n' \"$(uname -r)\" \"$(grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"')\" \"$(uname -n)\" \"$(free -h 2>/dev/null | awk -v OFS=' / ' '/^Mem:/ {print $3, $2}')\" \"$(sway --version 2>/dev/null | head -1)\""]
+        command: ["bash", "-c", "printf '%s\\n' \"$(uname -r)\" \"$(grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"')\" \"$(uname -n)\" \"$(free -h 2>/dev/null | awk -v OFS=' / ' '/^Mem:/ {print $3, $2}')\" \"$(p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>/dev/null | head -1 || sway --version 2>/dev/null | head -1)\""]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -96,10 +96,7 @@ ColumnLayout {
         }
     }
 
-    // ── 1. Header ────────────────────────────────────────────────────────────
-    SectionLabel {
-        text: "About & Diagnostics"
-    }
+    // (The page title is in the Settings header bar now.)
 
     // ── 2. System Specifications Card ────────────────────────────────────────
     Card {
@@ -239,7 +236,7 @@ ColumnLayout {
         icon: "\u{f0493}"
         accentColor: Design.mauve
 
-        RowLayout {
+        ButtonRow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 

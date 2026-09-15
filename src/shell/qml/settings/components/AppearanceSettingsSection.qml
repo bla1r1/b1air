@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import "../../Ui"
 import "../../Services"
 import "../../Services" as Services
@@ -169,19 +170,35 @@ ColumnLayout {
         }
     }
 
+    // These four are swayFX commands. Plain sway — what Debian and Ubuntu
+    // ship, or an Arch install made with --no-aur — has none of them, so the
+    // switches moved and nothing on screen changed. Ask the running
+    // compositor (its binary, not whichever `sway` is first on PATH: swayfx
+    // installs itself as `sway`).
+    property bool hasSwayfx: true
+    Process {
+        running: true
+        command: ["sh", "-c", "p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>&1 | grep -qi swayfx && echo yes || echo no"]
+        stdout: StdioCollector { onStreamFinished: section.hasSwayfx = this.text.trim() !== "no" }
+    }
+
     Card {
         title: "Compositor Effects"
-        subtitle: "Corner rounding, blur, shadows, and inactive window dimming"
+        subtitle: section.hasSwayfx
+                  ? "Corner rounding, blur, shadows, and inactive window dimming"
+                  : "Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows"
         icon: "\u{f02db}"
         accentColor: Design.teal
 
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.md)
+            enabled: section.hasSwayfx
+            opacity: section.hasSwayfx ? 1.0 : 0.5
 
 
             Stepper {
-                label: "Corner Radius (SwayFX)"
+                label: "Corner Radius"
                 valueText: section.cornerRadius + " px"
                 onDecrement: section.setCornerRadius(Math.max(0, section.cornerRadius - 2))
                 onIncrement: section.setCornerRadius(Math.min(24, section.cornerRadius + 2))
@@ -195,21 +212,21 @@ ColumnLayout {
             // were on.
             Toggle {
                 label: "Window Blur"
-                subtitle: section.blurEnabled ? "Enabled" : "Disabled"
+                subtitle: "Frosted glass behind translucent windows and panels"
                 checked: section.blurEnabled
                 onToggled: section.toggleBlur(!section.blurEnabled)
             }
 
             Toggle {
                 label: "Window Shadows"
-                subtitle: section.shadowsEnabled ? "Enabled" : "Disabled"
+                subtitle: "A soft shadow under every window"
                 checked: section.shadowsEnabled
                 onToggled: section.toggleShadows(!section.shadowsEnabled)
             }
 
             Toggle {
                 label: "Dim Inactive Windows"
-                subtitle: section.dimInactive ? "Enabled (20% dimming)" : "Disabled"
+                subtitle: "Darken the windows you are not using by 20%"
                 checked: section.dimInactive
                 onToggled: section.toggleDimInactive(!section.dimInactive)
             }

@@ -30,4 +30,5 @@ Stepper    1.0 Stepper.qml
 Badge      1.0 Badge.qml
 EmptyState 1.0 EmptyState.qml
 ActionButton 1.0 ActionButton.qml
+ButtonRow    1.0 ButtonRow.qml
 DeviceRow  1.0 DeviceRow.qml

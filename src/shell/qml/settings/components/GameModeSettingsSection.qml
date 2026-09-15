@@ -44,7 +44,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
                 Label { text: "Enable Game Mode"; weight: Design.weight.semibold }
-                Label { text: section.gameModeEnabled ? "Active — CPU governor set to performance, compositor blur & shadows disabled" : "Inactive"; role: "caption"; dim: true }
+                Label { text: section.gameModeEnabled ? "Active — CPU governor set to performance, compositor blur & shadows disabled" : "Performance governor, no blur or shadows, and the extras below while you play"; role: "caption"; dim: true }
             }
 
             Toggle {
@@ -84,7 +84,7 @@ ColumnLayout {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(1)
-                color: Design.border
+                color: Design.line
             }
 
             RowLayout {
@@ -106,7 +106,7 @@ ColumnLayout {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(1)
-                color: Design.border
+                color: Design.line
             }
 
             RowLayout {

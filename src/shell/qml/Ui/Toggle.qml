@@ -9,6 +9,11 @@ import QtQuick.Layouts
 // three separately-computed radii that had to stay in sync by hand.
 // =============================================================================
 
+// The text sits in its own column with the switch beside it, centred. The
+// switch used to share a row with the label, which made that row as tall as
+// the switch and pushed the subtitle well below its label — the same control
+// looked loosely spaced here and tight on the pages that built their own row.
+// The whole row toggles, not only the 40 px switch.
 RowLayout {
     id: row
 
@@ -19,7 +24,10 @@ RowLayout {
     signal toggled()
 
     Layout.fillWidth: true
-    spacing: Design.s(Design.space.lg)
+    spacing: Design.s(Design.space.md)
+
+    HoverHandler { cursorShape: row.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor }
+    TapHandler { onTapped: row.toggled() }
 
     Icon {
         text: row.icon
@@ -27,47 +35,19 @@ RowLayout {
         role: "title"
         color: Design.accent
         Layout.preferredWidth: Design.s(24)
-        Layout.alignment: Qt.AlignTop
+        Layout.alignment: Qt.AlignVCenter
     }
 
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: Design.s(Design.space.xs)
+        Layout.alignment: Qt.AlignVCenter
+        spacing: Design.s(1)
 
-        RowLayout {
+        Label {
+            text: row.label
+            weight: Design.weight.semibold
             Layout.fillWidth: true
-
-            Label {
-                text: row.label
-                weight: Design.weight.semibold
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-            }
-
-            Rectangle {
-                id: track
-                Layout.preferredWidth: Design.s(40)
-                Layout.preferredHeight: Design.s(24)
-                radius: height / 2
-                color: row.checked ? Design.accent : Design.hover
-
-                Behavior on color { ColorAnimation { duration: Design.duration.base } }
-
-                Rectangle {
-                    id: knob
-                    width: parent.height - Design.s(6)
-                    height: width
-                    radius: width / 2
-                    color: row.checked ? Design.accentText : Design.ground
-                    y: Design.s(3)
-                    x: row.checked ? parent.width - width - Design.s(3) : Design.s(3)
-
-                    Behavior on x { NumberAnimation { duration: Design.duration.base; easing.type: Design.easing } }
-                    Behavior on color { ColorAnimation { duration: Design.duration.base } }
-                }
-
-                Clickable { onClicked: row.toggled() }
-            }
+            elide: Text.ElideRight
         }
 
         Label {
@@ -77,6 +57,30 @@ RowLayout {
             dim: true
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
+        }
+    }
+
+    Rectangle {
+        id: track
+        Layout.alignment: Qt.AlignVCenter
+        Layout.preferredWidth: Design.s(40)
+        Layout.preferredHeight: Design.s(24)
+        radius: height / 2
+        color: row.checked ? Design.accent : Design.hover
+
+        Behavior on color { ColorAnimation { duration: Design.duration.base } }
+
+        Rectangle {
+            id: knob
+            width: parent.height - Design.s(6)
+            height: width
+            radius: width / 2
+            color: row.checked ? Design.accentText : Design.ground
+            y: Design.s(3)
+            x: row.checked ? parent.width - width - Design.s(3) : Design.s(3)
+
+            Behavior on x { NumberAnimation { duration: Design.duration.base; easing.type: Design.easing } }
+            Behavior on color { ColorAnimation { duration: Design.duration.base } }
         }
     }
 }

@@ -116,10 +116,7 @@ ColumnLayout {
         return list;
     }
 
-    // ── 1. Header ────────────────────────────────────────────────────────────
-    SectionLabel {
-        text: "Screen Time & Focus"
-    }
+    // (The page title is in the Settings header bar now.)
 
     // ── 2. Today's Wellbeing Overview ────────────────────────────────────────
     Card {
