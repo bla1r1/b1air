@@ -141,8 +141,22 @@ Singleton {
         id: watcher
         running: true
         stdinEnabled: true
+        //
+        // Text only, and at most 256 KB of it. A bare `wl-paste` hands over
+        // whatever type comes first, and with an image on the clipboard —
+        // every screenshot is copied there by default — that was megabytes of
+        // PNG bytes pushed into the shell as "text" and kept in the history.
+        // Measured: a 4K screenshot jammed three readers on 14 MB each.
+        //
+        // The trap ends the watcher however this wrapper ends. `kill $w` after
+        // `cat` only ran when stdin closed; a SIGTERM (the Process being
+        // stopped or restarted) killed bash first, and the watcher lived on,
+        // reparented to init — three of them on the test session, each reading
+        // every copy. `wait` is interruptible, so the trap runs at once.
         command: ["bash", "-c",
-                  "wl-paste --watch sh -c 'wl-paste --no-newline 2>/dev/null; printf \"\\036\"' & w=$!; cat >/dev/null 2>&1; kill $w 2>/dev/null"]
+                  "trap 'kill $w $c 2>/dev/null' EXIT; trap 'exit 0' TERM INT HUP; " +
+                  "wl-paste --watch sh -c 'wl-paste --type text --no-newline 2>/dev/null | head -c 262144; printf \"\\036\"' & w=$!; " +
+                  "cat <&0 >/dev/null 2>&1 & c=$!; wait $c"]
         stdout: SplitParser {
             splitMarker: "\u001e"
             onRead: data => {
@@ -192,7 +206,7 @@ Singleton {
 
     Process {
         id: pollProc
-        command: ["wl-paste", "--no-newline"]
+        command: ["sh", "-c", "wl-paste --type text --no-newline 2>/dev/null | head -c 262144"]
         stdout: StdioCollector {
             onStreamFinished: {
                 if (this.text)

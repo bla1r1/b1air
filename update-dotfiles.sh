@@ -317,34 +317,13 @@ sync_configs() {
         done < <(find "$REPO_DIR/.wallpapers" -type f -print0)
     fi
 
-    # Desktop entries. install.sh deploys these; the updater did not, so a
-    # renamed or added b1air-*.desktop never reached a machine that only ever
-    # runs the updater — and .config/mimeapps.list, which IS synced above,
-    # names them as the default handlers for text, directories and images.
-    if [[ -d "$REPO_DIR/.local/share/applications" ]]; then
-        mkdir -p "$HOME/.local/share/applications"
-        local changed_desktop=0
-        for entry in "$REPO_DIR"/.local/share/applications/*.desktop; do
-            [[ -e "$entry" ]] || continue
-            local base_entry dst_entry
-            base_entry="$(basename "$entry")"
-            dst_entry="$HOME/.local/share/applications/$base_entry"
-            if [[ ! -f "$dst_entry" ]] || ! cmp -s "$entry" "$dst_entry"; then
-                if [[ "$DRY_RUN" -eq 1 ]]; then
-                    log "Would update: ~/.local/share/applications/$base_entry"
-                else
-                    [[ -f "$dst_entry" ]] && {
-                        mkdir -p "$BACKUP_DIR/applications"
-                        cp -a "$dst_entry" "$BACKUP_DIR/applications/$base_entry"
-                    }
-                    cp -a "$entry" "$dst_entry"
-                    changed_desktop=1
-                fi
-            fi
-        done
-        if [[ "$changed_desktop" -eq 1 ]]; then
-            update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
-        fi
+    # Desktop entries and icons come with the suite (make install, above);
+    # what is left is removing per-user copies an older version put in
+    # ~/.local/share/applications, which shadow the installed ones.
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        local pruned
+        pruned="$(prune_stale_desktop_entries "$BACKUP_DIR")"
+        if (( pruned > 0 )); then log "Removed $pruned stale per-user desktop entries"; fi
     fi
 
     # Fix permissions for scripts
@@ -407,7 +386,7 @@ main() {
         if [[ -x /usr/local/bin/b1air-daemon ]]; then
             sudo make -C "$REPO_DIR/src" install \
                 PREFIX=/usr/local/bin DATADIR=/usr/share \
-                QMLDIR=/usr/share/b1air-shell/qml CONFDIR="$HOME/.config" >/dev/null \
+                QMLDIR=/usr/share/b1air-shell/qml COMPATDIR=/usr/share/b1air-shell/qs-compat CONFDIR="$HOME/.config" >/dev/null \
                 || { err "Suite install failed."; exit 1; }
             sudo chown -R "$USER" "$HOME/.config/environment.d" 2>/dev/null || true
         else

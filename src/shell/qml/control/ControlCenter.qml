@@ -984,6 +984,8 @@ PopupShell {
 
                     Image {
                         anchors.fill: parent
+                        // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                        sourceSize: Qt.size(256, 256)
                         source: Media.track.artUrl || ""
                         fillMode: Image.PreserveAspectCrop
                         visible: source !== ""

@@ -156,6 +156,8 @@ PanelWindow {
                     Image {
                         Layout.preferredWidth: Design.s(28)
                         Layout.preferredHeight: Design.s(28)
+                        // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                        sourceSize: Qt.size(128, 128)
                         source: "file://" + Quickshell.env("HOME") + "/.face.icon"
                         fillMode: Image.PreserveAspectCrop
                         mipmap: true

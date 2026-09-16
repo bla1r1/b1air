@@ -11,7 +11,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <iostream>
-#include "../qml_search.hpp"
+#include "qml_search.hpp"
 
 int main(int argc, char* argv[]) {
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");

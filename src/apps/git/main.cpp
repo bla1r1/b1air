@@ -4,7 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <iostream>
-#include "../qml_search.hpp"
+#include "qml_search.hpp"
 #include "git_backend.hpp"
 
 int main(int argc, char* argv[]) {

@@ -296,6 +296,8 @@ ShellRoot {
                 Image {
                     id: bgWallpaper
                     anchors.fill: parent
+                    // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                    sourceSize: Qt.size(Screen.width * Screen.devicePixelRatio, Screen.height * Screen.devicePixelRatio)
                     source: screenRoot.staticWallpaperPath
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
@@ -495,6 +497,8 @@ ShellRoot {
                             Image {
                                 id: avatarImg
                                 anchors.fill: parent
+                                // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                                sourceSize: Qt.size(256, 256)
                                 source: screenRoot.faceIconPath !== "" ? screenRoot.faceIconPath : ""
                                 fillMode: Image.PreserveAspectCrop
                                 visible: false 

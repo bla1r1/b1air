@@ -472,6 +472,8 @@ PopupShell {
                 // LAYER 1: Background Blur (Smooth fade-in)
                 Image {
                     anchors.fill: parent
+                    // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                    sourceSize: Qt.size(512, 512)
                     source: root.musicData.blur ? "file://" + root.musicData.blur : ""
                     fillMode: Image.PreserveAspectCrop
                     
@@ -562,6 +564,8 @@ PopupShell {
                                 Image {
                                     id: artImg
                                     anchors.fill: parent
+                                    // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                                    sourceSize: Qt.size(512, 512)
                                     source: root.musicData.artUrl ? "file://" + root.musicData.artUrl : ""
                                     fillMode: Image.PreserveAspectCrop
                                     visible: false 

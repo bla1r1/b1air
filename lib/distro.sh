@@ -229,3 +229,34 @@ render_config_tree() {
         strip_swayfx_directives "$dir/sway/conf.d"
     fi
 }
+
+# ── Desktop entries ──────────────────────────────────────────────────────────
+#
+# `make install` writes the suite's entries next to its binaries: /usr/share
+# for a system install, ~/.local/share for a per-user one. Earlier versions of
+# install.sh and the updater also copied them into ~/.local/share/applications
+# with Exec=~/.local/bin/... — even when the binaries went to /usr/local/bin.
+# A per-user entry shadows the system one of the same name, so the menu kept
+# launching a path that did not exist. Remove those whose binary is gone.
+#
+# prune_stale_desktop_entries [backup dir]
+prune_stale_desktop_entries() {
+    local backup="${1:-}" dir="$HOME/.local/share/applications" f exe pruned=0
+    [[ -d "$dir" ]] || return 0
+    for f in "$dir"/b1air-*.desktop; do
+        [[ -f "$f" ]] || continue
+        exe="$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$f" | head -n1)"
+        [[ "$exe" == /* && ! -x "$exe" ]] || continue
+        if [[ -n "$backup" ]]; then
+            mkdir -p "$backup/applications"
+            mv "$f" "$backup/applications/"
+        else
+            rm -f "$f"
+        fi
+        pruned=$((pruned + 1))
+    done
+    if (( pruned > 0 )); then
+        update-desktop-database "$dir" >/dev/null 2>&1 || true
+    fi
+    echo "$pruned"
+}

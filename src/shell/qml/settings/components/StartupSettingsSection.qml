@@ -220,6 +220,8 @@ ColumnLayout {
                                 Image {
                                     Layout.preferredWidth: Design.s(20)
                                     Layout.preferredHeight: Design.s(20)
+                                    // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
+                                    sourceSize: Qt.size(64, 64)
                                     source: appPickerItem.model.icon ? (appPickerItem.model.icon.startsWith("/") ? "file://" + appPickerItem.model.icon : "image://icon/" + appPickerItem.model.icon) : ""
                                     visible: source.toString() !== ""
                                     fillMode: Image.PreserveAspectFit

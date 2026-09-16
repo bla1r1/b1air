@@ -2,21 +2,16 @@
 .DS_Store
 ._*
 
-# Compiled C++ Objects & Binaries
-*.o
-src/b1air-daemon
-b1air-daemon
-src/shell/build/
-shell/build/
+# Build output. Everything is built into src/build by CMake; the other names
+# are what the hand-written daemon build and the old per-shell CMake tree left
+# in checkouts that predate it.
 build/
-
-# Build products the Makefile leaves in the tree. `src/b1air-daemon` was
-# already listed; its siblings and the header-dependency files the Makefile
-# now generates were not, so a build made the working tree look dirty and
-# a careless `git add -A` committed binaries.
+*.o
+src/daemon/*.d
+src/b1air-daemon
 src/b1air-polkit-agent
 src/b1air-secret-service
-src/daemon/*.d
+src/shell/build/
 tools/controller
 
 # Notes for the coding assistant working in this repository. Kept out of the

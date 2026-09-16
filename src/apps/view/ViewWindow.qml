@@ -186,7 +186,17 @@ ApplicationWindow {
                             source: ViewBackend.currentPath ? ("file://" + ViewBackend.currentPath) : ""
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
-                            cache: true
+                            // Decoded at the size it is shown, not the size of
+                            // the file: a 3840x2160 picture was 33 MB of pixels
+                            // per copy, kept in the pixmap cache after moving on
+                            // to the next one, on top of its texture — 172 MB
+                            // for the window with a single wallpaper open.
+                            // Zooming in past 100% asks for the full image.
+                            sourceSize: window.zoomFactor > 1.05
+                                ? undefined
+                                : Qt.size(Screen.width * Screen.devicePixelRatio,
+                                          Screen.height * Screen.devicePixelRatio)
+                            cache: false
                             rotation: window.rotationAngle
                             scale: window.zoomFactor
 

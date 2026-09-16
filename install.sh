@@ -653,7 +653,7 @@ deploy_session_files() {
 deploy_dotfiles() {
     log "Deploying user dotfiles..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would deploy .config, .local/share/applications and .wallpapers to $HOME"
+        log "Would deploy .config, the cursor theme and .wallpapers to $HOME"
         deploy_sddm_theme
         deploy_session_files
         return 0
@@ -710,46 +710,9 @@ deploy_dotfiles() {
     # the first Export has somewhere to land.
     mkdir -p "$HOME/.config/b1air/themes"
 
-    # Desktop entries for the b1air app suite.
-    #
-    # These were never deployed by any version of this script, while
-    # .config/mimeapps.list — which IS deployed — names b1air-text.desktop,
-    # b1air-files.desktop and b1air-view.desktop as the default handlers for
-    # text, directories and images. Every one of those assignments pointed at a
-    # file that did not exist on disk, so xdg-open had no handler to resolve and
-    # the b1air apps were invisible to every launcher except our own Launchpad,
-    # which carries its own hardcoded list and so never noticed.
-    if [[ -d "$REPO_DIR/.local/share/applications" ]]; then
-        mkdir -p "$HOME/.local/share/applications"
-        for item in "$REPO_DIR"/.local/share/applications/*.desktop; do
-            [[ -e "$item" ]] || continue
-            local dbase
-            dbase="$(basename "$item")"
-            if [[ -e "$HOME/.local/share/applications/$dbase" ]]; then
-                mkdir -p "$BACKUP_DIR/applications"
-                mv "$HOME/.local/share/applications/$dbase" "$BACKUP_DIR/applications/$dbase"
-            fi
-            # Full path to the binary: ~/.local/bin is on PATH in the sway
-            # session and not in KDE or GNOME, whose menus then could not
-            # start the apps at all. Same rewrite as `make install`.
-            sed -e "s|^Exec=b1air-|Exec=$HOME/.local/bin/b1air-|" \
-                -e "s|^TryExec=b1air-|TryExec=$HOME/.local/bin/b1air-|" \
-                "$item" > "$HOME/.local/share/applications/$dbase"
-            chmod 644 "$HOME/.local/share/applications/$dbase"
-        done
-        # Without this the new entries exist but nothing has indexed them, so
-        # xdg-open still resolves nothing until the next login.
-        update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
-        ok "Installed $(ls -1 "$REPO_DIR"/.local/share/applications/*.desktop 2>/dev/null | wc -l) desktop entries"
-    fi
-
-    # The suite's icons, which the entries above name (Icon=b1air-<app>).
-    if [[ -d "$REPO_DIR/.local/share/icons/hicolor/scalable/apps" ]]; then
-        mkdir -p "$HOME/.local/share/icons/hicolor/scalable/apps"
-        install -m 644 "$REPO_DIR"/.local/share/icons/hicolor/scalable/apps/b1air-*.svg \
-            "$HOME/.local/share/icons/hicolor/scalable/apps/"
-        gtk-update-icon-cache -q -t -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
-    fi
+    # The suite's desktop entries and icons live with each app under
+    # src/apps/<app>/ and are installed by `make install` (build_b1air_suite),
+    # beside the binaries they launch.
 
     # The desktop's own cursor theme (src/cursors), named by input.conf and the
     # GTK settings. cp -a keeps its alias names as symlinks.
@@ -897,14 +860,14 @@ build_b1air_suite() {
         # No `make clean` first. It threw away every object and the whole CMake
         # build directory on every run, so an install that changed one file
         # recompiled the entire suite — including a fresh CMake configure and a
-        # full AUTOMOC pass. The dependency tracking in src/Makefile is correct
-        # (-MMD -MP, fed back with -include), so an incremental build is the
-        # right default; B1AIR_CLEAN_BUILD=1 forces the old behaviour.
+        # full AUTOMOC pass. CMake tracks header dependencies, so an
+        # incremental build in src/build is the right default;
+        # B1AIR_CLEAN_BUILD=1 forces the old behaviour.
         if [[ "${B1AIR_CLEAN_BUILD:-0}" == "1" ]]; then
             make -C "$REPO_DIR/src" clean >/dev/null 2>&1 || true
         fi
         make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" || {
-            err "Failed to build b1air-daemon — see the compiler output above."; exit 1; }
+            err "Failed to build the b1air suite — see the compiler output above."; exit 1; }
 
         # Installed for every user, not just this one.
         #
@@ -925,6 +888,7 @@ build_b1air_suite() {
                 PREFIX=/usr/local/bin \
                 DATADIR=/usr/share \
                 QMLDIR=/usr/share/b1air-shell/qml \
+                COMPATDIR=/usr/share/b1air-shell/qs-compat \
                 CONFDIR="$HOME/.config" >/dev/null; then
             sudo chown -R "$USER" "$HOME/.config/environment.d" 2>/dev/null || true
             ok "b1air suite installed system-wide to /usr/local/bin"
@@ -942,59 +906,29 @@ build_b1air_suite() {
         render_config_tree "$HOME/.config" "$B1AIR_PREFIX"
         ok "sway and the user units resolve the suite through ${B1AIR_PREFIX}"
 
+        # Entries an older install left in ~/.local/share/applications, which
+        # shadow the ones just installed and may name a binary that is gone.
+        local pruned
+        pruned="$(prune_stale_desktop_entries "$BACKUP_DIR")"
+        if (( pruned > 0 )); then ok "Removed $pruned stale per-user desktop entries"; fi
+
         # 2. Native b1air-shell
         if [[ -d "$REPO_DIR/src/shell" ]]; then
-            # `make install` above already ran cmake configure and build through
-            # the Makefile's shell-target, so this was the second full pass over
-            # the same tree. What is left here is the part make does not do:
-            # putting the QML plugin and the QML tree where Qt and the apps look
-            # for them. Configure is still checked, because a missing Qt6 module
-            # should die here rather than at first launch.
-            cmake -B "$REPO_DIR/src/shell/build" "$REPO_DIR/src/shell" >/dev/null || {
-                err "cmake configure failed — a build dependency is missing."; exit 1; }
             # The QML plugin has to sit on Qt's import path for quickshell to
-            # find it; ~/.local is not on that path, so this one needs root.
+            # find it. A system `make install` above put it there already; a
+            # per-user one could not, so it is done here with sudo.
             local qml_dest
             qml_dest="$(qt_qml_dir)"
-            if [[ -d "$REPO_DIR/src/shell/build/qml/B1air" ]]; then
-                sudo cp -r "$REPO_DIR/src/shell/build/qml/B1air" "$qml_dest/" \
+            if [[ -d "$REPO_DIR/src/build/qml/B1air" && "$B1AIR_PREFIX" != /usr/local/bin ]]; then
+                sudo cp -r "$REPO_DIR/src/build/qml/B1air" "$qml_dest/" \
                     && ok "B1air.Daemon QML module installed to $qml_dest" \
                     || { err "Failed to install the B1air.Daemon QML module."; exit 1; }
             fi
 
-            # The QML itself, which nothing used to install. Every window
-            # file was found only at $HOME/DotsFiles/src/..., so the desktop
-            # worked exactly when the repository happened to be cloned to that
-            # one path — clone it as ~/dotfiles and b1air-files, -term, -text,
-            # -git, -notes, -view and -monitor all came up with no window and
-            # a "not found" line on a stderr nobody reads.
-            #
-            # /usr/share/b1air-shell/qml is where every app already looked
-            # last; now something puts the files there. The per-app windows
-            # land in the same directory so one search path covers the suite.
-            if sudo install -d -m 755 /usr/share/b1air-shell/qml 2>/dev/null; then
-                if sudo rsync -a --delete "$REPO_DIR/src/shell/qml/" /usr/share/b1air-shell/qml/; then
-                    # Every app window, from the one place each of them lives.
-                    # This used to be `cp -n`, which mattered when five of the
-                    # seven also existed under src/shell/qml: the rsync above
-                    # put the shell's copy here first and the -n then skipped
-                    # the app's, so which of the two duplicates shipped was
-                    # decided by the order of these two lines. There is one
-                    # copy of each now, so it simply copies.
-                    sudo find "$REPO_DIR/src/apps" -maxdepth 2 -name '*Window.qml' \
-                        -exec cp {} /usr/share/b1air-shell/qml/ \; 2>/dev/null || true
-                    # The compatibility module tree, which lets the standalone
-                    # apps host the shell's own QML. A sibling directory, never
-                    # inside qml/: the shell searches that one and must keep
-                    # finding the real Quickshell.
-                    sudo install -d -m 755 /usr/share/b1air-shell/qs-compat 2>/dev/null \
-                        && sudo rsync -a "$REPO_DIR/src/compat/qml/" /usr/share/b1air-shell/qs-compat/ \
-                        || true
-                    ok "shell QML installed to /usr/share/b1air-shell/qml"
-                else
-                    warn "Could not install the shell QML; apps will fall back to a checkout."
-                fi
-            fi
+            # The QML (shell, app windows, icons) and the compat tree went to
+            # /usr/share/b1air-shell with `make install` above. It was copied a
+            # second time here with rsync --delete, which now would delete the
+            # icons that install put beside it.
 
             # b1air-shell is installed by `make install` above, along with
             # every other binary — it used to be copied separately here, which

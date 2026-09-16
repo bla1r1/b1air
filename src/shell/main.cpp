@@ -5,7 +5,7 @@
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include "../apps/qml_search.hpp"
+#include "qml_search.hpp"
 #include <QQmlContext>
 #include <QDBusConnection>
 #include <QDBusInterface>

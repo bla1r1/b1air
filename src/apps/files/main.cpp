@@ -10,7 +10,7 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <iostream>
-#include "../qml_search.hpp"
+#include "qml_search.hpp"
 #include "backend.hpp"
 
 int main(int argc, char* argv[]) {

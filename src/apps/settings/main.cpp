@@ -34,7 +34,7 @@
 #include <iostream>
 #include <unistd.h>
 
-#include "../qml_search.hpp"
+#include "qml_search.hpp"
 #include "qs_compat.hpp"
 #include "qs_services.hpp"
 

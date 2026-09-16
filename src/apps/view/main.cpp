@@ -4,13 +4,20 @@
 #include <QDir>
 #include <QFile>
 #include <iostream>
-#include "../qml_search.hpp"
+#include "qml_search.hpp"
 #include "view_backend.hpp"
 
 int main(int argc, char* argv[]) {
     // Force Wayland, high performance rendering & basic render loop (0% idle CPU)
     setenv("QT_QPA_PLATFORM", "wayland;xcb", 1);
-    setenv("QSG_RHI_BACKEND", "opengl", 1);
+    // The software renderer unless the environment names another, like the
+    // rest of the suite. The image is decoded at screen size now (see
+    // ViewWindow.qml), so scaling and rotating it is light work for the CPU,
+    // and OpenGL was half the window's memory: 149 MB against 73 MB with one
+    // 4K wallpaper open (measured under llvmpipe; a real GPU's driver costs
+    // less, but not nothing). QT_QUICK_BACKEND=opengl brings it back.
+    setenv("QT_QUICK_BACKEND", "software", 0);
+    setenv("QSG_RHI_BACKEND", "opengl", 0);
     setenv("QSG_RENDER_LOOP", "basic", 1);
     setenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1", 1);
 

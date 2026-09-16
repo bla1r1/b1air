@@ -193,17 +193,21 @@ DotsFiles/
 │   ├── sway/                  # SwayFX compositor keybinds, rules, look & feel
 │   ├── systemd/               # Systemd user services for the b1air session
 │   └── xdg-desktop-portal-wlr # Unattended screencast configuration
-├── .local/share/              # Desktop entries, app icons and the b1air cursor theme
+├── .local/share/icons/        # The b1air cursor theme (built from src/cursors)
 ├── .wallpapers/               # Wallpapers offered in Settings
 ├── src/                       # Compiled C++20 desktop suite & Qt6 shell
-│   ├── daemon/                # b1air-daemon, polkit agent and secret service
-│   ├── shell/                 # Qt6/QML desktop shell (TopBar, launcher, popups, Settings)
-│   ├── apps/                  # b1air-files, -term, -text, -view, -notes, -git, -monitor, -camera
+│   ├── CMakeLists.txt         # One build for the whole suite, into src/build
+│   ├── Makefile               # `make` builds, `make install` installs
+│   ├── cmake/B1airApp.cmake   # b1air_add_app(): how every app is built
+│   ├── daemon/                # b1air-core library; b1air-daemon, polkit agent, secret service
+│   ├── shell/                 # b1air-shell: Qt6/QML desktop (TopBar, launcher, popups, Settings)
+│   ├── apps/<app>/            # One program each: sources, <App>Window.qml, .desktop, icon
+│   │                          #   camera files git monitor notes settings term text view
+│   ├── common/                # Headers shared by several programs (QML search path)
 │   ├── qmlplugin/             # B1air.Daemon QML module
-│   ├── compat/                # Quickshell compatibility layer for the standalone apps
+│   ├── compat/                # Quickshell stand-in that lets b1air-settings run on its own
 │   ├── cursors/               # Sources of the b1air cursor theme
-│   ├── third_party/           # Vendored SQLite, nlohmann/json, libvterm
-│   └── Makefile               # Unified build & install
+│   └── third_party/           # Vendored SQLite, nlohmann/json, libvterm
 ├── usr/                       # System session files
 │   ├── bin/b1air-session      # Wayland session launch wrapper
 │   └── share/                 # SDDM greeter, wayland-sessions, and portal configs

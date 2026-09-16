@@ -409,9 +409,9 @@ PY
 # ── daemon-cli ───────────────────────────────────────────────────────────────
 check_daemon_cli() {
     head_ "daemon-cli"
-    local bin="$REPO/src/b1air-daemon"
+    local bin="$REPO/src/build/bin/b1air-daemon"
     if [[ ! -x "$bin" ]]; then
-        skip "src/b1air-daemon not built (run: make -C src)"
+        skip "src/build/bin/b1air-daemon not built (run: make -C src)"
         return
     fi
 

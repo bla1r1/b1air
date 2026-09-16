@@ -314,9 +314,10 @@ PanelWindow {
     function iconSource(icon) {
         const value = (icon || "application-x-executable").trim();
         if (value.startsWith("/") || value.startsWith("file://")) return value.startsWith("file://") ? value : "file://" + value;
-        // The suite's own icons, by file: they live in ~/.local/share/icons,
-        // which not every icon theme lookup searches.
-        if (value.startsWith("b1air-")) return "file://" + Quickshell.env("HOME") + "/.local/share/icons/hicolor/scalable/apps/" + value + ".svg";
+        // The suite's own icons, by file, from the copy `make install` puts
+        // beside this QML. They used to be read from ~/.local/share/icons,
+        // where a system-wide install never put them.
+        if (value.startsWith("b1air-")) return Qt.resolvedUrl("icons/apps/" + value + ".svg");
         const legacy = {
             "utilities-terminal": "utilities-terminal.png",
             "system-file-manager": "system-file-manager.png",
