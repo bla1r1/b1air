@@ -35,6 +35,12 @@ Rectangle {
 
     readonly property alias focused: input.activeFocus
 
+    // For a dialog that opens on this field: the caret in it, text selected.
+    function focusInput() {
+        input.forceActiveFocus();
+        input.selectAll();
+    }
+
     implicitHeight: Design.s(Design.size.field)
     implicitWidth: Design.s(120)
 

@@ -48,7 +48,7 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+N"
-        onActivated: NotesBackend.createNote("Untitled Note")
+        onActivated: window.newNote()
     }
 
     // Editing is auto-saved on a 500 ms debounce; Ctrl+S is the "now, please"
@@ -65,6 +65,26 @@ ApplicationWindow {
         sequence: "Ctrl+P"
         onActivated: window.showPreview = !window.showPreview
     }
+
+    // The last half-second of typing waits on the debounce below; anything
+    // that leaves the note — another note, a new one, closing the window —
+    // writes it first. Switching notes or pressing Escape inside that half
+    // second used to drop it.
+    function flushSave() {
+        if (autoSaveTimer.running) {
+            autoSaveTimer.stop();
+            NotesBackend.saveCurrentNote(titleInput.text, editorArea.text, "");
+        }
+    }
+
+    function newNote() {
+        flushSave();
+        NotesBackend.createNote("Untitled");
+        titleInput.forceActiveFocus();
+        titleInput.selectAll();
+    }
+
+    onClosing: flushSave()
 
     // Auto-save debounce timer
     Timer {
@@ -135,7 +155,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: NotesBackend.createNote("Untitled Note")
+                            onClicked: window.newNote()
                         }
                     }
 
@@ -153,7 +173,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             spacing: Design.s(4)
                             Text { text: "󰈚"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colPurple }
-                            Text { text: "Obsidian Sync"; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colPurple }
+                            Text { text: NotesBackend.obsidianVaultPath ? "Obsidian Sync" : "Connect Obsidian…"; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colPurple }
                         }
 
                         MouseArea {
@@ -161,35 +181,21 @@ ApplicationWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: NotesBackend.syncWithObsidian()
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            // Left: re-read the vault (or pick one, the first
+                            // time). Right: pick a different vault.
+                            onClicked: mouse => {
+                                window.flushSave();
+                                if (mouse.button === Qt.RightButton) NotesBackend.chooseObsidianVault();
+                                else NotesBackend.syncWithObsidian();
+                            }
                         }
                     }
 
-                    // Notion Sync Pill
-                    Rectangle {
-                        width: notionRow.implicitWidth + Design.s(14)
-                        height: Design.s(26)
-                        radius: Design.s(6)
-                        color: notionArea.containsMouse ? Design.tint(Design.ok, 0.25) : Design.tint(Design.raised, 0.40)
-                        border.color: window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: notionRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(4)
-                            Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colGreen }
-                            Text { text: "Notion Sync"; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colGreen }
-                        }
-
-                        MouseArea {
-                            id: notionArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: NotesBackend.syncWithNotion()
-                        }
-                    }
+                    // There was a "Notion Sync" pill here. It queried a Notion
+                    // database and, whatever came back, imported nothing and
+                    // exported nothing — then reported "Notion Synced". It is
+                    // gone until it does something.
 
                     // What the two buttons above did. Both set a status the
                     // window never showed, so pressing either was silent —
@@ -353,6 +359,7 @@ ApplicationWindow {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
+                                        window.flushSave();
                                         NotesBackend.selectNote(modelData.id);
                                         titleInput.text = modelData.title || "";
                                         editorArea.text = modelData.content || "";
@@ -419,19 +426,22 @@ ApplicationWindow {
                                 TextInput {
                                     id: tagInput
                                     Layout.fillWidth: true
+                                    // The note's #hashtags, read from its text. This
+                                    // was an editable field whose edits were kept
+                                    // in memory only and gone after a restart.
                                     text: NotesBackend.currentTags
+                                    readOnly: true
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(11)
                                     color: window.colCyan
                                     selectByMouse: true
-                                    onTextChanged: autoSaveTimer.restart()
 
                                     Text {
-                                        text: "Add tags (comma separated)..."
+                                        text: "Tags: write #tag anywhere in the note"
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(11)
                                         color: window.colDim
-                                        visible: !tagInput.text && !tagInput.activeFocus
+                                        visible: !tagInput.text
                                     }
                                 }
                             }
@@ -466,12 +476,16 @@ ApplicationWindow {
                                         anchors.fill: parent
                                         anchors.margins: Design.s(12)
                                         contentWidth: width
-                                        contentHeight: editorArea.implicitHeight + 20
+                                        contentHeight: editorArea.height
                                         clip: true
 
                                         TextArea {
                                             id: editorArea
                                             width: parent.width
+                                            // At least the pane's height, so a
+                                            // click anywhere in it starts typing;
+                                            // it was only as tall as its text.
+                                            height: Math.max(implicitHeight + 20, editorFlick.height)
                                             text: NotesBackend.currentContent
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(13)
@@ -541,30 +555,16 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    AppDialog {
         id: deleteConfirm
         title: "Delete note?"
-        modal: true
+        message: "This note will be permanently deleted."
+        acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
-        onAccepted: NotesBackend.deleteNote(NotesBackend.currentNoteId)
-        // A wrapping label as contentItem sizes itself from the width the
-        // Dialog gives it, while the Dialog sizes itself from the label —
-        // Qt reported "Binding loop detected for property implicitWidth" on
-        // every start. An explicit implicitWidth breaks the cycle.
-        // Text.implicitWidth is read-only, so the loop has to be broken one
-        // level up: an Item can carry an explicit implicit size, and the
-        // wrapping label lays out inside it.
-        contentItem: Item {
-            implicitWidth: Design.s(300)
-            implicitHeight: delMsg.implicitHeight + Design.s(36)
-
-            Label {
-                id: delMsg
-                anchors.fill: parent
-                anchors.margins: Design.s(18)
-                text: "This note will be permanently deleted."
-                wrapMode: Text.WordWrap
-            }
+        onAccepted: {
+            autoSaveTimer.stop();
+            NotesBackend.deleteNote(NotesBackend.currentNoteId);
         }
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Delete"
     }
 }

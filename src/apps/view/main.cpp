@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     // Check CLI argument for initial file
     QString initialFile = "";
     if (argc > 1) {
-        initialFile = QString::fromUtf8(argv[1]);
+        initialFile = b1air::app::path_arg(QString::fromUtf8(argv[1]));
     } else {
         QStringList candidates = {
             QDir::homePath() + "/Pictures",

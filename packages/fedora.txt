@@ -53,7 +53,7 @@ ImageMagick tesseract tesseract-langpack-eng zbar qrencode
 # Fedora 41+ ships tuned-ppd, which provides the same D-Bus API and conflicts
 # with power-profiles-daemon — so this one is optional.
 ?power-profiles-daemon pamixer poppler-utils ?gocryptfs ?easyeffects
-xdg-utils ?wlsunset ?snapper
+xdg-utils file glib2 ?wlsunset ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g bsdtar

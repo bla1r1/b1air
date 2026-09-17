@@ -22,6 +22,7 @@
 #include <QQmlApplicationEngine>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 
 namespace b1air {
 namespace app {
@@ -68,6 +69,19 @@ inline void add_import_paths(QQmlApplicationEngine& engine, const QString& app_d
     const QStringList dirs = qml_dirs(app_dir);
     for (auto it = dirs.crbegin(); it != dirs.crend(); ++it)
         engine.addImportPath(*it);
+}
+
+/**
+ * A command-line argument as a local path. Launchers pass a desktop entry's
+ * %U as a file:// URI, percent-encoded ("My%20Photos"); a shell passes a path
+ * relative to where it was. Either way the app wants an absolute local path.
+ */
+inline QString path_arg(const QString& arg) {
+    if (arg.startsWith(QLatin1String("file:")))
+        return QUrl(arg).toLocalFile();
+    if (arg.isEmpty() || arg.contains(QLatin1String("://")))
+        return arg;
+    return QDir::current().absoluteFilePath(arg);
 }
 
 } // namespace app

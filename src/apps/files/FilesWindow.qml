@@ -64,6 +64,7 @@ ApplicationWindow {
     Connections {
         target: window.isNative ? FilesBackend : null
         function onErrorOccurred(message) { window.note(message); }
+        function onPasteFinished(ok, message) { window.note(message); }
     }
     property int selectedIndex: -1
     property string selectedPath: ""
@@ -243,13 +244,17 @@ ApplicationWindow {
         }
     }
 
+    function copyItem(path, cut) {
+        if (!path || !isNative) return;
+        FilesBackend.copyFiles([path], cut);
+        note((cut ? "Cut " : "Copied ") + path.split("/").pop() + " — paste with Ctrl+V");
+    }
+
     function askName(mode, target, initial) {
         nameDialog.mode = mode;
         nameDialog.target = target;
         nameField.text = initial;
         nameDialog.open();
-        nameField.forceActiveFocus();
-        nameField.selectBase();
     }
 
     function submitName(text) {
@@ -259,6 +264,10 @@ ApplicationWindow {
             if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
             if (!FilesBackend.renameItem(nameDialog.target, v)) { note("Could not rename to " + v); return; }
             note("Renamed to " + v);
+        } else if (nameDialog.mode === "newfile") {
+            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+            if (!FilesBackend.createFile(v)) { note("Could not create " + v); return; }
+            note("Created " + v);
         } else if (nameDialog.mode === "newfolder") {
             if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
             if (!FilesBackend.createFolder(v)) { note("Could not create " + v); return; }
@@ -361,6 +370,9 @@ ApplicationWindow {
     Shortcut { sequence: "F2"; onActivated: if (window.selectedPath) window.askName("rename", window.selectedPath, window.selectedPath.split("/").pop()) }
     Shortcut { sequence: "Delete"; onActivated: window.trash(window.selectedPath) }
     Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", "New Folder") }
+    Shortcut { sequence: "Ctrl+C"; enabled: !!window.selectedPath; onActivated: window.copyItem(window.selectedPath, false) }
+    Shortcut { sequence: "Ctrl+X"; enabled: !!window.selectedPath; onActivated: window.copyItem(window.selectedPath, true) }
+    Shortcut { sequence: "Ctrl+V"; onActivated: if (window.isNative && !FilesBackend.busy) FilesBackend.paste() }
     Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPathDisplay) }
     Shortcut { sequence: "Ctrl+Shift+C"; onActivated: window.copyPath(window.selectedPath || window.currentPath) }
     Shortcut { sequence: "Ctrl+D"; onActivated: { window.addCurrentToBookmarks(); window.note("Bookmarked " + window.currentPathDisplay); } }
@@ -1494,6 +1506,12 @@ ApplicationWindow {
         FItem { text: "Quick Look"; glyph: "\u{f0208}"; keys: "Space"; enabled: !itemMenu.isDir; onTriggered: FilesBackend.triggerQuickLook(itemMenu.path) }
         FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; onTriggered: FilesBackend.openTerminal(itemMenu.isDir ? itemMenu.path : window.parentOf(itemMenu.path)) }
         FSeparator {}
+        FItem { text: "Copy"; glyph: "\u{f018f}"; keys: "Ctrl+C"; onTriggered: window.copyItem(itemMenu.path, false) }
+        FItem { text: "Cut"; glyph: "\u{f0190}"; keys: "Ctrl+X"; onTriggered: window.copyItem(itemMenu.path, true) }
+        FItem { text: "Paste Into Folder"; glyph: "\u{f0192}"
+                enabled: itemMenu.isDir && window.isNative && FilesBackend.clipboardHasFiles() && !FilesBackend.busy
+                onTriggered: { window.navigateTo(itemMenu.path); FilesBackend.paste(); } }
+        FSeparator {}
         FItem { text: "Copy Path"; glyph: "\u{f018f}"; keys: "Ctrl+Shift+C"; onTriggered: window.copyPath(itemMenu.path) }
         FItem { text: "Copy Name"; glyph: "\u{f0a0a}"; onTriggered: { FilesBackend.copyText(itemMenu.name); window.note("Copied " + itemMenu.name); } }
         FItem { text: "Rename…"; glyph: "\u{f03eb}"; keys: "F2"; onTriggered: window.askName("rename", itemMenu.path, itemMenu.name) }
@@ -1518,7 +1536,12 @@ ApplicationWindow {
     // On empty space: the folder itself, and how it is shown.
     FMenu {
         id: bgMenu
+        FItem { text: "Paste"; glyph: "\u{f0192}"; keys: "Ctrl+V"
+                enabled: window.isNative && FilesBackend.clipboardHasFiles() && !FilesBackend.busy
+                onTriggered: FilesBackend.paste() }
+        FSeparator {}
         FItem { text: "New Folder…"; glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; onTriggered: window.askName("newfolder", "", "New Folder") }
+        FItem { text: "New File…"; glyph: "\u{f0224}"; onTriggered: window.askName("newfile", "", "New File.txt") }
         FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; onTriggered: window.openTerminalHere() }
         FItem { text: "Go to Folder…"; glyph: "\u{f0770}"; keys: "Ctrl+L"; onTriggered: window.askName("goto", "", window.currentPathDisplay) }
         FItem { text: "Copy Folder Path"; glyph: "\u{f018f}"; onTriggered: window.copyPath(window.currentPath) }
@@ -1540,6 +1563,14 @@ ApplicationWindow {
         id: nameDialog
         property string mode: ""      // rename | newfolder | goto
         property string target: ""
+        // Focus and selection once the popup is up. Done right after open()
+        // they were lost: opening moves focus into the popup, a TextInput
+        // drops its selection when it loses focus, and the name typed into
+        // Rename was appended to the old one ("Documentsrenamed.txt").
+        onOpened: {
+            nameField.forceActiveFocus();
+            nameField.selectBase();
+        }
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: Design.s(380)
@@ -1560,6 +1591,7 @@ ApplicationWindow {
             Text {
                 text: nameDialog.mode === "rename" ? "Rename"
                     : nameDialog.mode === "newfolder" ? "New folder in " + window.currentPathDisplay
+                    : nameDialog.mode === "newfile" ? "New file in " + window.currentPathDisplay
                     : "Go to folder"
                 font.family: Design.font.sans
                 font.pixelSize: Design.s(12)
@@ -1593,7 +1625,7 @@ ApplicationWindow {
                     // Rename selects the name without its extension, as
                     // everywhere else, so typing replaces "photo", not ".jpg".
                     function selectBase() {
-                        const dot = nameDialog.mode === "rename" ? text.lastIndexOf(".") : -1;
+                        const dot = (nameDialog.mode === "rename" || nameDialog.mode === "newfile") ? text.lastIndexOf(".") : -1;
                         if (dot > 0) select(0, dot); else selectAll();
                     }
                 }
@@ -1607,7 +1639,8 @@ ApplicationWindow {
                 // dark text on this dark card, and "Cancel" was invisible.
                 DialogBtn { label: "Cancel"; onClicked: nameDialog.close() }
                 DialogBtn {
-                    label: nameDialog.mode === "rename" ? "Rename" : nameDialog.mode === "newfolder" ? "Create" : "Go"
+                    label: nameDialog.mode === "rename" ? "Rename"
+                           : (nameDialog.mode === "newfolder" || nameDialog.mode === "newfile") ? "Create" : "Go"
                     primary: true
                     onClicked: window.submitName(nameField.text)
                 }

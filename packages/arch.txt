@@ -44,7 +44,7 @@ papirus-icon-theme
 # Tools the shell and daemon call out to
 imagemagick tesseract tesseract-data-eng zbar qrencode
 power-profiles-daemon pamixer poppler gocryptfs easyeffects
-xdg-utils wlsunset snapper
+xdg-utils file glib2 wlsunset snapper
 
 # Storage & archives (libarchive powers extraction in b1air-files)
 udisks2 gvfs ntfs-3g libarchive

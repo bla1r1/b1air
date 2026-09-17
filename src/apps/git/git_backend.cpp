@@ -1,4 +1,5 @@
 #include "git_backend.hpp"
+#include <algorithm>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -1277,10 +1278,20 @@ QString gitError(const QString& err, const QString& out, const QString& fallback
 void GitBackend::commit(const QString& message) {
     if (message.trimmed().isEmpty()) return;
     const QString branch = m_branchName;
+    // Nothing ticked means everything, as in GitHub Desktop, whose layout
+    // this copies. It used to run a bare `git commit`, which with nothing
+    // staged fails with git's "On branch master … nothing added to commit".
+    const bool anyStaged = std::any_of(m_changedFiles.cbegin(), m_changedFiles.cend(),
+        [](const QVariant& v) { return v.toMap().value("isStaged").toBool(); });
+    if (!anyStaged) runGit({"add", "-A"});
     runTask("commit", "Committing…", {"commit", "-m", message},
             [this, branch](bool ok, const QString& out, const QString& err) {
-        if (ok) emit notice("Committed to " + branch);
-        else emit commandFailed(gitError(err, out, "Commit failed"));
+        if (ok) {
+            emit committed();
+            emit notice("Committed to " + branch);
+        } else {
+            emit commandFailed(gitError(err, out, "Commit failed"));
+        }
     });
 }
 

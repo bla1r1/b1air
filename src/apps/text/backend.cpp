@@ -1,6 +1,9 @@
 #include "backend.hpp"
 
 #include <QRegularExpression>
+#include <QSaveFile>
+#include <QUrl>
+#include <QStandardPaths>
 
 namespace b1air {
 
@@ -28,13 +31,23 @@ void TextBackend::setIsModified(bool mod) {
 }
 
 bool TextBackend::openFile(const QString& path) {
-    QString cleanPath = path;
-    if (cleanPath.startsWith("file://")) {
-        cleanPath = cleanPath.mid(7);
-    }
+    // A file:// URI (what xdg-open passes for %U) is percent-encoded:
+    // cutting the scheme off left "%20" where the spaces were.
+    QString cleanPath = path.startsWith("file://") ? QUrl(path).toLocalFile() : path;
 
     QFile file(cleanPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        // A path that does not exist yet is a new file to be written there,
+        // the way `b1air-text notes.txt` works in any editor.
+        if (!QFileInfo::exists(cleanPath)) {
+            newFile();
+            m_filePath = QFileInfo(cleanPath).absoluteFilePath();
+            m_fileName = QFileInfo(cleanPath).fileName();
+            detectFileType();
+            emit fileChanged();
+            return true;
+        }
+        setError("Could not open " + cleanPath + ": " + file.errorString());
         return false;
     }
 
@@ -47,6 +60,7 @@ bool TextBackend::openFile(const QString& path) {
 
     detectFileType();
     updateStats();
+    setError(QString());
 
     emit fileChanged();
     emit contentChanged();
@@ -56,21 +70,36 @@ bool TextBackend::openFile(const QString& path) {
 
 bool TextBackend::saveFile(const QString& path) {
     QString targetPath = path.isEmpty() ? m_filePath : path;
-    if (targetPath.startsWith("file://")) {
-        targetPath = targetPath.mid(7);
-    }
+    if (targetPath.startsWith("file://")) targetPath = QUrl(targetPath).toLocalFile();
     if (targetPath.isEmpty()) {
+        setError("This file has no name yet — choose where to save it.");
+        emit saved(false);
         return false;
     }
+    if (targetPath.startsWith("~/")) targetPath = QDir::homePath() + targetPath.mid(1);
 
-    QFile file(targetPath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+    // QSaveFile writes beside the target and renames over it on commit, so a
+    // full disk or a crash mid-write leaves the old file intact instead of a
+    // truncated one.
+    QDir().mkpath(QFileInfo(targetPath).absolutePath());
+    QSaveFile file(targetPath);
+    // A writable file in a directory we cannot create files in (some of
+    // /etc, a shared folder) can still be written in place.
+    file.setDirectWriteFallback(true);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        setError("Could not save " + targetPath + ": " + file.errorString());
+        emit saved(false);
         return false;
     }
-
-    QTextStream out(&file);
-    out << m_content;
-    file.close();
+    {
+        QTextStream out(&file);
+        out << m_content;
+    }
+    if (!file.commit()) {
+        setError("Could not save " + targetPath + ": " + file.errorString());
+        emit saved(false);
+        return false;
+    }
 
     m_filePath = targetPath;
     QFileInfo fi(targetPath);
@@ -78,9 +107,25 @@ bool TextBackend::saveFile(const QString& path) {
     m_isModified = false;
 
     detectFileType();
+    setError(QString());
     emit fileChanged();
     emit modifiedChanged();
+    emit saved(true);
     return true;
+}
+
+QString TextBackend::suggestedPath() const {
+    if (!m_filePath.isEmpty()) return m_filePath;
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (dir.isEmpty() || !QFileInfo(dir).isDir()) dir = QDir::homePath();
+    return dir + "/Untitled.txt";
+}
+
+void TextBackend::setError(const QString& error) {
+    if (m_lastError != error) {
+        m_lastError = error;
+        emit lastErrorChanged();
+    }
 }
 
 void TextBackend::newFile() {

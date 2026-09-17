@@ -51,7 +51,7 @@ noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts liber
 # Tools the shell and daemon call out to
 ImageMagick tesseract-ocr tesseract-ocr-traineddata-english zbar qrencode
 ?power-profiles-daemon pamixer poppler-tools ?gocryptfs ?easyeffects
-xdg-utils ?wlsunset ?snapper
+xdg-utils file glib2-tools ?wlsunset ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g bsdtar

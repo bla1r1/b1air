@@ -48,13 +48,16 @@ public:
 
     Q_INVOKABLE void loadNotes();
     Q_INVOKABLE void selectNote(const QString& id);
-    Q_INVOKABLE void createNote(const QString& title = "Untitled Note");
+    Q_INVOKABLE void createNote(const QString& title = "Untitled");
     Q_INVOKABLE void saveCurrentNote(const QString& title, const QString& content, const QString& tags);
     Q_INVOKABLE void deleteNote(const QString& id);
     Q_INVOKABLE void setObsidianVault(const QString& path);
     Q_INVOKABLE void setNotionCredentials(const QString& token, const QString& dbId);
     Q_INVOKABLE void syncWithNotion();
     Q_INVOKABLE void syncWithObsidian();
+    // Ask b1air-files for a folder and use it as the Obsidian vault. The only
+    // way to set one was editing config.json by hand.
+    Q_INVOKABLE void chooseObsidianVault();
     Q_INVOKABLE QString renderMarkdownToHtml(const QString& markdown,
                                             const QVariantMap& palette = {});
 
@@ -70,6 +73,9 @@ private:
     void scanObsidianVault();
     void saveConfig();
     void loadConfig();
+    static QStringList tagsIn(const QString& content);
+    static QString safeFileTitle(const QString& title);
+    static QString freeNotePath(const QString& dir, const QString& title, const QString& except = QString());
 
     QList<NoteItem> m_notes;
     QString m_currentId;

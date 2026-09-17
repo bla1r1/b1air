@@ -7,6 +7,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QDir>
+#include <QRegularExpression>
 #include <QFile>
 #include <iostream>
 #include "qml_search.hpp"
@@ -47,11 +48,20 @@ int main(int argc, char* argv[]) {
     QString initialDir = "";
 
     for (int i = 1; i < argc; ++i) {
-        QString arg = QString::fromUtf8(argv[i]);
+        const QString raw = QString::fromUtf8(argv[i]);
+        const QString arg = raw == "-e" ? raw : b1air::app::path_arg(raw);
         if (arg == "-e" && i + 1 < argc) {
             QStringList cmdParts;
+            // Each argument quoted for the shell that runs it: joined bare,
+            // `-e sh -c "echo a; read"` reached the shell as
+            // `sh -c echo a; read`. Single quotes read the same in sh, bash,
+            // zsh and fish for everything but a backslash.
+            static const QRegularExpression plain(QStringLiteral("^[A-Za-z0-9_@%+=:,./-]+$"));
             for (int j = i + 1; j < argc; ++j) {
-                cmdParts << QString::fromUtf8(argv[j]);
+                QString part = QString::fromUtf8(argv[j]);
+                if (!plain.match(part).hasMatch())
+                    part = "'" + part.replace("'", "'\"'\"'") + "'";
+                cmdParts << part;
             }
             initialCommand = cmdParts.join(" ");
             break;

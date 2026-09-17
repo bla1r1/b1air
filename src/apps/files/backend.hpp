@@ -34,6 +34,8 @@ class FileManagerBackend : public QObject {
     // manager — so it is used, rather than each app raising Qt's own dialog,
     // which looks and behaves like nothing else here.
     Q_PROPERTY(bool pickMode READ pickMode CONSTANT)
+    // A paste is copying in the background.
+    Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 
 public:
     explicit FileManagerBackend(QObject* parent = nullptr);
@@ -75,6 +77,7 @@ public:
     QVariantList places() const;
     QString diskFreeSpace() const;
     QString diskTotalSpace() const;
+    bool busy() const { return m_busy; }
 
 public slots:
     void refresh();
@@ -106,6 +109,17 @@ public slots:
     // For "Copy path": QML has no clipboard of its own.
     void copyText(const QString& text) const;
 
+    // Copy, cut and paste of files, through the system clipboard in the
+    // formats other file managers use (text/uri-list, plus GNOME's
+    // x-special/gnome-copied-files for cut), so a copy here pastes in
+    // Nautilus or Dolphin and the other way round.
+    void copyFiles(const QStringList& paths, bool cut);
+    bool clipboardHasFiles() const;
+    // Into the current folder, on a worker thread; pasteFinished reports.
+    void paste();
+    // A new empty file in the current folder.
+    bool createFile(const QString& name);
+
 signals:
     void currentPathChanged();
     void historyChanged();
@@ -115,10 +129,14 @@ signals:
     void sortChanged();
     void diskInfoChanged();
     void errorOccurred(const QString& message);
+    void busyChanged();
+    void pasteFinished(bool ok, const QString& message);
 
 private:
     QString m_pickResultPath;   // non-empty only in --pick-folder mode
+    bool m_busy = false;
     QString formatSize(qint64 bytes) const;
+    void openWithDefaultApp(const QString& path);
     QString uniqueExtractDir(const QFileInfo& archive) const;
     bool extractWithLibarchive(const QString& archivePath, const QString& destDir, QString* error);
 

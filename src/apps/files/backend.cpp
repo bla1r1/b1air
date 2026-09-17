@@ -10,6 +10,10 @@
 #include <QJsonObject>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QMimeData>
+#include <QDirIterator>
+#include <QPointer>
+#include <thread>
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -259,8 +263,34 @@ void FileManagerBackend::openItem(const QString& path) {
         // next to itself instead of asking what app should open it.
         extractArchive(path);
     } else {
-        QProcess::startDetached("xdg-open", QStringList() << path);
+        openWithDefaultApp(path);
     }
+}
+
+// The application mimeapps.list names for this file. xdg-open alone was not
+// enough: this desktop's XDG_CURRENT_DESKTOP is one it does not know, so it
+// falls back to a generic mode that needs `file` to tell a .txt from a .jpg —
+// and without it (a minimal install) Enter on any file did nothing at all.
+// gio reads the same mimeapps.list with its own type detection; xdg-open is
+// the fallback when gio is missing or fails.
+void FileManagerBackend::openWithDefaultApp(const QString& path) {
+    if (QStandardPaths::findExecutable("gio").isEmpty()) {
+        QProcess::startDetached("xdg-open", {path});
+        return;
+    }
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [this, proc, path](int code, QProcess::ExitStatus status) {
+        proc->deleteLater();
+        if (status == QProcess::NormalExit && code == 0) return;
+        if (!QProcess::startDetached("xdg-open", {path}))
+            emit errorOccurred("No application is set to open " + QFileInfo(path).fileName());
+    });
+    connect(proc, &QProcess::errorOccurred, this, [proc, path](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        proc->deleteLater();
+        QProcess::startDetached("xdg-open", {path});
+    });
+    proc->start("gio", {"open", path});
 }
 
 bool FileManagerBackend::isArchive(const QString& path) const {
@@ -499,6 +529,136 @@ void FileManagerBackend::savePrefs(const QVariantMap& prefs) const {
 
 void FileManagerBackend::copyText(const QString& text) const {
     QGuiApplication::clipboard()->setText(text);
+}
+
+static const char* kGnomeCopied = "x-special/gnome-copied-files";
+
+void FileManagerBackend::copyFiles(const QStringList& paths, bool cut) {
+    QList<QUrl> urls;
+    QByteArray gnome = cut ? "cut" : "copy";
+    for (const QString& p : paths) {
+        if (p.isEmpty()) continue;
+        const QUrl u = QUrl::fromLocalFile(p);
+        urls << u;
+        gnome += "\n" + u.toEncoded();
+    }
+    if (urls.isEmpty()) return;
+    auto* data = new QMimeData;
+    data->setUrls(urls);
+    data->setData(kGnomeCopied, gnome);
+    data->setText(paths.join('\n'));
+    QGuiApplication::clipboard()->setMimeData(data);
+}
+
+bool FileManagerBackend::clipboardHasFiles() const {
+    const QMimeData* d = QGuiApplication::clipboard()->mimeData();
+    if (!d || !d->hasUrls()) return false;
+    for (const QUrl& u : d->urls())
+        if (u.isLocalFile()) return true;
+    return false;
+}
+
+// "report.pdf" -> "report (copy).pdf", then "(copy 2)", ... until free.
+static QString freeName(const QDir& dir, const QString& name) {
+    if (!dir.exists(name)) return dir.absoluteFilePath(name);
+    const QFileInfo fi(name);
+    const QString suffix = fi.completeSuffix().isEmpty() || fi.fileName().startsWith('.')
+                           ? QString() : "." + fi.completeSuffix();
+    const QString base = suffix.isEmpty() ? name : name.left(name.size() - suffix.size());
+    for (int i = 1;; ++i) {
+        const QString candidate = base + (i == 1 ? " (copy)" : QStringLiteral(" (copy %1)").arg(i)) + suffix;
+        if (!dir.exists(candidate)) return dir.absoluteFilePath(candidate);
+    }
+}
+
+// Recursive copy that keeps permissions; symlinks are copied as links.
+static bool copyRecursive(const QString& src, const QString& dst, QString* error) {
+    const QFileInfo fi(src);
+    if (fi.isSymLink()) {
+        if (!QFile::link(fi.symLinkTarget(), dst)) { *error = "Could not copy link " + fi.fileName(); return false; }
+        return true;
+    }
+    if (fi.isDir()) {
+        if (!QDir().mkpath(dst)) { *error = "Could not create " + dst; return false; }
+        QFile::setPermissions(dst, fi.permissions());
+        const QDir d(src);
+        for (const QFileInfo& e : d.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System))
+            if (!copyRecursive(e.absoluteFilePath(), dst + "/" + e.fileName(), error)) return false;
+        return true;
+    }
+    if (!QFile::copy(src, dst)) { *error = "Could not copy " + fi.fileName(); return false; }
+    return true;
+}
+
+void FileManagerBackend::paste() {
+    if (m_busy) return;
+    const QMimeData* d = QGuiApplication::clipboard()->mimeData();
+    if (!d || !d->hasUrls()) return;
+    bool cut = false;
+    if (d->hasFormat(kGnomeCopied))
+        cut = d->data(kGnomeCopied).startsWith("cut");
+    QStringList sources;
+    for (const QUrl& u : d->urls())
+        if (u.isLocalFile()) sources << u.toLocalFile();
+    if (sources.isEmpty()) return;
+
+    const QString destDir = m_currentPath;
+    for (const QString& s : sources) {
+        const QString clean = QDir::cleanPath(s);
+        if (destDir == clean || destDir.startsWith(clean + "/")) {
+            emit pasteFinished(false, "Cannot paste a folder into itself");
+            return;
+        }
+    }
+
+    m_busy = true;
+    emit busyChanged();
+    QPointer<FileManagerBackend> self(this);
+    // A worker thread: copying a large folder on the GUI thread froze the
+    // window for as long as it took.
+    std::thread([self, sources, destDir, cut]() {
+        QString error;
+        int done = 0;
+        const QDir dest(destDir);
+        for (const QString& src : sources) {
+            const QFileInfo fi(src);
+            if (!fi.exists() && !fi.isSymLink()) { error = fi.fileName() + " no longer exists"; break; }
+            // Cut into the folder it already lives in is a no-op, not a copy.
+            if (cut && fi.absolutePath() == dest.absolutePath()) { ++done; continue; }
+            const QString target = freeName(dest, fi.fileName());
+            if (cut && QFile::rename(src, target)) { ++done; continue; }
+            if (!copyRecursive(src, target, &error)) break;
+            if (cut) {
+                const bool removed = fi.isDir() && !fi.isSymLink() ? QDir(src).removeRecursively() : QFile::remove(src);
+                if (!removed) { error = "Copied, but could not remove " + fi.fileName(); break; }
+            }
+            ++done;
+        }
+        const bool ok = error.isEmpty();
+        const QString msg = ok ? QStringLiteral("%1 %2 item%3").arg(cut ? "Moved" : "Pasted").arg(done).arg(done == 1 ? "" : "s")
+                               : error;
+        QMetaObject::invokeMethod(qApp, [self, ok, msg, cut]() {
+            if (!self) return;
+            self->m_busy = false;
+            emit self->busyChanged();
+            // A moved file is gone from where it was; the clipboard must not
+            // offer to move it a second time.
+            if (ok && cut) QGuiApplication::clipboard()->clear();
+            self->refresh();
+            emit self->pasteFinished(ok, msg);
+        }, Qt::QueuedConnection);
+    }).detach();
+}
+
+bool FileManagerBackend::createFile(const QString& name) {
+    if (name.isEmpty() || name.contains('/')) return false;
+    const QString path = QDir(m_currentPath).absoluteFilePath(name);
+    if (QFileInfo::exists(path)) return false;
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly)) return false;
+    f.close();
+    refresh();
+    return true;
 }
 
 static QString bookmarksPath() {

@@ -32,11 +32,46 @@ Window {
     property bool wordWrapEnabled: false
     property int currentLine: 1
     property int currentCol: 1
+    // Offset of the first character of every line, for the gutter.
+    property var lineStarts: [0]
+
+    function recomputeLineStarts() {
+        const t = editorArea.text;
+        const starts = [0];
+        let i = -1;
+        while ((i = t.indexOf("\n", i + 1)) !== -1) starts.push(i + 1);
+        window.lineStarts = starts;
+    }
 
     function newFileWithConfirmation() {
         window.closeAfterSave = false;
         if (TextBackend.isModified) unsavedDialog.open();
         else TextBackend.newFile();
+    }
+
+    // What to do once a save started by the unsaved-changes dialog lands:
+    // "quit", "new", or "" for a plain save. Only after it succeeds — the
+    // dialog's Save used to quit straight away, so a save that failed (an
+    // Untitled file has nowhere to go) threw the text away anyway.
+    property string afterSave: ""
+
+    function save() {
+        if (!TextBackend.filePath) {
+            saveAsDialog.open();
+            return;
+        }
+        TextBackend.saveFile();
+    }
+
+    Connections {
+        target: TextBackend
+        function onSaved(ok) {
+            if (!ok) { window.afterSave = ""; return; }
+            const next = window.afterSave;
+            window.afterSave = "";
+            if (next === "quit") Qt.quit();
+            else if (next === "new") TextBackend.newFile();
+        }
     }
 
     function calculateCursorPos() {
@@ -47,7 +82,8 @@ Window {
     }
 
     // ── Global Shortcuts ─────────────────────────────────────────────────────
-    Shortcut { sequence: "Ctrl+S"; onActivated: TextBackend.saveFile() }
+    Shortcut { sequence: "Ctrl+S"; onActivated: window.save() }
+    Shortcut { sequence: "Ctrl+Shift+S"; onActivated: saveAsDialog.open() }
     Shortcut { sequence: "Ctrl+N"; onActivated: window.newFileWithConfirmation() }
     Shortcut { sequence: "Escape"; onActivated: window.close() }
 
@@ -147,7 +183,7 @@ Window {
                         hoverTone: Design.teal
                         fill: TextBackend.isModified ? Design.tint(Design.accent, 0.25) : "transparent"
                         tone: TextBackend.isModified ? Design.accent : Design.textDim
-                        onClicked: TextBackend.saveFile()
+                        onClicked: window.save()
                     }
 
                     Rectangle {
@@ -198,23 +234,41 @@ Window {
                     ListView {
                         id: lineNumbersView
                         anchors.fill: parent
-                        anchors.topMargin: Design.s(12)
-                        anchors.bottomMargin: Design.s(12)
+                        anchors.topMargin: editorArea.topPadding
+                        anchors.bottomMargin: editorArea.bottomPadding
                         clip: true
                         interactive: false
                         contentY: editorFlickable.contentY
 
-                        model: TextBackend.lineCount
+                        // One number per logical line, each as tall as that
+                        // line is in the editor and placed where it is. They
+                        // had a fixed 20px row against the editor's ~16px
+                        // line, so the numbers drifted further from their
+                        // lines the further down the file one read.
+                        model: window.lineStarts.length
 
-                        delegate: Text {
+                        delegate: Item {
+                            required property int index
+                            // Re-evaluated when the layout changes: width
+                            // (wrapping) and contentHeight (any edit).
+                            readonly property real _layout: editorArea.contentHeight + editorArea.width
+                            readonly property rect _here: (_layout, editorArea.positionToRectangle(window.lineStarts[index] || 0))
+                            readonly property real _next: index + 1 < window.lineStarts.length
+                                ? (_layout, editorArea.positionToRectangle(window.lineStarts[index + 1]).y)
+                                : _here.y + _here.height
                             width: lineNumbersView.width - Design.s(14)
-                            height: Design.s(20)
-                            text: String(index + 1)
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(12)
-                            color: (index + 1 === window.currentLine) ? Design.accent : Design.textFaint
-                            horizontalAlignment: Text.AlignRight
-                            verticalAlignment: Text.AlignVCenter
+                            height: Math.max(1, _next - _here.y)
+
+                            Text {
+                                width: parent.width
+                                height: parent._here.height
+                                text: String(index + 1)
+                                font.family: Design.font.mono
+                                font.pixelSize: Design.s(12)
+                                color: (index + 1 === window.currentLine) ? Design.accent : Design.textFaint
+                                horizontalAlignment: Text.AlignRight
+                                verticalAlignment: Text.AlignVCenter
+                            }
                         }
                     }
 
@@ -249,6 +303,8 @@ Window {
                         wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
                         padding: Design.s(12)
                         selectByMouse: true
+                        // Typing works the moment the window appears.
+                        Component.onCompleted: forceActiveFocus()
 
                         text: TextBackend.fileContent
 
@@ -256,6 +312,7 @@ Window {
                             if (text !== TextBackend.fileContent) {
                                 TextBackend.setFileContent(text);
                             }
+                            window.recomputeLineStarts();
                             window.calculateCursorPos();
                         }
 
@@ -270,6 +327,22 @@ Window {
                                     editorArea.text = TextBackend.fileContent;
                                 }
                             }
+                        }
+                    }
+
+                    // The TextArea is only as tall as its text, so a click in
+                    // the empty space below the last line landed on nothing
+                    // and the editor never took the caret. This takes it there
+                    // and puts the caret at the end.
+                    MouseArea {
+                        x: 0
+                        y: editorArea.height
+                        width: editorFlickable.width
+                        height: Math.max(0, editorFlickable.height - editorArea.height)
+                        cursorShape: Qt.IBeamCursor
+                        onClicked: {
+                            editorArea.forceActiveFocus();
+                            editorArea.cursorPosition = editorArea.length;
                         }
                     }
 
@@ -349,7 +422,18 @@ Window {
                     color: Design.textDim
                 }
 
-                Item { Layout.fillWidth: true }
+                // A save or open that failed says so, where the eye already is.
+                Text {
+                    Layout.fillWidth: true
+                    text: TextBackend.lastError
+                    visible: text.length > 0
+                    elide: Text.ElideRight
+                    font.family: Design.font.sans
+                    font.pixelSize: Design.s(10)
+                    color: Design.danger
+                }
+
+                Item { Layout.fillWidth: true; visible: TextBackend.lastError.length === 0 }
 
                 Rectangle {
                     implicitWidth: ftText.implicitWidth + Design.s(12)
@@ -379,36 +463,47 @@ Window {
     }
 }
 
-    Dialog {
+    AppDialog {
         id: unsavedDialog
         title: "Unsaved changes"
-        modal: true
-        anchors.centerIn: parent
+        message: "Save changes before starting a new file or closing the editor?"
         standardButtons: Dialog.Cancel | Dialog.Discard | Dialog.Save
         onAccepted: {
-            TextBackend.saveFile();
-            if (window.closeAfterSave) Qt.quit();
-            else TextBackend.newFile();
+            window.afterSave = window.closeAfterSave ? "quit" : "new";
+            window.save();
         }
         onDiscarded: {
+            unsavedDialog.close();
             if (window.closeAfterSave) Qt.quit();
             else TextBackend.newFile();
-        }
-        // Same shape as b1air-notes' delete dialog: a wrapping label and the
-        // Dialog would each size from the other, and Text.implicitWidth is
-        // read-only, so the explicit size lives on a wrapping Item.
-        contentItem: Item {
-            implicitWidth: Design.s(340)
-            implicitHeight: saveMsg.implicitHeight + Design.s(36)
-
-            Label {
-                id: saveMsg
-                anchors.fill: parent
-                anchors.margins: Design.s(18)
-                text: "Save changes before starting a new file or closing the editor?"
-                wrapMode: Text.WordWrap
-            }
         }
     }
 
+    AppDialog {
+        id: saveAsDialog
+        title: "Save as"
+        standardButtons: Dialog.Cancel | Dialog.Save
+        onOpened: {
+            savePathField.text = TextBackend.suggestedPath;
+            savePathField.focusInput();
+        }
+        onAccepted: TextBackend.saveFile(savePathField.text.trim())
+        onRejected: window.afterSave = ""
+
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(420)
+            spacing: Design.s(Design.space.sm)
+
+            Label {
+                text: "Path"
+                role: "caption"
+                dim: true
+            }
+            Field {
+                id: savePathField
+                Layout.fillWidth: true
+                onAccepted: saveAsDialog.accept()
+            }
+        }
+    }
 }

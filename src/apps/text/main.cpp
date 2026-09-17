@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
 
     b1air::TextBackend backend;
     if (argc > 1) {
-        QString fileArg = QString::fromUtf8(argv[1]);
+        QString fileArg = b1air::app::path_arg(QString::fromUtf8(argv[1]));
         backend.openFile(fileArg);
     }
     engine.rootContext()->setContextProperty("TextBackend", &backend);

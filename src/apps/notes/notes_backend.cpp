@@ -5,7 +5,12 @@
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QUuid>
+#include <QSaveFile>
+#include <QProcess>
+#include <QCoreApplication>
+#include <QTemporaryFile>
 #include <iostream>
+#include <algorithm>
 
 NotesBackend::NotesBackend(QObject* parent) : QObject(parent) {
     ensureStorageDir();
@@ -97,6 +102,19 @@ void NotesBackend::loadNotes() {
     QDir localDir(m_storageDir + "/notes");
     if (!localDir.exists()) localDir.mkpath(".");
 
+    // Notes from before titles were file names are "note_<seconds>.md"; give
+    // each the name of its first heading, which is what its title was.
+    static const QRegularExpression legacyName("^note_\\d+(_\\d+)?$");
+    for (const QFileInfo& fi : localDir.entryInfoList({"*.md"}, QDir::Files)) {
+        if (!legacyName.match(fi.completeBaseName()).hasMatch()) continue;
+        QFile f(fi.absoluteFilePath());
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+        const QString first = QString::fromUtf8(f.readLine()).trimmed();
+        f.close();
+        if (!first.startsWith("# ")) continue;
+        QFile::rename(fi.absoluteFilePath(), freeNotePath(localDir.absolutePath(), first.mid(2)));
+    }
+
     QFileInfoList localFiles = localDir.entryInfoList(QStringList() << "*.md", QDir::Files, QDir::Time);
     for (const auto& fi : localFiles) {
         QFile file(fi.absoluteFilePath());
@@ -105,19 +123,14 @@ void NotesBackend::loadNotes() {
             QString content = in.readAll();
             
             NoteItem note;
-            note.id = fi.baseName();
-            note.title = fi.baseName();
+            note.id = "local_" + fi.completeBaseName();
+            note.title = fi.completeBaseName();
             note.content = content;
             note.modified = fi.lastModified().toString("MMM d, hh:mm");
             note.source = "local";
             note.filePath = fi.absoluteFilePath();
             
-            // Extract tags e.g. #ideas #todo
-            QRegularExpression tagRe("#([a-zA-Z0-9_-]+)");
-            auto matchIt = tagRe.globalMatch(content);
-            while (matchIt.hasNext()) {
-                note.tags.append(matchIt.next().captured(0));
-            }
+            note.tags = tagsIn(content);
 
             m_notes.append(note);
         }
@@ -131,7 +144,9 @@ void NotesBackend::loadNotes() {
     // If empty, create a welcome note
     if (m_notes.isEmpty()) {
         createNote("Getting Started with b1air-notes");
-    } else if (m_currentId.isEmpty()) {
+    } else if (std::none_of(m_notes.cbegin(), m_notes.cend(),
+                            [this](const NoteItem& n) { return n.id == m_currentId; })) {
+        // Nothing selected, or the selected note was renamed on disk since.
         m_currentId = m_notes[0].id;
     }
 
@@ -149,18 +164,14 @@ void NotesBackend::scanObsidianVault() {
             QString content = in.readAll();
 
             NoteItem note;
-            note.id = "obs_" + fi.baseName();
-            note.title = fi.baseName();
+            note.id = "obs_" + fi.completeBaseName();
+            note.title = fi.completeBaseName();
             note.content = content;
             note.modified = fi.lastModified().toString("MMM d, hh:mm");
             note.source = "obsidian";
             note.filePath = fi.absoluteFilePath();
 
-            QRegularExpression tagRe("#([a-zA-Z0-9_-]+)");
-            auto matchIt = tagRe.globalMatch(content);
-            while (matchIt.hasNext()) {
-                note.tags.append(matchIt.next().captured(0));
-            }
+            note.tags = tagsIn(content);
 
             m_notes.append(note);
         }
@@ -173,19 +184,31 @@ void NotesBackend::selectNote(const QString& id) {
 }
 
 void NotesBackend::createNote(const QString& title) {
+    // The first note anyone sees explains itself; every note after that
+    // starts empty. Each used to be the same "Task 1 / Task 2 / #ideas"
+    // template, which then had to be deleted line by line.
+    const bool welcome = m_notes.isEmpty();
     NoteItem note;
-    note.id = "note_" + QString::number(QDateTime::currentSecsSinceEpoch());
-    note.title = title.isEmpty() ? "Untitled Note" : title;
-    note.content = "# " + note.title + "\n\nStart writing notes, ideas, or todo lists here...\n\n- [ ] Task 1\n- [ ] Task 2\n\n#ideas #b1air";
-    note.tags << "#ideas" << "#b1air";
+    // Milliseconds plus a counter: two notes made within one second had the
+    // same id, and the second one's file replaced the first.
+    static int counter = 0;
+    note.id = "note_" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QString::number(++counter);
+    note.title = title.trimmed().isEmpty() ? "Untitled" : title.trimmed();
+    note.content = welcome
+        ? "# " + note.title + "\n\nStart writing notes, ideas, or todo lists here...\n\n- [ ] Task 1\n- [ ] Task 2\n\n#ideas #b1air"
+        : QString();
+    note.tags = tagsIn(note.content);
     note.modified = QDateTime::currentDateTime().toString("MMM d, hh:mm");
     note.source = "local";
-    note.filePath = m_storageDir + "/notes/" + note.id + ".md";
+    // The file is named after the title, the way Obsidian names its notes:
+    // the title is read back from the file name, so it survives a restart.
+    note.filePath = freeNotePath(m_storageDir + "/notes", note.title);
+    note.title = QFileInfo(note.filePath).completeBaseName();
 
-    QFile file(note.filePath);
+    QSaveFile file(note.filePath);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << note.content;
+        file.write(note.content.toUtf8());
+        file.commit();
     }
 
     m_notes.prepend(note);
@@ -195,37 +218,82 @@ void NotesBackend::createNote(const QString& title) {
     emit currentNoteChanged();
 }
 
-void NotesBackend::saveCurrentNote(const QString& title, const QString& content, const QString& tags) {
-    for (auto& n : m_notes) {
-        if (n.id == m_currentId) {
-            n.title = title;
-            n.content = content;
-            n.tags = tags.split(",", Qt::SkipEmptyParts);
-            for (auto& t : n.tags) t = t.trimmed();
-            n.modified = QDateTime::currentDateTime().toString("MMM d, hh:mm");
+QStringList NotesBackend::tagsIn(const QString& content) {
+    QStringList tags;
+    static const QRegularExpression tagRe("(?:^|\\s)(#[\\p{L}\\p{N}_/-]+)");
+    auto it = tagRe.globalMatch(content);
+    while (it.hasNext()) {
+        const QString t = it.next().captured(1);
+        if (!tags.contains(t)) tags.append(t);
+    }
+    return tags;
+}
 
-            // Write to file
-            if (!n.filePath.isEmpty()) {
-                QFile file(n.filePath);
-                if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                    QTextStream out(&file);
-                    out << content;
+// A title as a file name: no path separators or characters other systems
+// refuse, not hidden, not empty.
+QString NotesBackend::safeFileTitle(const QString& title) {
+    QString t = title.trimmed();
+    static const QRegularExpression bad(R"([/\\:*?"<>|\x00-\x1f])");
+    t.replace(bad, "-");
+    while (t.startsWith('.')) t.remove(0, 1);
+    if (t.size() > 120) t.truncate(120);
+    return t.isEmpty() ? QStringLiteral("Untitled") : t;
+}
+
+QString NotesBackend::freeNotePath(const QString& dir, const QString& title, const QString& except) {
+    const QString base = safeFileTitle(title);
+    QString path = dir + "/" + base + ".md";
+    for (int i = 2; QFileInfo::exists(path) && path != except; ++i)
+        path = dir + "/" + base + " " + QString::number(i) + ".md";
+    return path;
+}
+
+void NotesBackend::saveCurrentNote(const QString& title, const QString& content, const QString& tags) {
+    Q_UNUSED(tags)  // tags are the #hashtags in the text; see tagsIn()
+    for (auto& n : m_notes) {
+        if (n.id != m_currentId) continue;
+        const bool changed = n.content != content || n.title != title.trimmed();
+        if (!changed) return;   // re-saving identical text rewrote the file and reset the editor
+        n.content = content;
+        n.tags = tagsIn(content);
+        n.modified = QDateTime::currentDateTime().toString("MMM d, hh:mm");
+
+        if (!n.filePath.isEmpty()) {
+            // A new title renames the file; that is where the title lives.
+            // It was only kept in memory, so every renamed note came back
+            // after a restart as "note_1790853781".
+            const QString wanted = safeFileTitle(title);
+            if (wanted != QFileInfo(n.filePath).completeBaseName()) {
+                const QString dir = QFileInfo(n.filePath).absolutePath();
+                const QString target = freeNotePath(dir, wanted, n.filePath);
+                if (QFile::rename(n.filePath, target)) n.filePath = target;
+            }
+            n.title = QFileInfo(n.filePath).completeBaseName();
+
+            QSaveFile file(n.filePath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                file.write(content.toUtf8());
+                if (!file.commit()) {
+                    m_syncStatus = "Could not save " + n.filePath;
+                    emit syncStatusChanged();
                 }
             }
-            break;
         }
+        break;
     }
-
+    // The list (titles, snippets) changes; the editor's own text does not
+    // need re-binding, so currentNoteChanged is not emitted for an edit.
     emit notesChanged();
-    emit currentNoteChanged();
 }
 
 void NotesBackend::deleteNote(const QString& id) {
     for (int i = 0; i < m_notes.size(); ++i) {
         if (m_notes[i].id == id) {
-            if (!m_notes[i].filePath.isEmpty()) {
-                QFile::remove(m_notes[i].filePath);
-            }
+            // To the trash, like the file manager's delete, so a note removed
+            // by mistake — including one in an Obsidian vault — comes back.
+            const QString path = m_notes[i].filePath;
+            if (!path.isEmpty() && QProcess::execute("gio", {"trash", path}) != 0)
+                QFile::remove(path);
             m_notes.removeAt(i);
             break;
         }
@@ -259,9 +327,7 @@ void NotesBackend::syncWithObsidian() {
     // Without a vault this used to reload the local notes and report
     // "Obsidian Synced" — a success message for something it had not done.
     if (m_obsidianVault.isEmpty()) {
-        m_syncStatus = "No Obsidian vault. Set obsidianVault in "
-                       + m_storageDir + "/config.json";
-        emit syncStatusChanged();
+        chooseObsidianVault();
         return;
     }
 
@@ -270,6 +336,33 @@ void NotesBackend::syncWithObsidian() {
     loadNotes();
     m_syncStatus = "Synced with " + m_obsidianVault;
     emit syncStatusChanged();
+}
+
+void NotesBackend::chooseObsidianVault() {
+    const QString out = QDir::tempPath() + "/b1air-notes-vault-" + QString::number(QCoreApplication::applicationPid());
+    QFile::remove(out);
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [this, proc, out](int, QProcess::ExitStatus) {
+        QFile f(out);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QString path = QString::fromUtf8(f.readAll()).trimmed();
+            if (!path.isEmpty()) {
+                setObsidianVault(path);
+                m_syncStatus = "Obsidian vault: " + path;
+                emit syncStatusChanged();
+            }
+        }
+        QFile::remove(out);
+        proc->deleteLater();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        m_syncStatus = "Could not start b1air-files to choose a folder";
+        emit syncStatusChanged();
+        proc->deleteLater();
+    });
+    const QString start = m_obsidianVault.isEmpty() ? QDir::homePath() + "/Documents" : m_obsidianVault;
+    proc->start("b1air-files", {"--pick-folder", out, QDir(start).exists() ? start : QDir::homePath()});
 }
 
 void NotesBackend::syncWithNotion() {

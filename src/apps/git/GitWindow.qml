@@ -597,10 +597,11 @@ ApplicationWindow {
         if (!window.hasRepo || window.busy || sumInput.text.trim() === "") return;
         let msg = sumInput.text.trim();
         if (descInput.text.trim()) msg += "\n\n" + descInput.text.trim();
+        // The fields are cleared when the commit has gone in (onCommitted
+        // below), not here: a commit that failed took the message with it.
         GitBackend.commit(msg);
-        sumInput.text = "";
-        descInput.text = "";
     }
+    readonly property int stagedCount: GitBackend.changedFiles.filter(f => f.isStaged).length
     readonly property bool syncBusy: ["push", "publish", "pull", "fetch"].indexOf(GitBackend.busy) >= 0
 
     readonly property var githubAccount: GitBackend.accounts.find(a => a.provider === "github") || null
@@ -1161,6 +1162,11 @@ ApplicationWindow {
 
                                             MouseArea {
                                                 id: fArea
+                                                // Under the row, not over it: declared
+                                                // after the checkbox it sat on top of it,
+                                                // and ticking a file selected it instead
+                                                // of staging it.
+                                                z: -1
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
@@ -1191,6 +1197,10 @@ ApplicationWindow {
 
                                         Connections {
                                             target: GitBackend
+                                            function onCommitted() {
+                                                sumInput.text = "";
+                                                descInput.text = "";
+                                            }
                                             function onRestoreMessage(summary, description) {
                                                 sumInput.text = summary;
                                                 descInput.text = description;
@@ -1397,8 +1407,11 @@ ApplicationWindow {
                                                 Text {
                                                     anchors.centerIn: parent
                                                     visible: !parent.committing
-                                                    text: window.hasRepo ? "Commit to " + GitBackend.branchName
-                                                                         : "No repository open"
+                                                    // Nothing ticked commits everything.
+                                                    text: !window.hasRepo ? "No repository open"
+                                                          : window.stagedCount === 0 && GitBackend.changedFiles.length > 0
+                                                            ? "Commit all to " + GitBackend.branchName
+                                                            : "Commit to " + GitBackend.branchName
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(11)
                                                     font.bold: true

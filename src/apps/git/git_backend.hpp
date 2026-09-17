@@ -297,6 +297,8 @@ signals:
     void busyChanged();
     /** A finished operation, for the window to show briefly. */
     void notice(const QString& message);
+    /** A commit went in; the window clears its message fields on this. */
+    void committed();
     /** After an undo, for the commit fields. */
     void restoreMessage(const QString& summary, const QString& description);
     void syncChanged();

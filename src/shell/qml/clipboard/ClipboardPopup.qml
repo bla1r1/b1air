@@ -252,28 +252,13 @@ PopupShell {
         }
     }
 
-    Dialog {
+    AppDialog {
         id: clearConfirm
         title: "Clear clipboard history?"
-        modal: true
+        message: "All unpinned clipboard entries will be removed."
+        acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: Clipboard.clearHistory()
-        // Third instance of the same shape as b1air-notes' delete dialog and
-        // b1air-text's unsaved-changes one: a wrapping label as contentItem
-        // sizes from the width the Dialog gives it while the Dialog sizes from
-        // the label. Text.implicitWidth is read-only, so the explicit size goes
-        // on a wrapping Item.
-        contentItem: Item {
-            implicitWidth: Design.s(320)
-            implicitHeight: clearMsg.implicitHeight + Design.s(36)
-
-            Label {
-                id: clearMsg
-                anchors.fill: parent
-                anchors.margins: Design.s(18)
-                text: "All unpinned clipboard entries will be removed."
-                wrapMode: Text.WordWrap
-            }
-        }
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Clear"
     }
 }

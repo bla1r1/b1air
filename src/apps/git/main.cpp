@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     // repository, otherwise the last one open. This line used to open the
     // working directory unconditionally, which from the launcher is $HOME —
     // so the last repository was never restored.
-    gitBackend.openRepo(argc > 1 ? QString::fromUtf8(argv[1]) : gitBackend.startupRepo());
+    gitBackend.openRepo(argc > 1 ? b1air::app::path_arg(QString::fromUtf8(argv[1])) : gitBackend.startupRepo());
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
