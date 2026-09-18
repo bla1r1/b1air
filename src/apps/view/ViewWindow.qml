@@ -71,6 +71,22 @@ ApplicationWindow {
             Keys.onRightPressed: ViewBackend.next()
             Keys.onEscapePressed: window.close()
             Keys.onSpacePressed: ViewBackend.next()
+            // Zoom and rotate had buttons and the wheel, and no keys.
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) {
+                    window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25);
+                } else if (event.key === Qt.Key_Minus) {
+                    window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25);
+                } else if (event.key === Qt.Key_0) {
+                    window.zoomFactor = 1.0;
+                    window.rotationAngle = 0;
+                } else if (event.key === Qt.Key_R) {
+                    window.rotationAngle = (window.rotationAngle + 90) % 360;
+                } else {
+                    return;
+                }
+                event.accepted = true;
+            }
         }
 
         ColumnLayout {
@@ -183,7 +199,7 @@ ApplicationWindow {
                         Image {
                             id: mainImage
                             anchors.centerIn: parent
-                            source: ViewBackend.currentPath ? ("file://" + ViewBackend.currentPath) : ""
+                            source: Paths.fileUrl(ViewBackend.currentPath)
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
                             // Decoded at the size it is shown, not the size of
@@ -292,7 +308,7 @@ ApplicationWindow {
                         Image {
                             anchors.fill: parent
                             anchors.margins: Design.s(3)
-                            source: "file://" + modelData.path
+                            source: Paths.fileUrl(modelData.path)
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             sourceSize: Qt.size(60, 60)

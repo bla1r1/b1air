@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QHash>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QTimer>
@@ -48,6 +49,8 @@ private:
 
 class MonitorBackend : public QObject {
     Q_OBJECT
+    // Every process on the system, before the filter.
+    Q_PROPERTY(int taskCount READ taskCount NOTIFY tasksChanged)
 
     Q_PROPERTY(qreal cpuPercent READ cpuPercent NOTIFY cpuChanged)
     Q_PROPERTY(QString cpuModel READ cpuModel NOTIFY sysInfoChanged)
@@ -101,6 +104,7 @@ public:
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE bool killProcess(int pid, bool force = false);
+    int taskCount() const { return m_taskCount; }
     Q_INVOKABLE void setProcessFilter(const QString& query);
     Q_INVOKABLE void setProcessSort(const QString& sortBy);
 
@@ -113,6 +117,9 @@ signals:
     void uptimeChanged();
     void loadAvgChanged();
     void historyChanged();
+    void tasksChanged();
+    /** A kill that failed, in words (not permitted, already gone). */
+    void killFailed(const QString& message);
 
 private slots:
     void poll();
@@ -150,6 +157,12 @@ private:
 
     unsigned long long m_prevIdle = 0;
     unsigned long long m_prevTotal = 0;
+
+    // Per-process CPU time at the previous sample, for current usage.
+    QHash<int, unsigned long long> m_prevProcTicks;
+    qint64 m_prevProcSampleMs = 0;
+    QHash<uint, QString> m_userNames;
+    int m_taskCount = 0;
 };
 
 } // namespace b1air

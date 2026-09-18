@@ -181,10 +181,14 @@ PopupShell {
                         }
                     }
 
+                    // Hover only. It took the left button too, by default, and
+                    // lying over the card it swallowed every click on the open
+                    // and remove buttons.
                     MouseArea {
                         id: fileHover
                         anchors.fill: parent
                         hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
                     }
                 }
             }

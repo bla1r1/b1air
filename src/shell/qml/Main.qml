@@ -12,6 +12,15 @@ import "WindowRegistry.js" as Registry
 Scope {
     id: rootScope
 
+    // Quickshell puts a white "Config reloaded — run qs log …" box over the
+    // desktop after every reload, and every update reloads: it is a developer
+    // notice, not something a user can act on. A failed reload still shows
+    // its box, which is the one worth seeing.
+    Connections {
+        target: Quickshell
+        function onReloadCompleted() { Quickshell.inhibitReloadPopup(); }
+    }
+
     // Ui/Design cannot read Services/Settings itself — the standalone apps load
     // Ui without a Quickshell runtime — so the shell is what joins the two. The
     // accent picker in Appearance had no effect on anything before this.

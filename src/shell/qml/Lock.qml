@@ -210,7 +210,7 @@ ShellRoot {
                             if (parts.length > 0 && parts[0] !== "") screenRoot.currentUser = parts[0];
                             if (parts.length > 1 && parts[1].trim() !== "") {
                                 let path = parts[1].trim();
-                                screenRoot.faceIconPath = path.startsWith("file://") ? path : "file://" + path;
+                                screenRoot.faceIconPath = Paths.fileUrl(path);
                             }
                         }
                     }

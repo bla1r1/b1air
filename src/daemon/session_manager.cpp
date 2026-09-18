@@ -545,6 +545,11 @@ int SessionManager::run_session() {
     setenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1", 1);
     setenv("QT_AUTO_SCREEN_SCALE_FACTOR", "0", 1);
     setenv("MOZ_ENABLE_WAYLAND", "1", 1);
+    // Ui/Design reads ~/.config/b1air/theme.json with XMLHttpRequest, which
+    // Qt 6 refuses on file:// without this. Only b1air-session set it, so a
+    // session started any other way (sway from a TTY) drew the shell in the
+    // built-in palette whatever theme was picked.
+    setenv("QML_XHR_ALLOW_FILE_READ", "1", 1);
 
     // 2. DBus Activation Environment
     // Do not publish the whole login environment to every user service.  It may
@@ -555,7 +560,7 @@ int SessionManager::run_session() {
                 "USER", "LANG", "WAYLAND_DISPLAY", "SWAYSOCK",
                 "XDG_CURRENT_DESKTOP", "XDG_SESSION_DESKTOP", "XDG_SESSION_TYPE",
                 "QT_QPA_PLATFORM", "QT_QUICK_BACKEND", "QSG_RHI_BACKEND",
-                "QSG_RENDER_LOOP", "MOZ_ENABLE_WAYLAND", "GDK_BACKEND",
+                "QSG_RENDER_LOOP", "QML_XHR_ALLOW_FILE_READ", "MOZ_ENABLE_WAYLAND", "GDK_BACKEND",
                 "WLR_RENDERER", "WLR_RENDERER_ALLOW_SOFTWARE", "WLR_NO_HARDWARE_CURSORS"});
     mark("dbus-update-activation-environment done");
 

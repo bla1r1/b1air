@@ -20,6 +20,14 @@ int main(int argc, char* argv[]) {
     // Qt 6 blocks file:// reads for it unless this is set.
     qputenv("QML_XHR_ALLOW_FILE_READ", "1");
     qputenv("QSG_RENDER_LOOP", "basic");
+    // OpenGL only where there is a GPU to run it. Without a render node (a VM,
+    // a container, a driver that is not loaded) Mesa's EGL failed to start,
+    // and the window that came up was drawn at the wrong scale, half of it
+    // off the edge. The software renderer is what that machine would have
+    // ended up using anyway, minus the breakage. QT_QUICK_BACKEND overrides.
+    if (!qEnvironmentVariableIsSet("QT_QUICK_BACKEND")
+        && QDir("/dev/dri").entryList({"renderD*"}, QDir::System).isEmpty())
+        qputenv("QT_QUICK_BACKEND", "software");
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-camera");

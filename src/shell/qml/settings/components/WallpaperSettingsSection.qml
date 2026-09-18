@@ -133,7 +133,7 @@ ColumnLayout {
                     Image {
                         anchors.fill: parent
                         anchors.margins: wallCard.isSelected ? 2 : 1
-                        source: "file://" + wallCard.modelData.path
+                        source: Paths.fileUrl(wallCard.modelData.path)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true

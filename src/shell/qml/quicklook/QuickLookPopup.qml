@@ -183,7 +183,7 @@ PopupShell {
                 visible: root.fileType === "image"
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.sm)
-                source: root.fileType === "image" && root.filePath ? "file://" + root.filePath : ""
+                source: root.fileType === "image" && root.filePath ? Paths.fileUrl(root.filePath) : ""
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 smooth: true

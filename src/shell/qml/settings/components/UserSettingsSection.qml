@@ -110,7 +110,7 @@ ColumnLayout {
                     visible: section.userInfo.avatar !== ""
                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                     sourceSize: Qt.size(256, 256)
-                    source: section.userInfo.avatar ? "file://" + section.userInfo.avatar : ""
+                    source: section.userInfo.avatar ? Paths.fileUrl(section.userInfo.avatar) : ""
                     fillMode: Image.PreserveAspectCrop
                 }
 

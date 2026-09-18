@@ -33,13 +33,21 @@ PopupShell {
     // still last, because that is where a fixed list of snippets belongs once
     // there is real history to show.
     readonly property var allItems: {
+        // Read into the result, so the binding depends on it: re-sorts and
+        // re-colours when a pin changes (see Clipboard.revision).
+        const rev = Clipboard.revision;
         const pinned = [];
         const recent = [];
         for (let i = 0; i < Clipboard.items.count; i++) {
-            const it = Clipboard.items.get(i);
+            const m = Clipboard.items.get(i);
+            // Plain copies, not the ListModel's own element objects: those
+            // kept the value they were read with, so a pinned entry went on
+            // drawing as unpinned until the popup was rebuilt.
+            const it = { id: m.id, text: m.text, preview: m.preview, type: m.type,
+                         time: m.time, pinned: !!m.pinned };
             (it.pinned ? pinned : recent).push(it);
         }
-        return pinned.concat(recent, root.permanentTemplates);
+        return rev >= 0 ? pinned.concat(recent, root.permanentTemplates) : [];
     }
 
     readonly property var filteredItems: root.allItems.filter(it => {
@@ -111,13 +119,14 @@ PopupShell {
                 id: clipCard
                 required property var modelData
                 required property int index
+                readonly property bool pinned: !!clipCard.modelData.pinned
 
                 width: ListView.view ? ListView.view.width : 0
                 implicitHeight: cardCol.implicitHeight + Design.s(Design.space.sm)
                 radius: Design.s(Design.radius.card)
-                color: clipCard.modelData.pinned ? Design.tint(Design.accent, 0.12)
+                color: clipCard.pinned ? Design.tint(Design.accent, 0.12)
                      : (cardHoverMa.containsMouse ? Design.raised : Design.glassCard)
-                border.color: clipCard.modelData.pinned ? Design.accent
+                border.color: clipCard.pinned ? Design.accent
                             : (cardHoverMa.containsMouse ? Design.glassBorderStrong : Design.glassBorder)
                 border.width: 1
 
@@ -192,7 +201,7 @@ PopupShell {
                         // share the row number.
                         IconButton {
                             visible: !clipCard.modelData.template
-                            icon: clipCard.modelData.pinned ? "\u{f0403}" : "\u{f0404}"
+                            icon: clipCard.pinned ? "\u{f0403}" : "\u{f0404}"
                             role: "caption"
                             hoverTone: Design.accent
                             onClicked: Clipboard.togglePin(clipCard.modelData.id)
@@ -210,6 +219,10 @@ PopupShell {
 
                 MouseArea {
                     id: cardHoverMa
+                    // Below the card's contents: declared last, it lay over the
+                    // pin and delete buttons, and pressing either copied the
+                    // entry and closed the popup instead.
+                    z: -1
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor

@@ -313,7 +313,7 @@ PanelWindow {
 
     function iconSource(icon) {
         const value = (icon || "application-x-executable").trim();
-        if (value.startsWith("/") || value.startsWith("file://")) return value.startsWith("file://") ? value : "file://" + value;
+        if (value.startsWith("/") || value.startsWith("file://")) return Paths.fileUrl(value);
         // The suite's own icons, by file, from the copy `make install` puts
         // beside this QML. They used to be read from ~/.local/share/icons,
         // where a system-wide install never put them.

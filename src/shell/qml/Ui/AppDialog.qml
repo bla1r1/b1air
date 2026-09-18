@@ -18,7 +18,17 @@ C.Dialog {
     property color acceptTone: Design.accent
 
     modal: true
+    focus: true
     anchors.centerIn: C.Overlay.overlay
+
+    // Enter takes the dialog's default answer, as every desktop dialog does;
+    // Escape already rejects (Popup closes on it). A Shortcut, because Keys
+    // on a Popup — which is not an Item — never sees a key.
+    Shortcut {
+        sequences: ["Return", "Enter"]
+        enabled: root.opened
+        onActivated: root.accept()
+    }
     padding: Design.s(Design.space.lg)
     topPadding: Design.s(Design.space.sm)
 

@@ -49,8 +49,11 @@ ApplicationWindow {
     }
 
     // The shutter, with the self-timer in front of it when one is set.
+    // Shutter and record do nothing without a camera, and look it.
+    readonly property bool hasCamera: devices.videoInputs.length > 0
+
     function shoot() {
-        if (window.countdown > 0)
+        if (!window.hasCamera || window.countdown > 0)
             return;
         if (window.timerSeconds > 0) {
             window.countdown = window.timerSeconds;
@@ -74,6 +77,7 @@ ApplicationWindow {
     }
 
     function toggleRecording() {
+        if (!window.hasCamera) return;
         if (recorder.recorderState === MediaRecorder.RecordingState) {
             recorder.stop();
         } else {
@@ -312,6 +316,7 @@ ApplicationWindow {
                         border.color: Design.text
                         border.width: 2
                         scale: shutterMa.pressed ? 0.94 : 1.0
+                        opacity: window.hasCamera ? 1.0 : 0.35
                         Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
 
                         Rectangle {
@@ -324,6 +329,7 @@ ApplicationWindow {
                         MouseArea {
                             id: shutterMa
                             anchors.fill: parent
+                            enabled: window.hasCamera
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: window.shoot()
@@ -336,6 +342,7 @@ ApplicationWindow {
                         Layout.preferredHeight: Design.s(46)
                         radius: width / 2
                         color: window.recording ? Design.danger : (recMa.containsMouse ? Design.hover : Design.raised)
+                        opacity: window.hasCamera ? 1.0 : 0.35
                         border.color: window.recording ? Design.danger : Design.line
                         border.width: 1
 
@@ -351,6 +358,7 @@ ApplicationWindow {
                         MouseArea {
                             id: recMa
                             anchors.fill: parent
+                            enabled: window.hasCamera
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: window.toggleRecording()

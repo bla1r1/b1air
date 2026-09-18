@@ -9,6 +9,12 @@
 #include <thread>
 #include <algorithm>
 #include <fstream>
+#include <QDateTime>
+#include <QFileInfo>
+#include <cerrno>
+#include <cstring>
+#include <pwd.h>
+#include <unistd.h>
 
 namespace b1air {
 
@@ -65,37 +71,54 @@ void ProcessModel::setSort(const QString& field) {
 }
 
 void ProcessModel::applyFilterAndSort() {
-    beginResetModel();
-    m_filtered.clear();
-
+    std::vector<ProcessInfo> next;
+    next.reserve(m_all.size());
     for (const auto& p : m_all) {
         if (m_filter.isEmpty() ||
             p.name.toLower().contains(m_filter) ||
             p.user.toLower().contains(m_filter) ||
             QString::number(p.pid).contains(m_filter)) {
-            m_filtered.push_back(p);
+            next.push_back(p);
         }
     }
 
+    // stable_sort, ties by pid: equal values kept swapping places between
+    // samples, and the rows shuffled under the pointer.
+    auto byPid = [](const ProcessInfo& a, const ProcessInfo& b) { return a.pid < b.pid; };
     if (m_sortField == "cpu") {
-        std::sort(m_filtered.begin(), m_filtered.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
-            return a.cpu > b.cpu;
+        std::stable_sort(next.begin(), next.end(), [&](const ProcessInfo& a, const ProcessInfo& b) {
+            return a.cpu != b.cpu ? a.cpu > b.cpu : byPid(a, b);
         });
     } else if (m_sortField == "mem") {
-        std::sort(m_filtered.begin(), m_filtered.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
-            return a.mem > b.mem;
+        std::stable_sort(next.begin(), next.end(), [&](const ProcessInfo& a, const ProcessInfo& b) {
+            return a.mem != b.mem ? a.mem > b.mem : byPid(a, b);
         });
     } else if (m_sortField == "pid") {
-        std::sort(m_filtered.begin(), m_filtered.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
-            return a.pid < b.pid;
-        });
+        std::stable_sort(next.begin(), next.end(), byPid);
     } else if (m_sortField == "name") {
-        std::sort(m_filtered.begin(), m_filtered.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
-            return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+        std::stable_sort(next.begin(), next.end(), [&](const ProcessInfo& a, const ProcessInfo& b) {
+            const int c = a.name.compare(b.name, Qt::CaseInsensitive);
+            return c != 0 ? c < 0 : byPid(a, b);
         });
     }
 
-    endResetModel();
+    // In place, not a model reset. A reset every refresh threw the list back
+    // to the top 40 times a minute and rebuilt every row.
+    const int oldCount = static_cast<int>(m_filtered.size());
+    const int newCount = static_cast<int>(next.size());
+    if (newCount > oldCount) {
+        beginInsertRows(QModelIndex(), oldCount, newCount - 1);
+        m_filtered = std::move(next);
+        endInsertRows();
+    } else if (newCount < oldCount) {
+        beginRemoveRows(QModelIndex(), newCount, oldCount - 1);
+        m_filtered = std::move(next);
+        endRemoveRows();
+    } else {
+        m_filtered = std::move(next);
+    }
+    if (!m_filtered.empty())
+        emit dataChanged(index(0), index(static_cast<int>(m_filtered.size()) - 1));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -151,9 +174,16 @@ void MonitorBackend::refresh() {
 
 bool MonitorBackend::killProcess(int pid, bool force) {
     if (pid <= 1) return false;
-    bool ok = (::kill(pid, force ? SIGKILL : SIGTERM) == 0);
+    if (::kill(pid, force ? SIGKILL : SIGTERM) != 0) {
+        // It failed in silence before: a root process simply stayed.
+        const int e = errno;
+        emit killFailed(e == EPERM ? QStringLiteral("Not allowed: process %1 belongs to another user").arg(pid)
+                      : e == ESRCH ? QStringLiteral("Process %1 has already exited").arg(pid)
+                      : QStringLiteral("Could not end process %1: %2").arg(pid).arg(QString::fromLocal8Bit(strerror(e))));
+        return false;
+    }
     poll();
-    return ok;
+    return true;
 }
 
 void MonitorBackend::setProcessFilter(const QString& query) {
@@ -285,36 +315,76 @@ void MonitorBackend::updateLoadAndUptime() {
     }
 }
 
+// Every process, read from /proc. This ran `ps --sort=-pcpu` and kept the
+// first 40 lines: the filter searched those 40 and nothing else, "Sort by RAM"
+// re-sorted the 40 busiest by CPU, and the footer counted 40 tasks on any
+// machine. ps's %CPU is also the average over the process's whole life, not
+// what it is doing now; this is the share of the last interval, as top shows.
 void MonitorBackend::updateProcesses() {
+    static const long ticksPerSec = sysconf(_SC_CLK_TCK);
+    static const long pageKb = sysconf(_SC_PAGESIZE) / 1024;
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    const double elapsedTicks = m_prevProcSampleMs > 0
+        ? (nowMs - m_prevProcSampleMs) / 1000.0 * ticksPerSec : 0.0;
+    const double memTotalKb = m_ramTotalMb > 0 ? m_ramTotalMb * 1024.0 : 0.0;
+
     std::vector<ProcessInfo> list;
-    QProcess ps;
-    ps.start("ps", {"-eo", "pid,pcpu,pmem,user,comm", "--sort=-pcpu"});
-    if (!ps.waitForFinished(1000) || ps.exitStatus() != QProcess::NormalExit || ps.exitCode() != 0) {
-        if (m_procModel) m_procModel->updateProcesses(list);
-        return;
-    }
-    const QStringList lines = QString::fromUtf8(ps.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
-    // The first line is the ps header.  Limit in-process rather than through
-    // a shell pipeline, so process names can never become shell source.
-    for (int i = 1; i < lines.size() && i <= 40; ++i) {
-        const QStringList fields = lines[i].simplified().split(' ', Qt::SkipEmptyParts);
-        if (fields.size() < 5) continue;
-        bool pidOk = false;
-        const int pid = fields[0].toInt(&pidOk);
-        if (!pidOk) continue;
-        bool cpuOk = false, memOk = false;
-        const float cpu = fields[1].toFloat(&cpuOk);
-        const float mem = fields[2].toFloat(&memOk);
-        if (!cpuOk || !memOk) continue;
+    QHash<int, unsigned long long> ticksNow;
+    const QStringList pids = QDir("/proc").entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString& entry : pids) {
+        bool isPid = false;
+        const int pid = entry.toInt(&isPid);
+        if (!isPid) continue;
+        const QString base = "/proc/" + entry;
+
+        QFile statFile(base + "/stat");
+        if (!statFile.open(QIODevice::ReadOnly)) continue;
+        const QByteArray stat = statFile.readAll();
+        // comm is in parentheses and may itself hold spaces or ')'.
+        const int open = stat.indexOf('('), close = stat.lastIndexOf(')');
+        if (open < 0 || close < open) continue;
+        QString name = QString::fromUtf8(stat.mid(open + 1, close - open - 1));
+        const QList<QByteArray> f = stat.mid(close + 2).split(' ');
+        if (f.size() < 22) continue;
+        const unsigned long long ticks = f[11].toULongLong() + f[12].toULongLong(); // utime + stime
+        const long long rssPages = f[21].toLongLong();
+        ticksNow.insert(pid, ticks);
+
+        // comm stops at 15 characters ("environment-man"); the executable's
+        // own name is in cmdline.
+        if (name.size() >= 15) {
+            QFile cmd(base + "/cmdline");
+            if (cmd.open(QIODevice::ReadOnly)) {
+                const QByteArray argv0 = cmd.readAll().split('\0').value(0);
+                const QString exe = QFileInfo(QString::fromUtf8(argv0)).fileName();
+                if (exe.startsWith(name)) name = exe;
+            }
+        }
+
         ProcessInfo p;
         p.pid = pid;
-        p.cpu = cpu;
-        p.mem = mem;
-        p.user = fields[3];
-        p.name = fields[4];
+        p.name = name;
+        const auto prev = m_prevProcTicks.constFind(pid);
+        p.cpu = (elapsedTicks > 0 && prev != m_prevProcTicks.cend() && ticks >= *prev)
+                ? float((ticks - *prev) / elapsedTicks * 100.0) : 0.0f;
+        p.mem = memTotalKb > 0 ? float(rssPages * pageKb / memTotalKb * 100.0) : 0.0f;
+
+        const uint uid = QFileInfo(base).ownerId();
+        auto u = m_userNames.constFind(uid);
+        if (u == m_userNames.cend()) {
+            const struct passwd* pw = getpwuid(uid);
+            u = m_userNames.insert(uid, pw ? QString::fromUtf8(pw->pw_name) : QString::number(uid));
+        }
+        p.user = *u;
         list.push_back(p);
     }
+    m_prevProcTicks = std::move(ticksNow);
+    m_prevProcSampleMs = nowMs;
 
+    if (m_taskCount != int(list.size())) {
+        m_taskCount = int(list.size());
+        emit tasksChanged();
+    }
     if (m_procModel) {
         m_procModel->updateProcesses(list);
     }

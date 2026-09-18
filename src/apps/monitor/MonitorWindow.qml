@@ -843,7 +843,7 @@ Window {
                                 HoverHandler { id: killHover }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: if (isNative) MonitorBackend.killProcess(model.pid, false)
+                                    onClicked: if (isNative) killConfirm.ask(model.pid, model.name, false)
                                 }
                             }
 
@@ -864,7 +864,7 @@ Window {
                                 HoverHandler { id: forceHover }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: if (isNative) MonitorBackend.killProcess(model.pid, true)
+                                    onClicked: if (isNative) killConfirm.ask(model.pid, model.name, true)
                                 }
                             }
                         }
@@ -891,7 +891,7 @@ Window {
                 anchors.rightMargin: Design.s(Design.space.md)
 
                 Text {
-                    text: (isNative && MonitorBackend.processes ? MonitorBackend.processes.rowCount() : 0) + " Total Tasks  |  Load: " + window.loadAvgStr + "  |  Uptime: " + window.uptimeStr
+                    text: (isNative ? MonitorBackend.taskCount : 0) + " Total Tasks  |  Load: " + window.loadAvgStr + "  |  Uptime: " + window.uptimeStr
                     font.family: Design.font.sans
                     font.pixelSize: Design.s(10)
                     color: Design.textDim
@@ -910,4 +910,52 @@ Window {
         }
     }
 }
+
+    // Ending a process asks first, naming the process and pid as they were
+    // when the button was pressed. It killed on the click, and the list
+    // re-sorts every refresh, so the row under the pointer could already be
+    // another process by the time the button came down.
+    AppDialog {
+        id: killConfirm
+        property int pid: 0
+        property string procName: ""
+        property bool force: false
+        function ask(pid, name, force) {
+            killConfirm.pid = pid;
+            killConfirm.procName = name;
+            killConfirm.force = force;
+            open();
+        }
+        title: (force ? "Force quit " : "End ") + procName + "?"
+        message: force
+            ? "Process " + pid + " is stopped at once (SIGKILL). Anything unsaved in it is lost."
+            : "Process " + pid + " is asked to quit (SIGTERM)."
+        acceptTone: Design.danger
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        Component.onCompleted: standardButton(Dialog.Ok).text = "End Process"
+        onAccepted: MonitorBackend.killProcess(pid, force)
+    }
+
+    // Why a kill did not happen (another user's process, already gone).
+    Connections {
+        target: window.isNative ? MonitorBackend : null
+        function onKillFailed(message) {
+            killError.text = message;
+            killErrorTimer.restart();
+        }
+    }
+    Timer { id: killErrorTimer; interval: 4000; onTriggered: killError.text = "" }
+    Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Design.s(40)
+        visible: killError.text.length > 0
+        width: killError.implicitWidth + Design.s(28)
+        height: Design.s(32)
+        radius: Design.s(Design.radius.ctl)
+        color: Design.surface
+        border.color: Design.danger
+        border.width: 1
+        Label { id: killError; anchors.centerIn: parent; color: Design.danger }
+    }
 }

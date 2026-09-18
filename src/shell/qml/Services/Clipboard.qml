@@ -302,12 +302,19 @@ Singleton {
         return -1;
     }
 
+    // Bumped when an entry changes in place. Views that sort or group the
+    // entries read it: a binding over `items` follows count, not a field of
+    // one element, so pinning saved the pin and the list did not move or
+    // change colour until it was reopened.
+    property int revision: 0
+
     function togglePin(id) {
         const index = root._indexOfId(id);
         if (index < 0)
             return;
         const item = root.items.get(index);
         item.pinned = !item.pinned;
+        root.revision++;
         root._save();
     }
 

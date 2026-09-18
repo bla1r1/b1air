@@ -342,7 +342,7 @@ ApplicationWindow {
     // ── FolderListModel ──────────────────────────────────────────────────────
     FolderListModel {
         id: folderModel
-        folder: "file://" + window.currentPath
+        folder: Paths.fileUrl(window.currentPath)
         showDirsFirst: window.dirsFirst
         showDotAndDotDot: false
         showHidden: window.showHidden
@@ -537,7 +537,7 @@ ApplicationWindow {
                                     text: "×"
                                     font.pixelSize: Design.s(13)
                                     color: delBmArea.containsMouse ? window.colRed : window.colDim
-                                    visible: bmArea.containsMouse
+                                    visible: bmArea.containsMouse || delBmArea.containsMouse
                                     MouseArea {
                                         id: delBmArea
                                         anchors.fill: parent
@@ -550,6 +550,9 @@ ApplicationWindow {
 
                             MouseArea {
                                 id: bmArea
+                                // Below the row: on top, it took the click meant
+                                // for the remove (×) button inside it.
+                                z: -1
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor

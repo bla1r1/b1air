@@ -32,4 +32,7 @@ EmptyState 1.0 EmptyState.qml
 ActionButton 1.0 ActionButton.qml
 ButtonRow    1.0 ButtonRow.qml
 AppDialog    1.0 AppDialog.qml
+
+# helpers
+Paths 1.0 Paths.js
 DeviceRow  1.0 DeviceRow.qml
