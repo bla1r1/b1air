@@ -40,6 +40,7 @@ Rectangle {
         input.forceActiveFocus();
         input.selectAll();
     }
+    function selectRange(from, to) { input.select(from, to); }
 
     implicitHeight: Design.s(Design.size.field)
     implicitWidth: Design.s(120)

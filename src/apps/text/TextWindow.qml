@@ -6,6 +6,28 @@ import Ui
 
 Window {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: (TextBackend.isModified ? "● " : "") + "Text Editor — " + TextBackend.fileName
     width: Design.s(900)
     height: Design.s(620)
@@ -106,111 +128,37 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         // TOP HEADER BAR (COMPACT TILED TOOLBAR)
         // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
+        AppToolbar {
             Layout.fillWidth: true
-            implicitHeight: Design.s(36)
-            color: Design.crust
-            border.color: Design.glassBorder
-            border.width: 1
+            spacing: Design.s(Design.space.sm)
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.sm)
-                anchors.rightMargin: Design.s(Design.space.sm)
-                spacing: Design.s(Design.space.xs)
-
-                // File Icon
-                Rectangle {
-                    width: Design.s(22)
-                    height: Design.s(22)
-                    radius: Design.s(Design.radius.sm)
-                    color: Design.tint(Design.accent, 0.18)
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "\u{f0f6}" // file-text
-                        color: Design.accent
-                        font.family: Design.font.icon
-                        font.pixelSize: Design.s(12)
-                    }
+            Text {
+                text: "\u{f0219}"
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(20)
+                color: Design.accent
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Label {
+                    Layout.fillWidth: true
+                    text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
+                    weight: Design.weight.semibold
+                    elide: Text.ElideRight
                 }
-
-                // File Name & Path
-                RowLayout {
-                    spacing: Design.s(6)
-
-                    Text {
-                        text: TextBackend.fileName
-                        font.family: Design.font.sans
-                        font.weight: Design.weight.bold
-                        font.pixelSize: Design.s(12)
-                        color: Design.text
-                    }
-
-                    Rectangle {
-                        width: Design.s(6)
-                        height: Design.s(6)
-                        radius: 3
-                        color: Design.peach
-                        visible: TextBackend.isModified
-                    }
-
-                    Text {
-                        text: TextBackend.filePath ? ("— " + TextBackend.filePath) : ""
-                        font.family: Design.font.sans
-                        font.pixelSize: Design.s(11)
-                        color: Design.textDim
-                        elide: Text.ElideMiddle
-                        Layout.maximumWidth: Design.s(320)
-                    }
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Actions: New, Save, Word Wrap
-                RowLayout {
-                    spacing: Design.s(4)
-
-                    IconButton {
-                        icon: "\u{f067}" // plus
-                        bordered: true
-                        onClicked: window.newFileWithConfirmation()
-                    }
-
-                    IconButton {
-                        icon: "\u{f0c7}" // save
-                        bordered: true
-                        hoverTone: Design.teal
-                        fill: TextBackend.isModified ? Design.tint(Design.accent, 0.25) : "transparent"
-                        tone: TextBackend.isModified ? Design.accent : Design.textDim
-                        onClicked: window.save()
-                    }
-
-                    Rectangle {
-                        implicitWidth: wrapBtnText.implicitWidth + Design.s(12)
-                        implicitHeight: Design.s(24)
-                        radius: Design.s(Design.radius.ctl)
-                        color: window.wordWrapEnabled ? Design.tint(Design.accent, 0.22) : Design.sunken
-                        border.color: Design.glassBorder
-                        border.width: 1
-
-                        Text {
-                            id: wrapBtnText
-                            anchors.centerIn: parent
-                            text: "Wrap"
-                            font.family: Design.font.sans
-                            font.weight: Design.weight.medium
-                            font.pixelSize: Design.s(10)
-                            color: window.wordWrapEnabled ? Design.accent : Design.textDim
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: window.wordWrapEnabled = !window.wordWrapEnabled
-                        }
-                    }
+                Label {
+                    Layout.fillWidth: true
+                    visible: text !== ""
+                    text: TextBackend.filePath
+                    role: "caption"
+                    dim: true
+                    elide: Text.ElideMiddle
                 }
             }
+            BarButton { glyph: "\u{f0415}"; label: "New"; tip: "New file (Ctrl+N)"; onClicked: window.newFileWithConfirmation() }
+            BarButton { glyph: "\u{f0193}"; label: "Save"; primary: TextBackend.isModified; tip: "Save (Ctrl+S) · Save as (Ctrl+Shift+S)"; onClicked: window.save() }
+            BarButton { glyph: "\u{f05b6}"; tip: "Wrap long lines"; checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
         }
 
         // ═════════════════════════════════════════════════════════════════════

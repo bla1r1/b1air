@@ -16,6 +16,28 @@ import "Ui"
 ApplicationWindow {
     id: window
 
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
+
     title: "Camera"
     width: Design.s(900)
     height: Design.s(620)
@@ -137,40 +159,37 @@ ApplicationWindow {
             spacing: 0
 
             // ── Title bar ────────────────────────────────────────────────────
-            Rectangle {
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(36)
-                color: Design.surface
+                spacing: Design.s(Design.space.sm)
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(10)
-                    anchors.rightMargin: Design.s(10)
-                    spacing: Design.s(8)
+                Text {
+                    text: "\u{f0567}"
+                    font.family: Design.font.icon
+                    font.pixelSize: Design.s(20)
+                    color: Design.accent
+                }
+                Label { Layout.fillWidth: true; text: "Camera"; weight: Design.weight.semibold }
 
-                    Icon { text: "\u{f0567}"; role: "body"; color: Design.sapphire }
-                    Label { text: "Camera"; weight: Design.weight.bold }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Which camera, when the machine has more than one.
-                    Pill {
-                        visible: devices.videoInputs.length > 1
-                        label: camera.cameraDevice.description || "Camera"
-                        onClicked: {
-                            const list = devices.videoInputs;
-                            let i = 0;
-                            for (let n = 0; n < list.length; n++)
-                                if (list[n].id === camera.cameraDevice.id) i = n;
-                            camera.cameraDevice = list[(i + 1) % list.length];
-                        }
+                // Which camera, when the machine has more than one.
+                BarButton {
+                    visible: devices.videoInputs.length > 1
+                    glyph: "\u{f0567}"
+                    label: camera.cameraDevice.description || "Camera"
+                    tip: "Switch camera"
+                    onClicked: {
+                        const list = devices.videoInputs;
+                        let i = 0;
+                        for (let n = 0; n < list.length; n++)
+                            if (list[n].id === camera.cameraDevice.id) i = n;
+                        camera.cameraDevice = list[(i + 1) % list.length];
                     }
-
-                    IconButton {
-                        icon: "\u{f0770}"      // folder
-                        hoverTone: Design.accent
-                        onClicked: Qt.openUrlExternally("file://" + window.shotsDir)
-                    }
+                }
+                BarButton {
+                    glyph: "\u{f024b}"
+                    label: "Open folder"
+                    tip: "Where photos and videos go (Ctrl+O)"
+                    onClicked: Qt.openUrlExternally(Paths.fileUrl(window.shotsDir))
                 }
             }
 

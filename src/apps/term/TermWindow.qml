@@ -7,6 +7,28 @@ import Ui
 
 Window {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: "Terminal"
     width: Design.s(840)
     height: Design.s(540)
@@ -68,7 +90,7 @@ Window {
             // ── Ultra-Compact Headerbar (36px) with Multi-Tabs ──────────────
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(36)
+                Layout.preferredHeight: Design.s(42)
                 color: Design.surface
                 z: 10
 
@@ -96,13 +118,13 @@ Window {
                             model: tabsModel
                             delegate: Rectangle {
                                 id: tabPill
-                                Layout.preferredHeight: Design.s(24)
-                                Layout.preferredWidth: Math.min(Design.s(140), tabRow.implicitWidth + Design.s(16))
-                                radius: Design.s(6)
+                                Layout.preferredHeight: Design.s(30)
+                                Layout.preferredWidth: Math.min(Design.s(200), tabRow.implicitWidth + Design.s(18))
+                                radius: Design.s(Design.radius.ctl)
                                 color: window.currentTabIndex === index
-                                    ? Qt.rgba(Design.sapphire.r, Design.sapphire.g, Design.sapphire.b, 0.25)
-                                    : (tabArea.containsMouse ? Design.glassHover : "transparent")
-                                border.color: window.currentTabIndex === index ? Design.sapphire : Design.glassBorder
+                                    ? Design.tint(Design.accent, 0.22)
+                                    : (tabArea.containsMouse ? Design.hover : "transparent")
+                                border.color: window.currentTabIndex === index ? Design.accent : Design.line
                                 border.width: 1
 
                                 // Declared first so it sits under the close button.
@@ -128,18 +150,18 @@ Window {
 
                                     Label {
                                         text: (index + 1) + ": " + (model.tabTitle || "fish")
-                                        font.family: "JetBrainsMono Nerd Font"
-                                        font.pixelSize: Design.s(10)
-                                        font.bold: window.currentTabIndex === index
-                                        color: window.currentTabIndex === index ? Design.text : Design.subtext0
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(Design.font.caption + 1)
+                                        font.weight: window.currentTabIndex === index ? Design.weight.semibold : Design.weight.regular
+                                        color: window.currentTabIndex === index ? Design.text : Design.textDim
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
 
                                     // Close Tab Button (×)
                                     Rectangle {
-                                        Layout.preferredWidth: Design.s(14)
-                                        Layout.preferredHeight: Design.s(14)
+                                        Layout.preferredWidth: Design.s(18)
+                                        Layout.preferredHeight: Design.s(18)
                                         radius: Design.s(3)
                                         color: closeHover.hovered ? Design.tint(Design.danger, 0.25) : "transparent"
                                         visible: tabsModel.count > 1
@@ -173,82 +195,21 @@ Window {
                         }
 
                         // Add Tab Button (+)
-                        Rectangle {
-                            Layout.preferredWidth: Design.s(22)
-                            Layout.preferredHeight: Design.s(22)
-                            radius: Design.s(5)
-                            color: addHover.hovered ? Design.glassHover : Design.tint(Design.text, 0.04)
-                            border.color: Design.glassBorder
-                            border.width: 1
-
-                            Label {
-                                anchors.centerIn: parent
-                                text: "+"
-                                font.family: "JetBrainsMono Nerd Font"
-                                font.pixelSize: Design.s(13)
-                                font.bold: true
-                                color: Design.sapphire
-                            }
-
-                            HoverHandler { id: addHover }
-                            TapHandler { onTapped: window.createNewTab("", "") }
-                        }
+                        BarButton { small: true; glyph: "\u{f0415}"; tip: "New tab (Ctrl+Shift+T)"; onClicked: window.createNewTab("", "") }
                     }
 
                     Item { Layout.fillWidth: true } // Spacer
 
                     // Zoom Controls & Actions
                     Row {
-                        spacing: Design.s(4)
+                        spacing: Design.s(Design.space.xs)
                         Layout.alignment: Qt.AlignVCenter
-
-                        // Zoom Out
-                        Rectangle {
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(5)
-                            color: zmOutH.hovered ? Design.glassHover : "transparent"
-                            Label { anchors.centerIn: parent; text: "−"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: Design.s(12); color: Design.subtext0 }
-                            HoverHandler { id: zmOutH }
-                            TapHandler { onTapped: currentTermView().zoomOut() }
-                        }
-
-                        // Zoom In
-                        Rectangle {
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(5)
-                            color: zmInH.hovered ? Design.glassHover : "transparent"
-                            Label { anchors.centerIn: parent; text: "+"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: Design.s(12); color: Design.subtext0 }
-                            HoverHandler { id: zmInH }
-                            TapHandler { onTapped: currentTermView().zoomIn() }
-                        }
-
-                        // Divider
-                        Rectangle { width: 1; height: Design.s(14); color: Design.glassBorder; anchors.verticalCenter: parent.verticalCenter }
-
-                        // Copy Selection
-                        Rectangle {
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(5)
-                            color: cpH.hovered ? Design.glassHover : "transparent"
-                            Label { anchors.centerIn: parent; text: "\u{f0c5}"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: Design.s(11); color: Design.subtext0 }
-                            HoverHandler { id: cpH }
-                            TapHandler { onTapped: currentTermView().copySelection() }
-                        }
-
-                        // Paste Clipboard
-                        Rectangle {
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(5)
-                            color: pstH.hovered ? Design.glassHover : "transparent"
-                            Label { anchors.centerIn: parent; text: "\u{f0ea}"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: Design.s(11); color: Design.subtext0 }
-                            HoverHandler { id: pstH }
-                            TapHandler { onTapped: currentTermView().pasteClipboard() }
-                        }
-
-                        // Clear
-                        Rectangle {
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(5)
-                            color: clrH.hovered ? Design.glassHover : "transparent"
-                            Label { anchors.centerIn: parent; text: "\u{f1f8}"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: Design.s(11); color: Design.subtext0 }
-                            HoverHandler { id: clrH }
-                            TapHandler { onTapped: currentTermView().clear() }
-                        }
+                        BarButton { small: true; glyph: "\u{f0374}"; tip: "Smaller text (Ctrl+−)"; onClicked: currentTermView().zoomOut() }
+                        BarButton { small: true; glyph: "\u{f0415}"; tip: "Larger text (Ctrl+=)"; onClicked: currentTermView().zoomIn() }
+                        Rectangle { width: 1; height: Design.s(16); color: Design.line; anchors.verticalCenter: parent.verticalCenter }
+                        BarButton { small: true; glyph: "\u{f018f}"; tip: "Copy (Ctrl+Shift+C)"; onClicked: currentTermView().copySelection() }
+                        BarButton { small: true; glyph: "\u{f0192}"; tip: "Paste (Ctrl+Shift+V)"; onClicked: currentTermView().pasteClipboard() }
+                        BarButton { small: true; glyph: "\u{f00e2}"; tip: "Clear"; onClicked: currentTermView().clear() }
                     }
                 }
             }
@@ -257,7 +218,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: Design.glassBorder
+                color: Design.line
             }
 
             // ── Terminal Views Stack ─────────────────────────────────────────

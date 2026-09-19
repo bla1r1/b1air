@@ -6,6 +6,28 @@ import Ui
 
 ApplicationWindow {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: ViewBackend.fileName ? ("Image Viewer — " + ViewBackend.fileName) : "Image Viewer"
 
     // With nothing open this window was a plain empty rectangle: the title bar
@@ -94,89 +116,49 @@ ApplicationWindow {
             spacing: 0
 
             // ── Top Header Toolbar (40px) ────────────────────────────────────
-            Rectangle {
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(40)
-                color: window.colSidebar
-                border.color: window.colBorder
-                border.width: 1
                 z: 10
+                spacing: Design.s(Design.space.sm)
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(12)
-                    anchors.rightMargin: Design.s(12)
-                    spacing: Design.s(8)
-
-                    // App Icon & File Name
-                    Row {
-                        spacing: Design.s(8)
-                        Layout.alignment: Qt.AlignVCenter
-                        Text {
-                            text: "󰋩"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(15)
-                            color: window.colBlue
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Text {
-                            text: ViewBackend.fileName || "No Image Open"
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(12)
-                            font.bold: true
-                            color: window.colFg
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
+                Text {
+                    text: "\u{f02e9}"
+                    font.family: Design.font.icon
+                    font.pixelSize: Design.s(20)
+                    color: Design.accent
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: ViewBackend.fileName || "No image open"
+                        weight: Design.weight.semibold
+                        elide: Text.ElideMiddle
                     }
-
-                    // Image Dimensions Badge
-                    Rectangle {
-                        width: dimText.implicitWidth + Design.s(12)
-                        height: Design.s(20)
-                        radius: Design.s(4)
-                        color: Design.tint(Design.text, 0.08)
+                    Label {
                         visible: ViewBackend.imageResolution !== "" && ViewBackend.imageResolution !== "Unknown"
-
-                        Text {
-                            id: dimText
-                            anchors.centerIn: parent
-                            text: ViewBackend.imageResolution + "  •  " + ViewBackend.fileSize
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(10)
-                            color: window.colDim
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Viewer Controls: Zoom In, Zoom Out, Reset, Rotate, Filmstrip Toggle, Wallpaper
-                    //
-                    // Two of these were the wrong glyph, which in a row of
-                    // unlabelled icon buttons is the whole message: Zoom Out
-                    // was nf-md-close, so the control beside the zoom
-                    // percentage was a ✕ that reads as "close the viewer", and
-                    // Set Wallpaper was nf-md-music, a note. Checked by
-                    // rendering the codepoints rather than by reading the
-                    // names — that is how these two were found in the first
-                    // place.
-                    Row {
-                        spacing: Design.s(4)
-                        Layout.alignment: Qt.AlignVCenter
-
-                        CtrlBtn { icon: "󰍴"; tip: "Zoom Out"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
-                        Rectangle {
-                            width: zoomText.implicitWidth + Design.s(10); height: Design.s(26); radius: Design.s(4)
-                            color: "transparent"
-                            Text { id: zoomText; anchors.centerIn: parent; text: Math.round(window.zoomFactor * 100) + "%"; font.family: Design.font.mono; font.pixelSize: Design.s(10); color: window.colDim }
-                        }
-                        CtrlBtn { icon: "󰐕"; tip: "Zoom In"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
-                        CtrlBtn { icon: "󰑐"; tip: "Reset View"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
-                        CtrlBtn { icon: "󰑓"; tip: "Rotate 90°"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
-                        CtrlBtn { icon: "󰸉"; tip: "Set Wallpaper"; onClicked: ViewBackend.setWallpaper() }
-                        // Nothing to toggle in a folder of one.
-                        CtrlBtn { visible: window.hasSiblings; icon: "󰋩"; tip: "Toggle Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                        text: ViewBackend.imageResolution + "  ·  " + ViewBackend.fileSize
+                              + (ViewBackend.totalFiles > 1 ? "  ·  " + (ViewBackend.fileIndex + 1) + " of " + ViewBackend.totalFiles : "")
+                        role: "caption"
+                        dim: true
                     }
                 }
+
+                CtrlBtn { icon: "\u{f0374}"; tip: "Zoom out (−)"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                Label {
+                    Layout.preferredWidth: Design.s(48)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Math.round(window.zoomFactor * 100) + "%"
+                    isMono: true
+                    role: "caption"
+                    dim: true
+                }
+                CtrlBtn { icon: "\u{f0415}"; tip: "Zoom in (+)"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
+                CtrlBtn { icon: "\u{f0450}"; tip: "Reset view (0)"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
+                CtrlBtn { icon: "\u{f0467}"; tip: "Rotate 90° (R)"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: "Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                BarButton { glyph: "\u{f0e09}"; label: "Set as wallpaper"; onClicked: ViewBackend.setWallpaper() }
             }
 
             // ── Main Image Canvas ────────────────────────────────────────────
@@ -327,32 +309,11 @@ ApplicationWindow {
         }
     }
 
-    component CtrlBtn: Rectangle {
-        id: cb
+    // The suite's toolbar button; `tip` was declared here and never shown.
+    component CtrlBtn: BarButton {
         property string icon: ""
-        property string tip: ""
         property bool active: false
-        signal clicked()
-
-        width: Design.s(26); height: Design.s(26); radius: Design.s(5)
-        color: cb.active ? window.colBlue : (cbArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
-        border.color: cb.active ? "transparent" : window.colBorder
-        border.width: 1
-
-        Text {
-            anchors.centerIn: parent
-            text: cb.icon
-            font.family: Design.font.mono
-            font.pixelSize: Design.s(12)
-            color: cb.active ? Design.accentText : (cbArea.containsMouse ? "#ffffff" : window.colFg)
-        }
-
-        MouseArea {
-            id: cbArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: cb.clicked()
-        }
+        glyph: icon
+        checked: active
     }
 }

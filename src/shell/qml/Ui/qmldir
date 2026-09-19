@@ -32,6 +32,11 @@ EmptyState 1.0 EmptyState.qml
 ActionButton 1.0 ActionButton.qml
 ButtonRow    1.0 ButtonRow.qml
 AppDialog    1.0 AppDialog.qml
+AppMenu      1.0 AppMenu.qml
+AppMenuItem  1.0 AppMenuItem.qml
+AppMenuSeparator 1.0 AppMenuSeparator.qml
+AppToolbar   1.0 AppToolbar.qml
+BarButton    1.0 BarButton.qml
 
 # helpers
 Paths 1.0 Paths.js

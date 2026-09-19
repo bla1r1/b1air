@@ -21,6 +21,21 @@ Scope {
         function onReloadCompleted() { Quickshell.inhibitReloadPopup(); }
     }
 
+    // Translucent panels only where the compositor blurs behind them: swayFX
+    // with blur on. Plain sway shows the wallpaper sharp through a
+    // translucent panel, and over a busy picture the text is unreadable.
+    property bool compositorBlurs: true
+    Process {
+        running: true
+        command: ["sh", "-c", "p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>&1 | grep -qi swayfx && echo yes || echo no"]
+        stdout: StdioCollector { onStreamFinished: rootScope.compositorBlurs = this.text.trim() !== "no" }
+    }
+    Binding {
+        target: Design
+        property: "translucent"
+        value: rootScope.compositorBlurs && (!Settings.loaded || Settings.blurEnabled)
+    }
+
     // Ui/Design cannot read Services/Settings itself — the standalone apps load
     // Ui without a Quickshell runtime — so the shell is what joins the two. The
     // accent picker in Appearance had no effect on anything before this.

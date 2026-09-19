@@ -7,6 +7,28 @@ import Ui
 
 ApplicationWindow {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: GitBackend.repoName ? "Git — " + GitBackend.repoName : "Git"
     width: Design.s(1040)
     height: Design.s(680)
@@ -53,40 +75,13 @@ ApplicationWindow {
     // ── Right-click menus ──────────────────────────────────────────────────
     // One of each, at window level, handed the path it is about before it
     // opens. A Menu per list row would be a few hundred popups in History.
-    component ContextMenu: Menu {
-        id: menu
+    // The suite's menu; disabled entries stay visible here, greyed, because
+    // in a git client "you cannot do this now" is information.
+    component ContextMenu: AppMenu {
         property string target: ""
-        padding: Design.s(4)
-        background: Rectangle {
-            implicitWidth: Design.s(210)
-            color: window.colHeader
-            border.color: window.colBorder
-            border.width: 1
-            radius: Design.s(8)
-        }
-        delegate: MenuItem {
-            id: menuItem
-            implicitHeight: Design.s(28)
-            contentItem: Text {
-                leftPadding: Design.s(8)
-                text: menuItem.text
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(12)
-                color: menuItem.enabled ? window.colFg : window.colDim
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-            background: Rectangle {
-                radius: Design.s(5)
-                color: menuItem.highlighted ? Design.tint(Design.accent, 0.20) : "transparent"
-            }
-        }
+        delegate: AppMenuItem { showDisabled: true }
     }
-    component MenuLine: MenuSeparator {
-        contentItem: Rectangle { implicitHeight: 1; color: window.colBorder }
-        topPadding: Design.s(3)
-        bottomPadding: Design.s(3)
-    }
+    component MenuLine: AppMenuSeparator {}
 
     function showMenu(menu, target) {
         window.repoDropdownOpen = false;
@@ -1155,7 +1150,7 @@ ApplicationWindow {
                                                     text: modelData.path
                                                     font.family: Design.font.mono
                                                     font.pixelSize: Design.s(11)
-                                                    color: fileCard.isSelected ? "#ffffff" : window.colFg
+                                                    color: fileCard.isSelected ? Design.text : window.colFg
                                                     elide: Text.ElideMiddle
                                                 }
                                             }

@@ -6,6 +6,28 @@ import Ui
 
 Window {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: "System Monitor"
     width: Design.s(880)
     height: Design.s(580)
@@ -213,95 +235,15 @@ Window {
             // ═════════════════════════════════════════════════════════════════
             // HEADER BAR (COMPACT TILED TOOLBAR)
             // ═════════════════════════════════════════════════════════════════
-            Rectangle {
+            AppToolbar {
                 Layout.fillWidth: true
-                implicitHeight: Design.s(36)
-                color: Design.crust
-                border.color: Design.glassBorder
-                border.width: 1
+                spacing: Design.s(Design.space.xs)
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.sm)
-                    anchors.rightMargin: Design.s(Design.space.sm)
-                    spacing: Design.s(Design.space.sm)
-
-                    // No name and no badge. The window is opened by name and is a table of
-                    // processes; "System Monitor" beside a bar-chart glyph told nobody
-                    // anything, and removing the label left the icon on its own as pure
-                    // decoration, so both went. The tabs take the space they were
-                    // holding, at the start of the row where the eye already goes,
-                    // instead of staying pinned to the far edge of an empty bar.
-
-                // Tab Switcher Pills
-                Rectangle {
-                    implicitWidth: tabRow.implicitWidth + Design.s(6)
-                    implicitHeight: Design.s(26)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
-                    border.color: Design.glassBorder
-                    border.width: 1
-
-                    RowLayout {
-                        id: tabRow
-                        anchors.centerIn: parent
-                        spacing: Design.s(2)
-
-                        Rectangle {
-                            implicitWidth: Design.s(76)
-                            implicitHeight: Design.s(22)
-                            radius: Design.s(8)
-                            color: window.currentTab === "overview" ? Design.tint(Design.accent, 0.28) : "transparent"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Overview"
-                                font.family: Design.font.sans
-                                font.weight: window.currentTab === "overview" ? Design.weight.bold : Design.weight.medium
-                                font.pixelSize: Design.s(11)
-                                color: window.currentTab === "overview" ? Design.accent : Design.textDim
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: window.currentTab = "overview"
-                            }
-                        }
-
-                        Rectangle {
-                            implicitWidth: Design.s(76)
-                            implicitHeight: Design.s(22)
-                            radius: Design.s(8)
-                            color: window.currentTab === "processes" ? Design.tint(Design.accent, 0.28) : "transparent"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Processes"
-                                font.family: Design.font.sans
-                                font.weight: window.currentTab === "processes" ? Design.weight.bold : Design.weight.medium
-                                font.pixelSize: Design.s(11)
-                                color: window.currentTab === "processes" ? Design.accent : Design.textDim
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: window.currentTab = "processes"
-                            }
-                        }
-                    }
-                }
-
+                BarButton { glyph: "\u{f0128}"; label: "Overview"; tip: "Ctrl+1"; checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
+                BarButton { glyph: "\u{f0279}"; label: "Processes"; tip: "Ctrl+2"; checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
                 Item { Layout.fillWidth: true }
-
-                // Refresh Button
-                IconButton {
-                    icon: "\u{f021}" // refresh
-                    bordered: true
-                    hoverTone: Design.accent
-                    onClicked: if (isNative) MonitorBackend.refresh()
-                }
+                BarButton { glyph: "\u{f0450}"; tip: "Refresh now (F5)"; onClicked: if (isNative) MonitorBackend.refresh() }
             }
-        }
 
         // ═════════════════════════════════════════════════════════════════════
         // TAB 1: OVERVIEW (METRICS, DIALS & LIVE HISTORY GRAPH)

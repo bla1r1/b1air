@@ -1,1653 +1,1338 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
-import QtQuick.Controls
+import QtQuick.Controls as C
 import "Ui"
-import Qt.labs.folderlistmodel
 
-ApplicationWindow {
+// b1air-files.
+//
+// Rebuilt around FilesBackend.files (dir_model.cpp) instead of Qt's
+// FolderListModel, which could hold no selection, could not open a folder
+// with "#" in its name, and knew a file's type only by its suffix. What that
+// made possible, and what the old window did not have: selecting several
+// items (Ctrl/Shift, Ctrl+A, the keyboard), acting on all of them, drag and
+// drop, a list with columns, a details panel, the trash and mounted drives in
+// the sidebar, Open With, and a size that can be read.
+C.ApplicationWindow {
     id: window
-    title: "Files — " + currentPathDisplay
-    width: Design.s(1060)
-    height: Design.s(680)
-    minimumWidth: 740
+
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
+
+    title: (FilesBackend.inTrash ? "Trash" : window.folderName) + " — Files"
+    width: Design.s(1120)
+    height: Design.s(720)
+    minimumWidth: 760
     minimumHeight: 480
     visible: true
-    color: "transparent"
-    flags: Qt.Window
+    color: Design.surface
 
-    readonly property bool isNative: typeof FilesBackend !== "undefined"
-    readonly property string homeDir: isNative ? FilesBackend.homePath : "/home/dev"
+    readonly property var fm: FilesBackend.files
+    readonly property string homeDir: FilesBackend.homePath
+    readonly property string currentPath: FilesBackend.currentPath
+    readonly property string folderName: currentPath === homeDir ? "Home"
+                                       : currentPath === "/" ? "File System"
+                                       : currentPath.substring(currentPath.lastIndexOf("/") + 1)
 
-    property string currentPath: isNative ? FilesBackend.currentPath : homeDir
-    property string currentPathDisplay: currentPath.startsWith(homeDir) 
-        ? ("~" + currentPath.substring(homeDir.length)) 
-        : currentPath
-
-    // Back and forward are the backend's history, which records every
-    // navigation and says with a signal when it moved.
-    //
-    // The window kept its own as well, as `property var history:
-    // [currentPath]` — a binding, so every change of folder rebuilt the list as
-    // just the folder now open, while the index went on counting up. Back led
-    // to an entry that was no longer there, and forward lit up with nothing
-    // ahead of it.
-    readonly property bool canGoBack: isNative && FilesBackend.canGoBack
-    readonly property bool canGoForward: isNative && FilesBackend.canGoForward
-
-    // View preferences, remembered between runs (FilesBackend.savePrefs).
-    readonly property var prefs: isNative ? FilesBackend.loadPrefs() : ({})
-    property bool showHidden: prefs.showHidden === true
-    property bool dirsFirst: prefs.dirsFirst !== false
-    property string sortBy: prefs.sortBy || "name"      // name | time | size | type
-    property bool sortDescending: prefs.sortDescending === true
-    property string filterQuery: ""
-    property string viewMode: prefs.viewMode || "grid" // "grid", "list", "gallery"
-    property string statusNote: ""
-
+    // ── Preferences, kept between runs ───────────────────────────────────────
+    readonly property var prefs: FilesBackend.loadPrefs()
+    property string viewMode: prefs.viewMode === "list" ? "list" : "grid"
+    property int iconSize: prefs.iconSize || 88
+    property bool showInfo: prefs.showInfo !== false
+    Component.onCompleted: {
+        FilesBackend.showHidden = prefs.showHidden === true;
+        FilesBackend.dirsFirst = prefs.dirsFirst !== false;
+        FilesBackend.sortField = prefs.sortBy || "name";
+        FilesBackend.sortAscending = prefs.sortDescending !== true;
+        currentView().forceActiveFocus();
+    }
     function savePrefs() {
-        if (!isNative) return;
-        FilesBackend.savePrefs({ showHidden: showHidden, dirsFirst: dirsFirst, sortBy: sortBy,
-                                 sortDescending: sortDescending, viewMode: viewMode });
+        FilesBackend.savePrefs({
+            viewMode: viewMode, iconSize: iconSize, showInfo: showInfo,
+            showHidden: FilesBackend.showHidden, dirsFirst: FilesBackend.dirsFirst,
+            sortBy: FilesBackend.sortField, sortDescending: !FilesBackend.sortAscending
+        });
     }
-    onShowHiddenChanged: savePrefs()
-    onDirsFirstChanged: savePrefs()
-    onSortByChanged: savePrefs()
-    onSortDescendingChanged: savePrefs()
     onViewModeChanged: savePrefs()
-
-    function note(text) {
-        statusNote = text;
-        noteTimer.restart();
-    }
-    Timer { id: noteTimer; interval: 3500; onTriggered: window.statusNote = "" }
+    onIconSizeChanged: savePrefs()
+    onShowInfoChanged: savePrefs()
     Connections {
-        target: window.isNative ? FilesBackend : null
+        target: FilesBackend
+        function onShowHiddenChanged() { window.savePrefs(); }
+        function onSortChanged() { window.savePrefs(); }
         function onErrorOccurred(message) { window.note(message); }
-        function onPasteFinished(ok, message) { window.note(message); }
-    }
-    property int selectedIndex: -1
-    property string selectedPath: ""
-
-    // User Bookmarks
-    // Read from disk, not shipped. The one entry that used to be hard-coded
-    // here pointed at ~/DotsFiles, which does not exist on a machine that
-    // cloned the repository anywhere else, and the list itself was never
-    // stored: the "+" in the sidebar appended to this array, the row appeared,
-    // and closing the window lost it. loadBookmarks() also drops any entry
-    // whose directory has since gone, so a bookmark on screen is one that
-    // still leads somewhere.
-    property var customBookmarks: window.isNative ? FilesBackend.loadBookmarks() : []
-
-    // A second, hand-rolled Tokyo Night palette used to live here alongside the
-    // Catppuccin one in Ui/Design.qml, so this window never followed the theme.
-    // The names stay — they are used throughout the file — but each now resolves
-    // to a design-system role.
-    readonly property color colBg: Design.surface
-    readonly property color colDark: Design.ground
-    readonly property color colSidebar: Design.sunken
-    readonly property color colSunken: Design.sunken
-    readonly property color colCard: Design.raised
-    readonly property color colCardHover: Design.hover
-    readonly property color colBorder: Design.glassBorder
-    readonly property color colBorderSubtle: Design.line
-    readonly property color colBlue: Design.accent
-    readonly property color colPurple: Design.mauve
-    readonly property color colPink: Design.pink
-    readonly property color colCyan: Design.sapphire
-    readonly property color colGreen: Design.ok
-    readonly property color colOrange: Design.warn
-    readonly property color colYellow: Design.yellow
-    readonly property color colRed: Design.danger
-    readonly property color colFg: Design.text
-    readonly property color colDim: Design.textDim
-
-    function formatSize(bytes) {
-        if (!bytes || bytes <= 0) return "0 B";
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-        return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+        function onPasteFinished(ok, message) { window.note(ok && FilesBackend.undoLabel ? message + " · Ctrl+Z undoes it" : message); }
+        function onCurrentPathChanged() { window.typed = ""; currentView().positionViewAtBeginning(); }
     }
 
-    function formatDate(d) {
-        if (!d) return "";
-        let date = new Date(d);
-        return date.toLocaleDateString(Qt.locale(), "MMM d, yyyy") + " " + date.toLocaleTimeString(Qt.locale(), "hh:mm");
+    // A line in the status bar for a few seconds.
+    property string statusNote: ""
+    function note(text) { statusNote = text; noteTimer.restart(); }
+    Timer { id: noteTimer; interval: 4000; onTriggered: window.statusNote = "" }
+
+    // ── Kinds of file: one glyph and one colour each ─────────────────────────
+    function glyphFor(category) {
+        switch (category) {
+        case "folder":     return "\u{f024b}";
+        case "image":      return "\u{f02e9}";
+        case "video":      return "\u{f0567}";
+        case "audio":      return "\u{f075a}";
+        case "code":       return "\u{f0169}";
+        case "text":       return "\u{f0219}";
+        case "archive":    return "\u{f05c4}";
+        case "pdf":        return "\u{f0226}";
+        case "document":   return "\u{f022c}";
+        case "executable": return "\u{f018d}";
+        default:           return "\u{f0214}";
+        }
     }
-
-    // One table, not two lists.
-    //
-    // The glyph and the colour were each chosen by their own chain of
-    // indexOf() calls over their own hand-kept extension lists, and the two had
-    // drifted: .ts, .bmp and every audio format had a glyph but no colour, so
-    // they drew a music note in the default foreground; .ini and .toml had the
-    // document colour but the generic file glyph; .bz2 and .xz were archives to
-    // one list and unknown to the other. A file's kind is one fact, so it is
-    // decided once and both answers come from it.
-    readonly property var fileKinds: [
-        { glyph: "󰋩", tone: "purple", ext: ["png","jpg","jpeg","webp","gif","svg","bmp","ico","tiff","avif"] },
-        { glyph: "󰕼", tone: "orange", ext: ["mp4","mkv","avi","mov","webm","m4v"] },
-        { glyph: "󰎆", tone: "pink",   ext: ["mp3","flac","wav","ogg","m4a","opus"] },
-        { glyph: "󰅩", tone: "cyan",   ext: ["cpp","hpp","cc","cxx","c","h","rs","py","js","ts","jsx","tsx","qml","go","java","rb","lua","vim"] },
-        { glyph: "󰆍", tone: "green",  ext: ["sh","bash","zsh","fish"] },
-        { glyph: "󰛫", tone: "yellow", ext: ["zip","tar","gz","7z","bz2","xz","zst","rar"] },
-        { glyph: "󰘦", tone: "green",  ext: ["json","yaml","yml","toml","ini","conf","cfg"] },
-        { glyph: "󰈙", tone: "green",  ext: ["txt","md","rst","org"] },
-        { glyph: "󰈦", tone: "red",    ext: ["pdf"] }
-    ]
-
-    function fileKind(name) {
-        const ext = (name || "").split('.').pop().toLowerCase();
-        for (const k of window.fileKinds)
-            if (k.ext.indexOf(ext) >= 0) return k;
-        return null;
-    }
-
-    function getIconGlyph(name, isDir) {
-        if (isDir) return "󰉋";
-        const k = window.fileKind(name);
-        return k ? k.glyph : "󰈔";
-    }
-
-    function getIconColor(name, isDir) {
-        if (isDir) return window.colBlue;
-        const k = window.fileKind(name);
-        switch (k ? k.tone : "") {
-        case "purple": return window.colPurple;
-        case "orange": return window.colOrange;
-        case "pink":   return window.colPink;
-        case "cyan":   return window.colCyan;
-        case "green":  return window.colGreen;
-        case "yellow": return window.colYellow;
-        case "red":    return window.colRed;
-        default:       return window.colFg;
+    function toneFor(category) {
+        switch (category) {
+        case "folder":     return Design.accent;
+        case "image":      return Design.mauve;
+        case "video":      return Design.peach;
+        case "audio":      return Design.pink;
+        case "code":       return Design.sapphire;
+        case "archive":    return Design.yellow;
+        case "pdf":        return Design.red;
+        case "document":   return Design.blue;
+        case "executable": return Design.green;
+        default:           return Design.textDim;
         }
     }
 
-    function isImageFile(name) {
-        if (!name) return false;
-        let ext = name.split('.').pop().toLowerCase();
-        return ["png","jpg","jpeg","webp","gif","svg","bmp"].indexOf(ext) >= 0;
-    }
-
-    function getBreadcrumbs() {
-        let p = currentPath;
-        let crumbs = [];
-        if (p.startsWith(homeDir)) {
-            crumbs.push({ name: "~", path: homeDir });
-            let rel = p.substring(homeDir.length);
-            let parts = rel.split("/").filter(Boolean);
-            let acc = homeDir;
-            for (let i = 0; i < parts.length; ++i) {
-                acc += "/" + parts[i];
-                crumbs.push({ name: parts[i], path: acc });
-            }
-        } else {
-            crumbs.push({ name: "/", path: "/" });
-            let parts = p.split("/").filter(Boolean);
-            let acc = "";
-            for (let i = 0; i < parts.length; ++i) {
-                acc += "/" + parts[i];
-                crumbs.push({ name: parts[i], path: acc });
-            }
-        }
-        return crumbs;
-    }
-
-    function clearSelection() {
-        selectedIndex = -1;
-        selectedPath = "";
-    }
-
+    // ── Navigation ───────────────────────────────────────────────────────────
     function navigateTo(path) {
-        if (!path || path === currentPath || !isNative) return;
+        if (!path || path === currentPath) return;
         FilesBackend.currentPath = path;
-        clearSelection();
     }
+    function currentView() { return viewMode === "grid" ? gridView : listView; }
 
-    function historyBack() {
-        if (!canGoBack) return;
-        FilesBackend.historyBack();
-        clearSelection();
+    // ── What the actions work on ─────────────────────────────────────────────
+    // The selection, or the item under the cursor when nothing is selected.
+    function targets() {
+        const sel = fm.selectedPaths();
+        if (sel.length > 0) return sel;
+        const cur = fm.get(fm.currentIndex);
+        return cur.path ? [cur.path] : [];
     }
+    function single() { const t = targets(); return t.length === 1 ? fm.get(fm.indexOfPath(t[0])) : null; }
 
-    function historyForward() {
-        if (!canGoForward) return;
-        FilesBackend.historyForward();
-        clearSelection();
+    function openRow(row) {
+        const it = fm.get(row);
+        if (!it.path) return;
+        if (it.isDir) navigateTo(it.path);
+        else FilesBackend.openItem(it.path);
     }
-
-    function goUp() {
-        if (!isNative || currentPath === "/" || currentPath === "") return;
-        FilesBackend.goUp();
-        clearSelection();
-    }
-
-    // ── Actions behind the menus and the keys ────────────────────────────────
-    function parentOf(path) {
-        const i = path.lastIndexOf("/");
-        return i <= 0 ? "/" : path.substring(0, i);
-    }
-
-    function copyPath(path) {
-        if (!isNative || !path) return;
-        FilesBackend.copyText(path);
-        note("Copied " + path);
-    }
-
-    function trash(path) {
-        if (!isNative || !path) return;
-        if (FilesBackend.deleteItem(path)) {
-            note("Moved " + path.split("/").pop() + " to the trash");
-            clearSelection();
+    function openSelection() {
+        const t = targets();
+        if (t.length === 1) { openRow(fm.indexOfPath(t[0])); return; }
+        for (const p of t) {
+            const it = fm.get(fm.indexOfPath(p));
+            if (!it.isDir) FilesBackend.openItem(p);
         }
     }
-
-    function copyItem(path, cut) {
-        if (!path || !isNative) return;
-        FilesBackend.copyFiles([path], cut);
-        note((cut ? "Cut " : "Copied ") + path.split("/").pop() + " — paste with Ctrl+V");
+    function copySelection(cut) {
+        const t = targets();
+        if (t.length === 0) return;
+        FilesBackend.copyFiles(t, cut);
+        note((cut ? "Cut " : "Copied ") + (t.length === 1 ? t[0].split("/").pop() : t.length + " items")
+             + " — paste with Ctrl+V");
+    }
+    function trashSelection() {
+        const t = targets();
+        if (t.length === 0) return;
+        if (FilesBackend.inTrash) { confirmDelete.ask(t); return; }
+        if (FilesBackend.trashItems(t))
+            note((t.length === 1 ? "Moved " + t[0].split("/").pop() + " to the trash" : "Moved " + t.length + " items to the trash")
+                 + " · Ctrl+Z undoes it");
+    }
+    function renameSelection() {
+        const it = single();
+        if (it) askName("rename", it.path, it.name);
     }
 
+    // ── Typing to find ───────────────────────────────────────────────────────
+    property string typed: ""
+    Timer { id: typedReset; interval: 900; onTriggered: window.typed = "" }
+    function typeToFind(ch) {
+        typed += ch;
+        typedReset.restart();
+        const row = fm.findPrefix(typed, typed.length === 1 ? fm.currentIndex + 1 : fm.currentIndex);
+        if (row >= 0) { fm.select(row, 0); currentView().positionViewAtIndex(row, GridView.Contain); }
+    }
+
+    // ── Keyboard, for whichever view is shown ────────────────────────────────
+    function handleKey(event, columns) {
+        const n = fm.count;
+        const cur = fm.currentIndex;
+        let next = -1;
+        switch (event.key) {
+        case Qt.Key_Left:  if (columns > 1) next = Math.max(0, cur - 1); break;
+        case Qt.Key_Right: if (columns > 1) next = Math.min(n - 1, cur + 1); break;
+        case Qt.Key_Up:    next = cur < 0 ? 0 : Math.max(0, cur - columns); break;
+        case Qt.Key_Down:  next = cur < 0 ? 0 : Math.min(n - 1, cur + columns); break;
+        case Qt.Key_Home:  next = 0; break;
+        case Qt.Key_End:   next = n - 1; break;
+        case Qt.Key_PageUp:   next = Math.max(0, cur - columns * 5); break;
+        case Qt.Key_PageDown: next = Math.min(n - 1, cur + columns * 5); break;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+            openSelection(); event.accepted = true; return;
+        default:
+            if (event.text.length === 1 && event.text >= " " && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier))) {
+                typeToFind(event.text); event.accepted = true;
+            }
+            return;
+        }
+        if (next < 0 || n === 0) return;
+        event.accepted = true;
+        fm.select(next, (event.modifiers & Qt.ShiftModifier) ? 2 : 0);
+        currentView().positionViewAtIndex(next, GridView.Contain);
+    }
+
+    // Selection mode for a click with these modifiers.
+    function clickMode(mods) {
+        const ctrl = mods & Qt.ControlModifier, shift = mods & Qt.ShiftModifier;
+        return ctrl && shift ? 3 : shift ? 2 : ctrl ? 1 : 0;
+    }
+
+    // ── Dialogs ──────────────────────────────────────────────────────────────
     function askName(mode, target, initial) {
         nameDialog.mode = mode;
         nameDialog.target = target;
         nameField.text = initial;
         nameDialog.open();
     }
-
     function submitName(text) {
         const v = String(text || "").trim();
-        if (v === "" || !isNative) return;
-        if (nameDialog.mode === "rename") {
-            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+        if (v === "") return;
+        const mode = nameDialog.mode;
+        if (mode !== "goto" && v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+        if (mode === "rename") {
             if (!FilesBackend.renameItem(nameDialog.target, v)) { note("Could not rename to " + v); return; }
-            note("Renamed to " + v);
-        } else if (nameDialog.mode === "newfile") {
-            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
-            if (!FilesBackend.createFile(v)) { note("Could not create " + v); return; }
-            note("Created " + v);
-        } else if (nameDialog.mode === "newfolder") {
-            if (v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+            fm.selectPaths([window.parentOf(nameDialog.target) + "/" + v]);
+        } else if (mode === "newfolder") {
             if (!FilesBackend.createFolder(v)) { note("Could not create " + v); return; }
-            note("Created " + v);
-        } else if (nameDialog.mode === "goto") {
+            fm.selectPaths([currentPath.replace(/\/$/, "") + "/" + v]);
+        } else if (mode === "newfile") {
+            if (!FilesBackend.createFile(v)) { note("Could not create " + v); return; }
+            fm.selectPaths([currentPath.replace(/\/$/, "") + "/" + v]);
+        } else if (mode === "goto") {
             const path = v.startsWith("~") ? homeDir + v.substring(1) : v;
             FilesBackend.currentPath = path;
-            if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/")
-                note("No folder at " + v);
-            clearSelection();
+            if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/") note("No folder at " + v);
         }
         nameDialog.close();
+        currentView().forceActiveFocus();
+    }
+    function parentOf(path) {
+        const i = path.lastIndexOf("/");
+        return i <= 0 ? "/" : path.substring(0, i);
     }
 
-    function openMenuFor(path, isDir, index) {
-        selectedIndex = index;
-        selectedPath = path;
-        itemMenu.path = path;
-        itemMenu.isDir = isDir;
-        itemMenu.popup();
+    // ── Bookmarks ────────────────────────────────────────────────────────────
+    property var bookmarks: FilesBackend.loadBookmarks()
+    function addBookmark(path) {
+        if (bookmarks.some(b => b.path === path)) return;
+        const copy = Array.from(bookmarks);
+        copy.push({ name: path.split("/").pop() || path, path: path });
+        bookmarks = copy;
+        FilesBackend.saveBookmarks(copy);
+        note("Bookmarked " + (path.split("/").pop() || path));
     }
-
-    function openItem(path, isDir) {
-        if (isDir) {
-            navigateTo(path);
-        } else if (isNative) {
-            FilesBackend.openItem(path);
-        }
-    }
-
-    function refreshView() {
-        if (!isNative) return;
-        FilesBackend.refresh();
-        const here = folderModel.folder;
-        folderModel.folder = "";
-        folderModel.folder = here;
-    }
-
-    function openTerminalHere() {
-        if (isNative) {
-            FilesBackend.openTerminal(currentPath);
-        }
-    }
-
-    function triggerQuickLook() {
-        if (selectedPath && isNative) {
-            FilesBackend.triggerQuickLook(selectedPath);
-        }
-    }
-
-    function addCurrentToBookmarks() {
-        let name = currentPath.split('/').pop() || "Folder";
-        if (currentPath === homeDir) name = "Home";
-        if (currentPath === "/") name = "Root";
-
-        for (let b of customBookmarks) {
-            if (b.path === currentPath) return;
-        }
-        let copy = Array.from(customBookmarks);
-        copy.push({ name: name, path: currentPath, icon: "󰉋" });
-        customBookmarks = copy;
-        if (window.isNative) FilesBackend.saveBookmarks(copy);
-    }
-
     function removeBookmark(index) {
-        let copy = Array.from(customBookmarks);
+        const copy = Array.from(bookmarks);
         copy.splice(index, 1);
-        customBookmarks = copy;
-        if (window.isNative) FilesBackend.saveBookmarks(copy);
+        bookmarks = copy;
+        FilesBackend.saveBookmarks(copy);
     }
 
-    // ── FolderListModel ──────────────────────────────────────────────────────
-    FolderListModel {
-        id: folderModel
-        folder: Paths.fileUrl(window.currentPath)
-        showDirsFirst: window.dirsFirst
-        showDotAndDotDot: false
-        showHidden: window.showHidden
-        nameFilters: window.filterQuery ? ["*" + window.filterQuery + "*"] : ["*"]
-        sortField: window.sortBy === "time" ? FolderListModel.Time
-                 : window.sortBy === "size" ? FolderListModel.Size
-                 : window.sortBy === "type" ? FolderListModel.Type : FolderListModel.Name
-        sortReversed: window.sortDescending
-    }
-
-    // ── Global Keyboard Shortcuts ────────────────────────────────────────────
-    Shortcut { sequence: "Space"; onActivated: window.triggerQuickLook() }
-    Shortcut { sequence: "Return"; onActivated: {
-        if (selectedIndex >= 0 && selectedIndex < folderModel.count) {
-            window.openItem(folderModel.get(selectedIndex, "filePath"), folderModel.isFolder(selectedIndex));
+    // ── Drag and drop ────────────────────────────────────────────────────────
+    function urlsOf(paths) { return paths.map(p => Paths.fileUrl(p)).join("\r\n"); }
+    // Move by default, as everywhere; Ctrl copies.
+    function dropInto(drop, dest) {
+        const paths = [];
+        for (const u of drop.urls) {
+            const s = String(u);
+            if (s.startsWith("file://")) paths.push(decodeURIComponent(s.substring(7)));
         }
-    }}
-    Shortcut { sequence: "Alt+Up"; onActivated: window.goUp() }
-    Shortcut { sequence: "Backspace"; onActivated: window.goUp() }
-    Shortcut { sequence: "Alt+Left"; onActivated: window.historyBack() }
-    Shortcut { sequence: "Alt+Right"; onActivated: window.historyForward() }
-    Shortcut { sequence: "Ctrl+H"; onActivated: window.showHidden = !window.showHidden }
-    Shortcut { sequence: "Ctrl+T"; onActivated: window.openTerminalHere() }
-    Shortcut { sequence: "F5"; onActivated: window.refreshView() }
-    Shortcut { sequence: "F2"; onActivated: if (window.selectedPath) window.askName("rename", window.selectedPath, window.selectedPath.split("/").pop()) }
-    Shortcut { sequence: "Delete"; onActivated: window.trash(window.selectedPath) }
+        if (paths.length === 0) return;
+        // Ctrl during the drag proposes a copy.
+        const copy = drop.proposedAction === Qt.CopyAction;
+        if (dest === FilesBackend.trashPath && !copy) FilesBackend.trashItems(paths);
+        else FilesBackend.transfer(paths, dest, !copy);
+        drop.accept(copy ? Qt.CopyAction : Qt.MoveAction);
+    }
+
+    // ── Shortcuts ────────────────────────────────────────────────────────────
+    Shortcut { sequence: "Alt+Up"; onActivated: FilesBackend.goUp() }
+    Shortcut { sequence: "Backspace"; onActivated: FilesBackend.goUp() }
+    Shortcut { sequence: "Alt+Left"; onActivated: FilesBackend.historyBack() }
+    Shortcut { sequence: "Alt+Right"; onActivated: FilesBackend.historyForward() }
+    Shortcut { sequence: "Alt+Home"; onActivated: window.navigateTo(window.homeDir) }
+    Shortcut { sequence: "Ctrl+A"; onActivated: fm.selectAll() }
+    Shortcut { sequence: "Ctrl+Z"; onActivated: FilesBackend.undo() }
+    Shortcut { sequence: "Ctrl+C"; onActivated: window.copySelection(false) }
+    Shortcut { sequence: "Ctrl+X"; onActivated: window.copySelection(true) }
+    Shortcut { sequence: "Ctrl+V"; onActivated: if (!FilesBackend.busy) FilesBackend.paste() }
+    Shortcut { sequence: "Delete"; onActivated: window.trashSelection() }
+    Shortcut { sequence: "Shift+Delete"; onActivated: { const t = window.targets(); if (t.length) confirmDelete.ask(t); } }
+    Shortcut { sequence: "F2"; onActivated: window.renameSelection() }
     Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", "New Folder") }
-    Shortcut { sequence: "Ctrl+C"; enabled: !!window.selectedPath; onActivated: window.copyItem(window.selectedPath, false) }
-    Shortcut { sequence: "Ctrl+X"; enabled: !!window.selectedPath; onActivated: window.copyItem(window.selectedPath, true) }
-    Shortcut { sequence: "Ctrl+V"; onActivated: if (window.isNative && !FilesBackend.busy) FilesBackend.paste() }
-    Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPathDisplay) }
-    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: window.copyPath(window.selectedPath || window.currentPath) }
-    Shortcut { sequence: "Ctrl+D"; onActivated: { window.addCurrentToBookmarks(); window.note("Bookmarked " + window.currentPathDisplay); } }
-    Shortcut { sequence: "Ctrl+F"; onActivated: searchField.forceActiveFocus() }
-    Shortcut { sequence: "Escape"; onActivated: { searchField.text = ""; window.filterQuery = ""; } }
+    Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPath) }
+    Shortcut { sequence: "Ctrl+F"; onActivated: searchField.focusInput() }
+    Shortcut { sequence: "Ctrl+H"; onActivated: FilesBackend.showHidden = !FilesBackend.showHidden }
+    Shortcut { sequence: "Ctrl+I"; onActivated: window.showInfo = !window.showInfo }
+    Shortcut { sequence: "Ctrl+1"; onActivated: window.viewMode = "grid" }
+    Shortcut { sequence: "Ctrl+2"; onActivated: window.viewMode = "list" }
+    Shortcut { sequences: ["Ctrl+=", "Ctrl++"]; onActivated: window.iconSize = Math.min(176, window.iconSize + 16) }
+    Shortcut { sequence: "Ctrl+-"; onActivated: window.iconSize = Math.max(56, window.iconSize - 16) }
+    Shortcut { sequence: "Ctrl+T"; onActivated: FilesBackend.openTerminal(window.currentPath) }
+    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: { const t = window.targets(); FilesBackend.copyText(t.length ? t.join("\n") : window.currentPath); window.note("Path copied"); } }
+    Shortcut { sequence: "Ctrl+D"; onActivated: window.addBookmark(window.currentPath) }
+    Shortcut { sequence: "F5"; onActivated: FilesBackend.refresh() }
+    Shortcut { sequence: "Space"; onActivated: { const it = window.single(); if (it && !it.isDir) FilesBackend.triggerQuickLook(it.path); } }
+    Shortcut {
+        sequence: "Escape"
+        onActivated: {
+            if (searchField.text !== "") { searchField.text = ""; FilesBackend.filterQuery = ""; }
+            else fm.clearSelection();
+            window.currentView().forceActiveFocus();
+        }
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // ROOT WINDOW FRAME (Rounded Corners + Antialiased Border)
-    // ═════════════════════════════════════════════════════════════════════════
-    Rectangle {
-        id: windowFrame
+    RowLayout {
         anchors.fill: parent
-        // No corners or outline of our own: sway draws both, and only sway
-        // knows which window has focus. The app drew a fixed 1px line and sway
-        // was told `border none` for it, so ours were the only windows on the
-        // desktop that did not light up when focused. SwayFX's corner_radius
-        // rounds the surface; a 14px radius inside its 10px one left slivers.
-        radius: 0
-        color: window.colBg
-        clip: true
+        spacing: 0
 
-        RowLayout {
-            anchors.fill: parent
-            spacing: 0
+        // ── Sidebar ──────────────────────────────────────────────────────────
+        Rectangle {
+            Layout.fillHeight: true
+            Layout.preferredWidth: Design.s(220)
+            color: Design.sunken
 
-            // ═════════════════════════════════════════════════════════════════
-            // LEFT SIDEBAR (210px, Full-Height Sleek Obsidian)
-            // ═════════════════════════════════════════════════════════════════
-            Rectangle {
-                Layout.fillHeight: true
-                Layout.preferredWidth: Design.s(210)
-                color: window.colSidebar
+            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
 
-                // Subtle right divider line
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 1
-                    color: window.colBorderSubtle
-                    z: 5
-                }
+            C.ScrollView {
+                anchors.fill: parent
+                anchors.topMargin: Design.s(Design.space.md)
+                anchors.bottomMargin: Design.s(Design.space.md)
+                contentWidth: availableWidth
+                C.ScrollBar.horizontal.policy: C.ScrollBar.AlwaysOff
 
                 ColumnLayout {
+                    width: parent.width
+                    spacing: Design.s(2)
+
+                    SideHeading { text: "Places" }
+                    SideRow { label: "Home"; glyph: "\u{f02dc}"; path: window.homeDir }
+                    Repeater {
+                        model: [
+                            { label: "Desktop",   glyph: "\u{f01c4}", sub: "Desktop" },
+                            { label: "Documents", glyph: "\u{f0219}", sub: "Documents" },
+                            { label: "Downloads", glyph: "\u{f01da}", sub: "Downloads" },
+                            { label: "Pictures",  glyph: "\u{f02e9}", sub: "Pictures" },
+                            { label: "Music",     glyph: "\u{f075a}", sub: "Music" },
+                            { label: "Videos",    glyph: "\u{f0567}", sub: "Videos" }
+                        ]
+                        delegate: SideRow {
+                            required property var modelData
+                            label: modelData.label
+                            glyph: modelData.glyph
+                            path: window.homeDir + "/" + modelData.sub
+                            visible: FilesBackend.pathExists(path)
+                        }
+                    }
+                    SideRow {
+                        label: "Trash"
+                        glyph: FilesBackend.trashCount > 0 ? "\u{f0a7a}" : "\u{f0a79}"
+                        path: FilesBackend.trashPath
+                        badge: FilesBackend.trashCount > 0 ? String(FilesBackend.trashCount) : ""
+                    }
+
+                    SideHeading { text: "Devices" }
+                    SideRow { label: "File System"; glyph: "\u{f02ca}"; path: "/"; detail: FilesBackend.diskFreeSpace }
+                    Repeater {
+                        model: FilesBackend.volumes
+                        delegate: SideRow {
+                            required property var modelData
+                            label: modelData.name
+                            glyph: "\u{f02cb}"
+                            path: modelData.path
+                            detail: modelData.free
+                            ejectable: true
+                            onEject: FilesBackend.unmount(modelData.path)
+                        }
+                    }
+
+                    SideHeading {
+                        text: "Bookmarks"
+                        action: "\u{f0415}"
+                        actionTip: "Bookmark this folder (Ctrl+D)"
+                        onActionClicked: window.addBookmark(window.currentPath)
+                    }
+                    Repeater {
+                        model: window.bookmarks
+                        delegate: SideRow {
+                            required property var modelData
+                            required property int index
+                            label: modelData.name
+                            glyph: "\u{f00c0}"
+                            path: modelData.path
+                            removable: true
+                            onRemove: window.removeBookmark(index)
+                        }
+                    }
+                    Label {
+                        visible: window.bookmarks.length === 0
+                        Layout.leftMargin: Design.s(Design.space.lg)
+                        Layout.rightMargin: Design.s(Design.space.md)
+                        Layout.fillWidth: true
+                        text: "Drag a folder here, or press Ctrl+D"
+                        role: "caption"
+                        color: Design.textFaint
+                        wrapMode: Text.WordWrap
+                    }
+                    // Dropping a folder on the bookmark list bookmarks it.
+                    DropArea {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Design.s(28)
+                        keys: ["text/uri-list"]
+                        onDropped: drop => {
+                            for (const u of drop.urls) {
+                                const p = decodeURIComponent(String(u).replace(/^file:\/\//, ""));
+                                if (FilesBackend.isDirectory(p)) window.addBookmark(p);
+                            }
+                            drop.accept(Qt.LinkAction);
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Main column ──────────────────────────────────────────────────────
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+
+            // Folder chooser bar, in --pick-folder mode.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(52)
+                visible: FilesBackend.pickMode
+                color: Design.tint(Design.accent, 0.14)
+                RowLayout {
                     anchors.fill: parent
-                    anchors.margins: Design.s(14)
-                    spacing: Design.s(10)
-
-                    // No app header. The window is opened by name, has this suite's frame
-                    // and a folder tree in it — nothing about "Files / Explorer & Gallery"
-                    // was news, and it cost the top of the sidebar, which is where the
-                    // places you actually navigate to belong.
-
-                    // 1. QUICK JUMP (Root, Home, the dotfiles checkout)
-                    //
-                    // Three of the glyphs below were simply the wrong picture,
-                    // which in a sidebar of icon-and-label rows is only half
-                    // wrong — and in the viewer's unlabelled toolbar, where the
-                    // same check found a ✕ on "Zoom Out", entirely so. Root had
-                    // Home's house, Downloads pointed *up*, and Videos was the
-                    // VLC traffic cone among six generic places. Verified by
-                    // rendering the codepoints, not by trusting their names.
-                    Text {
-                        text: "QUICK JUMP"
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(9)
-                        font.bold: true
-                        color: window.colDim
-                        Layout.topMargin: 4
-                    }
-
+                    anchors.leftMargin: Design.s(Design.space.lg)
+                    anchors.rightMargin: Design.s(Design.space.lg)
+                    spacing: Design.s(Design.space.md)
+                    Icon { text: "\u{f024b}"; color: Design.accent }
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: Design.s(2)
-
-                        SidebarPill { label: "Root (/)"; path: "/"; icon: "󰋊"; iconCol: window.colRed }
-                        SidebarPill { label: "Home (~)"; path: window.homeDir; icon: "󰋜"; iconCol: window.colBlue }
-                        // A pinned entry for this desktop's own repository sat here.
-                        // It is a bookmark like any other: add it with the "+" under
-                        // Bookmarks if you want it, remove it the same way.
+                        spacing: 0
+                        Label { text: "Choose a folder"; role: "caption"; dim: true }
+                        Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
                     }
+                    BarButton { label: "Cancel"; onClicked: FilesBackend.cancelPick() }
+                    BarButton { label: "Choose this folder"; primary: true; onClicked: FilesBackend.confirmPick() }
+                }
+            }
 
-                    // 2. PLACES
-                    Text {
-                        text: "PLACES"
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(9)
-                        font.bold: true
-                        color: window.colDim
-                        Layout.topMargin: 4
-                    }
+            // ── Toolbar ──────────────────────────────────────────────────────
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(52)
+                color: Design.surface
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
 
-                    ColumnLayout {
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Design.s(Design.space.md)
+                    anchors.rightMargin: Design.s(Design.space.md)
+                    spacing: Design.s(Design.space.xs)
+
+                    BarButton { glyph: "\u{f004d}"; tip: "Back (Alt+←)"; enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                    BarButton { glyph: "\u{f0054}"; tip: "Forward (Alt+→)"; enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                    BarButton { glyph: "\u{f005d}"; tip: "Up (Alt+↑)"; enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+
+                    // Path: clickable segments; a click on the empty part of the
+                    // bar, or Ctrl+L, types one instead.
+                    Rectangle {
                         Layout.fillWidth: true
-                        spacing: Design.s(2)
-
-                        SidebarPill { label: "Documents"; path: window.homeDir + "/Documents"; icon: "󰈙"; iconCol: window.colPurple }
-                        SidebarPill { label: "Downloads"; path: window.homeDir + "/Downloads"; icon: "󰁅"; iconCol: window.colGreen }
-                        SidebarPill { label: "Pictures"; path: window.homeDir + "/Pictures"; icon: "󰋩"; iconCol: window.colPurple }
-                        SidebarPill { label: "Music"; path: window.homeDir + "/Music"; icon: "󰎆"; iconCol: window.colOrange }
-                        SidebarPill { label: "Videos"; path: window.homeDir + "/Videos"; icon: "󰎁"; iconCol: window.colRed }
-                    }
-
-                    // 3. BOOKMARKS
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 4
-
-                        Text {
-                            text: "BOOKMARKS"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(9)
-                            font.bold: true
-                            color: window.colDim
-                        }
-                        Item { Layout.fillWidth: true }
-                        Rectangle {
-                            width: Design.s(18); height: Design.s(18); radius: Design.s(4)
-                            color: addBmArea.containsMouse ? Design.tint(Design.accent, 0.25) : "transparent"
-                            Text {
-                                anchors.centerIn: parent
-                                text: "󰐕"
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                color: addBmArea.containsMouse ? window.colBlue : window.colDim
-                            }
-                            MouseArea {
-                                id: addBmArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: window.addCurrentToBookmarks()
-                            }
-                        }
-                    }
-
-                    ListView {
-                        id: bookmarksList
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
+                        Layout.preferredHeight: Design.s(34)
+                        Layout.leftMargin: Design.s(Design.space.sm)
+                        radius: Design.s(Design.radius.ctl)
+                        color: Design.sunken
+                        border.color: Design.line
+                        border.width: 1
                         clip: true
-                        spacing: Design.s(2)
-                        model: window.customBookmarks
 
-                        delegate: Rectangle {
-                            width: bookmarksList.width
-                            height: Design.s(28)
-                            radius: Design.s(6)
-                            color: window.currentPath === modelData.path ? Design.tint(Design.accent, 0.20) : (bmArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
-                            border.color: window.currentPath === modelData.path ? Design.tint(Design.accent, 0.40) : "transparent"
-                            border.width: 1
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Design.s(8)
-                                anchors.rightMargin: Design.s(6)
-                                spacing: Design.s(6)
-
-                                Text { text: modelData.icon || "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
-                                Text { text: modelData.name; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: window.colFg; Layout.fillWidth: true; elide: Text.ElideRight }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.IBeamCursor
+                            onClicked: window.askName("goto", "", window.currentPath)
+                        }
+                        ListView {
+                            id: crumbs
+                            anchors.fill: parent
+                            anchors.leftMargin: Design.s(Design.space.xs)
+                            anchors.rightMargin: Design.s(Design.space.xs)
+                            orientation: ListView.Horizontal
+                            interactive: false
+                            spacing: 0
+                            model: FilesBackend.inTrash ? [{ name: "Trash", path: FilesBackend.trashPath }] : FilesBackend.breadcrumbs
+                            onCountChanged: positionViewAtEnd()
+                            delegate: Row {
+                                required property var modelData
+                                required property int index
+                                height: crumbs.height
                                 Text {
-                                    text: "×"
-                                    font.pixelSize: Design.s(13)
-                                    color: delBmArea.containsMouse ? window.colRed : window.colDim
-                                    visible: bmArea.containsMouse || delBmArea.containsMouse
+                                    visible: index > 0
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "\u{f0142}"
+                                    font.family: Design.font.icon
+                                    font.pixelSize: Design.s(12)
+                                    color: Design.textFaint
+                                }
+                                Rectangle {
+                                    readonly property bool last: index === crumbs.count - 1
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: crumbText.implicitWidth + Design.s(16)
+                                    height: Design.s(26)
+                                    radius: Design.s(Design.radius.sm)
+                                    color: crumbMa.containsMouse ? Design.hover : (last ? Design.raised : "transparent")
+                                    Text {
+                                        id: crumbText
+                                        anchors.centerIn: parent
+                                        text: modelData.name === "~" ? "Home" : modelData.name
+                                        font.family: Design.font.sans
+                                        font.pixelSize: Design.s(Design.font.body)
+                                        font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
+                                        color: parent.last ? Design.text : Design.textDim
+                                    }
                                     MouseArea {
-                                        id: delBmArea
+                                        id: crumbMa
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: window.removeBookmark(index)
+                                        onClicked: window.navigateTo(modelData.path)
+                                    }
+                                    DropArea {
+                                        anchors.fill: parent
+                                        keys: ["text/uri-list"]
+                                        onDropped: drop => window.dropInto(drop, modelData.path)
                                     }
                                 }
                             }
-
-                            MouseArea {
-                                id: bmArea
-                                // Below the row: on top, it took the click meant
-                                // for the remove (×) button inside it.
-                                z: -1
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: window.navigateTo(modelData.path)
-                            }
                         }
                     }
 
-                    // Storage Device Card with Progress Bar
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: Design.s(44)
-                        radius: Design.s(8)
-                        color: window.colSunken
-                        border.color: window.colBorderSubtle
-                        border.width: 1
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: Design.s(8)
-                            spacing: Design.s(4)
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text { text: "󰋊 System Drive"; font.family: Design.font.sans; font.pixelSize: Design.s(10); font.bold: true; color: window.colFg }
-                                Item { Layout.fillWidth: true }
-                                Text { text: isNative ? FilesBackend.diskFreeSpace : "12.8 GB free"; font.family: Design.font.sans; font.pixelSize: Design.s(9); color: window.colDim }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: Design.s(4)
-                                radius: Design.s(2)
-                                color: window.colBorderSubtle
-
-                                Rectangle {
-                                    width: parent.width * 0.42
-                                    height: parent.height
-                                    radius: Design.s(2)
-                                    color: window.colBlue
-                                }
-                            }
-                        }
-                    }
-                }
-
-                component SidebarPill: Rectangle {
-                    id: pill
-                    property string label: ""
-                    property string path: ""
-                    property string icon: "󰉋"
-                    property color iconCol: window.colBlue
-
-                    readonly property bool isActive: window.currentPath === pill.path
-
-                    Layout.fillWidth: true
-                    height: Design.s(28)
-                    radius: Design.s(6)
-                    color: isActive ? Design.tint(Design.accent, 0.20) : (pillArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
-                    border.color: isActive ? Design.tint(Design.accent, 0.45) : "transparent"
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(8)
-                        anchors.rightMargin: Design.s(8)
-                        spacing: Design.s(8)
-
-                        Text { text: pill.icon; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: pill.isActive ? window.colBlue : pill.iconCol }
-                        Text { text: pill.label; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: pill.isActive ? "#ffffff" : window.colFg; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Field {
+                        id: searchField
+                        Layout.preferredWidth: Design.s(220)
+                        Layout.leftMargin: Design.s(Design.space.sm)
+                        placeholder: "Search this folder (Ctrl+F)"
+                        onEdited: value => FilesBackend.filterQuery = value
+                        onAccepted: window.currentView().forceActiveFocus()
                     }
 
-                    MouseArea {
-                        id: pillArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: window.navigateTo(pill.path)
+                    Item { Layout.preferredWidth: Design.s(Design.space.sm) }
+
+                    BarButton {
+                        visible: FilesBackend.inTrash
+                        glyph: "\u{f0a7a}"
+                        label: "Empty Trash"
+                        danger: true
+                        enabled: FilesBackend.trashCount > 0
+                        onClicked: confirmEmpty.open()
                     }
+                    BarButton { visible: !FilesBackend.inTrash; glyph: "\u{f0b9d}"; tip: "New folder (Ctrl+Shift+N)"; onClicked: window.askName("newfolder", "", "New Folder") }
+                    BarButton { glyph: "\u{f0570}"; tip: "Icons (Ctrl+1)"; checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
+                    BarButton { glyph: "\u{f0279}"; tip: "List (Ctrl+2)"; checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
+                    BarButton { glyph: "\u{f02fd}"; tip: "Details panel (Ctrl+I)"; checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                    BarButton { glyph: "\u{f01d9}"; tip: "View options"; onClicked: viewMenu.popup() }
                 }
             }
 
-            // ═════════════════════════════════════════════════════════════════
-            // RIGHT WORKSPACE: HEADER TOOLBAR, FILE BROWSER, FOOTER
-            // ═════════════════════════════════════════════════════════════════
-            ColumnLayout {
+            // ── Content ──────────────────────────────────────────────────────
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 0
 
-                // ── Folder chooser bar ───────────────────────────────────────
-                //
-                // Only in `--pick-folder` mode, where another application asked
-                // for a directory and this file manager is answering. The apps
-                // used to raise Qt's own FolderDialog for this: a window that
-                // looks like nothing else on this desktop, with its own idea of
-                // Favourites and its own keys.
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(44)
-                    visible: window.isNative && FilesBackend.pickMode
-                    color: Design.tint(Design.accent, 0.16)
+                // Drops on empty space land in this folder.
+                DropArea {
+                    anchors.fill: parent
+                    keys: ["text/uri-list"]
+                    onDropped: drop => window.dropInto(drop, window.currentPath)
+                }
 
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: 1
-                        color: Design.accent
+                // Clicks on empty space: clear the selection, right-click for
+                // the folder's own menu. Under the views so items get theirs.
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: mouse => {
+                        window.currentView().forceActiveFocus();
+                        if (!(mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))) fm.clearSelection();
+                        if (mouse.button === Qt.RightButton) bgMenu.popup();
                     }
+                }
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(12)
-                        anchors.rightMargin: Design.s(12)
-                        spacing: Design.s(10)
+                // ── Icons ────────────────────────────────────────────────────
+                GridView {
+                    id: gridView
+                    anchors.fill: parent
+                    anchors.margins: Design.s(Design.space.md)
+                    visible: window.viewMode === "grid"
+                    model: fm
+                    clip: true
+                    focus: visible
+                    boundsBehavior: Flickable.StopAtBounds
+                    readonly property int columns: Math.max(1, Math.floor(width / cellWidth))
+                    cellWidth: Design.s(window.iconSize + 44)
+                    cellHeight: Design.s(window.iconSize + 62)
+                    currentIndex: fm.currentIndex
+                    highlightFollowsCurrentItem: false
+                    C.ScrollBar.vertical: OverflowBar {}
+                    Keys.onPressed: event => window.handleKey(event, gridView.columns)
 
-                        Text {
-                            text: "󰉋"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(15)
-                            color: Design.accent
-                        }
+                    delegate: Item {
+                        id: tile
+                        required property int index
+                        required property string name
+                        required property string path
+                        required property bool isDir
+                        required property bool isImage
+                        required property bool selected
+                        required property bool hidden
+                        required property bool symlink
+                        required property string category
+                        required property string sizeText
+                        width: gridView.cellWidth
+                        height: gridView.cellHeight
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 0
-                            Text {
-                                text: "Choose a folder"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(9)
-                                color: Design.textDim
+                        Rectangle {
+                            id: tileBg
+                            anchors.fill: parent
+                            anchors.margins: Design.s(3)
+                            radius: Design.s(Design.radius.card)
+                            color: tile.selected ? Design.tint(Design.accent, 0.24)
+                                 : tileDrop.containsDrag ? Design.tint(Design.accent, 0.16)
+                                 : tileMa.containsMouse ? Design.hover : "transparent"
+                            border.width: tile.selected || tileDrop.containsDrag ? 1 : 0
+                            border.color: Design.accent
+                            opacity: tile.hidden ? 0.65 : 1.0
+
+                            Item {
+                                id: thumbBox
+                                anchors.top: parent.top
+                                anchors.topMargin: Design.s(Design.space.sm)
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Design.s(window.iconSize)
+                                height: Design.s(window.iconSize)
+
+                                Image {
+                                    id: thumb
+                                    anchors.fill: parent
+                                    visible: tile.isImage && status === Image.Ready
+                                    source: tile.isImage ? Paths.fileUrl(tile.path) : ""
+                                    sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    smooth: true
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: !thumb.visible
+                                    text: window.glyphFor(tile.category)
+                                    font.family: Design.font.icon
+                                    font.pixelSize: Design.s(window.iconSize * 0.78)
+                                    color: window.toneFor(tile.category)
+                                }
+                                Text {
+                                    visible: tile.symlink
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    text: "\u{f0339}"
+                                    font.family: Design.font.icon
+                                    font.pixelSize: Design.s(14)
+                                    color: Design.text
+                                }
                             }
                             Text {
-                                Layout.fillWidth: true
-                                text: window.currentPath
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(11)
-                                font.bold: true
+                                anchors.top: thumbBox.bottom
+                                anchors.topMargin: Design.s(Design.space.xs)
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.leftMargin: Design.s(Design.space.xs)
+                                anchors.rightMargin: Design.s(Design.space.xs)
+                                text: tile.name
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WrapAnywhere
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(Design.font.body)
                                 color: Design.text
-                                elide: Text.ElideMiddle
                             }
                         }
 
-                        Rectangle {
-                            Layout.preferredWidth: Design.s(70)
-                            Layout.preferredHeight: Design.s(26)
-                            radius: Design.s(5)
-                            color: cancelPickArea.containsMouse ? Design.hover : "transparent"
-                            border.color: Design.line
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Cancel"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(11)
-                                color: Design.textDim
-                            }
-                            MouseArea {
-                                id: cancelPickArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: FilesBackend.cancelPick()
-                            }
-                        }
+                        DragProxy { id: tileProxy; active: tileMa.drag.active; paths: tile.selected ? fm.selectedPaths() : [tile.path] }
 
-                        Rectangle {
-                            Layout.preferredWidth: Design.s(120)
-                            Layout.preferredHeight: Design.s(26)
-                            radius: Design.s(5)
-                            color: confirmPickArea.containsMouse ? Design.accentAlt : Design.accent
-                            Text {
-                                anchors.centerIn: parent
-                                text: "Choose this folder"
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(11)
-                                font.bold: true
-                                color: Design.accentText
-                            }
-                            MouseArea {
-                                id: confirmPickArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: FilesBackend.confirmPick()
-                            }
+                        MouseArea {
+                            id: tileMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            drag.target: tileProxy
+                            drag.threshold: Design.s(10)
+                            onPressed: mouse => window.itemPressed(tile.index, mouse)
+                            onReleased: mouse => window.itemReleased(tile.index, mouse, drag.active)
+                            onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(tile.index); }
+                        }
+                        DropArea {
+                            id: tileDrop
+                            anchors.fill: parent
+                            enabled: tile.isDir
+                            keys: ["text/uri-list"]
+                            onDropped: drop => window.dropInto(drop, tile.path)
                         }
                     }
                 }
 
-                // ── Top Navigation Bar (46px) ────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(46)
-                    color: window.colDark
+                // ── List with columns ────────────────────────────────────────
+                ColumnLayout {
+                    anchors.fill: parent
+                    visible: window.viewMode === "list"
+                    spacing: 0
 
-                    // Subtle bottom divider
                     Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: 1
-                        color: window.colBorderSubtle
-                    }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(12)
-                        anchors.rightMargin: Design.s(12)
-                        spacing: Design.s(8)
-
-                        // History Navigation Cluster
-                        //
-                        // This had a height and no width. Its only child is
-                        // anchored, and an anchored child gives its parent no
-                        // implicit size, so the capsule was zero pixels wide:
-                        // the background and border never drew at all, and the
-                        // row of four buttons spilled out of it symmetrically —
-                        // half of it left, across the sidebar divider and up
-                        // against the app title, and half right, underneath the
-                        // breadcrumb. Sized from its contents, it sits in the
-                        // toolbar where it belongs and collides with nothing.
-                        Rectangle {
-                            implicitWidth: navRow.implicitWidth + Design.s(10)
-                            height: Design.s(30)
-                            radius: Design.s(6)
-                            color: window.colSunken
-                            border.color: window.colBorderSubtle
-                            border.width: 1
-
-                            Row {
-                                id: navRow
-                                anchors.centerIn: parent
-                                spacing: Design.s(2)
-
-                                NavIconBtn { icon: "󰁍"; enabled: window.canGoBack; onClicked: window.historyBack() }
-                                NavIconBtn { icon: "󰁔"; enabled: window.canGoForward; onClicked: window.historyForward() }
-                                NavIconBtn { icon: "󰁝"; enabled: window.currentPath !== "/"; onClicked: window.goUp() }
-                                // Re-points the model as well as asking the backend for the disk
-                                // figures. The button used to do only the second of those — the list
-                                // is a FolderListModel bound to currentPath, and nothing told it to
-                                // look again — so "refresh" refreshed the free-space readout and left
-                                // the files exactly as they were.
-                                NavIconBtn {
-                                    icon: "󰑐"
-                                    enabled: true
-                                    onClicked: window.refreshView()
-                                }
-                            }
-                        }
-
-                        // Breadcrumbs, not a capsule.
-                        //
-                        // These sat inside a sunken, bordered, full-width
-                        // field. In the home directory that drew a 900-pixel
-                        // inset box around a single "~" chip — and an empty
-                        // inset field is the shape of a text input waiting to
-                        // be filled, which this is not. Without the box the
-                        // crumbs are just a path on the toolbar, which is what
-                        // they are and what every other file manager shows.
-                        // The width still fills, so a long path has room and
-                        // still scrolls.
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: Design.s(30)
-                            radius: Design.s(6)
-                            color: "transparent"
-                            clip: true
-
-                            ListView {
-                                id: breadcrumbsList
-                                anchors.fill: parent
-                                anchors.leftMargin: Design.s(8)
-                                anchors.rightMargin: Design.s(8)
-                                orientation: ListView.Horizontal
-                                spacing: Design.s(4)
-                                clip: true
-                                model: window.getBreadcrumbs()
-
-                                delegate: RowLayout {
-                                    spacing: Design.s(4)
-                                    anchors.verticalCenter: parent.verticalCenter
-
-                                    Rectangle {
-                                        // The child Text referenced isLast unqualified, which does not
-                                        // resolve from its scope, so the current folder was never
-                                        // highlighted. Naming the chip fixes both uses.
-                                        id: crumbChip
-                                        implicitWidth: crumbText.implicitWidth + Design.s(12)
-                                        height: Design.s(22)
-                                        radius: Design.s(4)
-                                        // accentSoft is a container role, and on
-                                        // this palette it resolves to a muddy grey
-                                        // that reads as a disabled field rather
-                                        // than as where you are. The accent tint is
-                                        // what marks a selection everywhere else in
-                                        // the suite — the sidebar pills, the
-                                        // launcher — so the path follows the theme
-                                        // the way the rest of it does.
-                                        color: crumbChip.isLast ? Design.tint(Design.accent, 0.20)
-                                             : (crumbHover.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
-                                        border.color: crumbChip.isLast ? Design.tint(Design.accent, 0.45) : "transparent"
-                                        border.width: 1
-
-                                        readonly property bool isLast: index === (breadcrumbsList.count - 1)
-
-                                        Text {
-                                            id: crumbText
-                                            anchors.centerIn: parent
-                                            text: modelData.name
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(11)
-                                            font.bold: crumbChip.isLast
-                                            color: crumbChip.isLast ? Design.accent
-                                                 : (crumbHover.containsMouse ? Design.text : window.colFg)
-                                        }
-
-                                        HoverHandler { id: crumbHover }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: window.navigateTo(modelData.path)
-                                        }
-                                    }
-
-                                    Text {
-                                        text: "󰅂"
-                                        font.family: Design.font.mono
-                                        color: window.colDim
-                                        font.pixelSize: Design.s(9)
-                                        visible: index < (breadcrumbsList.count - 1)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Search Filter Bar
-                        Rectangle {
-                            Layout.preferredWidth: Math.min(180, Math.max(120, window.width * 0.18))
-                            height: Design.s(30)
-                            radius: Design.s(6)
-                            color: window.colSunken
-                            border.color: searchField.activeFocus ? window.colBlue : window.colBorderSubtle
-                            border.width: 1
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Design.s(8)
-                                anchors.rightMargin: Design.s(8)
-                                spacing: Design.s(6)
-
-                                Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: searchField.activeFocus ? window.colBlue : window.colDim }
-                                TextInput {
-                                    id: searchField
-                                    Layout.fillWidth: true
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(11)
-                                    color: window.colFg
-                                    clip: true
-                                    selectByMouse: true
-                                    onTextChanged: window.filterQuery = text.trim()
-
-                                    Text {
-                                        text: "Search files..."
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(11)
-                                        color: window.colDim
-                                        visible: !searchField.text && !searchField.activeFocus
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-                                Text {
-                                    text: "󰅖"
-                                    font.family: Design.font.mono
-                                    font.pixelSize: Design.s(10)
-                                    color: window.colDim
-                                    visible: searchField.text.length > 0
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: { searchField.text = ""; window.filterQuery = ""; }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Segmented View Mode Capsule [ Grid | List | Gallery ]
-                        Rectangle {
-                            height: Design.s(30)
-                            width: Design.s(90)
-                            radius: Design.s(6)
-                            color: window.colSunken
-                            border.color: window.colBorderSubtle
-                            border.width: 1
-
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: Design.s(2)
-
-                                ViewSegmentBtn { icon: "󰕰"; active: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
-                                ViewSegmentBtn { icon: "󰕱"; active: window.viewMode === "list"; onClicked: window.viewMode = "list" }
-                                ViewSegmentBtn { icon: "󰋩"; active: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
-                            }
-                        }
-
-                        // Quick Action Buttons (Hidden Toggle & Terminal)
-                        Row {
-                            spacing: Design.s(4)
-                            Layout.alignment: Qt.AlignVCenter
-
-                            Rectangle {
-                                width: Design.s(30); height: Design.s(30); radius: Design.s(6)
-                                color: window.showHidden ? Design.tint(Design.accent, 0.25) : (hidArea.containsMouse ? Design.tint(Design.text, 0.08) : window.colSunken)
-                                border.color: window.showHidden ? window.colBlue : window.colBorderSubtle
-                                border.width: 1
-                                Text { anchors.centerIn: parent; text: "󰈉"; font.family: Design.font.mono; font.pixelSize: Design.s(13); color: window.showHidden ? window.colBlue : window.colDim }
-                                MouseArea { id: hidArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: window.showHidden = !window.showHidden }
-                            }
-
-                            Rectangle {
-                                width: Design.s(30); height: Design.s(30); radius: Design.s(6)
-                                color: termArea.containsMouse ? Design.tint(Design.text, 0.08) : window.colSunken
-                                border.color: window.colBorderSubtle
-                                border.width: 1
-                                Text { anchors.centerIn: parent; text: "󰞷"; font.family: Design.font.mono; font.pixelSize: Design.s(13); color: window.colFg }
-                                MouseArea { id: termArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: window.openTerminalHere() }
-                            }
-                        }
-                    }
-                }
-
-                // ── Main File Browser Canvas ─────────────────────────────────
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-
-                    // Under the views: what a click on no file means. The side
-                    // buttons of a mouse go back and forward, as in a browser; a
-                    // right click on empty space is the folder's own menu; a left
-                    // click clears the selection. The views only take the left
-                    // button for scrolling, so these reach here.
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton | Qt.ForwardButton
-                        onClicked: mouse => {
-                            if (mouse.button === Qt.BackButton) window.historyBack();
-                            else if (mouse.button === Qt.ForwardButton) window.historyForward();
-                            else if (mouse.button === Qt.RightButton) { window.clearSelection(); bgMenu.popup(); }
-                            else window.clearSelection();
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Design.s(34)
+                        color: Design.surface
+                        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: Design.s(Design.space.lg)
+                            anchors.rightMargin: Design.s(Design.space.lg)
+                            spacing: Design.s(Design.space.md)
+                            ColumnHead { Layout.fillWidth: true; label: "Name"; field: "name" }
+                            ColumnHead { Layout.preferredWidth: Design.s(110); label: "Size"; field: "size"; alignRight: true }
+                            ColumnHead { Layout.preferredWidth: Design.s(170); label: "Kind"; field: "type" }
+                            ColumnHead { Layout.preferredWidth: Design.s(150); label: "Modified"; field: "time" }
                         }
                     }
 
-                    // 1. GRID VIEW (Default, Smooth Fast Scrolling)
-                    GridView {
-                        id: grid
-                        reuseItems: true
-                        anchors.fill: parent
-                        anchors.margins: Design.s(14)
-                        // A fixed cell size ignores the window. At 1280px wide
-                        // that laid out fourteen columns of 80px around a 24px
-                        // glyph, so a file manager full of files still read as
-                        // mostly empty, and every name longer than "DotsFiles"
-                        // was elided. The floor decides how small a cell may
-                        // get; the remainder is shared out evenly so the grid
-                        // reaches the right edge instead of leaving a ragged
-                        // strip beside it.
-                        readonly property int columns: Math.max(1, Math.floor(width / Design.s(136)))
-                        cellWidth: Math.floor(width / grid.columns)
-                        cellHeight: grid.cellWidth
-                        clip: true
-                        visible: window.viewMode === "grid"
-                        model: folderModel
-                        cacheBuffer: 300
-
-                        delegate: Rectangle {
-                            id: gridCard
-                            width: grid.cellWidth - Design.s(10)
-                            height: grid.cellHeight - Design.s(10)
-                            radius: Design.s(8)
-                            color: isSelected ? Design.tint(Design.accent, 0.22) : (cardHover.containsMouse ? window.colCardHover : "transparent")
-                            border.color: isSelected ? window.colBlue : (cardHover.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
-                            border.width: 1
-
-                            readonly property bool isSelected: window.selectedIndex === index
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(4)
-
-                                // Low-res fast thumbnail or vector icon
-                                Item {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-
-                                    Image {
-                                        id: gridThumb
-                                        anchors.centerIn: parent
-                                        width: Design.s(60); height: Design.s(60)
-                                        source: window.isImageFile(model.fileName) ? model.filePath : ""
-                                        fillMode: Image.PreserveAspectFit
-
-                                        // Ready, not "the name ends in .png". Whether a file is
-                                        // an image decided both halves of this, so a picture
-                                        // that would not decode — truncated, empty, or simply
-                                        // not the format its name claims — drew an empty cell
-                                        // with a filename under it and no icon of any kind.
-                                        // The glyph now covers that, and covers the moment
-                                        // before an async thumbnail arrives.
-                                        visible: status === Image.Ready
-                                        asynchronous: true
-                                        cache: true
-                                        // Low resolution decoding to eliminate scroll stutter!
-                                        sourceSize: Qt.size(64, 64)
-                                    }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: window.getIconGlyph(model.fileName, model.fileIsDir)
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(46)
-                                        color: window.getIconColor(model.fileName, model.fileIsDir)
-                                        visible: !gridThumb.visible
-                                    }
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: model.fileName || ""
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(11)
-                                    font.bold: gridCard.isSelected
-                                    color: gridCard.isSelected ? "#ffffff" : window.colFg
-                                    horizontalAlignment: Text.AlignHCenter
-                                    // Two lines. One elided line in an 80px cell
-                                    // turned most of a real directory into
-                                    // "DotsFile…es" and "run-headl…sh".
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    // A folder is already drawn as a folder, so
-                                    // the word under it was a third line of type
-                                    // saying what the icon says. Files keep their
-                                    // size, which the icon cannot tell you.
-                                    visible: !model.fileIsDir
-                                    text: window.formatSize(model.fileSize)
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(9)
-                                    color: window.colDim
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                            }
-
-                            HoverHandler { id: cardHover }
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                onClicked: mouse => {
-                                    if (mouse.button === Qt.RightButton) {
-                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
-                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
-                                        // Middle click on a folder: a terminal there.
-                                        FilesBackend.openTerminal(model.filePath);
-                                    } else {
-                                        window.selectedIndex = index;
-                                        window.selectedPath = model.filePath;
-                                    }
-                                }
-                                onDoubleClicked: mouse => {
-                                    if (mouse.button === Qt.LeftButton)
-                                        window.openItem(model.filePath, model.fileIsDir);
-                                }
-                            }
-                        }
-                    }
-
-                    // 2. LIST VIEW
                     ListView {
                         id: listView
-                        reuseItems: true
-                        anchors.fill: parent
-                        anchors.margins: Design.s(10)
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: fm
                         clip: true
-                        visible: window.viewMode === "list"
-                        model: folderModel
-                        spacing: Design.s(2)
+                        focus: visible
+                        boundsBehavior: Flickable.StopAtBounds
+                        currentIndex: fm.currentIndex
+                        highlightFollowsCurrentItem: false
+                        C.ScrollBar.vertical: OverflowBar {}
+                        Keys.onPressed: event => window.handleKey(event, 1)
 
-                        delegate: Rectangle {
-                            id: listCard
+                        delegate: Item {
+                            id: row
+                            required property int index
+                            required property string name
+                            required property string path
+                            required property bool isDir
+                            required property bool selected
+                            required property bool hidden
+                            required property string category
+                            required property string sizeText
+                            required property string kind
+                            required property string modifiedText
                             width: listView.width
-                            height: Design.s(32)
-                            radius: Design.s(6)
-                            color: isSelected ? Design.tint(Design.accent, 0.22) : (lHover.containsMouse ? window.colCardHover : "transparent")
-                            border.color: isSelected ? window.colBlue : "transparent"
-                            border.width: 1
+                            height: Design.s(36)
 
-                            readonly property bool isSelected: window.selectedIndex === index
-
-                            RowLayout {
+                            Rectangle {
                                 anchors.fill: parent
-                                anchors.leftMargin: Design.s(10)
-                                anchors.rightMargin: Design.s(10)
-                                spacing: Design.s(8)
+                                anchors.leftMargin: Design.s(Design.space.sm)
+                                anchors.rightMargin: Design.s(Design.space.sm)
+                                radius: Design.s(Design.radius.sm)
+                                color: row.selected ? Design.tint(Design.accent, 0.24)
+                                     : rowDrop.containsDrag ? Design.tint(Design.accent, 0.16)
+                                     : rowMa.containsMouse ? Design.hover
+                                     : (row.index % 2 ? Design.tint(Design.raised, 0.35) : "transparent")
+                                opacity: row.hidden ? 0.65 : 1.0
 
-                                Text {
-                                    text: window.getIconGlyph(model.fileName, model.fileIsDir)
-                                    font.family: Design.font.mono
-                                    font.pixelSize: Design.s(15)
-                                    color: window.getIconColor(model.fileName, model.fileIsDir)
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: model.fileName || ""
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(11)
-                                    color: listCard.isSelected ? "#ffffff" : window.colFg
-                                    elide: Text.ElideMiddle
-                                }
-
-                                Text {
-                                    width: Design.s(80)
-                                    text: model.fileIsDir ? "Folder" : window.formatSize(model.fileSize)
-                                    font.family: Design.font.mono
-                                    font.pixelSize: Design.s(10)
-                                    color: window.colDim
-                                    horizontalAlignment: Text.AlignRight
-                                }
-
-                                Text {
-                                    width: Design.s(140)
-                                    text: window.formatDate(model.fileModified)
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(10)
-                                    color: window.colDim
-                                    horizontalAlignment: Text.AlignRight
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                    anchors.rightMargin: Design.s(Design.space.sm)
+                                    spacing: Design.s(Design.space.md)
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Design.s(Design.space.sm)
+                                        Text {
+                                            Layout.preferredWidth: Design.s(20)
+                                            text: window.glyphFor(row.category)
+                                            font.family: Design.font.icon
+                                            font.pixelSize: Design.s(17)
+                                            color: window.toneFor(row.category)
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                        Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
+                                    }
+                                    Label { Layout.preferredWidth: Design.s(110); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
+                                    Label { Layout.preferredWidth: Design.s(170); text: row.kind; dim: true; elide: Text.ElideRight }
+                                    Label { Layout.preferredWidth: Design.s(150); text: row.modifiedText; dim: true; elide: Text.ElideRight }
                                 }
                             }
 
-                            HoverHandler { id: lHover }
+                            DragProxy { id: rowProxy; active: rowMa.drag.active; paths: row.selected ? fm.selectedPaths() : [row.path] }
+
                             MouseArea {
+                                id: rowMa
                                 anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                onClicked: mouse => {
-                                    if (mouse.button === Qt.RightButton) {
-                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
-                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
-                                        // Middle click on a folder: a terminal there.
-                                        FilesBackend.openTerminal(model.filePath);
-                                    } else {
-                                        window.selectedIndex = index;
-                                        window.selectedPath = model.filePath;
-                                    }
-                                }
-                                onDoubleClicked: mouse => {
-                                    if (mouse.button === Qt.LeftButton)
-                                        window.openItem(model.filePath, model.fileIsDir);
-                                }
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                drag.target: rowProxy
+                                drag.threshold: Design.s(10)
+                                onPressed: mouse => window.itemPressed(row.index, mouse)
+                                onReleased: mouse => window.itemReleased(row.index, mouse, drag.active)
+                                onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(row.index); }
                             }
-                        }
-                    }
-
-                    // 3. GALLERY VIEW
-                    GridView {
-                        id: galView
-                        reuseItems: true
-                        anchors.fill: parent
-                        anchors.margins: Design.s(14)
-                        cellWidth: Design.s(180)
-                        cellHeight: Design.s(160)
-                        clip: true
-                        visible: window.viewMode === "gallery"
-                        model: folderModel
-                        cacheBuffer: 200
-
-                        delegate: Rectangle {
-                            id: galCard
-                            width: Design.s(170)
-                            height: Design.s(150)
-                            radius: Design.s(8)
-                            color: isSelected ? Design.tint(Design.accent, 0.22) : (gHover.containsMouse ? window.colCardHover : window.colSunken)
-                            border.color: isSelected ? window.colBlue : window.colBorderSubtle
-                            border.width: 1
-
-                            readonly property bool isSelected: window.selectedIndex === index
-
-                            ColumnLayout {
+                            DropArea {
+                                id: rowDrop
                                 anchors.fill: parent
-                                anchors.margins: Design.s(8)
-                                spacing: Design.s(6)
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    radius: Design.s(6)
-                                    color: window.colSunken
-                                    clip: true
-
-                                    Image {
-                                        id: galleryThumb
-                                        anchors.fill: parent
-                                        source: window.isImageFile(model.fileName) ? model.filePath : ""
-                                        fillMode: Image.PreserveAspectCrop
-                                        visible: status === Image.Ready
-                                        asynchronous: true
-                                        cache: true
-                                        // Low resolution for gallery view
-                                        sourceSize: Qt.size(120, 90)
-                                    }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: window.getIconGlyph(model.fileName, model.fileIsDir)
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(38)
-                                        color: window.getIconColor(model.fileName, model.fileIsDir)
-                                        visible: !galleryThumb.visible
-                                    }
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: model.fileName || ""
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(11)
-                                    font.bold: galCard.isSelected
-                                    color: galCard.isSelected ? "#ffffff" : window.colFg
-                                    horizontalAlignment: Text.AlignHCenter
-                                    elide: Text.ElideMiddle
-                                }
-                            }
-
-                            HoverHandler { id: gHover }
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                onClicked: mouse => {
-                                    if (mouse.button === Qt.RightButton) {
-                                        window.openMenuFor(model.filePath, model.fileIsDir, index);
-                                    } else if (mouse.button === Qt.MiddleButton && model.fileIsDir) {
-                                        // Middle click on a folder: a terminal there.
-                                        FilesBackend.openTerminal(model.filePath);
-                                    } else {
-                                        window.selectedIndex = index;
-                                        window.selectedPath = model.filePath;
-                                    }
-                                }
-                                onDoubleClicked: mouse => {
-                                    if (mouse.button === Qt.LeftButton)
-                                        window.openItem(model.filePath, model.fileIsDir);
-                                }
+                                enabled: row.isDir
+                                keys: ["text/uri-list"]
+                                onDropped: drop => window.dropInto(drop, row.path)
                             }
                         }
                     }
                 }
 
-                // ── Bottom Status Bar (30px) ─────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(30)
-                    color: window.colDark
-
-                    // Subtle top divider
-                    Rectangle {
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: 1
-                        color: window.colBorderSubtle
+                // ── Nothing to show ──────────────────────────────────────────
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - Design.s(48), Design.s(360))
+                    visible: fm.count === 0
+                    spacing: Design.s(Design.space.sm)
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: fm.error ? "\u{f0b8a}"
+                            : FilesBackend.filterQuery ? "\u{f0349}"
+                            : FilesBackend.inTrash ? "\u{f0a79}" : "\u{f0256}"
+                        font.family: Design.font.icon
+                        font.pixelSize: Design.s(56)
+                        color: Design.textFaint
                     }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(12)
-                        anchors.rightMargin: Design.s(12)
-
-                        Text {
-                            text: window.statusNote !== "" ? window.statusNote
-                                : folderModel.count + " items" + (window.selectedPath ? ("  •  Selected: " + window.selectedPath.split('/').pop()) : "")
-                            color: window.statusNote !== "" ? window.colBlue : window.colDim
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(10)
-                            Layout.fillWidth: true
-                            elide: Text.ElideMiddle
-                        }
-
-                        Row {
-                            spacing: Design.s(8)
-                            Text { text: "Right-click Actions"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
-                            Text { text: "•"; font.pixelSize: Design.s(8); color: window.colBorderSubtle }
-                            Text { text: "Space QuickLook"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
-                            Text { text: "•"; font.pixelSize: Design.s(8); color: window.colBorderSubtle }
-                            Text { text: "Ctrl+T Terminal"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
-                            Text { text: "•"; font.pixelSize: Design.s(8); color: window.colBorderSubtle }
-                            Text { text: "Ctrl+H Hidden"; font.family: Design.font.mono; font.pixelSize: Design.s(9); color: window.colDim }
-                        }
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        role: "subhead"
+                        weight: Design.weight.semibold
+                        text: fm.error ? "Can't open this folder"
+                            : FilesBackend.filterQuery ? "Nothing matches “" + FilesBackend.filterQuery + "”"
+                            : FilesBackend.inTrash ? "Trash is empty" : "This folder is empty"
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        dim: true
+                        text: fm.error ? fm.error
+                            : FilesBackend.filterQuery ? "Search looks at names in this folder only."
+                            : FilesBackend.inTrash ? "Things you delete wait here until you empty it."
+                            : "Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N."
                     }
                 }
             }
-        }
-    }
 
-    component NavIconBtn: Rectangle {
-        id: nb
-        property string icon: ""
-        property bool enabled: true
-        signal clicked()
-
-        width: Design.s(24); height: Design.s(24); radius: Design.s(4)
-        color: nbArea.containsMouse && nb.enabled ? Design.tint(Design.text, 0.10) : "transparent"
-        opacity: nb.enabled ? 1.0 : 0.35
-
-        Text {
-            anchors.centerIn: parent
-            text: nb.icon
-            font.family: Design.font.mono
-            font.pixelSize: Design.s(11)
-            color: window.colFg
-        }
-
-        MouseArea {
-            id: nbArea
-            anchors.fill: parent
-            enabled: nb.enabled
-            hoverEnabled: true
-            cursorShape: nb.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: nb.clicked()
-        }
-    }
-
-    component ViewSegmentBtn: Rectangle {
-        id: vsb
-        property string icon: ""
-        property bool active: false
-        signal clicked()
-
-        width: Design.s(26); height: Design.s(24); radius: Design.s(4)
-        color: vsb.active ? window.colBlue : (vsbArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
-
-        Text {
-            anchors.centerIn: parent
-            text: vsb.icon
-            font.family: Design.font.mono
-            font.pixelSize: Design.s(11)
-            color: vsb.active ? Design.accentText : (vsbArea.containsMouse ? "#ffffff" : window.colDim)
-        }
-
-        MouseArea {
-            id: vsbArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: vsb.clicked()
-        }
-    }
-
-    // ── Menus ────────────────────────────────────────────────────────────────
-    //
-    // A right click did nothing at all. Rename, trash, new folder, extract and
-    // set-as-wallpaper were all in the backend with no way to reach them.
-
-    component FMenu: Menu {
-        id: fm
-        padding: Design.s(4)
-        background: Rectangle {
-            implicitWidth: Design.s(230)
-            radius: Design.s(8)
-            color: window.colCard
-            border.color: window.colBorder
-            border.width: 1
-        }
-    }
-
-    component FItem: MenuItem {
-        id: fi
-        property string glyph: ""
-        property string keys: ""
-        implicitHeight: Design.s(30)
-        visible: enabled
-        height: visible ? implicitHeight : 0
-        contentItem: RowLayout {
-            spacing: Design.s(8)
-            Text {
-                Layout.preferredWidth: Design.s(16)
-                text: fi.checkable ? (fi.checked ? "\u{f012c}" : "") : fi.glyph
-                font.family: Design.font.mono
-                font.pixelSize: Design.s(12)
-                color: fi.checked ? window.colBlue : window.colDim
-                horizontalAlignment: Text.AlignHCenter
-            }
-            Text {
-                Layout.fillWidth: true
-                text: fi.text
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(11)
-                color: window.colFg
-                elide: Text.ElideRight
-            }
-            Text {
-                visible: fi.keys !== ""
-                text: fi.keys
-                font.family: Design.font.mono
-                font.pixelSize: Design.s(9)
-                color: window.colDim
-            }
-        }
-        background: Rectangle {
-            radius: Design.s(5)
-            color: fi.highlighted ? Design.tint(Design.accent, 0.20) : "transparent"
-        }
-    }
-
-    component DialogBtn: Rectangle {
-        id: db
-        property string label: ""
-        property bool primary: false
-        signal clicked()
-        implicitWidth: dbText.implicitWidth + Design.s(24)
-        implicitHeight: Design.s(28)
-        radius: Design.s(6)
-        color: db.primary ? (dbArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
-                          : (dbArea.containsMouse ? Design.tint(Design.text, 0.10) : "transparent")
-        border.color: db.primary ? "transparent" : window.colBorderSubtle
-        border.width: 1
-        Text {
-            id: dbText
-            anchors.centerIn: parent
-            text: db.label
-            font.family: Design.font.sans
-            font.pixelSize: Design.s(11)
-            font.bold: db.primary
-            color: db.primary ? Design.contrastOn(window.colBlue) : window.colFg
-        }
-        MouseArea { id: dbArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: db.clicked() }
-    }
-
-    component FSeparator: MenuSeparator {
-        contentItem: Rectangle { implicitHeight: 1; color: window.colBorderSubtle }
-    }
-
-    // On a file or folder.
-    FMenu {
-        id: itemMenu
-        property string path: ""
-        property bool isDir: false
-        readonly property string name: path.split("/").pop()
-
-        FItem { text: itemMenu.isDir ? "Open" : "Open"; glyph: "\u{f0770}"; keys: "Enter"; onTriggered: window.openItem(itemMenu.path, itemMenu.isDir) }
-        FItem { text: "Quick Look"; glyph: "\u{f0208}"; keys: "Space"; enabled: !itemMenu.isDir; onTriggered: FilesBackend.triggerQuickLook(itemMenu.path) }
-        FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; onTriggered: FilesBackend.openTerminal(itemMenu.isDir ? itemMenu.path : window.parentOf(itemMenu.path)) }
-        FSeparator {}
-        FItem { text: "Copy"; glyph: "\u{f018f}"; keys: "Ctrl+C"; onTriggered: window.copyItem(itemMenu.path, false) }
-        FItem { text: "Cut"; glyph: "\u{f0190}"; keys: "Ctrl+X"; onTriggered: window.copyItem(itemMenu.path, true) }
-        FItem { text: "Paste Into Folder"; glyph: "\u{f0192}"
-                enabled: itemMenu.isDir && window.isNative && FilesBackend.clipboardHasFiles() && !FilesBackend.busy
-                onTriggered: { window.navigateTo(itemMenu.path); FilesBackend.paste(); } }
-        FSeparator {}
-        FItem { text: "Copy Path"; glyph: "\u{f018f}"; keys: "Ctrl+Shift+C"; onTriggered: window.copyPath(itemMenu.path) }
-        FItem { text: "Copy Name"; glyph: "\u{f0a0a}"; onTriggered: { FilesBackend.copyText(itemMenu.name); window.note("Copied " + itemMenu.name); } }
-        FItem { text: "Rename…"; glyph: "\u{f03eb}"; keys: "F2"; onTriggered: window.askName("rename", itemMenu.path, itemMenu.name) }
-        FItem { text: "Add to Bookmarks"; glyph: "\u{f00c0}"; enabled: itemMenu.isDir
-                onTriggered: {
-                    const copy = Array.from(window.customBookmarks);
-                    if (!copy.some(b => b.path === itemMenu.path)) {
-                        copy.push({ name: itemMenu.name, path: itemMenu.path, icon: "󰉋" });
-                        window.customBookmarks = copy;
-                        FilesBackend.saveBookmarks(copy);
-                    }
-                    window.note("Bookmarked " + itemMenu.name);
-                } }
-        FItem { text: "Extract Here"; glyph: "\u{f05c4}"; enabled: !itemMenu.isDir && window.isNative && FilesBackend.isArchive(itemMenu.path)
-                onTriggered: window.note(FilesBackend.extractArchive(itemMenu.path) ? "Extracted " + itemMenu.name : "Could not extract " + itemMenu.name) }
-        FItem { text: "Set as Wallpaper"; glyph: "\u{f02e9}"; enabled: !itemMenu.isDir && window.isImageFile(itemMenu.name)
-                onTriggered: { FilesBackend.setWallpaper(itemMenu.path); window.note("Wallpaper set"); } }
-        FSeparator {}
-        FItem { text: "Move to Trash"; glyph: "\u{f0a7a}"; keys: "Del"; onTriggered: window.trash(itemMenu.path) }
-    }
-
-    // On empty space: the folder itself, and how it is shown.
-    FMenu {
-        id: bgMenu
-        FItem { text: "Paste"; glyph: "\u{f0192}"; keys: "Ctrl+V"
-                enabled: window.isNative && FilesBackend.clipboardHasFiles() && !FilesBackend.busy
-                onTriggered: FilesBackend.paste() }
-        FSeparator {}
-        FItem { text: "New Folder…"; glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; onTriggered: window.askName("newfolder", "", "New Folder") }
-        FItem { text: "New File…"; glyph: "\u{f0224}"; onTriggered: window.askName("newfile", "", "New File.txt") }
-        FItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; onTriggered: window.openTerminalHere() }
-        FItem { text: "Go to Folder…"; glyph: "\u{f0770}"; keys: "Ctrl+L"; onTriggered: window.askName("goto", "", window.currentPathDisplay) }
-        FItem { text: "Copy Folder Path"; glyph: "\u{f018f}"; onTriggered: window.copyPath(window.currentPath) }
-        FItem { text: "Bookmark This Folder"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; onTriggered: { window.addCurrentToBookmarks(); window.note("Bookmarked " + window.currentPathDisplay); } }
-        FItem { text: "Refresh"; glyph: "\u{f0450}"; keys: "F5"; onTriggered: window.refreshView() }
-        FSeparator {}
-        FItem { text: "Show Hidden Files"; checkable: true; checked: window.showHidden; keys: "Ctrl+H"; onTriggered: window.showHidden = !window.showHidden }
-        FItem { text: "Folders First"; checkable: true; checked: window.dirsFirst; onTriggered: window.dirsFirst = !window.dirsFirst }
-        FSeparator {}
-        FItem { text: "Sort by Name"; checkable: true; checked: window.sortBy === "name"; onTriggered: window.sortBy = "name" }
-        FItem { text: "Sort by Date Modified"; checkable: true; checked: window.sortBy === "time"; onTriggered: window.sortBy = "time" }
-        FItem { text: "Sort by Size"; checkable: true; checked: window.sortBy === "size"; onTriggered: window.sortBy = "size" }
-        FItem { text: "Sort by Type"; checkable: true; checked: window.sortBy === "type"; onTriggered: window.sortBy = "type" }
-        FItem { text: "Descending"; checkable: true; checked: window.sortDescending; onTriggered: window.sortDescending = !window.sortDescending }
-    }
-
-    // One small dialog for everything that needs a name or a path.
-    Popup {
-        id: nameDialog
-        property string mode: ""      // rename | newfolder | goto
-        property string target: ""
-        // Focus and selection once the popup is up. Done right after open()
-        // they were lost: opening moves focus into the popup, a TextInput
-        // drops its selection when it loses focus, and the name typed into
-        // Rename was appended to the old one ("Documentsrenamed.txt").
-        onOpened: {
-            nameField.forceActiveFocus();
-            nameField.selectBase();
-        }
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: Design.s(380)
-        modal: true
-        focus: true
-        padding: Design.s(14)
-        background: Rectangle {
-            radius: Design.s(10)
-            color: window.colCard
-            border.color: window.colBorder
-            border.width: 1
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: Design.s(10)
-
-            Text {
-                text: nameDialog.mode === "rename" ? "Rename"
-                    : nameDialog.mode === "newfolder" ? "New folder in " + window.currentPathDisplay
-                    : nameDialog.mode === "newfile" ? "New file in " + window.currentPathDisplay
-                    : "Go to folder"
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(12)
-                font.bold: true
-                color: window.colFg
-                Layout.fillWidth: true
-                elide: Text.ElideMiddle
-            }
-
+            // ── Status bar ───────────────────────────────────────────────────
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(32)
-                radius: Design.s(6)
-                color: window.colSunken
-                border.color: nameField.activeFocus ? window.colBlue : window.colBorderSubtle
-                border.width: 1
-
-                TextInput {
-                    id: nameField
+                color: Design.surface
+                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
+                RowLayout {
                     anchors.fill: parent
-                    anchors.margins: Design.s(8)
-                    verticalAlignment: TextInput.AlignVCenter
-                    font.family: Design.font.mono
-                    font.pixelSize: Design.s(11)
-                    color: window.colFg
-                    selectByMouse: true
-                    clip: true
-                    onAccepted: window.submitName(text)
-                    Keys.onEscapePressed: nameDialog.close()
-
-                    // Rename selects the name without its extension, as
-                    // everywhere else, so typing replaces "photo", not ".jpg".
-                    function selectBase() {
-                        const dot = (nameDialog.mode === "rename" || nameDialog.mode === "newfile") ? text.lastIndexOf(".") : -1;
-                        if (dot > 0) select(0, dot); else selectAll();
+                    anchors.leftMargin: Design.s(Design.space.lg)
+                    anchors.rightMargin: Design.s(Design.space.md)
+                    spacing: Design.s(Design.space.md)
+                    Label {
+                        Layout.fillWidth: true
+                        role: "caption"
+                        elide: Text.ElideRight
+                        color: window.statusNote ? Design.accent : Design.textDim
+                        text: window.statusNote
+                              || (FilesBackend.busy ? "Copying…"
+                              : fm.selectionCount > 0 ? fm.selectionSummary : fm.summary)
+                    }
+                    Label { role: "caption"; dim: true; text: FilesBackend.diskFreeSpace; visible: !FilesBackend.inTrash }
+                    // Icon size, for the icon view.
+                    RowLayout {
+                        visible: window.viewMode === "grid"
+                        spacing: Design.s(Design.space.xs)
+                        BarButton { glyph: "\u{f0374}"; small: true; tip: "Smaller (Ctrl+−)"; onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                        BarButton { glyph: "\u{f0415}"; small: true; tip: "Larger (Ctrl+=)"; onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                     }
                 }
             }
+        }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(8)
-                Item { Layout.fillWidth: true }
-                // Drawn here rather than Basic's Button: its flat variant set
-                // dark text on this dark card, and "Cancel" was invisible.
-                DialogBtn { label: "Cancel"; onClicked: nameDialog.close() }
-                DialogBtn {
-                    label: nameDialog.mode === "rename" ? "Rename"
-                           : (nameDialog.mode === "newfolder" || nameDialog.mode === "newfile") ? "Create" : "Go"
-                    primary: true
-                    onClicked: window.submitName(nameField.text)
+        // ── Details panel ────────────────────────────────────────────────────
+        Rectangle {
+            Layout.fillHeight: true
+            Layout.preferredWidth: Design.s(270)
+            visible: window.showInfo && window.width > 980
+            color: Design.sunken
+            Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
+
+            // What it describes: the one selected item, or the folder itself.
+            readonly property string subject: {
+                const n = fm.selectionCount;   // re-read on selection change
+                const t = n > 0 ? fm.selectedPaths() : [];
+                return t.length === 1 ? t[0] : (t.length === 0 ? window.currentPath : "");
+            }
+            property var info: ({})
+            property string folderSize: ""
+            onSubjectChanged: refreshInfo()
+            Component.onCompleted: refreshInfo()
+            Connections { target: fm; function onReloaded() { infoPanel.refreshInfo(); } }
+            id: infoPanel
+            function refreshInfo() {
+                infoPanel.folderSize = "";
+                infoPanel.info = infoPanel.subject ? FilesBackend.itemInfo(infoPanel.subject) : ({});
+            }
+            Connections {
+                target: FilesBackend
+                function onFolderSizeReady(path, text, files) {
+                    if (path === infoPanel.subject)
+                        infoPanel.folderSize = text + " in " + files + (files === 1 ? " file" : " files");
+                }
+            }
+
+            C.ScrollView {
+                anchors.fill: parent
+                anchors.margins: Design.s(Design.space.lg)
+                contentWidth: availableWidth
+                C.ScrollBar.horizontal.policy: C.ScrollBar.AlwaysOff
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: Design.s(Design.space.md)
+
+                    // Several selected: a count and a total.
+                    ColumnLayout {
+                        visible: infoPanel.subject === ""
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.sm)
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "\u{f0c51}"
+                            font.family: Design.font.icon
+                            font.pixelSize: Design.s(72)
+                            color: Design.accent
+                        }
+                        Label { Layout.alignment: Qt.AlignHCenter; role: "subhead"; weight: Design.weight.semibold; text: fm.selectionCount + " items" }
+                        Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; dim: true; text: fm.selectionSummary }
+                    }
+
+                    // One item, or the folder.
+                    ColumnLayout {
+                        visible: infoPanel.subject !== ""
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.md)
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(150)
+                            radius: Design.s(Design.radius.card)
+                            color: Design.raised
+                            Image {
+                                id: preview
+                                anchors.fill: parent
+                                anchors.margins: Design.s(Design.space.sm)
+                                visible: infoPanel.info.category === "image" && status === Image.Ready
+                                source: infoPanel.info.category === "image" ? Paths.fileUrl(infoPanel.info.path) : ""
+                                sourceSize: Qt.size(Design.s(500), Design.s(300))
+                                fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: !preview.visible
+                                text: window.glyphFor(infoPanel.info.category || "folder")
+                                font.family: Design.font.icon
+                                font.pixelSize: Design.s(84)
+                                color: window.toneFor(infoPanel.info.category || "folder")
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: infoPanel.subject === window.currentPath && infoPanel.subject === window.homeDir ? "Home" : (infoPanel.info.name || "")
+                            role: "subhead"
+                            weight: Design.weight.semibold
+                            wrapMode: Text.WrapAnywhere
+                            maximumLineCount: 3
+                            elide: Text.ElideRight
+                        }
+                        Label { text: infoPanel.info.kind || ""; dim: true; Layout.topMargin: -Design.s(Design.space.sm) }
+
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Design.line }
+
+                        InfoRow { label: "Size"; value: infoPanel.info.isDir ? (infoPanel.folderSize || infoPanel.info.sizeText) : (infoPanel.info.sizeText || "") }
+                        InfoRow { label: "Contains"; value: infoPanel.info.isDir ? infoPanel.info.items + (infoPanel.info.items === 1 ? " item" : " items") : "" }
+                        InfoRow { label: "Modified"; value: infoPanel.info.modified || "" }
+                        InfoRow { label: "Created"; value: infoPanel.info.created || "" }
+                        InfoRow { label: "Where"; value: infoPanel.info.location || ""; mono: true }
+                        InfoRow { label: "Links to"; value: infoPanel.info.symlinkTarget || ""; mono: true }
+                        InfoRow { label: "Access"; value: infoPanel.info.permissions ? infoPanel.info.permissions + (infoPanel.info.writable ? "" : "  (read-only for you)") : ""; mono: true }
+                        InfoRow { label: "Owner"; value: infoPanel.info.owner || "" }
+                    }
                 }
             }
         }
+    }
+
+    // ── Pressing and releasing an item ───────────────────────────────────────
+    //
+    // Press selects at once (and right-press opens the menu), except a plain
+    // press on something already selected: that may be the start of dragging
+    // the whole selection, so the narrowing to one item waits for a release
+    // that was not a drag.
+    function itemPressed(row, mouse) {
+        currentView().forceActiveFocus();
+        if (mouse.button === Qt.RightButton) {
+            if (!fm.isSelected(row)) fm.select(row, 0);
+            openItemMenu();
+            return;
+        }
+        const mode = clickMode(mouse.modifiers);
+        if (mode !== 0 || !fm.isSelected(row)) fm.select(row, mode);
+    }
+    function itemReleased(row, mouse, dragged) {
+        if (mouse.button !== Qt.LeftButton || dragged) return;
+        if (clickMode(mouse.modifiers) === 0 && fm.selectionCount > 1 && fm.isSelected(row)) fm.select(row, 0);
+    }
+
+    // ── Menus ────────────────────────────────────────────────────────────────
+    function openItemMenu() {
+        const t = targets();
+        itemMenu.first = t.length ? fm.get(fm.indexOfPath(t[0])) : ({});
+        itemMenu.paths = t;
+        itemMenu.apps = t.length === 1 && !!!itemMenu.first.isDir ? FilesBackend.openWithApps(t[0]) : [];
+        itemMenu.popup();
+    }
+
+    AppMenu {
+        id: itemMenu
+        property var paths: []
+        property var first: ({})
+        property var apps: []
+        readonly property bool one: paths.length === 1
+        readonly property bool trash: FilesBackend.inTrash
+
+        AppMenuItem { text: itemMenu.one && !!itemMenu.first.isDir ? "Open" : (itemMenu.one ? "Open" : "Open " + itemMenu.paths.length + " items"); glyph: "\u{f0770}"; keys: "Enter"; enabled: !itemMenu.trash; onTriggered: window.openSelection() }
+        AppMenu {
+            id: openWithMenu
+            title: "Open With"
+            enabled: itemMenu.apps.length > 1 && !itemMenu.trash
+            Instantiator {
+                model: itemMenu.apps
+                delegate: AppMenuItem {
+                    required property var modelData
+                    text: modelData.name + (modelData.isDefault ? "  (default)" : "")
+                    onTriggered: FilesBackend.openWith(modelData.id, itemMenu.paths)
+                }
+                onObjectAdded: (i, o) => openWithMenu.insertItem(i, o)
+                onObjectRemoved: (i, o) => openWithMenu.removeItem(o)
+            }
+        }
+        AppMenuItem { text: "Quick Look"; glyph: "\u{f0208}"; keys: "Space"; enabled: itemMenu.one && !!!itemMenu.first.isDir && !itemMenu.trash; onTriggered: FilesBackend.triggerQuickLook(itemMenu.paths[0]) }
+        AppMenuItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; enabled: itemMenu.one && !itemMenu.trash; onTriggered: FilesBackend.openTerminal(!!itemMenu.first.isDir ? itemMenu.paths[0] : window.parentOf(itemMenu.paths[0])) }
+        AppMenuSeparator { visible: !itemMenu.trash; height: visible ? implicitHeight : 0 }
+        AppMenuItem { text: "Restore"; glyph: "\u{f0450}"; enabled: itemMenu.trash; onTriggered: FilesBackend.restoreFromTrash(itemMenu.paths) }
+        AppMenuItem { text: "Cut"; glyph: "\u{f0190}"; keys: "Ctrl+X"; enabled: !itemMenu.trash; onTriggered: window.copySelection(true) }
+        AppMenuItem { text: "Copy"; glyph: "\u{f018f}"; keys: "Ctrl+C"; onTriggered: window.copySelection(false) }
+        AppMenuItem { text: "Paste Into Folder"; glyph: "\u{f0192}"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash && FilesBackend.clipboardHasFiles(); onTriggered: { window.navigateTo(itemMenu.paths[0]); FilesBackend.paste(); } }
+        AppMenuItem { text: "Rename…"; glyph: "\u{f03eb}"; keys: "F2"; enabled: itemMenu.one && !itemMenu.trash; onTriggered: window.renameSelection() }
+        AppMenuSeparator {}
+        AppMenuItem { text: "Extract Here"; glyph: "\u{f05c4}"; enabled: itemMenu.one && itemMenu.first.category === "archive" && !itemMenu.trash
+                      onTriggered: window.note(FilesBackend.extractArchive(itemMenu.paths[0]) ? "Extracted " + itemMenu.first.name : "Could not extract " + itemMenu.first.name) }
+        AppMenuItem { text: "Set as Wallpaper"; glyph: "\u{f02e9}"; enabled: itemMenu.one && itemMenu.first.category === "image" && !itemMenu.trash
+                      onTriggered: { FilesBackend.setWallpaper(itemMenu.paths[0]); window.note("Wallpaper set"); } }
+        AppMenuItem { text: "Add to Bookmarks"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.addBookmark(itemMenu.paths[0]) }
+        AppMenuItem { text: "Copy Path"; glyph: "\u{f0219}"; keys: "Ctrl+Shift+C"; onTriggered: { FilesBackend.copyText(itemMenu.paths.join("\n")); window.note("Path copied"); } }
+        AppMenuItem { text: "Properties"; glyph: "\u{f02fd}"; keys: "Ctrl+I"; onTriggered: window.showInfo = true }
+        AppMenuSeparator {}
+        AppMenuItem { text: "Move to Trash"; glyph: "\u{f0a7a}"; keys: "Del"; tone: Design.danger; enabled: !itemMenu.trash; onTriggered: window.trashSelection() }
+        AppMenuItem { text: "Delete Permanently…"; glyph: "\u{f05e8}"; keys: itemMenu.trash ? "Del" : "Shift+Del"; tone: Design.danger; onTriggered: confirmDelete.ask(itemMenu.paths) }
+    }
+
+    AppMenu {
+        id: bgMenu
+        AppMenuItem { text: "Undo " + FilesBackend.undoLabel; glyph: "\u{f054c}"; keys: "Ctrl+Z"; enabled: FilesBackend.undoLabel !== ""; onTriggered: FilesBackend.undo() }
+        AppMenuItem { text: "Paste"; glyph: "\u{f0192}"; keys: "Ctrl+V"; enabled: !FilesBackend.inTrash && FilesBackend.clipboardHasFiles() && !FilesBackend.busy; onTriggered: FilesBackend.paste() }
+        AppMenuItem { text: "New Folder…"; glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfolder", "", "New Folder") }
+        AppMenuItem { text: "New File…"; glyph: "\u{f0224}"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfile", "", "New File.txt") }
+        AppMenuItem { text: "Select All"; glyph: "\u{f0486}"; keys: "Ctrl+A"; enabled: fm.count > 0; onTriggered: fm.selectAll() }
+        AppMenuItem { text: "Empty Trash…"; glyph: "\u{f0a7a}"; tone: Design.danger; enabled: FilesBackend.inTrash && FilesBackend.trashCount > 0; onTriggered: confirmEmpty.open() }
+        AppMenuSeparator {}
+        AppMenuItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; enabled: !FilesBackend.inTrash; onTriggered: FilesBackend.openTerminal(window.currentPath) }
+        AppMenuItem { text: "Bookmark This Folder"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: !FilesBackend.inTrash; onTriggered: window.addBookmark(window.currentPath) }
+        AppMenuItem { text: "Copy Folder Path"; glyph: "\u{f0219}"; onTriggered: { FilesBackend.copyText(window.currentPath); window.note("Path copied"); } }
+        AppMenuItem { text: "Refresh"; glyph: "\u{f0450}"; keys: "F5"; onTriggered: FilesBackend.refresh() }
+    }
+
+    AppMenu {
+        id: viewMenu
+        AppMenuItem { text: "Show Hidden Files"; checkable: true; checked: FilesBackend.showHidden; keys: "Ctrl+H"; onTriggered: FilesBackend.showHidden = !FilesBackend.showHidden }
+        AppMenuItem { text: "Folders First"; checkable: true; checked: FilesBackend.dirsFirst; onTriggered: FilesBackend.dirsFirst = !FilesBackend.dirsFirst }
+        AppMenuSeparator {}
+        AppMenuItem { text: "Sort by Name"; checkable: true; checked: FilesBackend.sortField === "name"; onTriggered: FilesBackend.sortField = "name" }
+        AppMenuItem { text: "Sort by Size"; checkable: true; checked: FilesBackend.sortField === "size"; onTriggered: FilesBackend.sortField = "size" }
+        AppMenuItem { text: "Sort by Kind"; checkable: true; checked: FilesBackend.sortField === "type"; onTriggered: FilesBackend.sortField = "type" }
+        AppMenuItem { text: "Sort by Date Modified"; checkable: true; checked: FilesBackend.sortField === "time"; onTriggered: FilesBackend.sortField = "time" }
+        AppMenuItem { text: "Reverse Order"; checkable: true; checked: !FilesBackend.sortAscending; onTriggered: FilesBackend.sortAscending = !FilesBackend.sortAscending }
+    }
+
+    // ── Dialogs ──────────────────────────────────────────────────────────────
+    AppDialog {
+        id: nameDialog
+        property string mode: ""
+        property string target: ""
+        title: mode === "rename" ? "Rename"
+             : mode === "newfolder" ? "New folder"
+             : mode === "newfile" ? "New file" : "Go to folder"
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = Qt.binding(() =>
+            mode === "rename" ? "Rename" : mode === "goto" ? "Go" : "Create")
+        onOpened: {
+            nameField.focusInput();
+            // A rename selects the name without its extension, as everywhere.
+            const dot = (mode === "rename" || mode === "newfile") ? nameField.text.lastIndexOf(".") : -1;
+            if (dot > 0) nameField.selectRange(0, dot);
+        }
+        onAccepted: window.submitName(nameField.text)
+        onRejected: window.currentView().forceActiveFocus()
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(420)
+            spacing: Design.s(Design.space.sm)
+            Label {
+                text: nameDialog.mode === "goto" ? "Path (~ for home)" : "Name"
+                role: "caption"
+                dim: true
+            }
+            Field { id: nameField; Layout.fillWidth: true }
+        }
+    }
+
+    AppDialog {
+        id: confirmDelete
+        property var paths: []
+        function ask(p) { paths = p; open(); }
+        title: paths.length === 1 ? "Delete “" + String(paths[0]).split("/").pop() + "” permanently?"
+                                  : "Delete " + paths.length + " items permanently?"
+        message: "This cannot be undone. Nothing goes to the trash."
+        acceptTone: Design.danger
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Delete"
+        onAccepted: FilesBackend.deletePermanently(paths)
+    }
+
+    AppDialog {
+        id: confirmEmpty
+        title: "Empty the trash?"
+        message: FilesBackend.trashCount + (FilesBackend.trashCount === 1 ? " item is" : " items are") + " deleted for good."
+        acceptTone: Design.danger
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Empty Trash"
+        onAccepted: FilesBackend.emptyTrash()
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Pieces
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // Carries the drag: text/uri-list, so other applications take it too.
+    component DragProxy: Item {
+        property var paths: []
+        property bool active: false
+        width: 1; height: 1
+        Drag.active: active
+        Drag.dragType: Drag.Automatic
+        Drag.supportedActions: Qt.MoveAction | Qt.CopyAction
+        Drag.proposedAction: Qt.MoveAction
+        Drag.mimeData: ({ "text/uri-list": window.urlsOf(paths) })
+        Drag.keys: ["text/uri-list"]
+    }
+
+    component SideHeading: RowLayout {
+        id: sh
+        property alias text: shLabel.text
+        property string action: ""
+        property string actionTip: ""
+        signal actionClicked()
+        Layout.fillWidth: true
+        Layout.topMargin: Design.s(Design.space.md)
+        Layout.leftMargin: Design.s(Design.space.lg)
+        Layout.rightMargin: Design.s(Design.space.sm)
+        Layout.bottomMargin: Design.s(Design.space.xxs)
+        Label {
+            id: shLabel
+            Layout.fillWidth: true
+            role: "caption"
+            weight: Design.weight.semibold
+            color: Design.textFaint
+            font.capitalization: Font.AllUppercase
+            font.letterSpacing: 0.6
+        }
+        BarButton { visible: sh.action !== ""; glyph: sh.action; tip: sh.actionTip; small: true; onClicked: sh.actionClicked() }
+    }
+
+    component SideRow: Rectangle {
+        id: sr
+        property string label: ""
+        property string glyph: ""
+        property string path: ""
+        property string detail: ""
+        property string badge: ""
+        property bool removable: false
+        property bool ejectable: false
+        signal remove()
+        signal eject()
+        readonly property bool active: path === window.currentPath
+        Layout.fillWidth: true
+        Layout.leftMargin: Design.s(Design.space.sm)
+        Layout.rightMargin: Design.s(Design.space.sm)
+        Layout.preferredHeight: visible ? Design.s(36) : 0
+        radius: Design.s(Design.radius.ctl)
+        color: active ? Design.tint(Design.accent, 0.22)
+             : srDrop.containsDrag ? Design.tint(Design.accent, 0.14)
+             : srMa.containsMouse ? Design.hover : "transparent"
+
+        MouseArea {
+            id: srMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: { window.navigateTo(sr.path); window.currentView().forceActiveFocus(); }
+        }
+        DropArea {
+            id: srDrop
+            anchors.fill: parent
+            keys: ["text/uri-list"]
+            onDropped: drop => window.dropInto(drop, sr.path)
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Design.s(Design.space.sm)
+            anchors.rightMargin: Design.s(Design.space.xs)
+            spacing: Design.s(Design.space.sm)
+            Text {
+                Layout.preferredWidth: Design.s(22)
+                text: sr.glyph
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(17)
+                color: sr.active ? Design.accent : Design.textDim
+                horizontalAlignment: Text.AlignHCenter
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Label {
+                    Layout.fillWidth: true
+                    text: sr.label
+                    elide: Text.ElideRight
+                    weight: sr.active ? Design.weight.semibold : Design.weight.regular
+                }
+                Label { visible: sr.detail !== ""; text: sr.detail; role: "caption"; color: Design.textFaint }
+            }
+            Rectangle {
+                visible: sr.badge !== ""
+                implicitWidth: badgeText.implicitWidth + Design.s(12)
+                implicitHeight: Design.s(20)
+                radius: height / 2
+                color: Design.raised
+                Text { id: badgeText; anchors.centerIn: parent; text: sr.badge; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+            }
+            BarButton {
+                visible: sr.removable && (srMa.containsMouse || hovered)
+                glyph: "\u{f0156}"; small: true; tip: "Remove bookmark"
+                onClicked: sr.remove()
+            }
+            BarButton {
+                visible: sr.ejectable
+                glyph: "\u{f01ea}"; small: true; tip: "Unmount"
+                onClicked: sr.eject()
+            }
+        }
+    }
+
+    component ColumnHead: Item {
+        id: ch
+        property string label: ""
+        property string field: ""
+        property bool alignRight: false
+        readonly property bool sorted: FilesBackend.sortField === field
+        implicitHeight: Design.s(34)
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: ch.alignRight ? parent.right : undefined
+            anchors.left: ch.alignRight ? undefined : parent.left
+            anchors.leftMargin: ch.alignRight ? 0 : Design.s(28)
+            spacing: Design.s(Design.space.xs)
+            Text {
+                text: ch.label
+                font.family: Design.font.sans
+                font.pixelSize: Design.s(Design.font.caption)
+                font.weight: Design.weight.semibold
+                color: ch.sorted ? Design.text : Design.textDim
+            }
+            Text {
+                visible: ch.sorted
+                text: FilesBackend.sortAscending ? "\u{f005d}" : "\u{f0045}"
+                font.family: Design.font.icon
+                font.pixelSize: Design.s(Design.font.caption)
+                color: Design.accent
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                if (ch.sorted) FilesBackend.sortAscending = !FilesBackend.sortAscending;
+                else { FilesBackend.sortField = ch.field; FilesBackend.sortAscending = ch.field === "name" || ch.field === "type"; }
+            }
+        }
+    }
+
+    component InfoRow: ColumnLayout {
+        property string label: ""
+        property string value: ""
+        property bool mono: false
+        visible: value !== ""
+        Layout.fillWidth: true
+        spacing: Design.s(Design.space.xxs)
+        Label { text: parent.label; role: "caption"; color: Design.textFaint }
+        Label { Layout.fillWidth: true; text: parent.value; wrapMode: Text.WrapAnywhere; isMono: parent.mono; role: parent.mono ? "caption" : "body" }
     }
 }

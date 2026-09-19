@@ -10,6 +10,8 @@
 #include <QDir>
 #include <QStorageInfo>
 #include <QProcess>
+#include <QTimer>
+#include "dir_model.hpp"
 
 namespace b1air {
 
@@ -34,6 +36,17 @@ class FileManagerBackend : public QObject {
     // manager — so it is used, rather than each app raising Qt's own dialog,
     // which looks and behaves like nothing else here.
     Q_PROPERTY(bool pickMode READ pickMode CONSTANT)
+    // The listing of the current folder, with its selection.
+    Q_PROPERTY(QObject* files READ files CONSTANT)
+    Q_PROPERTY(bool dirsFirst READ dirsFirst WRITE setDirsFirst NOTIFY sortChanged)
+    // Trash: where it is, whether we are in it, how much is in it.
+    Q_PROPERTY(QString trashPath READ trashPath CONSTANT)
+    Q_PROPERTY(bool inTrash READ inTrash NOTIFY currentPathChanged)
+    Q_PROPERTY(int trashCount READ trashCount NOTIFY trashChanged)
+    // Mounted drives other than the system one: [{name, path, free, total, percent, removable}]
+    Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
+    // What Ctrl+Z would undo: "Move 3 items", "Rename", "Move to Trash" — or "".
+    Q_PROPERTY(QString undoLabel READ undoLabel NOTIFY undoChanged)
     // A paste is copying in the background.
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 
@@ -78,6 +91,14 @@ public:
     QString diskFreeSpace() const;
     QString diskTotalSpace() const;
     bool busy() const { return m_busy; }
+    QObject* files() const { return m_files; }
+    bool dirsFirst() const { return m_dirsFirst; }
+    void setDirsFirst(bool v);
+    QString trashPath() const;
+    bool inTrash() const { return m_currentPath == trashPath(); }
+    int trashCount() const { return m_trashCount; }
+    QVariantList volumes() const { return m_volumes; }
+    QString undoLabel() const { return m_undo.isEmpty() ? QString() : m_undo.last().label; }
 
 public slots:
     void refresh();
@@ -120,6 +141,28 @@ public slots:
     // A new empty file in the current folder.
     bool createFile(const QString& name);
 
+    // Undo the last move, rename, copy or trashing.
+    void undo();
+    bool pathExists(const QString& path) const { return QFileInfo::exists(path); }
+    bool isDirectory(const QString& path) const { return QFileInfo(path).isDir(); }
+
+    // Several at once: what the selection works on.
+    bool trashItems(const QStringList& paths);
+    bool deletePermanently(const QStringList& paths);
+    bool restoreFromTrash(const QStringList& paths);
+    void emptyTrash();
+    // Copy or move `sources` into `destDir` on the worker thread — drag and
+    // drop, and "Move to…"/"Copy to…". Reports through pasteFinished.
+    void transfer(const QStringList& sources, const QString& destDir, bool move);
+    // Mounted drives.
+    bool unmount(const QString& path);
+    // Applications that open this file: [{id, name, isDefault}]
+    QVariantList openWithApps(const QString& path) const;
+    void openWith(const QString& desktopId, const QStringList& paths);
+    // Name, kind, size, dates, permissions, owner. A folder's total size
+    // arrives later through folderSizeReady.
+    QVariantMap itemInfo(const QString& path);
+
 signals:
     void currentPathChanged();
     void historyChanged();
@@ -131,10 +174,31 @@ signals:
     void errorOccurred(const QString& message);
     void busyChanged();
     void pasteFinished(bool ok, const QString& message);
+    void trashChanged();
+    void undoChanged();
+    void volumesChanged();
+    void folderSizeReady(const QString& path, const QString& sizeText, int fileCount);
 
 private:
     QString m_pickResultPath;   // non-empty only in --pick-folder mode
     bool m_busy = false;
+    bool m_dirsFirst = true;
+    struct UndoOp {
+        QString kind;                          // move | rename | copy | trash
+        QList<QPair<QString, QString>> moves;  // done as first -> second
+        QStringList paths;                     // copies made, or originals trashed
+        QString label;
+    };
+    QList<UndoOp> m_undo;
+    void pushUndo(const UndoOp& op);
+    bool restoreOriginals(const QStringList& originals);
+    int m_trashCount = 0;
+    QVariantList m_volumes;
+    QTimer m_volumeTimer;
+    FileListModel* m_files = nullptr;
+    void loadFiles();
+    void updateTrashCount();
+    void updateVolumes();
     QString formatSize(qint64 bytes) const;
     void openWithDefaultApp(const QString& path);
     QString uniqueExtractDir(const QFileInfo& archive) const;

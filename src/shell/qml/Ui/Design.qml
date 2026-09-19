@@ -233,9 +233,16 @@ QtObject {
     }
 
     // ── Glassmorphic & Translucency Tokens ────────────────────────────────────
-    readonly property color glassBg: tint(surface, 0.88)
-    readonly property color glassCard: tint(raised, 0.65)
-    readonly property color glassTile: tint(raised, 0.55)
+    // Whether surfaces may let the wallpaper through. Only with a compositor
+    // that blurs what is behind them (swayFX, blur on): on plain sway, or with
+    // blur off, a translucent panel shows the wallpaper sharp through every
+    // card, and text over a busy picture turned to mush. The shell sets it;
+    // the standalone apps leave it true, where these sit on their own window.
+    property bool translucent: true
+
+    readonly property color glassBg: tint(surface, translucent ? 0.88 : 1.0)
+    readonly property color glassCard: translucent ? tint(raised, 0.65) : raised
+    readonly property color glassTile: translucent ? tint(raised, 0.55) : raised
     readonly property color glassBorder: tint(text, 0.12)
     // Hover/active variant. ClipboardPopup has referenced this since it was
     // written; undeclared, it evaluated to an invalid colour, so hovering a
@@ -377,7 +384,63 @@ QtObject {
                          "green", "teal", "red", "maroon", "lavender"])
             set(n, n);
 
+        root._guardContrast();
         root._p.loaded = true;
+    }
+
+    // ── Contrast guard ───────────────────────────────────────────────────────
+    //
+    // Measured (WCAG ratio) before this existed: faint text — hints, captions,
+    // secondary labels — sat at 2.3–2.6 on a card, where 4.5 is the floor for
+    // reading; card borders at 1.4–1.6 against the card; and under Tokyo
+    // Night a card, its hover state and the panel behind it were 1.07–1.08
+    // apart, which is the same colour. Every palette passes through here —
+    // built-in, wallpaper-made or a user's file — and each role that falls
+    // short is moved in lightness, away from its background, until it does
+    // not. A palette that already passes comes out unchanged.
+    function _col(c) { return Qt.lighter(c, 1.0); }
+    function _lum(c) {
+        const f = v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+    function contrastRatio(a, b) {
+        const la = root._lum(root._col(a)), lb = root._lum(root._col(b));
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+    // `fg` moved away from `bg` (lighter on a dark theme, darker on a light
+    // one) in small lightness steps until the ratio is met or it runs out.
+    function _ensure(fg, bg, min, dark) {
+        let c = root._col(fg);
+        for (let i = 0; i < 60 && root.contrastRatio(c, bg) < min; ++i) {
+            const l = Math.max(0, Math.min(1, c.hslLightness + (dark ? 0.015 : -0.015)));
+            if (l === c.hslLightness) break;
+            c = Qt.hsla(c.hslHue < 0 ? 0 : c.hslHue, c.hslSaturation, l, 1);
+        }
+        return c.toString();
+    }
+    function _guardContrast() {
+        const p = root._p;
+        const dark = root._lum(root._col(p.text)) > root._lum(root._col(p.ground));
+        // Surfaces: each step distinguishable from the one under it.
+        p.mid = root._ensure(p.mid, p.low, 1.22, dark);
+        p.high = root._ensure(p.high, p.mid, 1.20, dark);
+        p.highest = root._ensure(p.highest, p.high, 1.15, dark);
+        // Lines visible against the card they outline.
+        p.outlineVariant = root._ensure(p.outlineVariant, p.mid, 1.8, dark);
+        // Text, on the lightest surface it is drawn on (hover).
+        p.text = root._ensure(p.text, p.high, 7.0, dark);
+        p.textDim = root._ensure(p.textDim, p.high, 4.5, dark);
+        p.outline = root._ensure(p.outline, p.mid, 4.0, dark);
+        // The accent is used for text and icons on cards.
+        p.primary = root._ensure(p.primary, p.mid, 3.5, dark);
+        for (const n of ["blue", "sapphire", "mauve", "pink", "peach", "yellow",
+                         "green", "teal", "red", "maroon", "lavender", "tertiary", "error"])
+            p[n] = root._ensure(p[n], p.mid, 3.0, dark);
+        // Text on an accent fill: whichever of its own colour or the ground
+        // reads, never a third shade that does neither.
+        if (root.contrastRatio(p.primaryText, p.primary) < 4.5)
+            p.primaryText = root.contrastRatio(p.ground, p.primary) >= root.contrastRatio(p.text, p.primary)
+                            ? p.ground : p.text;
     }
 
     // ── Loading the active theme ─────────────────────────────────────────────
@@ -413,7 +476,8 @@ QtObject {
         return false;
     }
 
-    Component.onCompleted: root.loadActiveTheme()
+    // Without a theme file the built-in palette still goes through the guard.
+    Component.onCompleted: if (!root.loadActiveTheme()) root.applyPalette(root.builtinPalette)
 
     /** Back to the palette compiled into this file. */
     function resetPalette() {

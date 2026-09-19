@@ -6,6 +6,28 @@ import Ui
 
 ApplicationWindow {
     id: window
+
+    // Colours for every stock control in the window — tooltips, scroll bars,
+    // combo boxes, text fields — from the desktop palette. Left to the Basic
+    // style they were its own: a pale-yellow tooltip, light-grey bars.
+    palette.window: Design.surface
+    palette.windowText: Design.text
+    palette.base: Design.sunken
+    palette.alternateBase: Design.raised
+    palette.text: Design.text
+    palette.button: Design.raised
+    palette.buttonText: Design.text
+    palette.brightText: Design.text
+    palette.highlight: Design.accent
+    palette.highlightedText: Design.accentText
+    palette.toolTipBase: Design.raised
+    palette.toolTipText: Design.text
+    palette.placeholderText: Design.textFaint
+    palette.light: Design.highest
+    palette.midlight: Design.high
+    palette.mid: Design.line
+    palette.dark: Design.sunken
+    palette.shadow: Design.ground
     title: NotesBackend.currentNoteId ? "Notes — " + NotesBackend.currentTitle : "Notes"
     width: Design.s(960)
     height: Design.s(620)
@@ -113,158 +135,49 @@ ApplicationWindow {
             spacing: 0
 
             // ── Headerbar (40px) ─────────────────────────────────────────────
-            Rectangle {
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(40)
-                color: window.colSidebar
-                border.color: window.colBorder
-                border.width: 1
-                z: 10
+                spacing: Design.s(Design.space.sm)
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(12)
-                    anchors.rightMargin: Design.s(12)
-                    spacing: Design.s(8)
-
-                    // App Icon & Title
-                    // No app name in the toolbar. Same reasoning as the file manager:
-                    // the window was opened by name and is full of notes, so "b1air-notes"
-                    // beside the New Note button was a label nobody needed and a gap the
-                    // buttons could have had.
-
-                    // New Note Button
-                    Rectangle {
-                        width: newRow.implicitWidth + Design.s(14)
-                        height: Design.s(26)
-                        radius: Design.s(6)
-                        color: newArea.containsMouse ? Design.tint(Design.accent, 0.25) : Design.tint(Design.raised, 0.60)
-                        border.color: window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: newRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(4)
-                            Text { text: "󰐕"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
-                            Text { text: "New Note"; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colFg }
-                        }
-
-                        MouseArea {
-                            id: newArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: window.newNote()
-                        }
+                BarButton { glyph: "\u{f0415}"; label: "New note"; tip: "Ctrl+N"; onClicked: window.newNote() }
+                // Left: re-read the vault (or choose one, the first time).
+                // Right-click: choose a different vault.
+                BarButton {
+                    id: obsBtn
+                    glyph: "\u{f0219}"
+                    label: NotesBackend.obsidianVaultPath ? "Obsidian" : "Connect Obsidian…"
+                    tip: NotesBackend.obsidianVaultPath
+                         ? "Re-read " + NotesBackend.obsidianVaultPath + " · right-click to choose another vault"
+                         : "Choose your Obsidian vault folder"
+                    onClicked: { window.flushSave(); NotesBackend.syncWithObsidian(); }
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: { window.flushSave(); NotesBackend.chooseObsidianVault(); }
                     }
-
-                    // Obsidian Sync Pill
-                    Rectangle {
-                        width: obsRow.implicitWidth + Design.s(14)
-                        height: Design.s(26)
-                        radius: Design.s(6)
-                        color: obsArea.containsMouse ? Design.tint(Design.mauve, 0.25) : Design.tint(Design.raised, 0.40)
-                        border.color: window.colBorder
-                        border.width: 1
-
-                        Row {
-                            id: obsRow
-                            anchors.centerIn: parent
-                            spacing: Design.s(4)
-                            Text { text: "󰈚"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colPurple }
-                            Text { text: NotesBackend.obsidianVaultPath ? "Obsidian Sync" : "Connect Obsidian…"; font.family: Design.font.sans; font.pixelSize: Design.s(11); font.bold: true; color: window.colPurple }
-                        }
-
-                        MouseArea {
-                            id: obsArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            // Left: re-read the vault (or pick one, the first
-                            // time). Right: pick a different vault.
-                            onClicked: mouse => {
-                                window.flushSave();
-                                if (mouse.button === Qt.RightButton) NotesBackend.chooseObsidianVault();
-                                else NotesBackend.syncWithObsidian();
-                            }
-                        }
-                    }
-
-                    // There was a "Notion Sync" pill here. It queried a Notion
-                    // database and, whatever came back, imported nothing and
-                    // exported nothing — then reported "Notion Synced". It is
-                    // gone until it does something.
-
-                    // What the two buttons above did. Both set a status the
-                    // window never showed, so pressing either was silent —
-                    // including the case where Notion has no credentials at
-                    // all, which is every install, since nothing here sets
-                    // them. Now the button says so, and says where they go.
-                    Text {
-                        id: syncStatusText
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Design.s(Design.space.sm)
-                        text: NotesBackend.syncStatus
-                        elide: Text.ElideRight
-                        font.family: Design.font.sans
-                        font.pixelSize: Design.s(11)
-                        color: NotesBackend.syncStatus.indexOf("Error") >= 0
-                               || NotesBackend.syncStatus.indexOf("not configured") >= 0
-                               || NotesBackend.syncStatus.indexOf("No Obsidian") >= 0
-                            ? Design.warn : Design.textDim
-                        visible: NotesBackend.syncStatus !== "" && NotesBackend.syncStatus !== "Ready"
-                    }
-
-                    Item { Layout.fillWidth: !syncStatusText.visible }
-
-                    // Search Bar
-                    Rectangle {
-                        width: Math.min(160, Math.max(100, window.width * 0.18))
-                        height: Design.s(26)
-                        radius: Design.s(6)
-                        color: window.colBg
-                        border.color: searchInput.activeFocus ? window.colBlue : window.colBorder
-                        border.width: 1
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: Design.s(4)
-                            spacing: Design.s(4)
-
-                            Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colDim }
-
-                            TextInput {
-                                id: searchInput
-                                Layout.fillWidth: true
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(11)
-                                color: window.colFg
-                                selectByMouse: true
-                                onTextChanged: window.searchQuery = text.toLowerCase()
-                            }
-                        }
-                    }
-
-                    // Toggle Preview Button
-                    Rectangle {
-                        width: Design.s(26); height: Design.s(26); radius: Design.s(5)
-                        color: prevArea.containsMouse ? Design.tint(Design.accent, 0.25) : "transparent"
-                        border.color: window.colBorder
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: window.showPreview ? "󰈙" : "󱡁"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(13)
-                            color: window.colFg
-                        }
-                        MouseArea {
-                            id: prevArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: window.showPreview = !window.showPreview
-                        }
-                    }
+                }
+                Label {
+                    id: syncStatusText
+                    Layout.fillWidth: true
+                    text: NotesBackend.syncStatus
+                    elide: Text.ElideRight
+                    role: "caption"
+                    color: NotesBackend.syncStatus.indexOf("Error") >= 0
+                           || NotesBackend.syncStatus.indexOf("Could not") >= 0
+                        ? Design.warn : Design.textDim
+                    opacity: NotesBackend.syncStatus !== "" && NotesBackend.syncStatus !== "Ready" ? 1 : 0
+                }
+                Field {
+                    id: searchInput
+                    Layout.preferredWidth: Design.s(220)
+                    placeholder: "Search notes"
+                    onEdited: value => window.searchQuery = value.toLowerCase()
+                }
+                BarButton {
+                    glyph: "\u{f0208}"
+                    tip: "Preview (Ctrl+P)"
+                    checked: window.showPreview
+                    onClicked: window.showPreview = !window.showPreview
                 }
             }
 
@@ -331,7 +244,7 @@ ApplicationWindow {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(12)
                                             font.bold: true
-                                            color: isSelected ? "#ffffff" : window.colFg
+                                            color: isSelected ? Design.text : window.colFg
                                             elide: Text.ElideRight
                                         }
                                         Text {
