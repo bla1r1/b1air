@@ -169,7 +169,7 @@ Window {
                                         Label {
                                             anchors.centerIn: parent
                                             text: "×"
-                                            font.pixelSize: Design.s(11)
+                                            font.pixelSize: Design.s(Design.font.caption)
                                             font.bold: true
                                             color: Design.subtext0
                                         }

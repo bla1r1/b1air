@@ -23,7 +23,8 @@ std::string FocusTimeDB::default_db_path() {
     const char* home = std::getenv("HOME");
     std::string base = home ? home : "/tmp";
     std::string dir = base + "/.local/share/focustime";
-    mkdir(dir.c_str(), 0755);
+    // Recursive: a fresh account may not have ~/.local/share yet.
+    util::mkdir_p(dir);
     return dir + "/focustime.db";
 }
 

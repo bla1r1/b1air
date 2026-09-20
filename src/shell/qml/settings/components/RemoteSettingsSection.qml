@@ -127,8 +127,6 @@ ColumnLayout {
             Pill {
                 label: "vnc://" + section.localIp + ":" + section.vncPort
                 active: true
-                activeColor: Design.surface1
-                activeTextColor: Design.sapphire
             }
 
             ActionButton {

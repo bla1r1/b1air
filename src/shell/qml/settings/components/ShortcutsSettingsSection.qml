@@ -145,43 +145,10 @@ ColumnLayout {
         icon: "\u{f11c}"
         accentColor: Design.sapphire
 
-        RowLayout {
+        Field {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(38)
-                radius: Design.s(Design.radius.ctl)
-                color: Design.surface
-                border.color: searchInput.activeFocus ? Design.accent : Design.tint(Design.line, 0.5)
-                border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Design.s(Design.space.sm)
-                    spacing: Design.s(Design.space.xs)
-
-                    Icon { text: "󰍉"; role: "caption"; color: Design.textDim }
-
-                    TextInput {
-                        id: searchInput
-                        Layout.fillWidth: true
-                        color: Design.text
-                        font.pixelSize: Design.font.caption
-                        clip: true
-                        selectByMouse: true
-                        Text {
-                            text: "Type to filter shortcuts (e.g. fullscreen, volume, space)..."
-                            color: Design.textDim
-                            visible: !searchInput.text && !searchInput.activeFocus
-                            anchors.fill: parent
-                            font: searchInput.font
-                        }
-                        onTextChanged: section.query = text.toLowerCase().trim()
-                    }
-                }
-            }
+            placeholder: "Filter: fullscreen, volume, space…"
+            onEdited: v => section.query = v.toLowerCase().trim()
         }
     }
 

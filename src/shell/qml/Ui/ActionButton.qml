@@ -24,7 +24,8 @@ Rectangle {
     property bool _armed: false
 
     Layout.fillWidth: true
-    Layout.preferredHeight: Design.s(Design.size.action)
+    // Field height, so a button next to a text field lines up with it.
+    Layout.preferredHeight: Design.s(Design.size.field)
 
     // The icon and label are centred with anchors, and anchored children
     // contribute nothing to a parent's implicit size — so this button reported
@@ -35,11 +36,12 @@ Rectangle {
     implicitWidth: content.implicitWidth + Design.s(Design.space.lg) * 2
     Layout.minimumWidth: root.implicitWidth
 
-    radius: Design.s(Design.radius.ctl)
+    radius: height / 2
     color: root._armed ? Design.tint(root.tone, 0.28)
                        : (ma.containsMouse ? (root.destructive ? Design.tint(root.tone, 0.18) : Design.glassHover)
                                            : Design.glassCard)
-    border.color: (root._armed || ma.containsMouse) ? Design.tint(root.tone, 0.7) : Design.tint(Design.line, 0.45)
+    // The same capsule as BarButton and Pill: no outline, the fill is the shape.
+    border.color: root._armed ? Design.tint(root.tone, 0.7) : "transparent"
     border.width: Design.border
 
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -67,16 +69,23 @@ Rectangle {
         spacing: Design.s(Design.space.xs)
 
         Icon {
+            id: glyph
+            visible: text !== ""
             text: root._armed ? "\u{f0e60}" : root.icon   // alert glyph while armed
-            role: "caption"
+            role: "body"
             color: root._armed ? root.tone : root.iconTone
         }
 
         Label {
+            // A squeezed button shortens its label rather than spilling it.
+            Layout.maximumWidth: Math.max(0, root.width - Design.s(Design.space.lg) * 2
+                                          - (glyph.visible ? glyph.implicitWidth + content.spacing : 0))
+            elide: Text.ElideRight
             text: root._armed ? root.confirmLabel : root.label
-            role: "caption"
-            weight: root._armed ? Design.weight.bold : Design.weight.medium
-            color: root._armed ? root.tone : root.tone
+            weight: root._armed ? Design.weight.semibold : Design.weight.regular
+            // Colour is for the "Sure?" step. Until then every action reads
+            // in the text colour, whatever tint its card has.
+            color: root._armed ? root.tone : Design.text
         }
     }
 

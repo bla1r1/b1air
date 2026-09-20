@@ -192,7 +192,6 @@ ColumnLayout {
                         required property var modelData
                         label: modelData.name
                         active: modelData.desktopFile === (section.current[rowCard.modelData.kind] || "")
-                        activeColor: rowCard.modelData.tone
                         onClicked: section.choose(rowCard.modelData, modelData.desktopFile)
                     }
                 }

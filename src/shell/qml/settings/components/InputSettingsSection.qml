@@ -317,14 +317,12 @@ ColumnLayout {
                     Pill {
                         label: "Flat (Linear)"
                         active: section.accelProfile === "flat"
-                        activeColor: Design.sapphire
                         onClicked: section.setAccelProfile("flat")
                     }
 
                     Pill {
                         label: "Adaptive"
                         active: section.accelProfile === "adaptive"
-                        activeColor: Design.sapphire
                         onClicked: section.setAccelProfile("adaptive")
                     }
                 }

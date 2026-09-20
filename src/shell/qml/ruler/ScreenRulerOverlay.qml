@@ -47,7 +47,7 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Icon {
-                text: "\u{f545}" // ruler
+                text: "\u{f046d}" // ruler
                 role: "subhead"
                 color: Design.accent
             }

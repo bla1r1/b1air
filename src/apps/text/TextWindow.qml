@@ -130,35 +130,34 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         AppToolbar {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
 
-            Text {
-                text: "\u{f0219}"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(20)
-                color: Design.accent
+            BarGroup {
+                BarButton { glyph: "\u{f0415}"; label: "New"; tip: "New file (Ctrl+N)"; onClicked: window.newFileWithConfirmation() }
+                BarButton { glyph: "\u{f0193}"; label: "Save"; primary: TextBackend.isModified; tip: "Save (Ctrl+S) · Save as (Ctrl+Shift+S)"; onClicked: window.save() }
             }
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
                 Label {
                     Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
                     text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
                     weight: Design.weight.semibold
-                    elide: Text.ElideRight
+                    elide: Text.ElideMiddle
                 }
                 Label {
                     Layout.fillWidth: true
                     visible: text !== ""
-                    text: TextBackend.filePath
+                    horizontalAlignment: Text.AlignHCenter
+                    text: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
                     role: "caption"
-                    dim: true
+                    color: Design.textFaint
                     elide: Text.ElideMiddle
                 }
             }
-            BarButton { glyph: "\u{f0415}"; label: "New"; tip: "New file (Ctrl+N)"; onClicked: window.newFileWithConfirmation() }
-            BarButton { glyph: "\u{f0193}"; label: "Save"; primary: TextBackend.isModified; tip: "Save (Ctrl+S) · Save as (Ctrl+Shift+S)"; onClicked: window.save() }
-            BarButton { glyph: "\u{f05b6}"; tip: "Wrap long lines"; checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+            BarGroup {
+                BarButton { glyph: "\u{f05b6}"; tip: "Wrap long lines"; checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+            }
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -212,7 +211,7 @@ Window {
                                 height: parent._here.height
                                 text: String(index + 1)
                                 font.family: Design.font.mono
-                                font.pixelSize: Design.s(12)
+                                font.pixelSize: Design.s(Design.font.body)
                                 color: (index + 1 === window.currentLine) ? Design.accent : Design.textFaint
                                 horizontalAlignment: Text.AlignRight
                                 verticalAlignment: Text.AlignVCenter
@@ -343,70 +342,19 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         // BOTTOM STATUS BAR
         // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
+        AppStatusBar {
             Layout.fillWidth: true
-            implicitHeight: Design.s(26)
-            color: Design.crust
-            border.color: Design.glassBorder
-            border.width: 1
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.md)
-                anchors.rightMargin: Design.s(Design.space.md)
-                spacing: Design.s(Design.space.md)
-
-                Text {
-                    text: "Ln " + window.currentLine + ", Col " + window.currentCol
-                    font.family: Design.font.mono
-                    font.pixelSize: Design.s(10)
-                    color: Design.textDim
-                }
-
-                Text {
-                    text: TextBackend.lineCount + " lines  •  " + TextBackend.wordCount + " words"
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
-                    color: Design.textDim
-                }
-
-                // A save or open that failed says so, where the eye already is.
-                Text {
-                    Layout.fillWidth: true
-                    text: TextBackend.lastError
-                    visible: text.length > 0
-                    elide: Text.ElideRight
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
-                    color: Design.danger
-                }
-
-                Item { Layout.fillWidth: true; visible: TextBackend.lastError.length === 0 }
-
-                Rectangle {
-                    implicitWidth: ftText.implicitWidth + Design.s(12)
-                    implicitHeight: Design.s(18)
-                    radius: Design.s(9)
-                    color: Design.tint(Design.teal, 0.18)
-
-                    Text {
-                        id: ftText
-                        anchors.centerIn: parent
-                        text: TextBackend.fileType
-                        font.family: Design.font.sans
-                        font.weight: Design.weight.bold
-                        font.pixelSize: Design.s(9)
-                        color: Design.teal
-                    }
-                }
-
-                Text {
-                    text: "UTF-8"
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
-                    color: Design.textDim
-                }
+            Label { text: "Ln " + window.currentLine + ", Col " + window.currentCol; role: "caption"; isMono: true; dim: true }
+            Label { text: TextBackend.lineCount + " lines  ·  " + TextBackend.wordCount + " words"; role: "caption"; dim: true }
+            // A save or open that failed says so, where the eye already is.
+            Label {
+                Layout.fillWidth: true
+                text: TextBackend.lastError
+                elide: Text.ElideRight
+                role: "caption"
+                color: Design.danger
             }
+            Label { text: TextBackend.fileType + "  ·  UTF-8"; role: "caption"; color: Design.textFaint }
         }
     }
 }

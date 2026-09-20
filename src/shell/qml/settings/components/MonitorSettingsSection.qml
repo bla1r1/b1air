@@ -484,14 +484,14 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { resW: 3840, resH: 2160, label: "4K",   accent: Design.accentAlt },
-                    { resW: 2560, resH: 1440, label: "QHD",  accent: Design.accentAlt },
-                    { resW: 1920, resH: 1080, label: "FHD",  accent: Design.accent },
-                    { resW: 1600, resH: 900,  label: "HD+",  accent: Design.ok },
-                    { resW: 1366, resH: 768,  label: "WXGA", accent: Design.warn },
-                    { resW: 1280, resH: 720,  label: "HD",   accent: Design.warn },
-                    { resW: 1024, resH: 768,  label: "XGA",  accent: Design.ok },
-                    { resW: 800,  resH: 600,  label: "SVGA", accent: Design.danger }
+                    { resW: 3840, resH: 2160, label: "4K" },
+                    { resW: 2560, resH: 1440, label: "QHD" },
+                    { resW: 1920, resH: 1080, label: "FHD" },
+                    { resW: 1600, resH: 900,  label: "HD+" },
+                    { resW: 1366, resH: 768,  label: "WXGA" },
+                    { resW: 1280, resH: 720,  label: "HD" },
+                    { resW: 1024, resH: 768,  label: "XGA" },
+                    { resW: 800,  resH: 600,  label: "SVGA" }
                 ]
 
                 Rectangle {
@@ -500,21 +500,18 @@ ColumnLayout {
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(44)
-                    radius: Design.s(Design.radius.card)
+                    radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isSel: section.activeMonitor
                         && section.activeMonitor.resW === resCard.modelData.resW
                         && section.activeMonitor.resH === resCard.modelData.resH
-                    readonly property color accentColor: resCard.modelData.accent
+                    readonly property color accentColor: Design.accent
 
-                    color: resCard.isSel ? Design.tint(resCard.accentColor, 0.15)
-                                         : (resMa.containsMouse ? Design.raised : Design.sunken)
-                    border.color: resCard.isSel ? resCard.accentColor
-                                                : (resMa.containsMouse ? Design.hover : "transparent")
-                    border.width: resCard.isSel ? 2 : 1
+                    // Selected the way a Pill is: an accent tint, no outline.
+                    color: resCard.isSel ? Design.tint(resCard.accentColor, 0.24)
+                                         : (resMa.containsMouse ? Design.glassHover : Design.glassCard)
 
                     Behavior on color { ColorAnimation { duration: Design.duration.base } }
-                    Behavior on border.color { ColorAnimation { duration: Design.duration.base } }
 
                     scale: resMa.pressed ? 0.96 : 1.0
                     Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutSine } }
@@ -525,8 +522,7 @@ ColumnLayout {
 
                         Label {
                             Layout.alignment: Qt.AlignHCenter
-                            role: "caption"
-                            weight: resCard.isSel ? Design.weight.bold : Design.weight.semibold
+                            weight: Design.weight.semibold
                             color: resCard.isSel ? resCard.accentColor : Design.text
                             text: resCard.modelData.label
                             Behavior on color { ColorAnimation { duration: Design.duration.base } }
@@ -703,7 +699,6 @@ ColumnLayout {
                     required property var modelData
                     label: modelData.label
                     active: section.activeMonitor && (section.activeMonitor.transform || "normal") === modelData.id
-                    activeColor: Design.accent
                     onClicked: {
                         if (!section.activeMonitor) return;
                         Monitors.setTransform(section.activeMonitor.name, modelData.id);
@@ -756,7 +751,6 @@ ColumnLayout {
                 icon: "\u{f012c}"
                 active: section.dirty
                 enabled: section.dirty
-                activeColor: section.selectedRateAccent
                 opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.applyLayout()
             }

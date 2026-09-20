@@ -119,7 +119,6 @@ ColumnLayout {
                         label: Network.scanning ? "Scanning..." : "Scan for devices"
                         icon: Network.scanning ? "\u{f0110}" : "\u{f002f}"
                         active: Network.scanning
-                        activeColor: Design.mauve
                         onClicked: {
                             if (Network.scanning) Network.stopScan();
                             else Network.startScan();
@@ -188,7 +187,6 @@ ColumnLayout {
                 Pill {
                     label: "Forget"
                     icon: "\u{f01b4}"
-                    activeColor: Design.danger
                     onClicked: Network.forgetDevice(modelData.mac)
                 }
             }
@@ -246,7 +244,6 @@ ColumnLayout {
                 Pill {
                     label: "Pair"
                     icon: "\u{f00af}"
-                    activeColor: Design.sapphire
                     onClicked: Network.pairDevice(modelData.mac)
                 }
             }

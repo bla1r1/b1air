@@ -137,23 +137,23 @@ ApplicationWindow {
             // ── Headerbar (40px) ─────────────────────────────────────────────
             AppToolbar {
                 Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
 
-                BarButton { glyph: "\u{f0415}"; label: "New note"; tip: "Ctrl+N"; onClicked: window.newNote() }
-                // Left: re-read the vault (or choose one, the first time).
-                // Right-click: choose a different vault.
-                BarButton {
-                    id: obsBtn
-                    glyph: "\u{f0219}"
-                    label: NotesBackend.obsidianVaultPath ? "Obsidian" : "Connect Obsidian…"
-                    tip: NotesBackend.obsidianVaultPath
-                         ? "Re-read " + NotesBackend.obsidianVaultPath + " · right-click to choose another vault"
-                         : "Choose your Obsidian vault folder"
-                    onClicked: { window.flushSave(); NotesBackend.syncWithObsidian(); }
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.RightButton
-                        onClicked: { window.flushSave(); NotesBackend.chooseObsidianVault(); }
+                BarGroup {
+                    BarButton { glyph: "\u{f0415}"; label: "New note"; tip: "Ctrl+N"; onClicked: window.newNote() }
+                    // Left: re-read the vault (or choose one, the first time).
+                    // Right-click: choose a different vault.
+                    BarButton {
+                        glyph: "\u{f0219}"
+                        label: NotesBackend.obsidianVaultPath ? "Obsidian" : "Connect Obsidian…"
+                        tip: NotesBackend.obsidianVaultPath
+                             ? "Re-read " + NotesBackend.obsidianVaultPath + " · right-click to choose another vault"
+                             : "Choose your Obsidian vault folder"
+                        onClicked: { window.flushSave(); NotesBackend.syncWithObsidian(); }
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            onClicked: { window.flushSave(); NotesBackend.chooseObsidianVault(); }
+                        }
                     }
                 }
                 Label {
@@ -162,22 +162,19 @@ ApplicationWindow {
                     text: NotesBackend.syncStatus
                     elide: Text.ElideRight
                     role: "caption"
-                    color: NotesBackend.syncStatus.indexOf("Error") >= 0
-                           || NotesBackend.syncStatus.indexOf("Could not") >= 0
-                        ? Design.warn : Design.textDim
+                    color: NotesBackend.syncStatus.indexOf("Error") >= 0 || NotesBackend.syncStatus.indexOf("Could not") >= 0
+                           ? Design.warn : Design.textFaint
                     opacity: NotesBackend.syncStatus !== "" && NotesBackend.syncStatus !== "Ready" ? 1 : 0
                 }
                 Field {
                     id: searchInput
                     Layout.preferredWidth: Design.s(220)
                     placeholder: "Search notes"
+                    radius: height / 2
                     onEdited: value => window.searchQuery = value.toLowerCase()
                 }
-                BarButton {
-                    glyph: "\u{f0208}"
-                    tip: "Preview (Ctrl+P)"
-                    checked: window.showPreview
-                    onClicked: window.showPreview = !window.showPreview
+                BarGroup {
+                    BarButton { glyph: "\u{f0208}"; tip: "Preview (Ctrl+P)"; checked: window.showPreview; onClicked: window.showPreview = !window.showPreview }
                 }
             }
 
@@ -192,7 +189,7 @@ ApplicationWindow {
 
                     // Left Column: Note List (240px)
                     Rectangle {
-                        Layout.preferredWidth: Design.s(240)
+                        Layout.preferredWidth: Design.s(224)
                         Layout.fillHeight: true
                         color: window.colSidebar
 
@@ -202,15 +199,18 @@ ApplicationWindow {
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             width: 1
-                            color: window.colBorder
+                            color: Design.line
                         }
 
                         ListView {
                             id: notesList
                             anchors.fill: parent
-                            anchors.margins: Design.s(8)
+                            anchors.topMargin: Design.s(Design.space.md)
+                            anchors.bottomMargin: Design.s(Design.space.md)
+                            anchors.leftMargin: Design.s(Design.space.sm)
+                            anchors.rightMargin: Design.s(Design.space.sm) + 1
                             clip: true
-                            spacing: Design.s(4)
+                            spacing: Design.s(2)
                             model: NotesBackend.noteList
 
                             delegate: Rectangle {
@@ -219,11 +219,11 @@ ApplicationWindow {
                                 // ListView, so filtering by `visible` alone left a
                                 // 58 px hole for every note the search excluded.
                                 height: matchesSearch ? Design.s(58) : 0
-                                radius: Design.s(6)
+                                // Selected as a row of any sidebar is (Ui/SidebarItem):
+                                // the accent fill, no outline.
+                                radius: Design.s(Design.radius.ctl)
                                 clip: true
-                                color: isSelected ? Design.tint(Design.accent, 0.20) : (itemArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
-                                border.color: isSelected ? window.colBlue : "transparent"
-                                border.width: 1
+                                color: isSelected ? Design.tint(Design.accent, 0.22) : (itemArea.containsMouse ? Design.hover : "transparent")
 
                                 readonly property bool isSelected: NotesBackend.currentNoteId === modelData.id
                                 readonly property bool matchesSearch: window.searchQuery === ""
@@ -242,7 +242,7 @@ ApplicationWindow {
                                             Layout.fillWidth: true
                                             text: modelData.title || "Untitled"
                                             font.family: Design.font.sans
-                                            font.pixelSize: Design.s(12)
+                                            font.pixelSize: Design.s(Design.font.body)
                                             font.bold: true
                                             color: isSelected ? Design.text : window.colFg
                                             elide: Text.ElideRight
@@ -250,7 +250,7 @@ ApplicationWindow {
                                         Text {
                                             text: modelData.date || ""
                                             font.family: Design.font.sans
-                                            font.pixelSize: Design.s(9)
+                                            font.pixelSize: Design.s(Design.font.caption)
                                             color: window.colDim
                                         }
                                     }
@@ -259,7 +259,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         text: (modelData.content || "").replace(/\n/g, " ")
                                         font.family: Design.font.sans
-                                        font.pixelSize: Design.s(10)
+                                        font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
                                         elide: Text.ElideRight
                                         maximumLineCount: 1
@@ -303,30 +303,20 @@ ApplicationWindow {
                                     id: titleInput
                                     Layout.fillWidth: true
                                     text: NotesBackend.currentTitle
+                                    // The size and weight of a Settings page title.
                                     font.family: Design.font.sans
-                                    font.pixelSize: Design.s(20)
-                                    font.bold: true
+                                    font.pixelSize: Design.s(Design.font.display)
+                                    font.weight: Design.weight.bold
                                     color: window.colFg
                                     selectByMouse: true
                                     onTextChanged: autoSaveTimer.restart()
                                 }
 
-                                Rectangle {
-                                    width: Design.s(28); height: Design.s(28); radius: Design.s(6)
-                                    color: delArea.containsMouse ? Design.tint(Design.danger, 0.25) : "transparent"
-                                    border.color: window.colBorder
-                                    border.width: 1
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "󰆴"
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(13)
-                                        color: window.colRed
-                                    }
-                                    MouseArea {
-                                        id: delArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: deleteConfirm.open()
-                                    }
+                                BarButton {
+                                    glyph: "\u{f0a7a}"
+                                    danger: true
+                                    tip: "Delete note"
+                                    onClicked: deleteConfirm.open()
                                 }
                             }
 
@@ -345,14 +335,14 @@ ApplicationWindow {
                                     text: NotesBackend.currentTags
                                     readOnly: true
                                     font.family: Design.font.mono
-                                    font.pixelSize: Design.s(11)
+                                    font.pixelSize: Design.s(Design.font.caption)
                                     color: window.colCyan
                                     selectByMouse: true
 
                                     Text {
                                         text: "Tags: write #tag anywhere in the note"
                                         font.family: Design.font.sans
-                                        font.pixelSize: Design.s(11)
+                                        font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
                                         visible: !tagInput.text
                                     }

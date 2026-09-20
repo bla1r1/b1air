@@ -286,6 +286,7 @@ ColumnLayout {
                 }
 
                 Field {
+                    mono: true
                     id: customCmdInput
                     Layout.fillWidth: true
                     placeholder: "Command, e.g. syncthing or steam -silent"

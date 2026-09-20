@@ -119,14 +119,7 @@ ApplicationWindow {
             AppToolbar {
                 Layout.fillWidth: true
                 z: 10
-                spacing: Design.s(Design.space.sm)
 
-                Text {
-                    text: "\u{f02e9}"
-                    font.family: Design.font.icon
-                    font.pixelSize: Design.s(20)
-                    color: Design.accent
-                }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
@@ -141,23 +134,26 @@ ApplicationWindow {
                         text: ViewBackend.imageResolution + "  ·  " + ViewBackend.fileSize
                               + (ViewBackend.totalFiles > 1 ? "  ·  " + (ViewBackend.fileIndex + 1) + " of " + ViewBackend.totalFiles : "")
                         role: "caption"
-                        dim: true
+                        color: Design.textFaint
                     }
                 }
-
-                CtrlBtn { icon: "\u{f0374}"; tip: "Zoom out (−)"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
-                Label {
-                    Layout.preferredWidth: Design.s(48)
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Math.round(window.zoomFactor * 100) + "%"
-                    isMono: true
-                    role: "caption"
-                    dim: true
+                BarGroup {
+                    CtrlBtn { icon: "\u{f0374}"; tip: "Zoom out (−)"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                    Label {
+                        Layout.preferredWidth: Design.s(46)
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Math.round(window.zoomFactor * 100) + "%"
+                        isMono: true
+                        role: "caption"
+                        dim: true
+                    }
+                    CtrlBtn { icon: "\u{f0415}"; tip: "Zoom in (+)"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
                 }
-                CtrlBtn { icon: "\u{f0415}"; tip: "Zoom in (+)"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
-                CtrlBtn { icon: "\u{f0450}"; tip: "Reset view (0)"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
-                CtrlBtn { icon: "\u{f0467}"; tip: "Rotate 90° (R)"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
-                CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: "Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                BarGroup {
+                    CtrlBtn { icon: "\u{f0450}"; tip: "Reset view (0)"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
+                    CtrlBtn { icon: "\u{f0467}"; tip: "Rotate 90° (R)"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                    CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: "Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                }
                 BarButton { glyph: "\u{f0e09}"; label: "Set as wallpaper"; onClicked: ViewBackend.setWallpaper() }
             }
 

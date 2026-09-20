@@ -110,28 +110,24 @@ ColumnLayout {
                 Pill {
                     label: "Candle (2700K)"
                     active: section.tempK === 2700
-                    activeColor: Design.yellow
                     onClicked: section.applyTemp(true, 2700)
                 }
 
                 Pill {
                     label: "Warm Incandescent (3400K)"
                     active: section.tempK === 3400
-                    activeColor: Design.yellow
                     onClicked: section.applyTemp(true, 3400)
                 }
 
                 Pill {
                     label: "Sunset (4500K)"
                     active: section.tempK === 4500
-                    activeColor: Design.yellow
                     onClicked: section.applyTemp(true, 4500)
                 }
 
                 Pill {
                     label: "Daylight (6500K)"
                     active: section.tempK === 6500
-                    activeColor: Design.yellow
                     onClicked: section.applyTemp(true, 6500)
                 }
             }

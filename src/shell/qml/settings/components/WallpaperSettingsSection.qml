@@ -86,7 +86,6 @@ ColumnLayout {
             Pill {
                 label: "Random Wallpaper"
                 icon: "\u{f049d}"
-                activeColor: Design.pink
                 onClicked: section.setRandom()
             }
 
@@ -214,6 +213,7 @@ ColumnLayout {
             Label { text: "Folder Path"; role: "caption"; dim: true }
 
             Field {
+                mono: true
                 Layout.fillWidth: true
                 text: section.wallpaperDir
                 placeholder: "/home/you/Pictures/Wallpapers"

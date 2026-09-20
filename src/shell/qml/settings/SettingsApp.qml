@@ -109,7 +109,7 @@ Item {
     // Ctrl+F goes to the search field, as in Files and Monitor.
     Shortcut {
         sequence: "Ctrl+F"
-        onActivated: searchBox.forceActiveFocus()
+        onActivated: searchBox.focusInput()
     }
 
     // ── Frame ────────────────────────────────────────────────────────────────
@@ -152,87 +152,25 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: Design.s(14)
+                anchors.topMargin: Design.s(Design.space.md)
+                anchors.bottomMargin: Design.s(Design.space.md)
+                anchors.leftMargin: Design.s(Design.space.sm)
+                anchors.rightMargin: Design.s(Design.space.sm) + 1
                 spacing: Design.s(Design.space.sm)
 
-                RowLayout {
+                // No "Settings" title: the window says it, and the apps'
+                // sidebars start with what you navigate to.
+                Field {
+                    id: searchBox
                     Layout.fillWidth: true
-                    Layout.bottomMargin: Design.s(2)
-                    spacing: Design.s(Design.space.sm)
-
-                    Icon { text: "\u{f0493}"; role: "subhead"; color: Design.accent }
-                    Label { text: "Settings"; role: "subhead"; weight: Design.weight.bold }
+                    Layout.preferredHeight: Design.s(36)
+                    radius: height / 2
+                    color: Design.raised
+                    placeholder: "Search settings (Ctrl+F)"
+                    text: app.searchQuery
+                    onEdited: value => app.searchQuery = value
                 }
 
-                // Search Capsule
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(32)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
-                    border.color: searchBox.activeFocus ? Design.accent : Design.glassBorder
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(8)
-                        anchors.rightMargin: Design.s(8)
-                        spacing: Design.s(6)
-
-                        Icon {
-                            text: "\u{f002}"
-                            role: "caption"
-                            color: searchBox.activeFocus ? Design.accent : Design.textDim
-                        }
-
-                        TextInput {
-                            id: searchBox
-                            Layout.fillWidth: true
-                            text: app.searchQuery
-                            color: Design.text
-                            font.pixelSize: Design.s(12)
-                            selectByMouse: true
-                            onTextChanged: {
-                                if (app.searchQuery !== text)
-                                    app.searchQuery = text;
-                            }
-                            Binding {
-                                target: searchBox
-                                property: "text"
-                                value: app.searchQuery
-                            }
-                            Keys.onEscapePressed: {
-                                app.searchQuery = "";
-                                text = "";
-                            }
-
-                            Text {
-                                anchors.fill: parent
-                                text: "Search settings..."
-                                color: Design.textDim
-                                font: parent.font
-                                visible: !parent.text && !parent.activeFocus
-                            }
-                        }
-
-                        Icon {
-                            text: "\u{f00d}"
-                            role: "caption"
-                            color: Design.textDim
-                            visible: app.searchQuery.length > 0
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    app.searchQuery = "";
-                                    searchBox.text = "";
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Category Items List
                 ListView {
                     id: railList
                     Layout.fillWidth: true
@@ -242,75 +180,28 @@ Item {
                     spacing: Design.s(2)
                     ScrollBar.vertical: OverflowBar {}
 
-                    delegate: Item {
+                    delegate: Loader {
                         id: railDelegate
                         required property var modelData
                         required property int index
-
                         width: railList.width
-                        height: modelData.isHeader ? Design.s(24) : Design.s(32)
+                        sourceComponent: modelData.isHeader ? headingRow : pageRow
 
-                        // Section Category Header
-                        Label {
-                            visible: railDelegate.modelData.isHeader === true
-                            anchors.left: parent.left
-                            anchors.leftMargin: Design.s(Design.space.xs)
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: Design.s(2)
-                            text: railDelegate.modelData.label || ""
-                            role: "caption"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(9)
-                            weight: Design.weight.bold
-                            color: Design.textFaint
+                        Component {
+                            id: headingRow
+                            SidebarHeading { text: railDelegate.modelData.label || "" }
                         }
-
-                        // Interactive Nav Button
-                        Rectangle {
-                            visible: !railDelegate.modelData.isHeader
-                            anchors.fill: parent
-                            radius: Design.s(Design.radius.ctl)
-
-                            readonly property bool isActive: app.page === railDelegate.modelData.id
-                            color: isActive
-                                ? Design.tint(railDelegate.modelData.color || Design.accent, 0.16)
-                                : (itemMa.containsMouse ? Design.glassHover : "transparent")
-                            border.color: isActive
-                                ? Design.tint(railDelegate.modelData.color || Design.accent, 0.35)
-                                : "transparent"
-                            border.width: 1
-
-                            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Design.s(Design.space.sm)
-                                anchors.rightMargin: Design.s(Design.space.sm)
-                                spacing: Design.s(Design.space.sm)
-
-                                Icon {
-                                    text: railDelegate.modelData.icon || ""
-                                    role: "body"
-                                    color: parent.parent.isActive ? (railDelegate.modelData.color || Design.accent) : Design.textDim
-                                }
-
-                                Label {
-                                    text: railDelegate.modelData.label || ""
-                                    weight: parent.parent.isActive ? Design.weight.bold : Design.weight.regular
-                                    color: parent.parent.isActive ? Design.text : Design.textDim
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Clickable {
-                                id: itemMa
+                        Component {
+                            id: pageRow
+                            SidebarItem {
+                                label: railDelegate.modelData.label || ""
+                                glyph: railDelegate.modelData.icon || ""
+                                active: app.page === railDelegate.modelData.id
                                 onClicked: app.open(railDelegate.modelData.id)
                             }
                         }
                     }
                 }
-
             }
         }
 
@@ -319,63 +210,6 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
-
-            // Header bar: which page this is and what it is for.
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(64)
-                visible: !app.noResults
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(24)
-                    anchors.rightMargin: Design.s(24)
-                    spacing: Design.s(Design.space.md)
-
-                    Rectangle {
-                        Layout.preferredWidth: Design.s(36)
-                        Layout.preferredHeight: Design.s(36)
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.tint(app.current.color || Design.accent, 0.18)
-                        border.color: Design.tint(app.current.color || Design.accent, 0.35)
-                        border.width: Design.border
-
-                        Icon {
-                            anchors.centerIn: parent
-                            text: app.current.icon || ""
-                            role: "subhead"
-                            color: app.current.color || Design.accent
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Design.s(1)
-                        Label {
-                            Layout.fillWidth: true
-                            text: app.current.label || ""
-                            role: "subhead"
-                            weight: Design.weight.bold
-                            elide: Text.ElideRight
-                        }
-                        Label {
-                            Layout.fillWidth: true
-                            text: app.current.desc || ""
-                            role: "caption"
-                            dim: true
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: Design.line
-                }
-            }
 
             EmptyState {
                 visible: app.noResults
@@ -410,7 +244,30 @@ Item {
                 x: Math.max(sidePad, (pageScroll.availableWidth - width) / 2)
                 spacing: Design.s(Design.space.lg)
 
-                Item { Layout.preferredHeight: Design.s(Design.space.xs) }
+                // The page's name, as the first thing on the page and scrolling
+                // with it. It was a 64px bar of its own — icon tile, name,
+                // description, rule — a header strip of the kind the apps have
+                // dropped: it took a band of every page to say what the rail,
+                // with the same icon highlighted, already said.
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Design.s(Design.space.xl)
+                    Layout.bottomMargin: Design.s(Design.space.xs)
+                    spacing: Design.s(Design.space.xs)
+                    Label {
+                        Layout.fillWidth: true
+                        text: app.current.label || ""
+                        role: "display"
+                        weight: Design.weight.bold
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: app.current.desc || ""
+                        dim: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
 
                 // One page exists at a time. Every section used to be built
                 // whenever Settings opened — all 25, 24 of them hidden — and a
@@ -709,53 +566,20 @@ Item {
             }
             }
 
-            // Status bar, as along the bottom of Files and Monitor.
-            Rectangle {
+            // Status bar, the same strip as along the bottom of every app.
+            AppStatusBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(30)
-                color: Design.ground
-                radius: Design.s(Design.radius.panel)
-
-                Rectangle {   // square the top corners
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: parent.radius
-                    color: parent.color
+                Label {
+                    Layout.fillWidth: true
+                    text: "Changes save automatically"
+                    role: "caption"
+                    dim: true
+                    elide: Text.ElideRight
                 }
-                Rectangle {   // left corner meets the sidebar square
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: parent.radius
-                    color: parent.color
-                }
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: 1
-                    color: Design.line
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(14)
-                    anchors.rightMargin: Design.s(14)
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: "Changes save automatically"
-                        role: "caption"
-                        dim: true
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        text: "Ctrl+F Search  \u2022  Esc Close"
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(9)
-                        color: Design.textDim
-                    }
+                Label {
+                    text: "Ctrl+F search  ·  Esc close"
+                    role: "caption"
+                    color: Design.textFaint
                 }
             }
         }

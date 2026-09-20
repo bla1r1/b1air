@@ -161,35 +161,29 @@ ApplicationWindow {
             // ── Title bar ────────────────────────────────────────────────────
             AppToolbar {
                 Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
 
-                Text {
-                    text: "\u{f0567}"
-                    font.family: Design.font.icon
-                    font.pixelSize: Design.s(20)
-                    color: Design.accent
-                }
-                Label { Layout.fillWidth: true; text: "Camera"; weight: Design.weight.semibold }
-
-                // Which camera, when the machine has more than one.
-                BarButton {
-                    visible: devices.videoInputs.length > 1
-                    glyph: "\u{f0567}"
-                    label: camera.cameraDevice.description || "Camera"
-                    tip: "Switch camera"
-                    onClicked: {
-                        const list = devices.videoInputs;
-                        let i = 0;
-                        for (let n = 0; n < list.length; n++)
-                            if (list[n].id === camera.cameraDevice.id) i = n;
-                        camera.cameraDevice = list[(i + 1) % list.length];
+                Item { Layout.fillWidth: true }
+                BarGroup {
+                    // Which camera, when the machine has more than one.
+                    BarButton {
+                        visible: devices.videoInputs.length > 1
+                        glyph: "\u{f0567}"
+                        label: camera.cameraDevice.description || "Camera"
+                        tip: "Switch camera"
+                        onClicked: {
+                            const list = devices.videoInputs;
+                            let i = 0;
+                            for (let n = 0; n < list.length; n++)
+                                if (list[n].id === camera.cameraDevice.id) i = n;
+                            camera.cameraDevice = list[(i + 1) % list.length];
+                        }
                     }
-                }
-                BarButton {
-                    glyph: "\u{f024b}"
-                    label: "Open folder"
-                    tip: "Where photos and videos go (Ctrl+O)"
-                    onClicked: Qt.openUrlExternally(Paths.fileUrl(window.shotsDir))
+                    BarButton {
+                        glyph: "\u{f024b}"
+                        label: "Open folder"
+                        tip: "Where photos and videos go (Ctrl+O)"
+                        onClicked: Qt.openUrlExternally(Paths.fileUrl(window.shotsDir))
+                    }
                 }
             }
 
@@ -387,23 +381,25 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     // Self-timer, mirror, grid.
-                    RowLayout {
-                        spacing: Design.s(Design.space.xs)
-
-                        Pill {
-                            label: window.timerSeconds === 0 ? "Timer off" : window.timerSeconds + "s"
-                            active: window.timerSeconds > 0
+                    BarGroup {
+                        BarButton {
+                            glyph: "\u{f051b}"
+                            label: window.timerSeconds === 0 ? "Off" : window.timerSeconds + "s"
+                            tip: "Self-timer: off, 3 s, 10 s"
+                            checked: window.timerSeconds > 0
                             onClicked: window.timerSeconds = window.timerSeconds === 0 ? 3
                                      : (window.timerSeconds === 3 ? 10 : 0)
                         }
-                        Pill {
-                            label: "Mirror"
-                            active: window.mirrored
+                        BarButton {
+                            glyph: "\u{f11fd}"
+                            tip: "Mirror (M)"
+                            checked: window.mirrored
                             onClicked: window.mirrored = !window.mirrored
                         }
-                        Pill {
-                            label: "Grid"
-                            active: window.showGrid
+                        BarButton {
+                            glyph: "\u{f02c1}"
+                            tip: "Grid (G)"
+                            checked: window.showGrid
                             onClicked: window.showGrid = !window.showGrid
                         }
                     }
@@ -411,26 +407,18 @@ ApplicationWindow {
             }
 
             // ── Status bar ───────────────────────────────────────────────────
-            Rectangle {
+            AppStatusBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(26)
-                color: Design.ground
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(12)
-                    anchors.rightMargin: Design.s(12)
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: window.status !== "" ? window.status : window.shotsDir
-                        role: "caption"
-                        color: window.status !== "" ? Design.accent : Design.textDim
-                        elide: Text.ElideMiddle
-                    }
-
-                    Label { text: "Space Shoot · R Record · G Grid · M Mirror"; role: "caption"; dim: true; isMono: true }
+                Label {
+                    Layout.fillWidth: true
+                    text: window.status !== "" ? window.status : window.shotsDir
+                    role: "caption"
+                    color: window.status !== "" ? Design.accent : Design.textDim
+                    elide: Text.ElideMiddle
                 }
+
+                Label { text: "Space shoot · R record · G grid · M mirror"; role: "caption"; color: Design.textFaint }
             }
         }
     }

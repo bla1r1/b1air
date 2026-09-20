@@ -37,6 +37,11 @@ AppMenuItem  1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
 AppToolbar   1.0 AppToolbar.qml
 BarButton    1.0 BarButton.qml
+BarGroup     1.0 BarGroup.qml
+AppSidebar   1.0 AppSidebar.qml
+SidebarHeading 1.0 SidebarHeading.qml
+SidebarItem  1.0 SidebarItem.qml
+AppStatusBar 1.0 AppStatusBar.qml
 
 # helpers
 Paths 1.0 Paths.js

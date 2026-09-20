@@ -145,7 +145,7 @@ PopupShell {
         if (n.includes("power") || n.includes("shut") || n.includes("exit")) return "\u{f011}";
         if (n.includes("clip") || n.includes("copy")) return "\u{f0ea}";
         if (n.includes("cmake") || n.includes("build") || n.includes("dev")) return "\u{f085}";
-        if (n.includes("avahi") || n.includes("vnc") || n.includes("ssh") || n.includes("net")) return "\u{f6ff}";
+        if (n.includes("avahi") || n.includes("vnc") || n.includes("ssh") || n.includes("net")) return "\u{f0317}";
         return "\u{f108}";
     }
 

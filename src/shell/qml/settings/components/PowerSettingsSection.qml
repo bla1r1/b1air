@@ -68,47 +68,18 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { id: "performance", label: "Performance", icon: "\u{f0e4}",  color: Design.red },
-                    { id: "balanced",    label: "Balanced",    icon: "\u{f0241}", color: Design.sapphire },
-                    { id: "power-saver", label: "Power Saver", icon: "\u{f0084}", color: Design.green }
+                    { id: "performance", label: "Performance", icon: "\u{f0e4}" },
+                    { id: "balanced",    label: "Balanced",    icon: "\u{f0241}" },
+                    { id: "power-saver", label: "Power Saver", icon: "\u{f0084}" }
                 ]
 
-                Rectangle {
-                    id: profTile
+                Pill {
                     required property var modelData
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(48)
-                    radius: Design.s(Design.radius.ctl)
-
-                    readonly property bool isActive: Power.profile === profTile.modelData.id
-                    color: isActive ? Design.tint(profTile.modelData.color, 0.18) : (profMa.containsMouse ? Design.raised : Design.sunken)
-                    border.color: isActive ? profTile.modelData.color : (profMa.containsMouse ? Design.hover : "transparent")
-                    border.width: isActive ? 2 : 1
-
-                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                    Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: Design.s(Design.space.sm)
-
-                        Icon {
-                            text: profTile.modelData.icon
-                            role: "body"
-                            color: profTile.isActive ? profTile.modelData.color : Design.textDim
-                        }
-
-                        Label {
-                            text: profTile.modelData.label
-                            weight: profTile.isActive ? Design.weight.bold : Design.weight.medium
-                            color: profTile.isActive ? profTile.modelData.color : Design.text
-                        }
-                    }
-
-                    Clickable {
-                        id: profMa
-                        onClicked: Power.setProfile(profTile.modelData.id)
-                    }
+                    icon: modelData.icon
+                    label: modelData.label
+                    active: Power.profile === modelData.id
+                    onClicked: Power.setProfile(modelData.id)
                 }
             }
         }

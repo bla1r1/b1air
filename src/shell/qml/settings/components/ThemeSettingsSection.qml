@@ -256,6 +256,7 @@ ColumnLayout {
                                     }
 
                                     Field {
+                                        mono: true
                                         id: hexField
                                         Layout.preferredWidth: Design.s(92)
                                         text: roleRow.colour
@@ -323,7 +324,6 @@ ColumnLayout {
                 Pill {
                     label: "Open JSON"
                     icon: "\u{f0219}"
-                    activeColor: Design.sapphire
                     onClicked: Quickshell.execDetached(["b1air-text", Services.Theme.themesDir + "/" + Services.Theme.editingId + ".json"])
                 }
                 Pill {
@@ -335,7 +335,6 @@ ColumnLayout {
                     label: "Done"
                     icon: "\u{f012c}"
                     active: true
-                    activeColor: Design.ok
                     onClicked: { editor.selected = ""; Services.Theme.finishEdit(); }
                 }
             }
@@ -373,7 +372,6 @@ ColumnLayout {
             Pill {
                 label: "Create"
                 icon: "\u{f0415}"
-                activeColor: Design.mauve
                 onClicked: {
                     if (Services.Theme.createFrom(newThemeName.text) !== "")
                         newThemeName.text = "";
@@ -387,7 +385,6 @@ ColumnLayout {
                 // clicks and the opacity says so.
                 enabled: Services.Theme.currentFile !== "" && Services.Theme.editingId === ""
                 opacity: enabled ? 1.0 : 0.45
-                activeColor: Design.sapphire
                 onClicked: Services.Theme.beginEdit(Settings.themeName)
             }
         }
@@ -422,6 +419,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Field {
+                mono: true
                 id: importPath
                 Layout.fillWidth: true
                 placeholder: "Path to a theme .json to import"
@@ -434,7 +432,6 @@ ColumnLayout {
             Pill {
                 label: "Import"
                 icon: "\u{f0552}"
-                activeColor: Design.ok
                 onClicked: {
                     if (Services.Theme.importFrom(importPath.text))
                         importPath.text = "";
@@ -444,7 +441,6 @@ ColumnLayout {
             Pill {
                 label: "Export"
                 icon: "\u{f0554}"
-                activeColor: Design.sapphire
                 onClicked: Services.Theme.exportTo("")
             }
         }

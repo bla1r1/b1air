@@ -51,6 +51,7 @@ Card {
             // and the field is always empty, so clicking into it and away
             // again overwrote the stored key with nothing.
             Field {
+                mono: true
                 id: keyField
                 Layout.fillWidth: true
                 echoMode: TextInput.Password
@@ -86,6 +87,7 @@ Card {
         Label { text: "City ID"; role: "caption"; dim: true }
 
         Field {
+            mono: true
             Layout.fillWidth: true
             text: section.cityId
             placeholder: "e.g. 703448 for Kyiv — the number in the city's openweathermap.org address"

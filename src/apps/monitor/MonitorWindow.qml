@@ -83,7 +83,7 @@ Window {
 
     // ── Global Shortcuts ─────────────────────────────────────────────────────
     Shortcut { sequence: "Escape"; onActivated: window.close() }
-    Shortcut { sequence: "Ctrl+F"; onActivated: if (window.currentTab === "processes") searchInput.forceActiveFocus() }
+    Shortcut { sequence: "Ctrl+F"; onActivated: if (window.currentTab === "processes") searchInput.focusInput() }
 
     // The two tabs were reachable by mouse only, in a desktop whose whole point
     // is the keyboard.
@@ -184,9 +184,9 @@ Window {
 
                 Text {
                     text: card.label
-                    font.family: Design.font.mono
-                    font.weight: Design.weight.bold
-                    font.pixelSize: Design.s(10)
+                    font.family: Design.font.sans
+                    font.weight: Design.weight.semibold
+                    font.pixelSize: Design.s(Design.font.caption)
                     color: Design.textDim
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -205,7 +205,7 @@ Window {
                 Text {
                     text: card.sub
                     font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
+                    font.pixelSize: Design.s(Design.font.caption)
                     color: Design.textDim
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -237,12 +237,15 @@ Window {
             // ═════════════════════════════════════════════════════════════════
             AppToolbar {
                 Layout.fillWidth: true
-                spacing: Design.s(Design.space.xs)
 
-                BarButton { glyph: "\u{f0128}"; label: "Overview"; tip: "Ctrl+1"; checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
-                BarButton { glyph: "\u{f0279}"; label: "Processes"; tip: "Ctrl+2"; checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
+                BarGroup {
+                    BarButton { glyph: "\u{f0128}"; label: "Overview"; tip: "Ctrl+1"; checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
+                    BarButton { glyph: "\u{f0279}"; label: "Processes"; tip: "Ctrl+2"; checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
+                }
                 Item { Layout.fillWidth: true }
-                BarButton { glyph: "\u{f0450}"; tip: "Refresh now (F5)"; onClicked: if (isNative) MonitorBackend.refresh() }
+                BarGroup {
+                    BarButton { glyph: "\u{f0450}"; tip: "Refresh now (F5)"; onClicked: if (isNative) MonitorBackend.refresh() }
+                }
             }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -283,7 +286,7 @@ Window {
                     }
 
                     MetricCard {
-                        label: "MEMORY"
+                        label: "Memory"
                         value: (window.ramUsedMb / 1024.0).toFixed(1) + " GB"
                         sub: "of " + (window.ramTotalMb / 1024.0).toFixed(1) + " GB  ·  "
                              + Math.round(window.ramPct) + "% used"
@@ -295,7 +298,7 @@ Window {
                     // leaving it ambiguous whether the ring meant used or free.
                     // It is the used share, and the subtitle now says so.
                     MetricCard {
-                        label: "STORAGE"
+                        label: "Storage"
                         value: window.diskFreeGb.toFixed(1) + " GB free"
                         sub: "of " + window.diskTotalGb.toFixed(1) + " GB  ·  "
                              + Math.round(window.diskPct) + "% used"
@@ -308,7 +311,7 @@ Window {
                     // count moved out of here — it has nothing to do with
                     // uptime and already has a home in the status bar.
                     MetricCard {
-                        label: "UPTIME"
+                        label: "Uptime"
                         value: window.uptimeStr
                         sub: "since last boot"
                         pct: -1
@@ -341,12 +344,12 @@ Window {
                                 // rather than letting a short trace look like
                                 // a machine that was idle and then spiked.
                                 text: window.historyFull
-                                      ? "ACTIVITY HISTORY (LAST 60 SECONDS)"
-                                      : "ACTIVITY HISTORY (COLLECTING…)"
-                                font.family: Design.font.mono
-                                font.weight: Design.weight.bold
-                                font.pixelSize: Design.s(11)
-                                color: Design.textDim
+                                      ? "Activity, last 60 seconds"
+                                      : "Activity (collecting…)"
+                                font.family: Design.font.sans
+                                font.weight: Design.weight.semibold
+                                font.pixelSize: Design.s(Design.font.body)
+                                color: Design.text
                             }
 
                             Item { Layout.fillWidth: true }
@@ -358,13 +361,13 @@ Window {
                                 RowLayout {
                                     spacing: Design.s(6)
                                     Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.sapphire }
-                                    Text { text: "CPU"; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: Design.textDim }
+                                    Text { text: "CPU"; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
 
                                 RowLayout {
                                     spacing: Design.s(6)
                                     Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.mauve }
-                                    Text { text: "Memory"; font.family: Design.font.sans; font.pixelSize: Design.s(11); color: Design.textDim }
+                                    Text { text: "Memory"; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
                             }
                         }
@@ -485,124 +488,41 @@ Window {
             spacing: 0
 
             // Search and Sort Bar
-            Rectangle {
+            // Filter and sort: the same capsules as every toolbar.
+            Item {
                 Layout.fillWidth: true
-                implicitHeight: Design.s(44)
-                color: Design.ground
-                border.color: Design.glassBorder
-                border.width: 1
+                implicitHeight: Design.s(48)
 
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Design.s(Design.space.md)
                     anchors.rightMargin: Design.s(Design.space.md)
-                    spacing: Design.s(Design.space.md)
+                    spacing: Design.s(Design.space.sm)
 
-                    // Search Filter
-                    Rectangle {
-                        Layout.preferredWidth: Design.s(220)
-                        implicitHeight: Design.s(30)
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
-                        border.color: searchInput.activeFocus ? Design.accent : Design.glassBorder
-                        border.width: 1
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Design.s(8)
-                            anchors.rightMargin: Design.s(8)
-                            spacing: Design.s(6)
-
-                            Text {
-                                text: "\u{f002}" // search
-                                font.family: Design.font.icon
-                                color: Design.textDim
-                                font.pixelSize: Design.s(11)
-                            }
-
-                            TextInput {
-                                id: searchInput
-                                Layout.fillWidth: true
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(11)
-                                color: Design.text
-                                selectByMouse: true
-
-                                Text {
-                                    anchors.fill: parent
-                                    text: "Filter processes..."
-                                    color: Design.textDim
-                                    font: parent.font
-                                    visible: !searchInput.text && !searchInput.activeFocus
-                                }
-
-                                onTextChanged: {
-                                    window.procSearchQuery = text;
-                                    if (isNative) MonitorBackend.setProcessFilter(text);
-                                }
-                            }
+                    Field {
+                        id: searchInput
+                        Layout.preferredWidth: Design.s(240)
+                        Layout.preferredHeight: Design.s(36)
+                        radius: height / 2
+                        color: Design.raised
+                        placeholder: "Filter processes (Ctrl+F)"
+                        onEdited: value => {
+                            window.procSearchQuery = value;
+                            if (isNative) MonitorBackend.setProcessFilter(value);
                         }
                     }
-
                     Item { Layout.fillWidth: true }
-
-                    // Sort buttons
-                    RowLayout {
-                        spacing: Design.s(4)
-
-                        Text {
-                            text: "Sort by:"
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(11)
-                            color: Design.textDim
+                    Label { text: "Sort by"; role: "caption"; color: Design.textFaint }
+                    BarGroup {
+                        BarButton {
+                            label: "CPU"
+                            checked: window.procSortBy === "cpu"
+                            onClicked: { window.procSortBy = "cpu"; if (isNative) MonitorBackend.setProcessSort("cpu"); }
                         }
-
-                        Rectangle {
-                            implicitWidth: Design.s(54)
-                            implicitHeight: Design.s(26)
-                            radius: Design.s(8)
-                            color: window.procSortBy === "cpu" ? Design.tint(Design.accent, 0.25) : Design.surface
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "CPU"
-                                font.family: Design.font.sans
-                                font.weight: window.procSortBy === "cpu" ? Design.weight.bold : Design.weight.medium
-                                font.pixelSize: Design.s(11)
-                                color: window.procSortBy === "cpu" ? Design.accent : Design.textDim
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: {
-                                    window.procSortBy = "cpu";
-                                    if (isNative) MonitorBackend.setProcessSort("cpu");
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            implicitWidth: Design.s(54)
-                            implicitHeight: Design.s(26)
-                            radius: Design.s(8)
-                            color: window.procSortBy === "mem" ? Design.tint(Design.accent, 0.25) : Design.surface
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "RAM"
-                                font.family: Design.font.sans
-                                font.weight: window.procSortBy === "mem" ? Design.weight.bold : Design.weight.medium
-                                font.pixelSize: Design.s(11)
-                                color: window.procSortBy === "mem" ? Design.accent : Design.textDim
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: {
-                                    window.procSortBy = "mem";
-                                    if (isNative) MonitorBackend.setProcessSort("mem");
-                                }
-                            }
+                        BarButton {
+                            label: "RAM"
+                            checked: window.procSortBy === "mem"
+                            onClicked: { window.procSortBy = "mem"; if (isNative) MonitorBackend.setProcessSort("mem"); }
                         }
                     }
                 }
@@ -620,18 +540,18 @@ Window {
                     anchors.rightMargin: Design.s(Design.space.md)
                     spacing: Design.s(Design.space.sm)
 
-                    Text { text: "PID"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
-                    Text { text: "PROCESS NAME"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
+                    Text { text: "PID"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
+                    Text { text: "Process"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
                     // The name column was the only one with fillWidth, so it
                     // took every spare pixel: on a 1280px window it ran 950px
                     // wide for names that need two hundred, and the numbers
                     // anyone actually reads sat crushed against the far edge
                     // with a void between. The slack carries the reading now.
-                    Text { text: "LOAD"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.fillWidth: true }
-                    Text { text: "USER"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
-                    Text { text: "% CPU"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
-                    Text { text: "% MEM"; font.family: Design.font.mono; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
-                    Text { text: "ACTIONS"; font.family: Design.font.sans; font.weight: Design.weight.bold; font.pixelSize: Design.s(10); color: Design.textDim; Layout.preferredWidth: Design.s(80); horizontalAlignment: Text.AlignHCenter }
+                    Text { text: "Load"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.fillWidth: true }
+                    Text { text: "User"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
+                    Text { text: "CPU"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
+                    Text { text: "Memory"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
+                    Text { text: ""; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80); horizontalAlignment: Text.AlignHCenter }
                 }
             }
 
@@ -660,7 +580,7 @@ Window {
                         Text {
                             text: String(model.pid)
                             font.family: Design.font.mono
-                            font.pixelSize: Design.s(11)
+                            font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
                             Layout.preferredWidth: Design.s(60)
                         }
@@ -686,7 +606,7 @@ Window {
                                 text: model.name
                                 font.family: Design.font.sans
                                 font.weight: Design.weight.semibold
-                                font.pixelSize: Design.s(12)
+                                font.pixelSize: Design.s(Design.font.body)
                                 color: Design.text
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
@@ -738,7 +658,7 @@ Window {
                         Text {
                             text: model.user
                             font.family: Design.font.sans
-                            font.pixelSize: Design.s(11)
+                            font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
                             Layout.preferredWidth: Design.s(80)
                         }
@@ -747,7 +667,7 @@ Window {
                             text: model.cpu.toFixed(1) + "%"
                             font.family: Design.font.mono
                             font.weight: model.cpu > 5.0 ? Design.weight.bold : Design.weight.regular
-                            font.pixelSize: Design.s(11)
+                            font.pixelSize: Design.s(Design.font.caption)
                             color: model.cpu > 15.0 ? Design.pink : (model.cpu > 5.0 ? Design.peach : Design.text)
                             Layout.preferredWidth: Design.s(70)
                             horizontalAlignment: Text.AlignRight
@@ -756,7 +676,7 @@ Window {
                         Text {
                             text: model.mem.toFixed(1) + "%"
                             font.family: Design.font.mono
-                            font.pixelSize: Design.s(11)
+                            font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
                             Layout.preferredWidth: Design.s(70)
                             horizontalAlignment: Text.AlignRight
@@ -820,35 +740,16 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         // BOTTOM STATUS BAR
         // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
+        AppStatusBar {
             Layout.fillWidth: true
-            implicitHeight: Design.s(28)
-            color: Design.crust
-            border.color: Design.glassBorder
-            border.width: 1
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.md)
-                anchors.rightMargin: Design.s(Design.space.md)
-
-                Text {
-                    text: (isNative ? MonitorBackend.taskCount : 0) + " Total Tasks  |  Load: " + window.loadAvgStr + "  |  Uptime: " + window.uptimeStr
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
-                    color: Design.textDim
-                    font.weight: Design.weight.medium
-                    Layout.fillWidth: true
-                }
-
-                Text {
-                    text: "Ctrl+1/2: Tabs  |  Ctrl+F: Search  |  F5: Refresh  |  Escape: Close"
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(10)
-                    color: Design.textDim
-                    font.weight: Design.weight.medium
-                }
+            Label {
+                Layout.fillWidth: true
+                text: (isNative ? MonitorBackend.taskCount : 0) + " processes  ·  load " + window.loadAvgStr + "  ·  up " + window.uptimeStr
+                role: "caption"
+                dim: true
+                elide: Text.ElideRight
             }
+            Label { text: "Ctrl+1/2 tabs  ·  Ctrl+F search  ·  F5 refresh  ·  Esc close"; role: "caption"; color: Design.textFaint }
         }
     }
 }

@@ -345,7 +345,6 @@ ColumnLayout {
                     required property var modelData
                     label: modelData.label
                     active: section.switchOption === modelData.val
-                    activeColor: Design.peach
                     onClicked: section.setSwitch(modelData.val)
                 }
             }
@@ -613,6 +612,7 @@ ColumnLayout {
                         spacing: Design.s(Design.space.sm)
 
                         Field {
+                            mono: true
                             id: keyField
                             Layout.fillWidth: true
                             placeholder: "e.g. Super+Shift+T or Ctrl+Alt+Return"

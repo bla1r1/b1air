@@ -326,15 +326,18 @@ C.ApplicationWindow {
         // ── Sidebar ──────────────────────────────────────────────────────────
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(220)
+            Layout.preferredWidth: Design.s(224)
             color: Design.sunken
 
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
 
+            // Same margins and parts as Settings' sidebar (Ui/SidebarItem).
             C.ScrollView {
                 anchors.fill: parent
                 anchors.topMargin: Design.s(Design.space.md)
                 anchors.bottomMargin: Design.s(Design.space.md)
+                anchors.leftMargin: Design.s(Design.space.sm)
+                anchors.rightMargin: Design.s(Design.space.sm) + 1
                 contentWidth: availableWidth
                 C.ScrollBar.horizontal.policy: C.ScrollBar.AlwaysOff
 
@@ -403,8 +406,8 @@ C.ApplicationWindow {
                     }
                     Label {
                         visible: window.bookmarks.length === 0
-                        Layout.leftMargin: Design.s(Design.space.lg)
-                        Layout.rightMargin: Design.s(Design.space.md)
+                        Layout.leftMargin: Design.s(Design.space.sm)
+                        Layout.rightMargin: Design.s(Design.space.sm)
                         Layout.fillWidth: true
                         text: "Drag a folder here, or press Ctrl+D"
                         role: "caption"
@@ -458,31 +461,25 @@ C.ApplicationWindow {
             }
 
             // ── Toolbar ──────────────────────────────────────────────────────
-            Rectangle {
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(52)
-                color: Design.surface
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.md)
-                    anchors.rightMargin: Design.s(Design.space.md)
-                    spacing: Design.s(Design.space.xs)
-
-                    BarButton { glyph: "\u{f004d}"; tip: "Back (Alt+←)"; enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                    BarButton { glyph: "\u{f0054}"; tip: "Forward (Alt+→)"; enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                    BarButton { glyph: "\u{f005d}"; tip: "Up (Alt+↑)"; enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                    BarGroup {
+                        BarButton { glyph: "\u{f004d}"; tip: "Back (Alt+←)"; enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                        BarButton { glyph: "\u{f0054}"; tip: "Forward (Alt+→)"; enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                        BarButton { glyph: "\u{f005d}"; tip: "Up (Alt+↑)"; enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                    }
 
                     // Path: clickable segments; a click on the empty part of the
                     // bar, or Ctrl+L, types one instead.
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(34)
-                        Layout.leftMargin: Design.s(Design.space.sm)
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
-                        border.color: Design.line
+                        Layout.minimumWidth: Design.s(140)
+                        Layout.horizontalStretchFactor: 3
+                        Layout.preferredHeight: Design.s(36)
+                        radius: height / 2
+                        color: Design.raised
+                        border.color: Design.tint(Design.text, 0.06)
                         border.width: 1
                         clip: true
 
@@ -494,13 +491,17 @@ C.ApplicationWindow {
                         ListView {
                             id: crumbs
                             anchors.fill: parent
-                            anchors.leftMargin: Design.s(Design.space.xs)
-                            anchors.rightMargin: Design.s(Design.space.xs)
+                            anchors.leftMargin: Design.s(Design.space.sm)
+                            anchors.rightMargin: Design.s(Design.space.sm)
                             orientation: ListView.Horizontal
                             interactive: false
                             spacing: 0
                             model: FilesBackend.inTrash ? [{ name: "Trash", path: FilesBackend.trashPath }] : FilesBackend.breadcrumbs
-                            onCountChanged: positionViewAtEnd()
+                            // Always the end of the path in view: the folder
+                            // you are in, not the root you came from.
+                            onCountChanged: Qt.callLater(positionViewAtEnd)
+                            onWidthChanged: Qt.callLater(positionViewAtEnd)
+                            onContentWidthChanged: Qt.callLater(positionViewAtEnd)
                             delegate: Row {
                                 required property var modelData
                                 required property int index
@@ -518,8 +519,8 @@ C.ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: crumbText.implicitWidth + Design.s(16)
                                     height: Design.s(26)
-                                    radius: Design.s(Design.radius.sm)
-                                    color: crumbMa.containsMouse ? Design.hover : (last ? Design.raised : "transparent")
+                                    radius: height / 2
+                                    color: crumbMa.containsMouse ? Design.hover : (last ? Design.tint(Design.accent, 0.18) : "transparent")
                                     Text {
                                         id: crumbText
                                         anchors.centerIn: parent
@@ -548,14 +549,18 @@ C.ApplicationWindow {
 
                     Field {
                         id: searchField
-                        Layout.preferredWidth: Design.s(220)
-                        Layout.leftMargin: Design.s(Design.space.sm)
-                        placeholder: "Search this folder (Ctrl+F)"
+                        // Narrows before the path does: the path is what
+                        // says where you are.
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: Design.s(240)
+                        Layout.minimumWidth: Design.s(110)
+                        Layout.preferredHeight: Design.s(36)
+                        radius: height / 2
+                        color: Design.raised
+                        placeholder: "Search (Ctrl+F)"
                         onEdited: value => FilesBackend.filterQuery = value
                         onAccepted: window.currentView().forceActiveFocus()
                     }
-
-                    Item { Layout.preferredWidth: Design.s(Design.space.sm) }
 
                     BarButton {
                         visible: FilesBackend.inTrash
@@ -565,12 +570,18 @@ C.ApplicationWindow {
                         enabled: FilesBackend.trashCount > 0
                         onClicked: confirmEmpty.open()
                     }
-                    BarButton { visible: !FilesBackend.inTrash; glyph: "\u{f0b9d}"; tip: "New folder (Ctrl+Shift+N)"; onClicked: window.askName("newfolder", "", "New Folder") }
-                    BarButton { glyph: "\u{f0570}"; tip: "Icons (Ctrl+1)"; checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
-                    BarButton { glyph: "\u{f0279}"; tip: "List (Ctrl+2)"; checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
-                    BarButton { glyph: "\u{f02fd}"; tip: "Details panel (Ctrl+I)"; checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                    BarButton { glyph: "\u{f01d9}"; tip: "View options"; onClicked: viewMenu.popup() }
-                }
+                    BarGroup {
+                        visible: !FilesBackend.inTrash
+                        BarButton { glyph: "\u{f0b9d}"; tip: "New folder (Ctrl+Shift+N)"; onClicked: window.askName("newfolder", "", "New Folder") }
+                    }
+                    BarGroup {
+                        BarButton { glyph: "\u{f0570}"; tip: "Icons (Ctrl+1)"; checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
+                        BarButton { glyph: "\u{f0279}"; tip: "List (Ctrl+2)"; checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
+                    }
+                    BarGroup {
+                        BarButton { glyph: "\u{f02fd}"; tip: "Details panel (Ctrl+I)"; checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                        BarButton { glyph: "\u{f01d9}"; tip: "View options"; onClicked: viewMenu.popup() }
+                    }
             }
 
             // ── Content ──────────────────────────────────────────────────────
@@ -866,33 +877,24 @@ C.ApplicationWindow {
             }
 
             // ── Status bar ───────────────────────────────────────────────────
-            Rectangle {
+            AppStatusBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(32)
-                color: Design.surface
-                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
+                Label {
+                    Layout.fillWidth: true
+                    role: "caption"
+                    elide: Text.ElideRight
+                    color: window.statusNote ? Design.accent : Design.textDim
+                    text: window.statusNote
+                          || (FilesBackend.busy ? "Copying…"
+                          : fm.selectionCount > 0 ? fm.selectionSummary : fm.summary)
+                }
+                Label { role: "caption"; color: Design.textFaint; text: FilesBackend.diskFreeSpace; visible: !FilesBackend.inTrash }
+                // Icon size, for the icon view.
                 RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.lg)
-                    anchors.rightMargin: Design.s(Design.space.md)
-                    spacing: Design.s(Design.space.md)
-                    Label {
-                        Layout.fillWidth: true
-                        role: "caption"
-                        elide: Text.ElideRight
-                        color: window.statusNote ? Design.accent : Design.textDim
-                        text: window.statusNote
-                              || (FilesBackend.busy ? "Copying…"
-                              : fm.selectionCount > 0 ? fm.selectionSummary : fm.summary)
-                    }
-                    Label { role: "caption"; dim: true; text: FilesBackend.diskFreeSpace; visible: !FilesBackend.inTrash }
-                    // Icon size, for the icon view.
-                    RowLayout {
-                        visible: window.viewMode === "grid"
-                        spacing: Design.s(Design.space.xs)
-                        BarButton { glyph: "\u{f0374}"; small: true; tip: "Smaller (Ctrl+−)"; onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
-                        BarButton { glyph: "\u{f0415}"; small: true; tip: "Larger (Ctrl+=)"; onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
-                    }
+                    visible: window.viewMode === "grid"
+                    spacing: Design.s(Design.space.xs)
+                    BarButton { glyph: "\u{f0374}"; small: true; tip: "Smaller (Ctrl+−)"; onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                    BarButton { glyph: "\u{f0415}"; small: true; tip: "Larger (Ctrl+=)"; onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                 }
             }
         }
@@ -1185,105 +1187,35 @@ C.ApplicationWindow {
         Drag.keys: ["text/uri-list"]
     }
 
-    component SideHeading: RowLayout {
-        id: sh
-        property alias text: shLabel.text
-        property string action: ""
-        property string actionTip: ""
-        signal actionClicked()
-        Layout.fillWidth: true
-        Layout.topMargin: Design.s(Design.space.md)
-        Layout.leftMargin: Design.s(Design.space.lg)
-        Layout.rightMargin: Design.s(Design.space.sm)
-        Layout.bottomMargin: Design.s(Design.space.xxs)
-        Label {
-            id: shLabel
-            Layout.fillWidth: true
-            role: "caption"
-            weight: Design.weight.semibold
-            color: Design.textFaint
-            font.capitalization: Font.AllUppercase
-            font.letterSpacing: 0.6
-        }
-        BarButton { visible: sh.action !== ""; glyph: sh.action; tip: sh.actionTip; small: true; onClicked: sh.actionClicked() }
-    }
+    component SideHeading: SidebarHeading {}
 
-    component SideRow: Rectangle {
+    component SideRow: SidebarItem {
         id: sr
-        property string label: ""
-        property string glyph: ""
         property string path: ""
-        property string detail: ""
-        property string badge: ""
         property bool removable: false
         property bool ejectable: false
         signal remove()
         signal eject()
-        readonly property bool active: path === window.currentPath
-        Layout.fillWidth: true
-        Layout.leftMargin: Design.s(Design.space.sm)
-        Layout.rightMargin: Design.s(Design.space.sm)
-        Layout.preferredHeight: visible ? Design.s(36) : 0
-        radius: Design.s(Design.radius.ctl)
-        color: active ? Design.tint(Design.accent, 0.22)
-             : srDrop.containsDrag ? Design.tint(Design.accent, 0.14)
-             : srMa.containsMouse ? Design.hover : "transparent"
-
-        MouseArea {
-            id: srMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: { window.navigateTo(sr.path); window.currentView().forceActiveFocus(); }
+        active: path === window.currentPath
+        highlight: srDrop.containsDrag
+        onClicked: { window.navigateTo(sr.path); window.currentView().forceActiveFocus(); }
+        overlay: [
+            DropArea {
+                id: srDrop
+                anchors.fill: parent
+                keys: ["text/uri-list"]
+                onDropped: drop => window.dropInto(drop, sr.path)
+            }
+        ]
+        BarButton {
+            visible: sr.removable && (sr.hovered || hovered)
+            glyph: "\u{f0156}"; small: true; tip: "Remove bookmark"
+            onClicked: sr.remove()
         }
-        DropArea {
-            id: srDrop
-            anchors.fill: parent
-            keys: ["text/uri-list"]
-            onDropped: drop => window.dropInto(drop, sr.path)
-        }
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Design.s(Design.space.sm)
-            anchors.rightMargin: Design.s(Design.space.xs)
-            spacing: Design.s(Design.space.sm)
-            Text {
-                Layout.preferredWidth: Design.s(22)
-                text: sr.glyph
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(17)
-                color: sr.active ? Design.accent : Design.textDim
-                horizontalAlignment: Text.AlignHCenter
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label {
-                    Layout.fillWidth: true
-                    text: sr.label
-                    elide: Text.ElideRight
-                    weight: sr.active ? Design.weight.semibold : Design.weight.regular
-                }
-                Label { visible: sr.detail !== ""; text: sr.detail; role: "caption"; color: Design.textFaint }
-            }
-            Rectangle {
-                visible: sr.badge !== ""
-                implicitWidth: badgeText.implicitWidth + Design.s(12)
-                implicitHeight: Design.s(20)
-                radius: height / 2
-                color: Design.raised
-                Text { id: badgeText; anchors.centerIn: parent; text: sr.badge; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
-            }
-            BarButton {
-                visible: sr.removable && (srMa.containsMouse || hovered)
-                glyph: "\u{f0156}"; small: true; tip: "Remove bookmark"
-                onClicked: sr.remove()
-            }
-            BarButton {
-                visible: sr.ejectable
-                glyph: "\u{f01ea}"; small: true; tip: "Unmount"
-                onClicked: sr.eject()
-            }
+        BarButton {
+            visible: sr.ejectable
+            glyph: "\u{f01ea}"; small: true; tip: "Unmount"
+            onClicked: sr.eject()
         }
     }
 

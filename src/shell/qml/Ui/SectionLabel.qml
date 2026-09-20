@@ -8,10 +8,9 @@ import QtQuick
 // =============================================================================
 
 Label {
+    // The same small heading as the sidebars' SidebarHeading: sans,
+    // semibold, dim. Monospace capitals read as a terminal, not a form.
     role: "caption"
-    isMono: true
-    weight: Design.weight.bold
+    weight: Design.weight.semibold
     dim: true
-    font.letterSpacing: 0.6
-    font.capitalization: Font.AllUppercase
 }

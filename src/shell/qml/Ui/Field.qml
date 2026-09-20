@@ -23,6 +23,8 @@ Rectangle {
     property alias readOnly: input.readOnly
     property alias horizontalAlignment: input.horizontalAlignment
     property string placeholder: ""
+    // Monospace for values that line up: ports, sizes, key names.
+    property bool mono: false
 
     // Fires on every keystroke that passes the validator.
     signal edited(string value)
@@ -71,7 +73,7 @@ Rectangle {
         verticalAlignment: TextInput.AlignVCenter
         clip: true
 
-        font.family: Design.font.mono
+        font.family: root.mono ? Design.font.mono : Design.font.sans
         font.pixelSize: Design.s(Design.font.body)
         color: Design.text
         selectionColor: Design.accent
@@ -90,7 +92,9 @@ Rectangle {
 
     Label {
         anchors.left: input.left
+        anchors.right: input.right
         anchors.verticalCenter: parent.verticalCenter
+        elide: Text.ElideRight
         text: root.placeholder
         visible: input.text.length === 0 && !input.activeFocus
         color: Design.textFaint

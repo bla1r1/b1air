@@ -176,13 +176,11 @@ ColumnLayout {
                     Pill {
                         label: "Automatic (DHCP)"
                         active: section.ethMethod === "auto"
-                        activeColor: Design.green
                         onClicked: section.ethMethod = "auto"
                     }
                     Pill {
                         label: "Manual (Static IP)"
                         active: section.ethMethod === "manual"
-                        activeColor: Design.green
                         onClicked: section.ethMethod = "manual"
                     }
                 }
@@ -197,6 +195,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Label { text: "IP Address"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
+                            mono: true
                             Layout.fillWidth: true
                             placeholder: "192.168.1.100"
                             text: section.ethIp
@@ -208,6 +207,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Label { text: "Subnet Prefix"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
+                            mono: true
                             Layout.fillWidth: true
                             placeholder: "24"
                             text: section.ethPrefix
@@ -219,6 +219,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Label { text: "Gateway"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
+                            mono: true
                             Layout.fillWidth: true
                             placeholder: "192.168.1.1"
                             text: section.ethGateway
@@ -230,6 +231,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Label { text: "DNS Servers"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
+                            mono: true
                             Layout.fillWidth: true
                             placeholder: "1.1.1.1, 8.8.8.8"
                             text: section.ethDns
@@ -252,7 +254,6 @@ ColumnLayout {
                         label: "Apply Changes"
                         icon: "\u{f012c}"
                         active: true
-                        activeColor: Design.green
                         onClicked: {
                             if (Network.ethernet) {
                                 Network.applyEthernetConfig(
@@ -352,7 +353,6 @@ ColumnLayout {
 
                     Pill {
                         label: "Disconnect"
-                        activeColor: Design.warn
                         onClicked: Network.disconnectWifi()
                     }
                 }
@@ -421,7 +421,6 @@ ColumnLayout {
                     Pill {
                         label: netEntry.asking ? "Cancel" : "Connect"
                         icon: "\u{f0928}"
-                        activeColor: Design.ok
                         onClicked: {
                             if (netEntry.asking) {
                                 section.askingFor = "";
@@ -498,7 +497,6 @@ ColumnLayout {
                 Pill {
                     label: "Forget"
                     icon: "\u{f01b4}"
-                    activeColor: Design.danger
                     onClicked: Network.forgetWifi(modelData.name)
                 }
             }

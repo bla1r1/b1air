@@ -423,6 +423,9 @@ Singleton {
 
     Connections {
         target: Bluetooth
+        // The standalone settings window gets a compat Bluetooth without
+        // this signal; the shell's real one has it.
+        ignoreUnknownSignals: true
         function onDefaultAdapterChanged() { root._rebuild(); }
     }
 
