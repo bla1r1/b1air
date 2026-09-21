@@ -28,6 +28,8 @@ ColumnLayout {
     property bool uinputReady: false
     readonly property bool devMode: Quickshell.env("B1AIR_DEV_MODE") === "1"
     property string vncPassword: ""
+    // The login a VNC client asks for beside the password: this account's.
+    property string vncUser: ""
 
     Process {
         id: vncStarter
@@ -54,6 +56,7 @@ ColumnLayout {
                     let parsed = JSON.parse(json.trim());
                     section.vncRunning = parsed.running || false;
                     section.localIp = parsed.ip || "127.0.0.1";
+                    section.vncUser = parsed.username || "";
                     section.promptFree = section.devMode && parsed.promptFreeScreencast === true;
                     section.uinputReady = parsed.uinputReady !== undefined ? parsed.uinputReady : true;
                 }
@@ -127,6 +130,13 @@ ColumnLayout {
             Pill {
                 label: "vnc://" + section.localIp + ":" + section.vncPort
                 active: true
+            }
+
+            Label {
+                visible: section.vncUser !== ""
+                text: "sign in as " + section.vncUser
+                role: "caption"
+                dim: true
             }
 
             ActionButton {

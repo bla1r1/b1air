@@ -194,7 +194,10 @@ ColumnLayout {
                         dim: true
                     }
                     Label {
-                        text: Notifications.dnd ? "Focusing (DND)" : "Active"
+                        // Say which of the reasons is holding banners back.
+                        text: Focus.wantsDnd ? "Focusing (DND)"
+                            : Notifications.quietHours ? "Quiet hours"
+                            : Notifications.dnd ? "Do Not Disturb" : "Active"
                         role: "subhead"
                         weight: Design.weight.bold
                         color: Notifications.dnd ? Design.peach : Design.green
@@ -342,6 +345,46 @@ ColumnLayout {
                     Settings.set("dailyScreenTimeGoal", v);
                 }
             }
+        }
+    }
+
+    // ── Quiet hours ──────────────────────────────────────────────────────────
+    function _hhmm(m) {
+        const h = Math.floor(m / 60), mm = m % 60;
+        return (h < 10 ? "0" : "") + h + ":" + (mm < 10 ? "0" : "") + mm;
+    }
+    function _stepTime(key, m, delta) {
+        Settings.set(key, (m + delta + 1440) % 1440);
+    }
+
+    Card {
+        title: "Quiet hours"
+        subtitle: Notifications.quietHours ? "On now — banners and sounds are held until " + section._hhmm(Settings.dndScheduleEnd)
+                                           : "Do Not Disturb on a schedule, every day"
+        icon: "\u{f00a0}"
+        accentColor: Design.lavender
+
+        Toggle {
+            label: "Quiet hours"
+            subtitle: "Notifications still arrive and wait in the list; they just do not pop up or play a sound"
+            checked: Settings.dndScheduleEnabled === true
+            onToggled: Settings.set("dndScheduleEnabled", !(Settings.dndScheduleEnabled === true))
+        }
+
+        Stepper {
+            visible: Settings.dndScheduleEnabled === true
+            label: "From"
+            valueText: section._hhmm(Settings.dndScheduleStart)
+            onDecrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, -30)
+            onIncrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, 30)
+        }
+
+        Stepper {
+            visible: Settings.dndScheduleEnabled === true
+            label: "Until"
+            valueText: section._hhmm(Settings.dndScheduleEnd)
+            onDecrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, -30)
+            onIncrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, 30)
         }
     }
 

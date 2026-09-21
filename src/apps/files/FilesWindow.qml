@@ -55,6 +55,9 @@ C.ApplicationWindow {
     property string viewMode: prefs.viewMode === "list" ? "list" : "grid"
     property int iconSize: prefs.iconSize || 88
     property bool showInfo: prefs.showInfo !== false
+    // Trash older than this many days is deleted when Files opens and at
+    // login (`b1air-files --purge-trash`). 0 keeps everything.
+    property int trashPurgeDays: prefs.trashPurgeDays !== undefined ? prefs.trashPurgeDays : 30
     Component.onCompleted: {
         FilesBackend.showHidden = prefs.showHidden === true;
         FilesBackend.dirsFirst = prefs.dirsFirst !== false;
@@ -64,7 +67,7 @@ C.ApplicationWindow {
     }
     function savePrefs() {
         FilesBackend.savePrefs({
-            viewMode: viewMode, iconSize: iconSize, showInfo: showInfo,
+            viewMode: viewMode, iconSize: iconSize, showInfo: showInfo, trashPurgeDays: trashPurgeDays,
             showHidden: FilesBackend.showHidden, dirsFirst: FilesBackend.dirsFirst,
             sortBy: FilesBackend.sortField, sortDescending: !FilesBackend.sortAscending
         });
@@ -72,6 +75,7 @@ C.ApplicationWindow {
     onViewModeChanged: savePrefs()
     onIconSizeChanged: savePrefs()
     onShowInfoChanged: savePrefs()
+    onTrashPurgeDaysChanged: savePrefs()
     Connections {
         target: FilesBackend
         function onShowHiddenChanged() { window.savePrefs(); }
@@ -1079,6 +1083,8 @@ C.ApplicationWindow {
         AppMenuSeparator {}
         AppMenuItem { text: "Extract Here"; glyph: "\u{f05c4}"; enabled: itemMenu.one && itemMenu.first.category === "archive" && !itemMenu.trash
                       onTriggered: window.note(FilesBackend.extractArchive(itemMenu.paths[0]) ? "Extracted " + itemMenu.first.name : "Could not extract " + itemMenu.first.name) }
+        AppMenuItem { text: itemMenu.one ? "Compress…" : "Compress " + itemMenu.paths.length + " Items…"; glyph: "\u{f05c4}"
+                      enabled: !itemMenu.trash && !FilesBackend.busy; onTriggered: compressDialog.ask(itemMenu.paths, itemMenu.first) }
         AppMenuItem { text: "Set as Wallpaper"; glyph: "\u{f02e9}"; enabled: itemMenu.one && itemMenu.first.category === "image" && !itemMenu.trash
                       onTriggered: { FilesBackend.setWallpaper(itemMenu.paths[0]); window.note("Wallpaper set"); } }
         AppMenuItem { text: "Add to Bookmarks"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.addBookmark(itemMenu.paths[0]) }
@@ -1097,6 +1103,8 @@ C.ApplicationWindow {
         AppMenuItem { text: "New File…"; glyph: "\u{f0224}"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfile", "", "New File.txt") }
         AppMenuItem { text: "Select All"; glyph: "\u{f0486}"; keys: "Ctrl+A"; enabled: fm.count > 0; onTriggered: fm.selectAll() }
         AppMenuItem { text: "Empty Trash…"; glyph: "\u{f0a7a}"; tone: Design.danger; enabled: FilesBackend.inTrash && FilesBackend.trashCount > 0; onTriggered: confirmEmpty.open() }
+        AppMenuItem { text: "Delete Items After 30 Days"; checkable: true; checked: window.trashPurgeDays > 0; enabled: FilesBackend.inTrash
+                      onTriggered: window.trashPurgeDays = window.trashPurgeDays > 0 ? 0 : 30 }
         AppMenuSeparator {}
         AppMenuItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; enabled: !FilesBackend.inTrash; onTriggered: FilesBackend.openTerminal(window.currentPath) }
         AppMenuItem { text: "Bookmark This Folder"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: !FilesBackend.inTrash; onTriggered: window.addBookmark(window.currentPath) }
@@ -1135,15 +1143,23 @@ C.ApplicationWindow {
         }
         onAccepted: window.submitName(nameField.text)
         onRejected: window.currentView().forceActiveFocus()
-        contentItem: ColumnLayout {
+        // An Item with a fixed width around the layout: a Layout ignores an
+        // implicitWidth given to it, so the dialog sized to its widest text
+        // and jumped when that text changed.
+        contentItem: Item {
             implicitWidth: Design.s(420)
-            spacing: Design.s(Design.space.sm)
-            Label {
-                text: nameDialog.mode === "goto" ? "Path (~ for home)" : "Name"
-                role: "caption"
-                dim: true
+            implicitHeight: nameBody.implicitHeight
+            ColumnLayout {
+                id: nameBody
+                width: parent.width
+                spacing: Design.s(Design.space.sm)
+                Label {
+                    text: nameDialog.mode === "goto" ? "Path (~ for home)" : "Name"
+                    role: "caption"
+                    dim: true
+                }
+                Field { id: nameField; Layout.fillWidth: true }
             }
-            Field { id: nameField; Layout.fillWidth: true }
         }
     }
 
@@ -1158,6 +1174,74 @@ C.ApplicationWindow {
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         Component.onCompleted: standardButton(C.Dialog.Ok).text = "Delete"
         onAccepted: FilesBackend.deletePermanently(paths)
+    }
+
+    AppDialog {
+        id: compressDialog
+        property var paths: []
+        property string format: "zip"
+        function ask(p, first) {
+            paths = p;
+            // One item: its own name, without the extension; several: "Archive".
+            const n = p.length === 1 ? String(first.name || p[0].split("/").pop()) : "Archive";
+            const dot = p.length === 1 && !first.isDir ? n.lastIndexOf(".") : -1;
+            archiveName.text = dot > 0 ? n.substring(0, dot) : n;
+            open();
+        }
+        title: paths.length === 1 ? "Compress “" + String(paths[0]).split("/").pop() + "”"
+                                  : "Compress " + paths.length + " items"
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Compress"
+        onOpened: archiveName.focusInput()
+        onAccepted: if (archiveName.text.trim() !== "") FilesBackend.compressItems(paths, archiveName.text.trim(), format)
+        onRejected: window.currentView().forceActiveFocus()
+        // An Item with a fixed width around the layout: a Layout ignores an
+        // implicitWidth given to it, so the dialog sized to its widest text
+        // and jumped when that text changed.
+        contentItem: Item {
+            implicitWidth: Design.s(420)
+            implicitHeight: compressBody.implicitHeight
+            ColumnLayout {
+                id: compressBody
+                width: parent.width
+                spacing: Design.s(Design.space.sm)
+                Label { text: "Name"; role: "caption"; dim: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Field { id: archiveName; Layout.fillWidth: true }
+                    Label { text: "." + compressDialog.format; dim: true }
+                }
+                Label { text: "Format"; role: "caption"; dim: true; Layout.topMargin: Design.s(Design.space.xs) }
+                RowLayout {
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: [
+                            { id: "zip", label: "ZIP" },
+                            { id: "tar.gz", label: "TAR.GZ" },
+                            { id: "tar.zst", label: "TAR.ZST" },
+                            { id: "7z", label: "7Z" }
+                        ]
+                        delegate: Pill {
+                            required property var modelData
+                            label: modelData.label
+                            active: compressDialog.format === modelData.id
+                            onClicked: compressDialog.format = modelData.id
+                        }
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    role: "caption"
+                    dim: true
+                    text: ({ "zip": "Opens anywhere, Windows and macOS included.",
+                             "tar.gz": "Keeps Unix permissions; the usual archive on Linux.",
+                             "tar.zst": "Smaller and much faster than gzip; needs a recent system to open.",
+                             "7z": "Usually the smallest, and the slowest to make." })[compressDialog.format]
+                }
+            }
+        }
     }
 
     AppDialog {

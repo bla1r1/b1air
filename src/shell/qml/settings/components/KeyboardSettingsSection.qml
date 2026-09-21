@@ -404,7 +404,8 @@ ColumnLayout {
             { id: "browser",    cat: "Apps",    keys: "$mod+f",          desc: "Web browser",             cmd: "exec $browser" },
             { id: "menu",       cat: "Apps",    keys: "$mod+space",      desc: "Launchpad",               cmd: "exec $menu" },
             { id: "spotlight",  cat: "Apps",    keys: "$mod+k",          desc: "Spotlight search",        cmd: "exec $spotlight" },
-            { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: "GitHub Desktop",          cmd: "exec github-desktop" },
+            { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: "Git",                     cmd: "exec b1air-git" },
+            { id: "dropdown",   cat: "Apps",    keys: "$mod+grave",      desc: "Drop-down terminal",      cmd: "exec swaymsg '[app_id=\"b1air-dropdown\"] scratchpad show' || b1air-term --dropdown" },
             { id: "settings",   cat: "System",  keys: "$mod+shift+s",    desc: "Settings",                cmd: "exec b1air-shell toggle settings" },
             { id: "control",    cat: "System",  keys: "$mod+c",          desc: "Control Center",          cmd: "exec b1air-shell toggle control" },
             { id: "clipboard",  cat: "System",  keys: "$mod+ctrl+v",          desc: "Clipboard history",       cmd: "exec b1air-shell toggle clipboard" },
@@ -419,7 +420,7 @@ ColumnLayout {
             { id: "focustime",  cat: "System",  keys: "$mod+shift+t",    desc: "Screen time",             cmd: "exec b1air-shell toggle focustime" },
             { id: "close",      cat: "Windows", keys: "$mod+q",          desc: "Close window",            cmd: "kill" },
             { id: "floating",   cat: "Windows", keys: "$mod+ctrl+space", desc: "Toggle floating",         cmd: "floating toggle" },
-            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f",    desc: "Fullscreen",              cmd: "exec $HOME/.local/bin/b1air-daemon fullscreen-toggle" }
+            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f",    desc: "Fullscreen",              cmd: "exec $b1airBin/b1air-daemon fullscreen-toggle" }
         ]
 
         function keysOf(b) { return bindCard.overrides[b.id] || b.keys; }

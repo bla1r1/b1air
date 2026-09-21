@@ -15,6 +15,7 @@
 #include <QMimeDatabase>
 #include <QDirIterator>
 #include <QPointer>
+#include <QDateTime>
 #include <thread>
 #include <archive.h>
 #include <archive_entry.h>
@@ -853,6 +854,123 @@ void FileManagerBackend::emptyTrash() {
         }
     }
     refresh();
+}
+
+int FileManagerBackend::trashPurgeDays() {
+    QFile f(prefsPath());
+    if (!f.open(QIODevice::ReadOnly)) return 30;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    return o.contains("trashPurgeDays") ? o.value("trashPurgeDays").toInt(30) : 30;
+}
+
+int FileManagerBackend::purgeTrash(int days) {
+    if (days <= 0) return 0;
+    const QString root = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Trash";
+    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-days);
+    int purged = 0;
+    for (const QFileInfo& info : QDir(root + "/info").entryInfoList({"*.trashinfo"}, QDir::Files | QDir::Hidden)) {
+        QFile f(info.absoluteFilePath());
+        if (!f.open(QIODevice::ReadOnly)) continue;
+        QDateTime deleted;
+        for (const QByteArray& line : f.readAll().split('\n'))
+            if (line.startsWith("DeletionDate="))
+                deleted = QDateTime::fromString(QString::fromUtf8(line.mid(13)).trimmed(), Qt::ISODate);
+        f.close();
+        // No readable date: leave it — an unknown age is not an old one.
+        if (!deleted.isValid() || deleted >= cutoff) continue;
+        const QString name = info.completeBaseName();   // strips ".trashinfo"
+        const QFileInfo item(root + "/files/" + name);
+        const bool gone = !item.exists() && !item.isSymLink() ? true
+            : item.isDir() && !item.isSymLink() ? QDir(item.absoluteFilePath()).removeRecursively()
+            : QFile::remove(item.absoluteFilePath());
+        if (gone && QFile::remove(info.absoluteFilePath())) ++purged;
+    }
+    return purged;
+}
+
+// ── Compress ────────────────────────────────────────────────────────────────
+
+static bool addToArchive(struct archive* a, const QFileInfo& fi, const QString& entryName, QString* error) {
+    struct archive_entry* e = archive_entry_new();
+    archive_entry_set_pathname(e, entryName.toUtf8().constData());
+    archive_entry_set_mtime(e, fi.lastModified().toSecsSinceEpoch(), 0);
+    archive_entry_set_uid(e, fi.ownerId());
+    archive_entry_set_gid(e, fi.groupId());
+    archive_entry_set_perm(e, 0644 | (fi.isExecutable() ? 0111 : 0));
+    bool ok = true;
+    if (fi.isSymLink()) {
+        archive_entry_set_filetype(e, AE_IFLNK);
+        archive_entry_set_symlink(e, fi.symLinkTarget().toUtf8().constData());
+        ok = archive_write_header(a, e) >= ARCHIVE_WARN;
+    } else if (fi.isDir()) {
+        archive_entry_set_filetype(e, AE_IFDIR);
+        archive_entry_set_perm(e, 0755);
+        ok = archive_write_header(a, e) >= ARCHIVE_WARN;
+    } else {
+        archive_entry_set_filetype(e, AE_IFREG);
+        archive_entry_set_size(e, fi.size());
+        QFile f(fi.absoluteFilePath());
+        ok = f.open(QIODevice::ReadOnly) && archive_write_header(a, e) >= ARCHIVE_WARN;
+        while (ok && !f.atEnd()) {
+            const QByteArray chunk = f.read(1 << 16);
+            ok = archive_write_data(a, chunk.constData(), size_t(chunk.size())) >= 0;
+        }
+    }
+    if (!ok && error && error->isEmpty())
+        *error = QString::fromUtf8(archive_error_string(a) ? archive_error_string(a) : "write failed") + " (" + fi.fileName() + ")";
+    archive_entry_free(e);
+    return ok;
+}
+
+void FileManagerBackend::compressItems(const QStringList& paths, const QString& name, const QString& format) {
+    if (m_busy || paths.isEmpty() || name.isEmpty() || name.contains('/')) return;
+    static const QStringList formats{"zip", "tar.gz", "tar.zst", "7z"};
+    if (!formats.contains(format)) return;
+    const QString target = freeName(QDir(m_currentPath), name + "." + format);
+    m_busy = true;
+    emit busyChanged();
+    QPointer<FileManagerBackend> self(this);
+    std::thread([self, paths, target, format]() {
+        QString error;
+        struct archive* a = archive_write_new();
+        if (format == "zip") archive_write_set_format_zip(a);
+        else if (format == "7z") archive_write_set_format_7zip(a);
+        else {
+            archive_write_set_format_pax_restricted(a);
+            if (format == "tar.gz") archive_write_add_filter_gzip(a);
+            else archive_write_add_filter_zstd(a);
+        }
+        bool ok = archive_write_open_filename(a, target.toLocal8Bit().constData()) == ARCHIVE_OK;
+        if (!ok) error = QString::fromUtf8(archive_error_string(a));
+        // Entries are named relative to the folder the items sit in, so the
+        // archive unpacks to what was selected and not to the whole path.
+        for (const QString& p : paths) {
+            if (!ok) break;
+            const QFileInfo top(p);
+            const QDir base = top.absoluteDir();
+            ok = addToArchive(a, top, top.fileName(), &error);
+            if (ok && top.isDir() && !top.isSymLink()) {
+                QDirIterator it(p, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System,
+                                QDirIterator::Subdirectories);
+                while (ok && it.hasNext()) {
+                    const QFileInfo fi(it.next());
+                    ok = addToArchive(a, fi, base.relativeFilePath(fi.absoluteFilePath()), &error);
+                }
+            }
+        }
+        if (archive_write_close(a) != ARCHIVE_OK && ok) { ok = false; error = QString::fromUtf8(archive_error_string(a)); }
+        archive_write_free(a);
+        if (!ok) QFile::remove(target);
+        const QString msg = ok ? "Created " + QFileInfo(target).fileName() : "Could not compress: " + error;
+        QMetaObject::invokeMethod(qApp, [self, ok, msg, target]() {
+            if (!self) return;
+            self->m_busy = false;
+            emit self->busyChanged();
+            self->refresh();
+            if (ok) self->m_files->selectPaths({target});
+            emit self->pasteFinished(ok, msg);
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 // ── Drives ──────────────────────────────────────────────────────────────────

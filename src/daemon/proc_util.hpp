@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <cerrno>
 #include <unistd.h>
+#include <cstdlib>
 #include <sys/wait.h>
 
 #include <iomanip>
@@ -166,6 +167,25 @@ inline bool spawn_detached(const std::vector<std::string>& args,
  *
  * Returns whether the directory exists afterwards.
  */
+/**
+ * Whether `name` is an executable somewhere on $PATH — the check `command -v`
+ * makes, without a shell.
+ */
+inline bool command_exists(const std::string& name) {
+    const char* path = std::getenv("PATH");
+    if (!path || name.empty() || name.find('/') != std::string::npos) return false;
+    std::string dirs(path);
+    size_t start = 0;
+    while (start <= dirs.size()) {
+        const size_t end = dirs.find(':', start);
+        const std::string dir = dirs.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (!dir.empty() && ::access((dir + "/" + name).c_str(), X_OK) == 0) return true;
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return false;
+}
+
 inline bool mkdir_p(const std::string& path, mode_t mode = 0755) {
     if (path.empty()) return false;
 

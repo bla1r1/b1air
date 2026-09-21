@@ -151,6 +151,15 @@ public slots:
     bool deletePermanently(const QStringList& paths);
     bool restoreFromTrash(const QStringList& paths);
     void emptyTrash();
+    // Deletes trashed items older than `days` (by their DeletionDate) and
+    // returns how many went. Static: `b1air-files --purge-trash` runs it at
+    // login without opening a window.
+    static int purgeTrash(int days);
+    // The age limit from the prefs file; 0 means keep everything.
+    static int trashPurgeDays();
+    // Packs `paths` into <currentPath>/<name>.<format> on the worker thread
+    // (zip, tar.gz, tar.zst or 7z). Reports through pasteFinished.
+    void compressItems(const QStringList& paths, const QString& name, const QString& format);
     // Copy or move `sources` into `destDir` on the worker thread — drag and
     // drop, and "Move to…"/"Copy to…". Reports through pasteFinished.
     void transfer(const QStringList& sources, const QString& destDir, bool move);

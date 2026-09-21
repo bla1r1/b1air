@@ -67,6 +67,36 @@ Singleton {
         // work interval and not during a break, or the notification saying the
         // break is over would be the one thing suppressed.
         || Focus.wantsDnd
+        || root.quietHours
+
+    // Quiet hours (Settings → Screen Time & DND). Re-read every half minute:
+    // the boundary is a time of day, and nothing else signals it.
+    property bool quietHours: false
+    function _checkQuietHours() {
+        if (Settings.dndScheduleEnabled !== true) {
+            root.quietHours = false;
+            return;
+        }
+        const d = new Date();
+        const now = d.getHours() * 60 + d.getMinutes();
+        const from = Settings.dndScheduleStart, until = Settings.dndScheduleEnd;
+        root.quietHours = from === until ? false
+            : from < until ? (now >= from && now < until)
+            : (now >= from || now < until);      // wraps past midnight
+    }
+    Timer {
+        interval: 30000
+        running: Settings.dndScheduleEnabled === true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root._checkQuietHours()
+    }
+    Connections {
+        target: Settings
+        function onDndScheduleEnabledChanged() { root._checkQuietHours(); }
+        function onDndScheduleStartChanged() { root._checkQuietHours(); }
+        function onDndScheduleEndChanged() { root._checkQuietHours(); }
+    }
     property int toastTimeoutMs: 5000
     readonly property int unreadCount: history.count
 

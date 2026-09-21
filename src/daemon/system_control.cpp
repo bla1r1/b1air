@@ -9,6 +9,7 @@
 #include <iostream>
 #include <openssl/crypto.h>
 #include <fstream>
+#include <pwd.h>
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -2516,6 +2517,12 @@ static std::vector<DdcDisplay> detect_ddc_displays(bool force = false) {
             size_t start = line.find_first_not_of(" \t", p + 8);
             if (start != std::string::npos) {
                 cur_model = line.substr(start);
+                // ddcutil writes "MFG:Model name:serial"; the model is the
+                // part a person recognises on a slider label.
+                size_t c1 = cur_model.find(':');
+                size_t c2 = c1 == std::string::npos ? c1 : cur_model.find(':', c1 + 1);
+                if (c2 != std::string::npos && c2 > c1 + 1)
+                    cur_model = cur_model.substr(c1 + 1, c2 - c1 - 1);
             }
         } else if (line.empty()) {
             emit();
@@ -4244,11 +4251,17 @@ bool SystemControl::remote_desktop_start(int port, const std::string& password) 
     // WayVNC needs the password in its config while running. The config is
     // ephemeral, mode 0600, and lives below the private runtime directory.
     const std::string config_path = runtime_path("wayvnc.conf");
+    // wayvnc refuses to start with auth on and no username ("Authentication
+    // enabled, but missing username"), and this config never had one — so
+    // the server exited the moment it was launched, every time. The login
+    // name is what a VNC client's user field expects anyway.
+    const struct passwd* pw = getpwuid(getuid());
+    const std::string vnc_user = pw && pw->pw_name ? pw->pw_name : "b1air";
     char config_text[4096];
     const int config_size = std::snprintf(config_text, sizeof(config_text),
         "address=%s\nport=%d\nenable_auth=true\nrelax_encryption=false\n"
-        "certificate_file=%s\nprivate_key_file=%s\npassword=%s\n",
-        bind_address.c_str(), port, tls_cert.c_str(), tls_key.c_str(), vnc_password.c_str());
+        "certificate_file=%s\nprivate_key_file=%s\nusername=%s\npassword=%s\n",
+        bind_address.c_str(), port, tls_cert.c_str(), tls_key.c_str(), vnc_user.c_str(), vnc_password.c_str());
     const bool config_written = config_size >= 0 && static_cast<size_t>(config_size) < sizeof(config_text) &&
         write_private_file(config_path, std::string(config_text, static_cast<size_t>(config_size)));
     OPENSSL_cleanse(config_text, sizeof(config_text));
@@ -4303,6 +4316,37 @@ bool SystemControl::remote_desktop_toggle() {
     }
 }
 
+// Established TCP connections whose local port is `port`, from the kernel's
+// own tables — no wayvncctl, which not every wayvnc build ships.
+static int count_established_on_port(int port) {
+    int n = 0;
+    for (const char* table : {"/proc/net/tcp", "/proc/net/tcp6"}) {
+        std::ifstream in(table);
+        std::string line;
+        std::getline(in, line);                       // header
+        while (std::getline(in, line)) {
+            std::istringstream row(line);
+            std::string slot, local, remote, state;
+            if (!(row >> slot >> local >> remote >> state)) continue;
+            const size_t colon = local.rfind(':');
+            if (colon == std::string::npos || state != "01") continue;   // 01 = ESTABLISHED
+            if (std::stoi(local.substr(colon + 1), nullptr, 16) == port) ++n;
+        }
+    }
+    return n;
+}
+
+// The port the running server was started on, from its config.
+static int running_vnc_port(const std::string& config_path) {
+    std::ifstream in(config_path);
+    std::string line;
+    while (std::getline(in, line))
+        if (line.rfind("port=", 0) == 0) {
+            try { return std::stoi(line.substr(5)); } catch (...) {}
+        }
+    return 5900;
+}
+
 std::string SystemControl::remote_desktop_status_json() {
     const pid_t pid = runtime_pid(runtime_path("wayvnc.pid"));
     bool running = pid > 0 && ::kill(pid, 0) == 0;
@@ -4319,9 +4363,16 @@ std::string SystemControl::remote_desktop_status_json() {
     if (ip.empty()) ip = "127.0.0.1";
     
     std::string json = "{";
+    const int port = running ? running_vnc_port(runtime_path("wayvnc.conf")) : 5900;
     json += "\"running\":" + std::string(running ? "true" : "false") + ",";
-    json += "\"port\":5900,";
+    json += "\"port\":" + std::to_string(port) + ",";
+    json += "\"clients\":" + std::to_string(running ? count_established_on_port(port) : 0) + ",";
+    json += "\"available\":" + std::string(util::command_exists("wayvnc") ? "true" : "false") + ",";
     json += "\"ip\":\"" + ip + "\",";
+    {
+        const struct passwd* pw = getpwuid(getuid());
+        json += "\"username\":\"" + util::escape_json(pw && pw->pw_name ? pw->pw_name : "") + "\",";
+    }
     json += "\"promptFreeScreencast\":" + std::string(is_screencast_prompt_free() ? "true" : "false") + ",";
     json += "\"uinputReady\":" + std::string(access("/dev/uinput", W_OK) == 0 ? "true" : "false");
     json += "}";

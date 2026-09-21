@@ -199,6 +199,11 @@ Singleton {
     readonly property alias focusAutoDnd: data.focusAutoDnd
     readonly property alias focusBreakReminders: data.focusBreakReminders
     readonly property alias focusDaemonAutoStart: data.focusDaemonAutoStart
+    // Quiet hours: Do Not Disturb between two times of day, in minutes since
+    // midnight. The range may wrap past midnight (22:00 → 07:00).
+    readonly property alias dndScheduleEnabled: data.dndScheduleEnabled
+    readonly property alias dndScheduleStart: data.dndScheduleStart
+    readonly property alias dndScheduleEnd: data.dndScheduleEnd
 
     // Device management
     readonly property alias disabledAudioDevices: data.disabledAudioDevices
@@ -515,6 +520,9 @@ Singleton {
         focusAutoDnd: true,
         focusBreakReminders: true,
         focusDaemonAutoStart: true,
+        dndScheduleEnabled: false,
+        dndScheduleStart: 1320,
+        dndScheduleEnd: 420,
         monitors: [],
         disabledAudioDevices: [],
     })
@@ -640,6 +648,9 @@ Singleton {
             property bool focusAutoDnd: true
             property bool focusBreakReminders: true
             property bool focusDaemonAutoStart: true
+            property bool dndScheduleEnabled: false
+            property int dndScheduleStart: 1320
+            property int dndScheduleEnd: 420
         }
     }
 }

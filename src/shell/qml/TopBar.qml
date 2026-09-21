@@ -1178,6 +1178,9 @@ PanelWindow {
                     // Privacy dots. Present only while something is using the
                     // device, because an indicator that is always there is one
                     // nobody looks at.
+                    // No ToolTips on them, for the reason at the Control Center
+                    // button below: a ToolTip in a bar-high window lands on top
+                    // of the bar and takes the clicks meant for its neighbours.
                     Rectangle {
                         visible: topBar.micInUse
                         anchors.verticalCenter: parent.verticalCenter
@@ -1190,9 +1193,6 @@ PanelWindow {
                             role: "caption"
                             color: Design.red
                         }
-                        HoverHandler { id: micDotHover }
-                        ToolTip.visible: micDotHover.hovered
-                        ToolTip.text: "Microphone in use"
                     }
 
                     Rectangle {
@@ -1207,9 +1207,32 @@ PanelWindow {
                             role: "caption"
                             color: Design.peach
                         }
-                        HoverHandler { id: camDotHover }
-                        ToolTip.visible: camDotHover.hovered
-                        ToolTip.text: "Camera in use"
+                    }
+
+                    // Remote desktop: shown while the server listens, red
+                    // while someone is connected. A click stops the server,
+                    // which drops every viewer — the one-click way out.
+                    Rectangle {
+                        visible: Remote.running
+                        readonly property bool watched: Remote.clients > 0
+                        readonly property color tone: watched ? Design.red : Design.blue
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Design.s(18); height: Design.s(18)
+                        radius: width / 2
+                        color: Design.tint(tone, remoteDotHover.containsMouse ? 0.4 : 0.22)
+                        Icon {
+                            anchors.centerIn: parent
+                            text: "\u{f0379}"
+                            role: "caption"
+                            color: parent.tone
+                        }
+                        MouseArea {
+                            id: remoteDotHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Remote.stop()
+                        }
                     }
 
                     // Caps Lock, shown only while it is on — which is the only

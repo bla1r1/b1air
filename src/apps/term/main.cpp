@@ -36,7 +36,12 @@ int main(int argc, char* argv[]) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-term");
     app.setApplicationDisplayName("Terminal");
-    app.setDesktopFileName("b1air-term");
+    // --dropdown: the same terminal under its own app_id, which the sway
+    // window rule turns into the panel that slides down from the top.
+    bool dropdown = false;
+    for (int i = 1; i < argc; ++i)
+        if (QString::fromUtf8(argv[i]) == QLatin1String("--dropdown")) dropdown = true;
+    app.setDesktopFileName(dropdown ? "b1air-dropdown" : "b1air-term");
     app.setOrganizationName("bla1r1");
 
     qmlRegisterType<b1air::TerminalItem>("B1Air.Term", 1, 0, "TerminalView");
@@ -50,7 +55,9 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         const QString raw = QString::fromUtf8(argv[i]);
         const QString arg = raw == "-e" ? raw : b1air::app::path_arg(raw);
-        if (arg == "-e" && i + 1 < argc) {
+        if (raw == QLatin1String("--dropdown")) {
+            continue;
+        } else if (arg == "-e" && i + 1 < argc) {
             QStringList cmdParts;
             // Each argument quoted for the shell that runs it: joined bare,
             // `-e sh -c "echo a; read"` reached the shell as

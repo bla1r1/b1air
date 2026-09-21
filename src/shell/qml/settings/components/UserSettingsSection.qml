@@ -26,7 +26,7 @@ ColumnLayout {
         groups: "wheel, input, audio, video"
     })
 
-    property string daemonCmd: Quickshell.env("HOME") + "/.local/bin/b1air-daemon"
+    property string daemonCmd: "b1air-daemon"
     property var availableShells: []
 
     function loadUserInfo() {

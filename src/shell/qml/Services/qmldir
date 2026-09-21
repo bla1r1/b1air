@@ -18,3 +18,4 @@ DaemonErrors 1.0 DaemonErrors.qml
 singleton Screens 1.0 Screens.qml
 singleton SwayConfig 1.0 SwayConfig.qml
 singleton Focus 1.0 Focus.qml
+singleton Remote 1.0 Remote.qml

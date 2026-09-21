@@ -4,6 +4,7 @@ Status:
 
 - `[x]`: completed.
 - `[ ]`: not implemented.
+- `[/]`: partly built — what exists and what is missing is written beside it.
 - `[~]`: **dropped** — decided against, with the reason beside it. Kept in the
   file rather than deleted so the same idea does not come back as a new one.
 - `initial` / `partial` / `deferred`: as before.
@@ -27,6 +28,13 @@ pretty-printed JSON by substring and so matched nothing, a privilege dialog that
 could not build, a clipboard that recorded nothing. Treat `[x]` as "it was
 built", never as "it works".
 
+The open column was audited the other way in October 2026: for every `[ ]`,
+whether the tree already does it. Nine did, in whole or in part — built as
+part of something else and never ticked. They are marked below with what
+exists. The same pass found `Super+G` launching `github-desktop`, which no
+package list installs, while the suite's own Git client sat unbound; it runs
+`b1air-git` now.
+
 ### Corrections
 
 - **Waybar is not part of this project.** It is not in the installer's package
@@ -47,17 +55,26 @@ built", never as "it works".
 In order. These are the ones worth building, and the reason is written down so
 that a future reader can disagree with the reason rather than guess at it.
 
-1. **Touchpad gestures** (M8) — three- and four-finger. The largest daily gap on
-   a laptop desktop, and the one thing every other environment has.
-2. **Fractional scaling and dock/undock display profiles** (M7) — this is a
-   ThinkPad that meets external monitors.
-3. **Drop-down terminal** (M9) — small, and used every day.
+1. **Dock/undock display profiles** (M7) — this is a ThinkPad that meets
+   external monitors, and today every plug-in means a trip to Settings.
+   Fractional scaling, the other half of the old item, is built.
+2. **External monitor brightness** (M7) — the daemon already speaks DDC/CI
+   (`ddcutil` detect, get and set are in `system_control.cpp`, used for idle
+   dimming); what is missing is a slider. Cheapest item on the list.
+3. **Drop-down terminal** (M9) — small, and used every day. `b1air-term`
+   exists; this is a scratchpad rule and a key.
 4. **Scheduled Do Not Disturb** (M14) — the focus timer it belongs to is built.
-5. **Remote session indicator and Control Center tile** (M5) — the WayVNC
+5. **Trash auto-purge and archive compression** (M11) — the Files app now owns
+   the trash (move, restore, empty) and extracts archives through libarchive;
+   both halves are small additions to code that exists.
+6. **Remote session indicator and Control Center tile** (M5) — the WayVNC
    backend is done; this is the missing front.
-6. **Keyboard shortcut editor** (M6) — the Keyboard settings page is already
-   half of it.
-7. **Per-workspace and per-monitor wallpaper** (M7) — cheap and visible.
+7. **Four-finger overview gesture** (M8) — three-finger workspace swipe is
+   built; the overview is what is left.
+8. **Per-workspace and per-monitor wallpaper** (M7) — cheap and visible.
+
+The keyboard shortcut editor that was sixth here is built: Keyboard →
+Desktop shortcuts rebinds a key in place, unbinding the old one.
 
 The Waybar remnants that used to head this list are gone: five
 `pkill -RTMIN+N waybar` calls signalling a process this desktop does not run,
@@ -146,26 +163,33 @@ large-text preset in M13 are kept.
 - [ ] Add Phone Link integration (KDE Connect / b1Connect) for battery, SMS, clipboard, and ring-my-phone.
 - [ ] Add LocalSend / QuickDrop wireless peer-to-peer file transfer in local Wi-Fi networks.
 - [x] Add native WayVNC Remote Desktop control in `b1air-daemon` (`b1air-daemon remote {start|stop|status|toggle}`) with TLS and password auth.
-- [ ] Add Remote Desktop quick-toggle tile in Control Center (`Super+C`) with active client connection count badge.
+- [ ] Add Remote Desktop quick-toggle tile in Control Center with active client connection count badge.
 - [x] Add Remote Desktop & Screen Sharing section in Settings App (`Super+Shift+S`) with port configuration, password management, and prompt-free permissions.
-- [ ] Add Waybar active remote session indicator badge with instant 1-click disconnect for privacy protection.
+- [ ] Add an active remote session indicator to the bar's system island, with a 1-click disconnect.
 - [x] Add headless sidecar display generator (`b1air-daemon sidecar create`) for using iPad / Android tablets as low-latency wireless secondary monitors via WayVNC.
 - [x] Add direct compositor input injection via `wlr-virtual-pointer-v1`, `uinput`, and `virtual-keyboard-v1` to eliminate portal permission prompts.
 
 ## M6: Desktop Widgets, Personalization, and Smart UI
 
-- [ ] Add desktop Sticky Notes and scratchpad memos (`Super+Shift+N`) with Markdown formatting.
+- [/] Add desktop Sticky Notes and scratchpad memos with Markdown formatting.
+      **Built:** `b1air-notes`, Markdown with a live preview, tags and an
+      Obsidian vault. **Missing:** notes on the desktop itself, and a key —
+      `Super+Shift+N` is the notification centre.
 - [~] Add desktop Glance Layer canvas widgets (`Super+G`) for clocks, weather, and circular hardware dials.
       **Cut:** The Control Center and calendar panels are this, and are now arrangeable in place.
-- [ ] Add visual GUI Keyboard Shortcuts editor in Settings for modifying keybindings without text editing.
+- [x] Add visual GUI Keyboard Shortcuts editor in Settings for modifying keybindings without text editing.
+      Keyboard → Desktop shortcuts: rebinding writes `unbindsym` for the old
+      key as well as the new `bindsym`, so it replaces rather than adds.
 - [ ] Add dynamic solar day/night auto-theming engine for sunrise/sunset wallpaper and palette switching.
 - [ ] Add live rolling hardware sensor and temperature telemetry graph overlay.
 
 ## M7: Display, Multi-Monitor, and Color Calibration
 
-- [ ] Add fractional scaling GUI control in Display Settings (1.25x, 1.5x, 1.75x) with subpixel sharpness.
+- [x] Add fractional scaling GUI control in Display Settings (1.25x, 1.5x, 1.75x) — a stepper in 0.25 steps.
 - [ ] Add Display Profile automatic switching on dock/undock events for HDMI/Type-C displays.
-- [ ] Add external monitor hardware brightness control via DDC/CI in Control Center slider.
+- [/] Add external monitor hardware brightness control via DDC/CI in Control Center slider.
+      **Built:** the daemon's DDC/CI detect, read and write, used today to dim
+      external screens on idle. **Missing:** the slider.
 - [ ] Add ICC/ICM color profile calibration importer in Display Settings.
 - [ ] Add distinct per-workspace and per-monitor wallpaper assignment engine.
 - [x] Add per-monitor top bar content. The bar itself was already on every
@@ -183,13 +207,21 @@ large-text preset in M13 are kept.
       offered by the main bar alone, and a pill lights only where the focus
       actually is. Which screen is the main one is on the Native Top Bar
       settings page, in a card that is absent when there is only one.
-- [ ] Add virtual headless display creation for tablet sidecar streaming (Moonlight / Sunshine).
+- [x] Add virtual headless display creation for tablet sidecar streaming.
+      The same item as M5's `sidecar create`, over WayVNC rather than
+      Moonlight/Sunshine; Settings → Remote Desktop → Create Display.
 
 ## M8: Advanced Input, Touchpad Gestures, and Keyboard Physics
 
-- [ ] Add 1:1 smooth multi-touch touchpad gestures (3-finger workspace switch, 4-finger overview/pinch).
-- [ ] Add mouse acceleration profile switcher (Flat raw sensor input vs Adaptive curve).
-- [ ] Add per-device scroll direction configuration (Natural scrolling for touchpad, standard for mouse wheel).
+- [/] Add 1:1 smooth multi-touch touchpad gestures (3-finger workspace switch, 4-finger overview/pinch).
+      **Built:** three-finger swipe between workspaces, with a direction
+      switch, as `bindgesture` (Settings → Mouse & Touchpad). **Missing:**
+      four-finger overview, and 1:1 tracking — sway's gestures fire on
+      completion, they do not follow the fingers.
+- [x] Add mouse acceleration profile switcher (Flat raw sensor input vs Adaptive curve).
+- [x] Add per-device scroll direction configuration (Natural scrolling for touchpad, standard for mouse wheel).
+      Natural scrolling is set on `type:touchpad` only, so a mouse wheel keeps
+      its own direction.
 - [ ] Add 1-click CapsLock re-mapping to Escape/Control in Keyboard Settings.
 - [x] Add a Caps Lock indicator to the bar, read from the kernel's own lock LED
       — sway's IPC does not report lock state and no protocol carries it.
@@ -200,7 +232,8 @@ large-text preset in M13 are kept.
 - [ ] Add drop-down sliding Quake terminal (`F12` / `Super+~`) persistent across all workspaces.
 - [ ] Add global file content search (Ripgrep integration in Spotlight via `find:` / `grep:` prefix).
 - [ ] Add open network ports and listening process inspector in Settings with 1-click process kill.
-- [ ] Add Git repository status telemetry widget in Waybar and Spotlight.
+- [ ] Add Git repository status in Spotlight. (The Waybar half is moot; the
+      suite has its own Git client, `b1air-git`, on `Super+G`.)
 - [~] Add Environment Variables (`PATH`, `EDITOR`, `XDG_*`) GUI editor in Settings.
       **Cut:** A GUI over a file where a typo breaks the login.
 - [~] Add System Services manager (systemd/runit/b1nix) in Settings Maintenance.
@@ -226,8 +259,13 @@ large-text preset in M13 are kept.
       **Cut:** `ncdu` and `baobab`.
 - [~] Add file checksum hash calculator and clipboard verifier (MD5, SHA256).
       **Cut:** `sha256sum` and `sha256sum -c`.
-- [ ] Add native archive compression and extraction popup for `.zip`, `.tar.gz`, `.tar.zst`, and `.7z`.
-- [ ] Add scheduled Trash auto-purge (>30 days) and 1-click deleted file restore.
+- [/] Add native archive compression and extraction for `.zip`, `.tar.gz`, `.tar.zst`, and `.7z`.
+      **Built:** extraction in Files through libarchive — double-click an
+      archive, refusing entries that would escape the target folder.
+      **Missing:** compression.
+- [/] Add scheduled Trash auto-purge (>30 days) and 1-click deleted file restore.
+      **Built:** restore, in Files' Trash view, to the original place.
+      **Missing:** the purge.
 
 ## M12: Network, VPN, Firewall, and Security Hardening
 
@@ -241,7 +279,10 @@ large-text preset in M13 are kept.
 
 ## M13: Wellness, Ergonomics, and Accessibility
 
-- [ ] Add 20-20-20 eye strain break reminder notification and subtle screen dim.
+- [/] Add 20-20-20 eye strain break reminder notification and subtle screen dim.
+      **Built:** an hourly break reminder after continuous use, in the daemon,
+      switched in Settings → Screen Time. **Missing:** the 20-minute cadence
+      and the dim.
 - [ ] Add accessibility color blindness shaders (Protanopia, Deuteranopia, Tritanopia) and Grayscale digital detox mode.
 - [ ] Add high contrast and large text 130% accessibility scaling preset.
 - [~] Add typing mechanical keyboard sound feedback simulation toggle.
@@ -250,7 +291,34 @@ large-text preset in M13 are kept.
 ## M14: Notification Intelligence and Focus Ecosystem
 
 - [ ] Add scheduled Do Not Disturb / Focus Hours automation (e.g. night hours or calendar meetings).
-- [ ] Add granular per-application notification priority rules and channel filtering.
+- [/] Add granular per-application notification priority rules and channel filtering.
+      **Built:** a per-app on/off for banners and sounds (Settings → Screen
+      Time). **Missing:** priorities and channels.
 - [ ] Add 7-day searchable notification history archive.
 - [~] Add synchronized LRC song lyrics display in the expanded media player.
       **Cut:** Novelty.
+
+## M15: The application suite
+
+Separate programs, one design system: each app is its own binary and process,
+built from the shared `Ui` module (toolbar capsules, sidebar, status bar,
+menus, dialogs, buttons and fields), so a change to a control changes it
+everywhere.
+
+- [x] Files (`b1air-files`): own directory model, trash with restore, undo,
+      drag and drop, volumes, Open With, details panel, archive extraction.
+- [x] Git (`b1air-git`): changes, history, branches, commit and undo, in
+      GitHub Desktop's layout.
+- [x] Text (`b1air-text`), View (`b1air-view`), Notes (`b1air-notes`),
+      Monitor (`b1air-monitor`), Camera (`b1air-camera`), Term (`b1air-term`).
+- [x] One look across the suite and Settings: same toolbar, sidebar, status
+      bar, button and field; contrast guarded against WCAG ratios whatever
+      the palette.
+- [ ] A light theme. Both built-in themes are dark, and the contrast guard has
+      only ever been looked at against dark surfaces.
+- [ ] Translation. No string goes through `qsTr`; the desktop is English-only.
+- [ ] A CI job that builds the suite and runs `tools/smoke.sh` on every push.
+      There is none, and the smoke test is what caught the daemon failing on a
+      fresh account.
+- [ ] Files: compress to archive, batch rename (M11), and tabs.
+

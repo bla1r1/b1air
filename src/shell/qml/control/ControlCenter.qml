@@ -52,11 +52,11 @@ PopupShell {
     property bool editing: false
 
     readonly property var tileIds: ["wifi", "bluetooth", "dnd", "nightlight", "powermode",
-                                    "gamemode", "caffeine", "screenshot", "dropper"]
+                                    "gamemode", "caffeine", "screenshot", "dropper", "remote"]
     readonly property var tileById: ({
         "wifi": wifiTile, "bluetooth": btTile, "dnd": dndTile, "nightlight": nightTile,
         "powermode": powerTile, "gamemode": gameTile, "caffeine": caffeineTile,
-        "screenshot": screenTile, "dropper": pickerTile
+        "screenshot": screenTile, "dropper": pickerTile, "remote": remoteTile
     })
 
     /**
@@ -83,6 +83,7 @@ PopupShell {
         if (id === "wifi") return Network.hasWifi;
         if (id === "bluetooth") return Network.hasBluetooth;
         if (id === "powermode") return Power.hasBattery || Power.hasProfiles;
+        if (id === "remote") return Remote.available;
         return true;
     }
 
@@ -230,7 +231,7 @@ PopupShell {
         "dnd": ["Do Not Disturb", "\u{f009b}"], "nightlight": ["Night Light", "\u{f0599}"],
         "powermode": ["Power Mode", "\u{f0e4}"], "gamemode": ["Game Mode", "\u{f11b}"],
         "caffeine": ["Caffeine", "\u{f0f4}"], "screenshot": ["Screenshot", "\u{f016d}"],
-        "dropper": ["Color Dropper", "\u{f0592}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
+        "dropper": ["Color Dropper", "\u{f0592}"], "remote": ["Remote Desktop", "\u{f0379}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
         "weather": ["Weather", "\u{f0590}"], "media": ["Now Playing", "\u{f0025}"],
         "session": ["Power Buttons", "\u{f0425}"]
     })
@@ -701,11 +702,41 @@ PopupShell {
                 onToggled: {
                     const next = !(Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false);
                     Settings.set("gameModeEnabled", next);
-                    Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "game-mode", next ? "on" : "off"]);
+                    Quickshell.execDetached(["b1air-daemon", "game-mode", next ? "on" : "off"]);
                 }
                 // "settings:gamemode" arrived as target "settings:gamemode" and was
                 // split on the colon into page "gamemode:", which is no page.
                 onActivated: center.openFull("settings", "gamemode")
+            }
+
+            QuickTile {
+                id: remoteTile
+                Layout.fillWidth: true
+                widgetId: "remote"
+                Layout.row: center.placeOf("remote").row
+                Layout.column: center.placeOf("remote").col
+                Layout.columnSpan: center.placeOf("remote").cols
+                Layout.rowSpan: center.placeOf("remote").rows
+                Layout.preferredHeight: center.tileHeightFor("remote")
+                visible: center.tileShown("remote")
+                glyph: "\u{f0379}"
+                title: "Remote Desktop"
+                on: Remote.running
+                // Red while someone is actually watching: that is the state
+                // worth noticing, not the server merely listening.
+                activeColor: Remote.clients > 0 ? Design.red : Design.blue
+                glyphTone: on ? activeColor : Design.textDim
+                detail: !on ? "Off"
+                      : Remote.clients > 0 ? (Remote.clients === 1 ? "1 viewer connected" : Remote.clients + " viewers connected")
+                      : "Waiting on port " + Remote.port
+                trailingGlyph: ""
+                onToggled: Remote.toggle()
+                onActivated: center.openFull("settings", "remote")
+                Connections {
+                    target: Remote
+                    // No password saved yet: the page where one is set.
+                    function onNeedsSetup() { center.openFull("settings", "remote"); }
+                }
             }
 
             QuickTile {
@@ -773,7 +804,7 @@ PopupShell {
                 trailingGlyph: ""
                 onActivated: {
                     center.close();
-                    Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "screenshot", "area"]);
+                    Quickshell.execDetached(["b1air-daemon", "screenshot", "area"]);
                 }
             }
 
@@ -797,7 +828,7 @@ PopupShell {
                 trailingGlyph: ""
                 onActivated: {
                     center.close();
-                    Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/b1air-daemon", "color-picker"]);
+                    Quickshell.execDetached(["b1air-daemon", "color-picker"]);
                 }
             }
         }

@@ -21,6 +21,18 @@ MiniView {
 
     trailing: BatteryPill { clickable: false }
 
+    // DDC probing runs ddcutil, so the panel list is only fetched while this
+    // view is on screen.
+    property bool _held: false
+    function _hold(on) {
+        if (on === root._held) return;
+        root._held = on;
+        if (on) Monitors.acquire(); else Monitors.release();
+    }
+    onVisibleChanged: root._hold(visible)
+    Component.onCompleted: root._hold(visible)
+    Component.onDestruction: root._hold(false)
+
     readonly property var modes: [
         {
             id: "performance",
@@ -127,7 +139,7 @@ MiniView {
         // ── Screen brightness ────────────────────────────────────────────────
         SectionLabel {
             text: "Display"
-            visible: Power.hasBacklight
+            visible: Power.hasBacklight || Monitors.hasBrightness
             Layout.topMargin: Design.s(Design.space.xs)
         }
 
@@ -140,6 +152,21 @@ MiniView {
             icon: "\u{f00df}"
             label: "Brightness"
             onMoved: pct => Power.setBrightness(pct)
+        }
+
+        // External screens over DDC/CI, one slider each, under the laptop's.
+        Repeater {
+            model: Monitors.brightness
+            delegate: Slider {
+                required property var modelData
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(Design.size.ctl)
+                value: modelData.brightness
+                tone: Design.yellow
+                icon: "\u{f0379}"
+                label: modelData.name
+                onMoved: pct => Monitors.setBrightness(modelData.id, pct)
+            }
         }
 
         // ── Energy modes ─────────────────────────────────────────────────────

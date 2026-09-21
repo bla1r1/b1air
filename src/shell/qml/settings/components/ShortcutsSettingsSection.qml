@@ -37,9 +37,10 @@ ColumnLayout {
                 { key: "Mod + /", label: "Spotlight", desc: "Same launcher, second binding" },
                 { key: "Mod + Shift + Space", label: "Spotlight", desc: "Same launcher, third binding" },
                 { key: "Mod + T", label: "Terminal", desc: "The terminal chosen in Default Apps (b1air-term out of the box)" },
+                { key: "Mod + `", label: "Drop-down terminal", desc: "Slides a terminal down from the top; the same key hides it" },
                 { key: "Mod + E", label: "Files", desc: "The file manager chosen in Default Apps (b1air-files out of the box)" },
                 { key: "Mod + F", label: "Browser", desc: "The browser chosen in Default Apps" },
-                { key: "Mod + G", label: "GitHub Desktop", desc: "Open the Git client" },
+                { key: "Mod + G", label: "Git", desc: "Open the Git client (b1air-git)" },
                 { key: "Mod + Ctrl + S", label: "Steam", desc: "Open the games library" },
                 { key: "Mod + D", label: "Discord", desc: "Open the chat client" }
             ]

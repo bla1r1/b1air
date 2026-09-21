@@ -25,7 +25,7 @@ ColumnLayout {
 
     function toggleGameMode(val) {
         Settings.set("gameModeEnabled", val);
-        const daemonCmd = Quickshell.env("HOME") + "/.local/bin/b1air-daemon";
+        const daemonCmd = "b1air-daemon";
         Quickshell.execDetached([daemonCmd, "game-mode", val ? "on" : "off"]);
     }
 

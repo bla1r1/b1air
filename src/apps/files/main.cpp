@@ -2,6 +2,7 @@
 // b1air-files — Native C++20 / Qt6 File Manager & Gallery Application
 // =============================================================================
 
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -14,6 +15,16 @@
 #include "backend.hpp"
 
 int main(int argc, char* argv[]) {
+    // `--purge-trash`: drop trashed items past the age set in Files and exit,
+    // without a window. Autostart runs it once per login.
+    for (int i = 1; i < argc; ++i) {
+        if (QString::fromUtf8(argv[i]) == QLatin1String("--purge-trash")) {
+            QCoreApplication core(argc, argv);
+            const int n = b1air::FileManagerBackend::purgeTrash(b1air::FileManagerBackend::trashPurgeDays());
+            if (n > 0) std::cout << "[b1air-files] purged " << n << " old item(s) from the trash\n";
+            return 0;
+        }
+    }
     // The software renderer unless the environment names another. Nothing in
     // this window needs the GPU — no shader effects, no layers — and OpenGL
     // cost a large share of its memory: measured on this machine's Intel
@@ -40,6 +51,8 @@ int main(int argc, char* argv[]) {
     // first on exit, and the engine's teardown then re-evaluated every binding
     // on FilesBackend against null — eight TypeErrors each time the window
     // closed.
+    // Old trash goes before the first count, so the sidebar badge is right.
+    b1air::FileManagerBackend::purgeTrash(b1air::FileManagerBackend::trashPurgeDays());
     b1air::FileManagerBackend backend;
 
     QQmlApplicationEngine engine;

@@ -450,6 +450,52 @@ ColumnLayout {
     }
 
     // =========================================================================
+    // EXTERNAL BRIGHTNESS
+    // The daemon has spoken DDC/CI for a long time (it dims external panels
+    // on idle) and Monitors.brightness has listed the panels that answer it;
+    // nothing ever showed them. A laptop's own backlight is on Power & Battery.
+    // =========================================================================
+    Card {
+        title: "Brightness"
+        subtitle: Monitors.hasBrightness
+            ? "External screens that take brightness over DDC/CI"
+            : "No external screen answered over DDC/CI"
+        icon: "\u{f00df}"
+        accentColor: Design.yellow
+
+        Repeater {
+            model: Monitors.brightness
+            delegate: Slider {
+                required property var modelData
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(Design.size.ctl)
+                value: modelData.brightness
+                tone: Design.yellow
+                icon: "\u{f00df}"
+                label: modelData.name
+                onMoved: pct => Monitors.setBrightness(modelData.id, pct)
+            }
+        }
+
+        Label {
+            visible: !Monitors.hasBrightness
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            dim: true
+            text: "Most monitors do, over the same cable as the picture. It needs ddcutil and the i2c-dev module; some panels have DDC/CI switched off in their own menu."
+        }
+
+        ButtonRow {
+            ActionButton {
+                icon: "\u{f0450}"
+                label: "Detect again"
+                onActivated: Monitors.redetect()
+            }
+        }
+    }
+
+    // =========================================================================
     // 2. THE SELECTED SCREEN
     // =========================================================================
     Card {
