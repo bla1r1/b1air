@@ -596,6 +596,10 @@ int SessionManager::run_session() {
     std::thread tiling_th(SessionManager::run_autotiler);
     tiling_th.detach();
 
+    // Plugging a screen in or out re-applies the layout saved for the new set.
+    std::thread outputs_th(SystemControl::watch_outputs);
+    outputs_th.detach();
+
     if (SettingsManager::get_json_bool("focusDaemonAutoStart", true)) {
         std::thread focus_th(SessionManager::run_focus_tracker);
         focus_th.detach();

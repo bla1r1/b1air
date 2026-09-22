@@ -166,6 +166,7 @@ Singleton {
     // Touchpad & Gestures
     readonly property alias touchpadSwipeWorkspace: data.touchpadSwipeWorkspace
     readonly property alias touchpadNaturalSwipe: data.touchpadNaturalSwipe
+    readonly property alias touchpadFourFinger: data.touchpadFourFinger
 
     // Pointer & touchpad. Defaults mirror conf.d/input.conf.
     readonly property alias naturalScroll: data.naturalScroll
@@ -502,6 +503,7 @@ Singleton {
         soundDeviceFeedback: true,
         touchpadSwipeWorkspace: true,
         touchpadNaturalSwipe: true,
+        touchpadFourFinger: true,
         naturalScroll: false,
         tapToClick: true,
         touchpadClickfinger: true,
@@ -629,6 +631,7 @@ Singleton {
 
             property bool touchpadSwipeWorkspace: true
             property bool touchpadNaturalSwipe: true
+            property bool touchpadFourFinger: true
             property bool naturalScroll: false
             property bool tapToClick: true
             property bool touchpadClickfinger: true

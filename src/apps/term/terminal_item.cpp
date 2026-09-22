@@ -397,8 +397,32 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
             MochaTeal,             // 14: Bright Cyan
             MochaText              // 15: Bright White
         };
+        // On a light background (Catppuccin Latte, or any light theme) the
+        // Mocha colours are pastels on white, and "white" — what programs use
+        // for plain bright text, fastfetch's values among them — vanished.
+        // Latte's colours instead, with black and white swapped the way light
+        // terminal themes do, so "white" text is the dark one.
+        static const QColor latte16[16] = {
+            QColor(188, 192, 204), // 0: Black → Surface1 (the light end)
+            QColor(210, 15, 57),   // 1: Red
+            QColor(64, 160, 43),   // 2: Green
+            QColor(223, 142, 29),  // 3: Yellow
+            QColor(30, 102, 245),  // 4: Blue
+            QColor(234, 118, 203), // 5: Magenta
+            QColor(23, 146, 153),  // 6: Cyan
+            QColor(92, 95, 119),   // 7: White → Subtext1
+            QColor(140, 143, 161), // 8: Bright Black → Overlay1
+            QColor(210, 15, 57),   // 9: Bright Red
+            QColor(64, 160, 43),   // 10: Bright Green
+            QColor(223, 142, 29),  // 11: Bright Yellow
+            QColor(32, 159, 181),  // 12: Bright Blue → Sapphire
+            QColor(136, 57, 239),  // 13: Bright Magenta → Mauve
+            QColor(23, 146, 153),  // 14: Bright Cyan
+            QColor(76, 79, 105)    // 15: Bright White → Text
+        };
         if (color.indexed.idx < 16) {
-            return ansi16[color.indexed.idx];
+            const bool light = m_background.lightnessF() > 0.5;
+            return (light ? latte16 : ansi16)[color.indexed.idx];
         }
     }
     return defaultColor;
@@ -472,7 +496,12 @@ void TerminalItem::paint(QPainter *painter) {
             // header all came out as ordinary text. Reverse is the one that
             // matters: it is how a terminal program says "this part", and
             // without it there was no difference between selected and not.
-            QColor fg = toQColor(cell.fg, m_foreground);
+            // libvterm hands the default colour over as RGB with a flag on
+            // it — the Mocha text it was created with — so asking only
+            // IS_RGB drew "default" text light-on-light under a light theme.
+            // The background already checked the flag; the foreground now too.
+            QColor fg = VTERM_COLOR_IS_DEFAULT_FG(&cell.fg) ? m_foreground
+                                                            : toQColor(cell.fg, m_foreground);
             QColor bg = VTERM_COLOR_IS_DEFAULT_BG(&cell.bg) ? m_background
                                                             : toQColor(cell.bg, m_background);
             if (cell.attrs.reverse)

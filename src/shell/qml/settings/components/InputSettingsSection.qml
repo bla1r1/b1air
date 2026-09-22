@@ -104,7 +104,27 @@ ColumnLayout {
     function setNaturalSwipe(on) {
         Settings.set("touchpadNaturalSwipe", on);
         section._applyGestures(Settings.touchpadSwipeWorkspace, on);
+        section._applyFourFinger(Settings.touchpadFourFinger, on);
         section._persist();
+    }
+
+    function setFourFinger(on) {
+        Settings.set("touchpadFourFinger", on);
+        section._applyFourFinger(on, Settings.touchpadNaturalSwipe);
+        section._persist();
+    }
+
+    function _applyFourFinger(enabled, natural) {
+        for (const g of SwayConfig.fourFingerGestures(natural)) {
+            if (enabled)
+                // Quoted for swaymsg: bare, sway splits a chained command
+                // at the ";" before the binding sees it and runs the second
+                // half on the spot. (A config file is the other way round —
+                // there the quotes would be kept and the binding would fail.)
+                Quickshell.execDetached(["swaymsg", "bindgesture " + g[0] + " \"" + g[1] + "\""]);
+            else
+                Quickshell.execDetached(["swaymsg", "unbindgesture", g[0]]);
+        }
     }
 
     function _applyGestures(enabled, natural) {
@@ -214,7 +234,7 @@ ColumnLayout {
     // ── 2. Multi-Touch Gestures ──────────────────────────────────────────────
     Card {
         title: "Multi-Touch Gestures"
-        subtitle: "Three-finger swipe between workspaces"
+        subtitle: "Three- and four-finger swipes"
         icon: "\u{f0048}"
         accentColor: Design.teal
 
@@ -254,8 +274,33 @@ ColumnLayout {
 
                 Toggle {
                     checked: section.touchpadNaturalSwipe
-                    enabled: section.touchpadSwipeWorkspace
+                    enabled: section.touchpadSwipeWorkspace || Settings.touchpadFourFinger
                     onToggled: section.setNaturalSwipe(!section.touchpadNaturalSwipe)
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label { text: "4-Finger Gestures"; weight: Design.weight.semibold }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: "Up opens the Launchpad, down closes it; left and right carry the window to the next workspace"
+                        role: "caption"
+                        dim: true
+                    }
+                }
+
+                Toggle {
+                    checked: Settings.touchpadFourFinger === true
+                    onToggled: section.setFourFinger(!(Settings.touchpadFourFinger === true))
                 }
             }
 

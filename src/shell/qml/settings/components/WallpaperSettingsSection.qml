@@ -40,28 +40,38 @@ ColumnLayout {
         }
     }
 
-    // Read current wallpaper cache if present
+    // The connected screens, and which has a picture of its own. With more
+    // than one, the gallery applies to the screen picked above it.
+    property var screens: []
+    property string target: ""          // "" = every screen
     Process {
-        id: currentWallReader
-        command: ["md5sum", (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/current_wallpaper.jpg"]
+        id: screenReader
+        command: ["b1air-daemon", "wallpaper", "screens"]
         stdout: StdioCollector {
             onStreamFinished: {
-                // Background scanner
+                try { section.screens = JSON.parse(this.text.trim() || "[]"); }
+                catch (e) { section.screens = []; }
+                if (section.target !== "" && !section.screens.some(o => o.name === section.target))
+                    section.target = "";
             }
         }
     }
+    Timer { id: screenRecheck; interval: 1200; onTriggered: screenReader.running = true }
 
     function scan() {
         dirScanner.running = false;
         dirScanner.running = true;
     }
 
-    Component.onCompleted: scan()
+    Component.onCompleted: { scan(); screenReader.running = true; }
     onWallpaperDirChanged: scan()
 
     function applyWallpaper(path) {
         section.activeWallpaper = path;
-        Cmd.run(["b1air-daemon", "wallpaper", "set", path], "Set wallpaper");
+        Cmd.run(section.target !== ""
+                    ? ["b1air-daemon", "wallpaper", "set", path, section.target]
+                    : ["b1air-daemon", "wallpaper", "set", path], "Set wallpaper");
+        screenRecheck.restart();
     }
 
     function setRandom() {
@@ -96,6 +106,29 @@ ColumnLayout {
             }
 
             Item { Layout.fillWidth: true }
+        }
+
+        // Which screen a click applies to. "All screens" also clears any one
+        // screen's own picture, which is what "all" says.
+        Flow {
+            visible: section.screens.length > 1
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Pill {
+                label: "All screens"
+                icon: "\u{f0379}"
+                active: section.target === ""
+                onClicked: section.target = ""
+            }
+            Repeater {
+                model: section.screens
+                delegate: Pill {
+                    required property var modelData
+                    label: modelData.name + (modelData.wallpaper !== "" ? " · own picture" : "")
+                    active: section.target === modelData.name
+                    onClicked: section.target = modelData.name
+                }
+            }
         }
 
         // Wallpaper Grid

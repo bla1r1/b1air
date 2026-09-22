@@ -9,115 +9,117 @@
     },
     "display": {
         "separator": "  ",
+        // ANSI colours, not 24-bit: the terminal maps these to the palette in
+        // use, so the keys stay readable on a light theme as on a dark one.
         "color": {
-            "keys": "38;2;122;162;247",
-            "title": "38;2;122;162;247"
+            "keys": "34",
+            "title": "34"
         }
     },
     "modules": [
         {
             "type": "title",
-            "keyColor": "38;2;122;162;247",
+            "keyColor": "34",
             "color": {
-                "user": "38;2;122;162;247",
-                "at": "38;2;86;95;137",
-                "host": "38;2;187;154;247"
+                "user": "34",
+                "at": "90",
+                "host": "35"
             }
         },
         "separator",
         {
             "type": "host",
             "key": "PC",
-            "keyColor": "38;2;115;218;202"
+            "keyColor": "36"
         },
         {
             "type": "cpu",
             "key": "CPU",
-            "keyColor": "38;2;247;118;142"
+            "keyColor": "31"
         },
         {
             "type": "gpu",
             "key": "GPU",
-            "keyColor": "38;2;115;218;202"
+            "keyColor": "36"
         },
         {
             "type": "memory",
             "key": "Memory",
-            "keyColor": "38;2;224;175;104"
+            "keyColor": "33"
         },
         {
             "type": "disk",
             "key": "Disk",
-            "keyColor": "38;2;125;207;255"
+            "keyColor": "94"
         },
         "separator",
         {
             "type": "os",
             "key": "OS",
-            "keyColor": "38;2;122;162;247"
+            "keyColor": "34"
         },
         {
             "type": "kernel",
             "key": "Kernel",
-            "keyColor": "38;2;187;154;247"
+            "keyColor": "35"
         },
         {
             "type": "bios",
             "key": "BIOS",
-            "keyColor": "38;2;125;207;255"
+            "keyColor": "94"
         },
         {
             "type": "packages",
             "key": "Packages",
-            "keyColor": "38;2;115;218;202"
+            "keyColor": "36"
         },
         {
             "type": "shell",
             "key": "Shell",
-            "keyColor": "38;2;224;175;104"
+            "keyColor": "33"
         },
         "separator",
         {
             "type": "de",
             "key": "DE",
-            "keyColor": "38;2;122;162;247"
+            "keyColor": "34"
         },
         {
             "type": "lm",
             "key": "LM",
-            "keyColor": "38;2;187;154;247"
+            "keyColor": "35"
         },
         {
             "type": "wm",
             "key": "WM",
-            "keyColor": "38;2;125;207;255"
+            "keyColor": "94"
         },
         {
             "type": "wmtheme",
             "key": "WM Theme",
-            "keyColor": "38;2;115;218;202"
+            "keyColor": "36"
         },
         {
             "type": "terminal",
             "key": "Terminal",
-            "keyColor": "38;2;224;175;104"
+            "keyColor": "33"
         },
         "separator",
         {
             "type": "command",
             "key": "OS Age",
-            "keyColor": "38;2;187;154;247",
+            "keyColor": "35",
             "text": "birth_install=$(stat -c %W /); current=$(date +%s); time_progression=$((current - birth_install)); days_difference=$((time_progression / 86400)); echo $days_difference days"
         },
         {
             "type": "uptime",
             "key": "Uptime",
-            "keyColor": "38;2;125;207;255"
+            "keyColor": "94"
         },
         {
             "type": "datetime",
             "key": "DateTime",
-            "keyColor": "38;2;224;175;104"
+            "keyColor": "33"
         },
         "break",
         {

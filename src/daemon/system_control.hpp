@@ -32,6 +32,12 @@ public:
     static bool monitors_restore();
     static bool monitors_apply(const std::string& layout_json);
     static bool monitors_save(const std::string& layout_json);
+    // Saved layouts, one per set of screens: [{key, screens, saved, current}].
+    static std::string monitors_profiles_json();
+    static bool monitors_forget(const std::string& key);
+    // Re-applies the matching profile whenever the set of screens changes.
+    // Blocks; the session runs it on its own thread.
+    static void watch_outputs();
 
     // Screenshot helper
 
@@ -208,6 +214,12 @@ public:
     static bool wallpaper_set(const std::string& filepath, const std::string& mode = "set");
     static bool wallpaper_random(const std::string& dir = "");
     static bool wallpaper_restore();
+    // One screen's own wallpaper, kept by the screen's identity.
+    static bool wallpaper_set_output(const std::string& filepath, const std::string& output);
+    static bool wallpaper_apply_overrides();
+    static std::string wallpaper_overrides_path();
+    // [{name, id, wallpaper}] for the connected screens.
+    static std::string wallpaper_overrides_json();
 
     // Night Light & Day/Night Ambiance
     static bool night_light_on(int temp = 4000, bool announce = true);

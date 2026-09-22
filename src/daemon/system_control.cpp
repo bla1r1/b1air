@@ -1877,13 +1877,120 @@ bool SystemControl::window_opacity_toggle() {
 
 
 // ── Multi-Monitor Layout Manager ─────────────────────────────────────────────
-static std::string get_monitors_state_file() {
-    return runtime_path("monitors-layout.json");
+//
+// Display profiles: one saved layout per *set* of screens, so a laptop that
+// meets a desk monitor in the morning and leaves it in the evening gets each
+// arrangement back without a trip to Settings.
+//
+// The layout used to be one file in $XDG_RUNTIME_DIR — a tmpfs emptied at
+// every logout — so "remembered" lasted until the next reboot. Profiles live
+// in ~/.config/b1air now. A set is keyed by what the screens are (make, model,
+// serial), not where they are plugged in: through a dock the same monitor can
+// come up as DP-3 one day and DP-5 the next.
+
+static std::string display_profiles_path() {
+    const char* home = std::getenv("HOME");
+    const std::string dir = std::string(home ? home : "/tmp") + "/.config/b1air";
+    util::mkdir_p(dir);
+    return dir + "/display-profiles.json";
+}
+
+// "Dell Inc. DELL U2720Q ABC123" — or the connector name, for a panel that
+// reports nothing (virtual and headless outputs, some laptop panels).
+static std::string output_identity(const nlohmann::json& o) {
+    std::string id;
+    for (const char* k : {"make", "model", "serial"}) {
+        const std::string v = json_str(o, k, "");
+        if (!v.empty() && v != "Unknown") id += (id.empty() ? "" : " ") + v;
+    }
+    return id.empty() ? json_str(o, "name", "") : id;
+}
+
+static std::string outputs_key(const nlohmann::json& outputs) {
+    std::vector<std::string> ids;
+    for (const auto& o : outputs)
+        if (o.is_object()) ids.push_back(output_identity(o));
+    std::sort(ids.begin(), ids.end());
+    std::string key;
+    for (const auto& id : ids) key += (key.empty() ? "" : " + ") + id;
+    return key;
+}
+
+static nlohmann::json load_profiles() {
+    const auto j = nlohmann::json::parse(read_file_string(display_profiles_path()), nullptr, false);
+    return j.is_object() ? j : nlohmann::json::object();
 }
 
 bool SystemControl::monitors_save(const std::string& layout_json) {
-    std::string path = get_monitors_state_file();
-    return write_private_file(path, layout_json + "\n");
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+    auto layout = nlohmann::json::parse(layout_json, nullptr, false);
+    if (!outputs.is_array() || outputs.empty() || !layout.is_array()) return false;
+
+    // Each entry learns which screen it is, so it can find it again on
+    // another connector.
+    for (auto& entry : layout) {
+        const std::string name = json_str(entry, "name", "");
+        for (const auto& o : outputs)
+            if (json_str(o, "name", "") == name) entry["id"] = output_identity(o);
+    }
+    auto profiles = load_profiles();
+    profiles[outputs_key(outputs)] = {
+        {"layout", layout},
+        {"saved", static_cast<long long>(std::time(nullptr))}
+    };
+    return write_private_file(display_profiles_path(), profiles.dump(2) + "\n");
+}
+
+std::string SystemControl::monitors_profiles_json() {
+    std::string current;
+    SwayIPC ipc;
+    if (ipc.connect()) {
+        const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+        if (outputs.is_array()) current = outputs_key(outputs);
+    }
+    nlohmann::json out = nlohmann::json::array();
+    const auto profiles = load_profiles();     // named: items() of a temporary dangles
+    for (const auto& [key, p] : profiles.items()) {
+        if (!p.is_object()) continue;
+        out.push_back({
+            {"key", key},
+            {"screens", p.contains("layout") && p["layout"].is_array() ? p["layout"].size() : 0},
+            {"saved", p.value("saved", 0LL)},
+            {"current", key == current}
+        });
+    }
+    return out.dump();
+}
+
+bool SystemControl::monitors_forget(const std::string& key) {
+    auto profiles = load_profiles();
+    if (!profiles.contains(key)) return false;
+    profiles.erase(key);
+    return write_private_file(display_profiles_path(), profiles.dump(2) + "\n");
+}
+
+void SystemControl::watch_outputs() {
+    SwayIPC events, query;
+    if (!events.connect() || !query.connect()) return;
+    auto key_now = [&query]() {
+        const auto o = nlohmann::json::parse(query.get_outputs(), nullptr, false);
+        return o.is_array() ? outputs_key(o) : std::string();
+    };
+    std::string last = key_now();
+    // sway sends a burst of output events while a screen comes up; the set is
+    // read once things settle, and only a different set restores anything —
+    // applying a layout raises output events of its own.
+    events.subscribe_events({"output"}, [&](const std::string&, const std::string&) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+        const std::string key = key_now();
+        if (key.empty() || key == last) return;
+        last = key;
+        std::cerr << "[b1air-displays] screens now: " << key << "\n";
+        monitors_restore();
+        wallpaper_apply_overrides();
+    });
 }
 
 bool SystemControl::monitors_apply(const std::string& layout_json) {
@@ -1975,41 +2082,37 @@ bool SystemControl::monitors_restore() {
     std::string outputs_json = ipc.get_outputs();
     if (outputs_json.empty() || outputs_json == "[]") return false;
 
-    std::string state_path = get_monitors_state_file();
-    std::string saved_json = read_file_string(state_path);
-
-    if (!saved_json.empty() && saved_json != "[]") {
-        // Does the saved layout mention any output that is actually connected?
-        //
-        // This used to scan the reply for the literal bytes "name":" — with no
-        // space. Sway pretty-prints its IPC replies, so what arrives is
-        // "name": "HEADLESS-1", the search matched nothing, and the saved
-        // layout was never applied: monitor restore had never once worked.
-        // Parsed rather than searched, so spacing cannot decide it again.
-        bool has_match = false;
-        try {
-            const auto outputs = nlohmann::json::parse(outputs_json);
-            const auto saved = nlohmann::json::parse(saved_json);
-            for (const auto& o : outputs) {
-                if (!o.contains("name") || !o["name"].is_string()) continue;
-                const std::string name = o["name"].get<std::string>();
-                for (const auto& sv : saved) {
-                    if (sv.contains("name") && sv["name"].is_string()
-                        && sv["name"].get<std::string>() == name) {
-                        has_match = true;
-                        break;
-                    }
+    // This set of screens seen before: its layout, with connector names
+    // brought up to date from each screen's identity.
+    try {
+        const auto outputs = nlohmann::json::parse(outputs_json);
+        const auto profiles = load_profiles();
+        const std::string key = outputs_key(outputs);
+        if (profiles.contains(key) && profiles[key].contains("layout")) {
+            auto layout = profiles[key]["layout"];
+            // Each connector once: two identical monitors with no serial share
+            // an identity, and must not both land on the same one. An entry
+            // whose saved name is still that screen's keeps it.
+            std::vector<std::string> taken;
+            auto claim = [&](nlohmann::json& entry, bool same_name_only) {
+                const std::string id = json_str(entry, "id", "");
+                if (id.empty() || entry.contains("_placed")) return;
+                for (const auto& o : outputs) {
+                    const std::string n = json_str(o, "name", "");
+                    if (output_identity(o) != id || std::find(taken.begin(), taken.end(), n) != taken.end()) continue;
+                    if (same_name_only && n != json_str(entry, "name", "")) continue;
+                    entry["name"] = n;
+                    entry["_placed"] = true;
+                    taken.push_back(n);
+                    return;
                 }
-                if (has_match) break;
-            }
-        } catch (const std::exception&) {
-            has_match = false;
+            };
+            for (auto& entry : layout) claim(entry, true);
+            for (auto& entry : layout) claim(entry, false);
+            for (auto& entry : layout) entry.erase("_placed");
+            return monitors_apply(layout.dump());
         }
-
-        if (has_match) {
-            return monitors_apply(saved_json);
-        }
-    }
+    } catch (const std::exception&) {}
 
     // First run, or a set of displays never seen before: lay them out left to
     // right in the order sway reports and give each the next workspace.
@@ -2991,7 +3094,7 @@ bool SystemControl::kbd_backlight_off() {
 }
 
 // ── Wallpaper ────────────────────────────────────────────────────────────────
-bool SystemControl::wallpaper_set(const std::string& filepath, const std::string& /*mode*/) {
+bool SystemControl::wallpaper_set(const std::string& filepath, const std::string& mode) {
     std::string resolved_path;
     if (!safe_wallpaper_file(filepath, resolved_path) || access(resolved_path.c_str(), R_OK) != 0 || !safe_sway_path(resolved_path)) return false;
 
@@ -3003,16 +3106,113 @@ bool SystemControl::wallpaper_set(const std::string& filepath, const std::string
     // Copy to SDDM cache if writable
     (void)run_argv_status({"cp", "-f", resolved_path, "/var/cache/wallpaper/current.jpg"});
 
-    // Apply to Sway
+    // Apply to Sway. At login the session asks before sway's IPC socket is
+    // always up; falling through to a swaybg of our own then left a second
+    // wallpaper layer running for the whole session, under sway's, that no
+    // later change ever reached. A couple of seconds of patience first.
     SwayIPC ipc;
-    if (ipc.connect()) {
+    bool connected = ipc.connect();
+    for (int i = 0; !connected && i < 20; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        connected = ipc.connect();
+    }
+    if (connected) {
         ipc.send_command(0, "output * bg '" + resolved_path + "' fill");
+        // A new picture for every screen replaces any one screen's own; a
+        // restore keeps them and lays them back over the shared one.
+        if (mode == "restore") {
+            wallpaper_apply_overrides();
+        } else {
+            (void)unlink(wallpaper_overrides_path().c_str());
+            // sway keeps a screen's own `output NAME bg` over `output * bg`,
+            // so "every screen" has to be said to each of them as well.
+            const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+            if (outputs.is_array())
+                for (const auto& o : outputs)
+                    ipc.send_command(0, "output \"" + json_str(o, "name", "") + "\" bg '" + resolved_path + "' fill");
+        }
     } else {
         (void)run_argv_status({"pkill", "-x", "swaybg"});
         (void)util::spawn_detached({"swaybg", "-m", "fill", "-i", resolved_path});
     }
 
     return true;
+}
+
+// ── One screen's own wallpaper ──────────────────────────────────────────────
+//
+// Kept by what the screen is (make, model, serial — as the display profiles
+// are), so it follows the monitor to whatever connector it comes up on, and
+// copied into the cache so it survives the original being moved.
+
+std::string SystemControl::wallpaper_overrides_path() {
+    const char* home = std::getenv("HOME");
+    const std::string dir = std::string(home ? home : "/tmp") + "/.config/b1air";
+    util::mkdir_p(dir);
+    return dir + "/wallpapers.json";
+}
+
+bool SystemControl::wallpaper_set_output(const std::string& filepath, const std::string& output) {
+    std::string resolved;
+    if (!safe_wallpaper_file(filepath, resolved) || access(resolved.c_str(), R_OK) != 0) return false;
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+    if (!outputs.is_array()) return false;
+    std::string identity;
+    for (const auto& o : outputs)
+        if (json_str(o, "name", "") == output) identity = output_identity(o);
+    if (identity.empty()) return false;
+
+    const char* home = std::getenv("HOME");
+    const std::string cache_dir = std::string(home ? home : "/tmp") + "/.cache/b1air/wallpapers";
+    util::mkdir_p(cache_dir);
+    std::string safe = identity;
+    for (char& c : safe) if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
+    const std::string cached = cache_dir + "/" + safe + std::filesystem::path(resolved).extension().string();
+    std::error_code ec;
+    std::filesystem::copy_file(resolved, cached, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec || !safe_sway_path(cached)) return false;
+
+    auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
+    if (!map.is_object()) map = nlohmann::json::object();
+    map[identity] = cached;
+    if (!write_private_file(wallpaper_overrides_path(), map.dump(2) + "\n")) return false;
+    ipc.send_command(0, "output \"" + output + "\" bg '" + cached + "' fill");
+    return true;
+}
+
+bool SystemControl::wallpaper_apply_overrides() {
+    const auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
+    if (!map.is_object() || map.empty()) return true;
+    SwayIPC ipc;
+    if (!ipc.connect()) return false;
+    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+    if (!outputs.is_array()) return false;
+    for (const auto& o : outputs) {
+        const auto it = map.find(output_identity(o));
+        if (it == map.end() || !it->is_string()) continue;
+        const std::string path = it->get<std::string>();
+        if (access(path.c_str(), R_OK) == 0 && safe_sway_path(path))
+            ipc.send_command(0, "output \"" + json_str(o, "name", "") + "\" bg '" + path + "' fill");
+    }
+    return true;
+}
+
+std::string SystemControl::wallpaper_overrides_json() {
+    nlohmann::json out = nlohmann::json::array();
+    const auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
+    SwayIPC ipc;
+    if (!ipc.connect()) return out.dump();
+    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+    if (!outputs.is_array()) return out.dump();
+    for (const auto& o : outputs) {
+        const std::string id = output_identity(o);
+        const auto it = map.is_object() ? map.find(id) : map.end();
+        out.push_back({{"name", json_str(o, "name", "")}, {"id", id},
+                       {"wallpaper", it != map.end() && it->is_string() ? it->get<std::string>() : ""}});
+    }
+    return out.dump();
 }
 
 bool SystemControl::wallpaper_random(const std::string& dir_arg) {

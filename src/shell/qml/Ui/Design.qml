@@ -422,11 +422,24 @@ QtObject {
         const p = root._p;
         const dark = root._lum(root._col(p.text)) > root._lum(root._col(p.ground));
         // Surfaces: each step distinguishable from the one under it.
-        p.mid = root._ensure(p.mid, p.low, 1.22, dark);
-        p.high = root._ensure(p.high, p.mid, 1.20, dark);
-        p.highest = root._ensure(p.highest, p.high, 1.15, dark);
-        // Lines visible against the card they outline.
-        p.outlineVariant = root._ensure(p.outlineVariant, p.mid, 1.8, dark);
+        if (dark) {
+            p.mid = root._ensure(p.mid, p.low, 1.22, dark);
+            p.high = root._ensure(p.high, p.mid, 1.20, dark);
+            p.highest = root._ensure(p.highest, p.high, 1.15, dark);
+        } else {
+            // A light interface raises a card by making it *lighter* — white
+            // over a grey ground — and darkens only for hover and press. The
+            // one-way ladder pushed white cards to #ddd and hover to slate.
+            // Cards just need to differ from the panel, either way; hover and
+            // press step down from the card.
+            if (root.contrastRatio(p.mid, p.low) < 1.05)
+                p.mid = root._ensure(p.mid, p.low, 1.05, dark);
+            p.high = root._ensure(p.high, p.mid, 1.12, dark);
+            p.highest = root._ensure(p.highest, p.high, 1.08, dark);
+        }
+        // Lines visible against the card they outline. Lighter on a light
+        // palette, where 1.8 turns every outline into a drawn stroke.
+        p.outlineVariant = root._ensure(p.outlineVariant, p.mid, dark ? 1.8 : 1.4, dark);
         // Text, on the lightest surface it is drawn on (hover).
         p.text = root._ensure(p.text, p.high, 7.0, dark);
         p.textDim = root._ensure(p.textDim, p.high, 4.5, dark);

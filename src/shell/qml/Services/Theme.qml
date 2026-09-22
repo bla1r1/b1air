@@ -101,6 +101,28 @@ Singleton {
                 green: "#9ece6a", teal: "#73daca", red: "#f7768e",
                 maroon: "#db4b4b", lavender: "#b4f9f8"
             }
+        },
+        {
+            // Catppuccin Latte, the light flavour of the default, with one
+            // change: Latte's surfaces darken going up (surface0 is greyer
+            // than base), which on a light desktop makes every card a grey
+            // slab. Here cards are white over the ground and darken only on
+            // hover and press, the way a light interface reads.
+            name: "Catppuccin Latte",
+            id: "catppuccin-latte",
+            palette: {
+                ground: "#eff1f5", lowest: "#e6e9ef", low: "#f5f6f9",
+                mid: "#ffffff", high: "#e6e9ef", highest: "#dce0e8",
+                text: "#4c4f69", textDim: "#5c5f77",
+                outline: "#7c7f93", outlineVariant: "#ccd0da",
+                primary: "#1e66f5", primaryText: "#ffffff",
+                primaryBox: "#dce0e8", tertiary: "#8839ef",
+                error: "#d20f39", errorText: "#ffffff",
+                blue: "#1e66f5", sapphire: "#209fb5", mauve: "#8839ef",
+                pink: "#ea76cb", peach: "#fe640b", yellow: "#df8e1d",
+                green: "#40a02b", teal: "#179299", red: "#d20f39",
+                maroon: "#e64553", lavender: "#7287fd"
+            }
         }
     ]
 

@@ -49,6 +49,29 @@ Singleton {
     //
     // The delay also collapses a held-down stepper into one write instead of
     // one per repeat.
+    /**
+     * The four-finger set, as [gesture, sway command] pairs — one list for
+     * the config file and the Settings page's runtime binding alike.
+     *
+     *   up          the Launchpad, every app at a glance
+     *   down        close whatever panel is open
+     *   left/right  carry the focused window to the neighbouring workspace
+     *               and follow it there
+     */
+    function fourFingerGestures(natural) {
+        const left = natural ? "prev" : "next";
+        const right = natural ? "next" : "prev";
+        return [
+            ["swipe:4:up", "exec b1air-shell toggle launchpad"],
+            ["swipe:4:down", "exec b1air-shell close"],
+            // Two commands: written bare in a config file, where the rest of
+            // the line is the binding; quoted when sent through swaymsg (see
+            // InputSettingsSection._applyFourFinger).
+            ["swipe:4:left", "move container to workspace " + left + "; workspace " + left],
+            ["swipe:4:right", "move container to workspace " + right + "; workspace " + right]
+        ];
+    }
+
     function writeInput() { inputDebounce.restart(); }
     function writeLook() { lookDebounce.restart(); }
 
@@ -90,7 +113,15 @@ Singleton {
             const right = Settings.touchpadNaturalSwipe ? "next" : "prev";
             out += "\nbindgesture swipe:3:left workspace " + left + "\n";
             out += "bindgesture swipe:3:right workspace " + right + "\n";
+        } else {
+            // input.conf binds the defaults and this file is read after it:
+            // switched off has to be said, not left out, or the default stays.
+            out += "\nunbindgesture swipe:3:left\nunbindgesture swipe:3:right\n";
         }
+
+        for (const g of root.fourFingerGestures(Settings.touchpadNaturalSwipe))
+            out += Settings.touchpadFourFinger ? "bindgesture " + g[0] + " " + g[1] + "\n"
+                                               : "unbindgesture " + g[0] + "\n";
 
         inputWriter.path = root.confDir + "/custom_input.conf";
         inputWriter.setText(out);

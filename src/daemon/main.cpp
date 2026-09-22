@@ -67,7 +67,7 @@ static void print_usage(const char* prog) {
               << "                                     Control external monitor brightness via DDC/CI\n"
               << "  kbd-backlight {available|get|up [N]|down [N]|set <pct>|off}\n"
               << "                                     Control keyboard backlight\n"
-              << "  wallpaper {set <file>|random [dir]|restore}\n"
+              << "  wallpaper {set <file> [output]|random [dir]|restore|screens}\n"
               << "                                     Manage and apply desktop & SDDM wallpaper\n"
               << "  night-light {on [temp]|off|toggle|auto}\n"
               << "                                     Control color temperature & blue light filter\n"
@@ -582,8 +582,17 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             return SystemControl::monitors_save(argv[3]) ? 0 : 1;
+        } else if (sub == "profiles") {
+            std::cout << SystemControl::monitors_profiles_json() << "\n";
+            return 0;
+        } else if (sub == "forget") {
+            if (argc < 4) {
+                std::cerr << "Usage: " << argv[0] << " monitors forget <profile-key>\n";
+                return 1;
+            }
+            return SystemControl::monitors_forget(argv[3]) ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " monitors {restore|apply <json>|save <json>}\n";
+            std::cerr << "Usage: " << argv[0] << " monitors {restore|apply <json>|save <json>|profiles|forget <key>}\n";
             return 1;
         }
     } else if (cmd == "ddc") {
@@ -659,14 +668,19 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Usage: " << argv[0] << " wallpaper set <path>\n";
                 return 1;
             }
+            // An optional output name: that screen only.
+            if (argc >= 5) return SystemControl::wallpaper_set_output(argv[3], argv[4]) ? 0 : 1;
             return SystemControl::wallpaper_set(argv[3]) ? 0 : 1;
         } else if (sub == "random") {
             std::string dir = (argc >= 4) ? argv[3] : "";
             return SystemControl::wallpaper_random(dir) ? 0 : 1;
         } else if (sub == "restore") {
             return SystemControl::wallpaper_restore() ? 0 : 1;
+        } else if (sub == "screens") {
+            std::cout << SystemControl::wallpaper_overrides_json() << "\n";
+            return 0;
         } else {
-            std::cerr << "Usage: " << argv[0] << " wallpaper {set <file>|random [dir]|restore}\n";
+            std::cerr << "Usage: " << argv[0] << " wallpaper {set <file> [output]|random [dir]|restore|screens}\n";
             return 1;
         }
     } else if (cmd == "night-light" || cmd == "nightlight") {

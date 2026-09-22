@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import "../../Ui"
 import "../../Services"
 
@@ -66,6 +67,7 @@ ColumnLayout {
     }
 
     Component.onCompleted: {
+        profileReader.running = true;
         section._hold(visible);
         section.reload();
     }
@@ -450,6 +452,70 @@ ColumnLayout {
     }
 
     // =========================================================================
+    // REMEMBERED LAYOUTS
+    // Every applied layout is kept for the set of screens it was made for, and
+    // the daemon puts it back when that set is plugged in again (dock in the
+    // morning, laptop alone in the evening). This is where they are seen and
+    // dropped.
+    // =========================================================================
+    property var profiles: []
+    Process {
+        id: profileReader
+        command: ["b1air-daemon", "monitors", "profiles"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { section.profiles = JSON.parse(this.text.trim() || "[]"); }
+                catch (e) { section.profiles = []; }
+            }
+        }
+    }
+    Process { id: profileForget; onExited: profileReader.running = true }
+    Timer { id: profileRecheck; interval: 1500; onTriggered: profileReader.running = true }
+
+    Card {
+        title: "Remembered layouts"
+        subtitle: section.profiles.length === 0
+            ? "Apply a layout and it is kept for this set of screens"
+            : "Put back automatically whenever the same screens are connected"
+        icon: "\u{f0379}"
+        accentColor: Design.teal
+
+        Repeater {
+            model: section.profiles
+            delegate: RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.sm)
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData.key
+                        weight: Design.weight.semibold
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        text: modelData.screens + (modelData.screens === 1 ? " screen" : " screens")
+                              + (modelData.current ? " · connected now" : "")
+                        role: "caption"
+                        color: modelData.current ? Design.accent : Design.textDim
+                    }
+                }
+                ActionButton {
+                    Layout.fillWidth: false
+                    icon: "\u{f0a7a}"
+                    label: "Forget"
+                    onActivated: {
+                        profileForget.command = ["b1air-daemon", "monitors", "forget", modelData.key];
+                        profileForget.running = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
     // EXTERNAL BRIGHTNESS
     // The daemon has spoken DDC/CI for a long time (it dims external panels
     // on idle) and Monitors.brightness has listed the panels that answer it;
@@ -809,6 +875,7 @@ ColumnLayout {
     function applyLayout() {
         if (monitorsModel.count === 0)
             return;
+        profileRecheck.restart();     // the daemon saves it as a profile
 
         if (monitorsModel.count === 1) {
             const mon = monitorsModel.get(0);
