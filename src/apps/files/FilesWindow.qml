@@ -35,7 +35,7 @@ C.ApplicationWindow {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
 
-    title: (FilesBackend.inTrash ? "Trash" : window.folderName) + " — Files"
+    title: I18n.tr("%1 — Files", FilesBackend.inTrash ? I18n.tr("Trash") : window.folderName)
     width: Design.s(1120)
     height: Design.s(720)
     minimumWidth: 760
@@ -46,8 +46,8 @@ C.ApplicationWindow {
     readonly property var fm: FilesBackend.files
     readonly property string homeDir: FilesBackend.homePath
     readonly property string currentPath: FilesBackend.currentPath
-    readonly property string folderName: currentPath === homeDir ? "Home"
-                                       : currentPath === "/" ? "File System"
+    readonly property string folderName: currentPath === homeDir ? I18n.tr("Home")
+                                       : currentPath === "/" ? I18n.tr("File System")
                                        : currentPath.substring(currentPath.lastIndexOf("/") + 1)
 
     // ── Preferences, kept between runs ───────────────────────────────────────
@@ -81,8 +81,14 @@ C.ApplicationWindow {
         function onShowHiddenChanged() { window.savePrefs(); }
         function onSortChanged() { window.savePrefs(); }
         function onErrorOccurred(message) { window.note(message); }
-        function onPasteFinished(ok, message) { window.note(ok && FilesBackend.undoLabel ? message + " · Ctrl+Z undoes it" : message); }
-        function onCurrentPathChanged() { window.typed = ""; currentView().positionViewAtBeginning(); }
+        function onPasteFinished(ok, message) { window.note(ok && FilesBackend.undoLabel ? I18n.tr("%1 · Ctrl+Z undoes it", message) : message); }
+        function onCurrentPathChanged() {
+            window.typed = ""; currentView().positionViewAtBeginning();
+            // The shown tab follows wherever the window goes.
+            if (window.tabs[window.tabIndex] !== FilesBackend.currentPath) {
+                const t = window.tabs.slice(); t[window.tabIndex] = FilesBackend.currentPath; window.tabs = t;
+            }
+        }
     }
 
     // A line in the status bar for a few seconds.
@@ -121,6 +127,50 @@ C.ApplicationWindow {
         }
     }
 
+    // ── Tabs ─────────────────────────────────────────────────────────────────
+    // A path per tab; the window shows one at a time through the backend, so
+    // switching is navigating. The strip appears from the second tab on.
+    property var tabs: [FilesBackend.currentPath]
+    property int tabIndex: 0
+    function tabTitle(p) {
+        return p === FilesBackend.trashPath ? I18n.tr("Trash") : p === homeDir ? I18n.tr("Home")
+             : p === "/" ? I18n.tr("File System") : String(p).split("/").pop();
+    }
+    function newTab(path) {
+        const t = tabs.slice();
+        t.splice(tabIndex + 1, 0, path || currentPath);
+        tabs = t;
+        switchTab(tabIndex + 1);
+    }
+    function switchTab(i) {
+        if (i < 0 || i >= tabs.length) return;
+        tabIndex = i;
+        navigateTo(tabs[i]);
+        currentView().forceActiveFocus();
+    }
+    function closeTab(i) {
+        if (tabs.length <= 1) { window.close(); return; }
+        const t = tabs.slice();
+        t.splice(i, 1);
+        tabs = t;
+        switchTab(i < tabIndex || tabIndex >= t.length ? Math.max(0, tabIndex - 1) : tabIndex);
+    }
+
+    // "3 folders, 12 files" and "4 items selected, 2.1 MB": worded here from
+    // the model's numbers, so they can be in the desktop's language.
+    function folderSummary() {
+        const parts = [];
+        if (fm.folderCount) parts.push(I18n.trn("%1 folder", "%1 folders", fm.folderCount));
+        if (fm.fileCount) parts.push(I18n.trn("%1 file", "%1 files", fm.fileCount));
+        return parts.length ? parts.join(", ") : I18n.tr("Empty");
+    }
+    function selectionText() {
+        let s = I18n.trn("%1 item selected", "%1 items selected", fm.selectionCount);
+        if (fm.selectionSize !== "")
+            s += ", " + (fm.selectionHasFolders ? I18n.tr("%1 in files", fm.selectionSize) : fm.selectionSize);
+        return s;
+    }
+
     // ── Navigation ───────────────────────────────────────────────────────────
     function navigateTo(path) {
         if (!path || path === currentPath) return;
@@ -156,18 +206,22 @@ C.ApplicationWindow {
         const t = targets();
         if (t.length === 0) return;
         FilesBackend.copyFiles(t, cut);
-        note((cut ? "Cut " : "Copied ") + (t.length === 1 ? t[0].split("/").pop() : t.length + " items")
-             + " — paste with Ctrl+V");
+        note(t.length === 1
+             ? I18n.tr(cut ? "Cut %1 — paste with Ctrl+V" : "Copied %1 — paste with Ctrl+V", t[0].split("/").pop())
+             : cut ? I18n.trn("Cut %1 item — paste with Ctrl+V", "Cut %1 items — paste with Ctrl+V", t.length)
+                   : I18n.trn("Copied %1 item — paste with Ctrl+V", "Copied %1 items — paste with Ctrl+V", t.length));
     }
     function trashSelection() {
         const t = targets();
         if (t.length === 0) return;
         if (FilesBackend.inTrash) { confirmDelete.ask(t); return; }
         if (FilesBackend.trashItems(t))
-            note((t.length === 1 ? "Moved " + t[0].split("/").pop() + " to the trash" : "Moved " + t.length + " items to the trash")
-                 + " · Ctrl+Z undoes it");
+            note(t.length === 1 ? I18n.tr("Moved %1 to the trash · Ctrl+Z undoes it", t[0].split("/").pop())
+                                : I18n.trn("Moved %1 item to the trash · Ctrl+Z undoes it", "Moved %1 items to the trash · Ctrl+Z undoes it", t.length));
     }
     function renameSelection() {
+        const t = targets();
+        if (t.length > 1) { batchDialog.ask(t); return; }
         const it = single();
         if (it) askName("rename", it.path, it.name);
     }
@@ -228,20 +282,20 @@ C.ApplicationWindow {
         const v = String(text || "").trim();
         if (v === "") return;
         const mode = nameDialog.mode;
-        if (mode !== "goto" && v.indexOf("/") >= 0) { note("A name cannot contain /"); return; }
+        if (mode !== "goto" && v.indexOf("/") >= 0) { note(I18n.tr("A name cannot contain /")); return; }
         if (mode === "rename") {
-            if (!FilesBackend.renameItem(nameDialog.target, v)) { note("Could not rename to " + v); return; }
+            if (!FilesBackend.renameItem(nameDialog.target, v)) { note(I18n.tr("Could not rename to %1", v)); return; }
             fm.selectPaths([window.parentOf(nameDialog.target) + "/" + v]);
         } else if (mode === "newfolder") {
-            if (!FilesBackend.createFolder(v)) { note("Could not create " + v); return; }
+            if (!FilesBackend.createFolder(v)) { note(I18n.tr("Could not create %1", v)); return; }
             fm.selectPaths([currentPath.replace(/\/$/, "") + "/" + v]);
         } else if (mode === "newfile") {
-            if (!FilesBackend.createFile(v)) { note("Could not create " + v); return; }
+            if (!FilesBackend.createFile(v)) { note(I18n.tr("Could not create %1", v)); return; }
             fm.selectPaths([currentPath.replace(/\/$/, "") + "/" + v]);
         } else if (mode === "goto") {
             const path = v.startsWith("~") ? homeDir + v.substring(1) : v;
             FilesBackend.currentPath = path;
-            if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/") note("No folder at " + v);
+            if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/") note(I18n.tr("No folder at %1", v));
         }
         nameDialog.close();
         currentView().forceActiveFocus();
@@ -259,7 +313,7 @@ C.ApplicationWindow {
         copy.push({ name: path.split("/").pop() || path, path: path });
         bookmarks = copy;
         FilesBackend.saveBookmarks(copy);
-        note("Bookmarked " + (path.split("/").pop() || path));
+        note(I18n.tr("Bookmarked %1", path.split("/").pop() || path));
     }
     function removeBookmark(index) {
         const copy = Array.from(bookmarks);
@@ -299,7 +353,7 @@ C.ApplicationWindow {
     Shortcut { sequence: "Delete"; onActivated: window.trashSelection() }
     Shortcut { sequence: "Shift+Delete"; onActivated: { const t = window.targets(); if (t.length) confirmDelete.ask(t); } }
     Shortcut { sequence: "F2"; onActivated: window.renameSelection() }
-    Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", "New Folder") }
+    Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", I18n.tr("New Folder")) }
     Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPath) }
     Shortcut { sequence: "Ctrl+F"; onActivated: searchField.focusInput() }
     Shortcut { sequence: "Ctrl+H"; onActivated: FilesBackend.showHidden = !FilesBackend.showHidden }
@@ -308,8 +362,14 @@ C.ApplicationWindow {
     Shortcut { sequence: "Ctrl+2"; onActivated: window.viewMode = "list" }
     Shortcut { sequences: ["Ctrl+=", "Ctrl++"]; onActivated: window.iconSize = Math.min(176, window.iconSize + 16) }
     Shortcut { sequence: "Ctrl+-"; onActivated: window.iconSize = Math.max(56, window.iconSize - 16) }
-    Shortcut { sequence: "Ctrl+T"; onActivated: FilesBackend.openTerminal(window.currentPath) }
-    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: { const t = window.targets(); FilesBackend.copyText(t.length ? t.join("\n") : window.currentPath); window.note("Path copied"); } }
+    // Ctrl+T is a new tab, as in every browser and file manager; the
+    // terminal moved to F4, where Dolphin has it.
+    Shortcut { sequence: "Ctrl+T"; onActivated: window.newTab("") }
+    Shortcut { sequence: "Ctrl+W"; onActivated: window.closeTab(window.tabIndex) }
+    Shortcut { sequence: "Ctrl+Tab"; onActivated: window.switchTab((window.tabIndex + 1) % window.tabs.length) }
+    Shortcut { sequence: "Ctrl+Shift+Tab"; onActivated: window.switchTab((window.tabIndex + window.tabs.length - 1) % window.tabs.length) }
+    Shortcut { sequence: "F4"; onActivated: FilesBackend.openTerminal(window.currentPath) }
+    Shortcut { sequence: "Ctrl+Shift+C"; onActivated: { const t = window.targets(); FilesBackend.copyText(t.length ? t.join("\n") : window.currentPath); window.note(I18n.tr("Path copied")); } }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.addBookmark(window.currentPath) }
     Shortcut { sequence: "F5"; onActivated: FilesBackend.refresh() }
     Shortcut { sequence: "Space"; onActivated: { const it = window.single(); if (it && !it.isDir) FilesBackend.triggerQuickLook(it.path); } }
@@ -349,16 +409,16 @@ C.ApplicationWindow {
                     width: parent.width
                     spacing: Design.s(2)
 
-                    SideHeading { text: "Places" }
-                    SideRow { label: "Home"; glyph: "\u{f02dc}"; path: window.homeDir }
+                    SideHeading { text: I18n.tr("Places") }
+                    SideRow { label: I18n.tr("Home"); glyph: "\u{f02dc}"; path: window.homeDir }
                     Repeater {
                         model: [
-                            { label: "Desktop",   glyph: "\u{f01c4}", sub: "Desktop" },
-                            { label: "Documents", glyph: "\u{f0219}", sub: "Documents" },
-                            { label: "Downloads", glyph: "\u{f01da}", sub: "Downloads" },
-                            { label: "Pictures",  glyph: "\u{f02e9}", sub: "Pictures" },
-                            { label: "Music",     glyph: "\u{f075a}", sub: "Music" },
-                            { label: "Videos",    glyph: "\u{f0567}", sub: "Videos" }
+                            { label: I18n.tr("Desktop"),   glyph: "\u{f01c4}", sub: "Desktop" },
+                            { label: I18n.tr("Documents"), glyph: "\u{f0219}", sub: "Documents" },
+                            { label: I18n.tr("Downloads"), glyph: "\u{f01da}", sub: "Downloads" },
+                            { label: I18n.tr("Pictures"),  glyph: "\u{f02e9}", sub: "Pictures" },
+                            { label: I18n.tr("Music"),     glyph: "\u{f075a}", sub: "Music" },
+                            { label: I18n.tr("Videos"),    glyph: "\u{f0567}", sub: "Videos" }
                         ]
                         delegate: SideRow {
                             required property var modelData
@@ -369,14 +429,14 @@ C.ApplicationWindow {
                         }
                     }
                     SideRow {
-                        label: "Trash"
+                        label: I18n.tr("Trash")
                         glyph: FilesBackend.trashCount > 0 ? "\u{f0a7a}" : "\u{f0a79}"
                         path: FilesBackend.trashPath
                         badge: FilesBackend.trashCount > 0 ? String(FilesBackend.trashCount) : ""
                     }
 
-                    SideHeading { text: "Devices" }
-                    SideRow { label: "File System"; glyph: "\u{f02ca}"; path: "/"; detail: FilesBackend.diskFreeSpace }
+                    SideHeading { text: I18n.tr("Devices") }
+                    SideRow { label: I18n.tr("File System"); glyph: "\u{f02ca}"; path: "/"; detail: I18n.tr("%1 free", FilesBackend.diskFreeSpace) }
                     Repeater {
                         model: FilesBackend.volumes
                         delegate: SideRow {
@@ -384,16 +444,16 @@ C.ApplicationWindow {
                             label: modelData.name
                             glyph: "\u{f02cb}"
                             path: modelData.path
-                            detail: modelData.free
+                            detail: I18n.tr("%1 free", modelData.free)
                             ejectable: true
                             onEject: FilesBackend.unmount(modelData.path)
                         }
                     }
 
                     SideHeading {
-                        text: "Bookmarks"
+                        text: I18n.tr("Bookmarks")
                         action: "\u{f0415}"
-                        actionTip: "Bookmark this folder (Ctrl+D)"
+                        actionTip: I18n.tr("Bookmark this folder (Ctrl+D)")
                         onActionClicked: window.addBookmark(window.currentPath)
                     }
                     Repeater {
@@ -413,7 +473,7 @@ C.ApplicationWindow {
                         Layout.leftMargin: Design.s(Design.space.sm)
                         Layout.rightMargin: Design.s(Design.space.sm)
                         Layout.fillWidth: true
-                        text: "Drag a folder here, or press Ctrl+D"
+                        text: I18n.tr("Drag a folder here, or press Ctrl+D")
                         role: "caption"
                         color: Design.textFaint
                         wrapMode: Text.WordWrap
@@ -456,11 +516,11 @@ C.ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
-                        Label { text: "Choose a folder"; role: "caption"; dim: true }
+                        Label { text: I18n.tr("Choose a folder"); role: "caption"; dim: true }
                         Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
                     }
-                    BarButton { label: "Cancel"; onClicked: FilesBackend.cancelPick() }
-                    BarButton { label: "Choose this folder"; primary: true; onClicked: FilesBackend.confirmPick() }
+                    BarButton { label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
+                    BarButton { label: I18n.tr("Choose this folder"); primary: true; onClicked: FilesBackend.confirmPick() }
                 }
             }
 
@@ -469,9 +529,9 @@ C.ApplicationWindow {
                 Layout.fillWidth: true
 
                     BarGroup {
-                        BarButton { glyph: "\u{f004d}"; tip: "Back (Alt+←)"; enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                        BarButton { glyph: "\u{f0054}"; tip: "Forward (Alt+→)"; enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                        BarButton { glyph: "\u{f005d}"; tip: "Up (Alt+↑)"; enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                        BarButton { glyph: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                        BarButton { glyph: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                        BarButton { glyph: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
                     }
 
                     // Path: clickable segments; a click on the empty part of the
@@ -500,7 +560,7 @@ C.ApplicationWindow {
                             orientation: ListView.Horizontal
                             interactive: false
                             spacing: 0
-                            model: FilesBackend.inTrash ? [{ name: "Trash", path: FilesBackend.trashPath }] : FilesBackend.breadcrumbs
+                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : FilesBackend.breadcrumbs
                             // Always the end of the path in view: the folder
                             // you are in, not the root you came from.
                             onCountChanged: Qt.callLater(positionViewAtEnd)
@@ -528,7 +588,7 @@ C.ApplicationWindow {
                                     Text {
                                         id: crumbText
                                         anchors.centerIn: parent
-                                        text: modelData.name === "~" ? "Home" : modelData.name
+                                        text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.body)
                                         font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
@@ -561,7 +621,7 @@ C.ApplicationWindow {
                         Layout.preferredHeight: Design.s(36)
                         radius: height / 2
                         color: Design.raised
-                        placeholder: "Search (Ctrl+F)"
+                        placeholder: I18n.tr("Search (Ctrl+F)")
                         onEdited: value => FilesBackend.filterQuery = value
                         onAccepted: window.currentView().forceActiveFocus()
                     }
@@ -569,23 +629,54 @@ C.ApplicationWindow {
                     BarButton {
                         visible: FilesBackend.inTrash
                         glyph: "\u{f0a7a}"
-                        label: "Empty Trash"
+                        label: I18n.tr("Empty Trash")
                         danger: true
                         enabled: FilesBackend.trashCount > 0
                         onClicked: confirmEmpty.open()
                     }
                     BarGroup {
                         visible: !FilesBackend.inTrash
-                        BarButton { glyph: "\u{f0b9d}"; tip: "New folder (Ctrl+Shift+N)"; onClicked: window.askName("newfolder", "", "New Folder") }
+                        BarButton { glyph: "\u{f0b9d}"; tip: I18n.tr("New folder (Ctrl+Shift+N)"); onClicked: window.askName("newfolder", "", I18n.tr("New Folder")) }
                     }
                     BarGroup {
-                        BarButton { glyph: "\u{f0570}"; tip: "Icons (Ctrl+1)"; checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
-                        BarButton { glyph: "\u{f0279}"; tip: "List (Ctrl+2)"; checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
+                        BarButton { glyph: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
+                        BarButton { glyph: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
                     }
                     BarGroup {
-                        BarButton { glyph: "\u{f02fd}"; tip: "Details panel (Ctrl+I)"; checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                        BarButton { glyph: "\u{f01d9}"; tip: "View options"; onClicked: viewMenu.popup() }
+                        BarButton { glyph: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                        BarButton { glyph: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
                     }
+            }
+
+            // ── Tabs ─────────────────────────────────────────────────────────
+            Flickable {
+                visible: window.tabs.length > 1
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(36)
+                Layout.leftMargin: Design.s(Design.space.md)
+                Layout.rightMargin: Design.s(Design.space.md)
+                contentWidth: tabRow.implicitWidth
+                clip: true
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                RowLayout {
+                    id: tabRow
+                    height: parent.height
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: window.tabs
+                        delegate: AppTab {
+                            required property var modelData
+                            required property int index
+                            glyph: modelData === FilesBackend.trashPath ? "\u{f0a7a}" : "\u{f024b}"
+                            label: window.tabTitle(modelData)
+                            active: index === window.tabIndex
+                            onClicked: window.switchTab(index)
+                            onCloseRequested: window.closeTab(index)
+                        }
+                    }
+                    BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
+                }
             }
 
             // ── Content ──────────────────────────────────────────────────────
@@ -717,7 +808,7 @@ C.ApplicationWindow {
                             id: tileMa
                             anchors.fill: parent
                             hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                             drag.target: tileProxy
                             drag.threshold: Design.s(10)
                             onPressed: mouse => window.itemPressed(tile.index, mouse)
@@ -750,10 +841,10 @@ C.ApplicationWindow {
                             anchors.leftMargin: Design.s(Design.space.lg)
                             anchors.rightMargin: Design.s(Design.space.lg)
                             spacing: Design.s(Design.space.md)
-                            ColumnHead { Layout.fillWidth: true; label: "Name"; field: "name" }
-                            ColumnHead { Layout.preferredWidth: Design.s(110); label: "Size"; field: "size"; alignRight: true }
-                            ColumnHead { Layout.preferredWidth: Design.s(170); label: "Kind"; field: "type" }
-                            ColumnHead { Layout.preferredWidth: Design.s(150); label: "Modified"; field: "time" }
+                            ColumnHead { Layout.fillWidth: true; label: I18n.tr("Name"); field: "name" }
+                            ColumnHead { Layout.preferredWidth: Design.s(110); label: I18n.tr("Size"); field: "size"; alignRight: true }
+                            ColumnHead { Layout.preferredWidth: Design.s(170); label: I18n.tr("Kind"); field: "type" }
+                            ColumnHead { Layout.preferredWidth: Design.s(150); label: I18n.tr("Modified"); field: "time" }
                         }
                     }
 
@@ -815,7 +906,7 @@ C.ApplicationWindow {
                                         Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
                                     }
                                     Label { Layout.preferredWidth: Design.s(110); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
-                                    Label { Layout.preferredWidth: Design.s(170); text: row.kind; dim: true; elide: Text.ElideRight }
+                                    Label { Layout.preferredWidth: Design.s(170); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
                                     Label { Layout.preferredWidth: Design.s(150); text: row.modifiedText; dim: true; elide: Text.ElideRight }
                                 }
                             }
@@ -826,7 +917,7 @@ C.ApplicationWindow {
                                 id: rowMa
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                                 drag.target: rowProxy
                                 drag.threshold: Design.s(10)
                                 onPressed: mouse => window.itemPressed(row.index, mouse)
@@ -863,9 +954,9 @@ C.ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                         role: "subhead"
                         weight: Design.weight.semibold
-                        text: fm.error ? "Can't open this folder"
-                            : FilesBackend.filterQuery ? "Nothing matches “" + FilesBackend.filterQuery + "”"
-                            : FilesBackend.inTrash ? "Trash is empty" : "This folder is empty"
+                        text: fm.error ? I18n.tr("Can't open this folder")
+                            : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
+                            : FilesBackend.inTrash ? I18n.tr("Trash is empty") : I18n.tr("This folder is empty")
                     }
                     Label {
                         Layout.fillWidth: true
@@ -873,9 +964,9 @@ C.ApplicationWindow {
                         wrapMode: Text.WordWrap
                         dim: true
                         text: fm.error ? fm.error
-                            : FilesBackend.filterQuery ? "Search looks at names in this folder only."
-                            : FilesBackend.inTrash ? "Things you delete wait here until you empty it."
-                            : "Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N."
+                            : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
+                            : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
+                            : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
                     }
                 }
             }
@@ -889,16 +980,16 @@ C.ApplicationWindow {
                     elide: Text.ElideRight
                     color: window.statusNote ? Design.accent : Design.textDim
                     text: window.statusNote
-                          || (FilesBackend.busy ? "Copying…"
-                          : fm.selectionCount > 0 ? fm.selectionSummary : fm.summary)
+                          || (FilesBackend.busy ? I18n.tr("Copying…")
+                          : fm.selectionCount > 0 ? window.selectionText() : window.folderSummary())
                 }
-                Label { role: "caption"; color: Design.textFaint; text: FilesBackend.diskFreeSpace; visible: !FilesBackend.inTrash }
+                Label { role: "caption"; color: Design.textFaint; text: I18n.tr("%1 free", FilesBackend.diskFreeSpace); visible: !FilesBackend.inTrash }
                 // Icon size, for the icon view.
                 RowLayout {
                     visible: window.viewMode === "grid"
                     spacing: Design.s(Design.space.xs)
-                    BarButton { glyph: "\u{f0374}"; small: true; tip: "Smaller (Ctrl+−)"; onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
-                    BarButton { glyph: "\u{f0415}"; small: true; tip: "Larger (Ctrl+=)"; onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
+                    BarButton { glyph: "\u{f0374}"; small: true; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                    BarButton { glyph: "\u{f0415}"; small: true; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                 }
             }
         }
@@ -931,7 +1022,7 @@ C.ApplicationWindow {
                 target: FilesBackend
                 function onFolderSizeReady(path, text, files) {
                     if (path === infoPanel.subject)
-                        infoPanel.folderSize = text + " in " + files + (files === 1 ? " file" : " files");
+                        infoPanel.folderSize = I18n.trn("%2 in %1 file", "%2 in %1 files", files, text);
                 }
             }
 
@@ -957,8 +1048,8 @@ C.ApplicationWindow {
                             font.pixelSize: Design.s(72)
                             color: Design.accent
                         }
-                        Label { Layout.alignment: Qt.AlignHCenter; role: "subhead"; weight: Design.weight.semibold; text: fm.selectionCount + " items" }
-                        Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; dim: true; text: fm.selectionSummary }
+                        Label { Layout.alignment: Qt.AlignHCenter; role: "subhead"; weight: Design.weight.semibold; text: I18n.trn("%1 item", "%1 items", fm.selectionCount) }
+                        Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; dim: true; text: window.selectionText() }
                     }
 
                     // One item, or the folder.
@@ -993,25 +1084,25 @@ C.ApplicationWindow {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: infoPanel.subject === window.currentPath && infoPanel.subject === window.homeDir ? "Home" : (infoPanel.info.name || "")
+                            text: infoPanel.subject === window.currentPath && infoPanel.subject === window.homeDir ? I18n.tr("Home") : (infoPanel.info.name || "")
                             role: "subhead"
                             weight: Design.weight.semibold
                             wrapMode: Text.WrapAnywhere
                             maximumLineCount: 3
                             elide: Text.ElideRight
                         }
-                        Label { text: infoPanel.info.kind || ""; dim: true; Layout.topMargin: -Design.s(Design.space.sm) }
+                        Label { text: I18n.tr(infoPanel.info.kind || ""); dim: true; Layout.topMargin: -Design.s(Design.space.sm) }
 
                         Rectangle { Layout.fillWidth: true; height: 1; color: Design.line }
 
-                        InfoRow { label: "Size"; value: infoPanel.info.isDir ? (infoPanel.folderSize || infoPanel.info.sizeText) : (infoPanel.info.sizeText || "") }
-                        InfoRow { label: "Contains"; value: infoPanel.info.isDir ? infoPanel.info.items + (infoPanel.info.items === 1 ? " item" : " items") : "" }
-                        InfoRow { label: "Modified"; value: infoPanel.info.modified || "" }
-                        InfoRow { label: "Created"; value: infoPanel.info.created || "" }
-                        InfoRow { label: "Where"; value: infoPanel.info.location || ""; mono: true }
-                        InfoRow { label: "Links to"; value: infoPanel.info.symlinkTarget || ""; mono: true }
-                        InfoRow { label: "Access"; value: infoPanel.info.permissions ? infoPanel.info.permissions + (infoPanel.info.writable ? "" : "  (read-only for you)") : ""; mono: true }
-                        InfoRow { label: "Owner"; value: infoPanel.info.owner || "" }
+                        InfoRow { label: I18n.tr("Size"); value: infoPanel.info.isDir ? (infoPanel.folderSize || infoPanel.info.sizeText) : (infoPanel.info.sizeText || "") }
+                        InfoRow { label: I18n.tr("Contains"); value: infoPanel.info.isDir ? I18n.trn("%1 item", "%1 items", infoPanel.info.items) : "" }
+                        InfoRow { label: I18n.tr("Modified"); value: infoPanel.info.modified || "" }
+                        InfoRow { label: I18n.tr("Created"); value: infoPanel.info.created || "" }
+                        InfoRow { label: I18n.tr("Where"); value: infoPanel.info.location || ""; mono: true }
+                        InfoRow { label: I18n.tr("Links to"); value: infoPanel.info.symlinkTarget || ""; mono: true }
+                        InfoRow { label: I18n.tr("Access"); value: infoPanel.info.permissions ? infoPanel.info.permissions + (infoPanel.info.writable ? "" : "  " + I18n.tr("(read-only for you)")) : ""; mono: true }
+                        InfoRow { label: I18n.tr("Owner"); value: infoPanel.info.owner || "" }
                     }
                 }
             }
@@ -1025,6 +1116,12 @@ C.ApplicationWindow {
     // the whole selection, so the narrowing to one item waits for a release
     // that was not a drag.
     function itemPressed(row, mouse) {
+        // Middle click on a folder: a new tab there, as in a browser.
+        if (mouse.button === Qt.MiddleButton) {
+            const it = fm.get(row);
+            if (it.isDir) window.newTab(it.path);
+            return;
+        }
         currentView().forceActiveFocus();
         if (mouse.button === Qt.RightButton) {
             if (!fm.isSelected(row)) fm.select(row, 0);
@@ -1056,10 +1153,10 @@ C.ApplicationWindow {
         readonly property bool one: paths.length === 1
         readonly property bool trash: FilesBackend.inTrash
 
-        AppMenuItem { text: itemMenu.one && !!itemMenu.first.isDir ? "Open" : (itemMenu.one ? "Open" : "Open " + itemMenu.paths.length + " items"); glyph: "\u{f0770}"; keys: "Enter"; enabled: !itemMenu.trash; onTriggered: window.openSelection() }
+        AppMenuItem { text: itemMenu.one ? I18n.tr("Open") : I18n.trn("Open %1 item", "Open %1 items", itemMenu.paths.length); glyph: "\u{f0770}"; keys: "Enter"; enabled: !itemMenu.trash; onTriggered: window.openSelection() }
         AppMenu {
             id: openWithMenu
-            title: "Open With"
+            title: I18n.tr("Open With")
             enabled: itemMenu.apps.length > 1 && !itemMenu.trash
             Instantiator {
                 model: itemMenu.apps
@@ -1072,56 +1169,57 @@ C.ApplicationWindow {
                 onObjectRemoved: (i, o) => openWithMenu.removeItem(o)
             }
         }
-        AppMenuItem { text: "Quick Look"; glyph: "\u{f0208}"; keys: "Space"; enabled: itemMenu.one && !!!itemMenu.first.isDir && !itemMenu.trash; onTriggered: FilesBackend.triggerQuickLook(itemMenu.paths[0]) }
-        AppMenuItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; enabled: itemMenu.one && !itemMenu.trash; onTriggered: FilesBackend.openTerminal(!!itemMenu.first.isDir ? itemMenu.paths[0] : window.parentOf(itemMenu.paths[0])) }
+        AppMenuItem { text: I18n.tr("Open in New Tab"); glyph: "\u{f0415}"; keys: "Middle click"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.newTab(itemMenu.paths[0]) }
+        AppMenuItem { text: I18n.tr("Quick Look"); glyph: "\u{f0208}"; keys: "Space"; enabled: itemMenu.one && !!!itemMenu.first.isDir && !itemMenu.trash; onTriggered: FilesBackend.triggerQuickLook(itemMenu.paths[0]) }
+        AppMenuItem { text: I18n.tr("Open Terminal Here"); glyph: "\u{f018d}"; enabled: itemMenu.one && !itemMenu.trash; onTriggered: FilesBackend.openTerminal(!!itemMenu.first.isDir ? itemMenu.paths[0] : window.parentOf(itemMenu.paths[0])) }
         AppMenuSeparator { visible: !itemMenu.trash; height: visible ? implicitHeight : 0 }
-        AppMenuItem { text: "Restore"; glyph: "\u{f0450}"; enabled: itemMenu.trash; onTriggered: FilesBackend.restoreFromTrash(itemMenu.paths) }
-        AppMenuItem { text: "Cut"; glyph: "\u{f0190}"; keys: "Ctrl+X"; enabled: !itemMenu.trash; onTriggered: window.copySelection(true) }
-        AppMenuItem { text: "Copy"; glyph: "\u{f018f}"; keys: "Ctrl+C"; onTriggered: window.copySelection(false) }
-        AppMenuItem { text: "Paste Into Folder"; glyph: "\u{f0192}"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash && FilesBackend.clipboardHasFiles(); onTriggered: { window.navigateTo(itemMenu.paths[0]); FilesBackend.paste(); } }
-        AppMenuItem { text: "Rename…"; glyph: "\u{f03eb}"; keys: "F2"; enabled: itemMenu.one && !itemMenu.trash; onTriggered: window.renameSelection() }
+        AppMenuItem { text: I18n.tr("Restore"); glyph: "\u{f0450}"; enabled: itemMenu.trash; onTriggered: FilesBackend.restoreFromTrash(itemMenu.paths) }
+        AppMenuItem { text: I18n.tr("Cut"); glyph: "\u{f0190}"; keys: "Ctrl+X"; enabled: !itemMenu.trash; onTriggered: window.copySelection(true) }
+        AppMenuItem { text: I18n.tr("Copy"); glyph: "\u{f018f}"; keys: "Ctrl+C"; onTriggered: window.copySelection(false) }
+        AppMenuItem { text: I18n.tr("Paste Into Folder"); glyph: "\u{f0192}"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash && FilesBackend.clipboardHasFiles(); onTriggered: { window.navigateTo(itemMenu.paths[0]); FilesBackend.paste(); } }
+        AppMenuItem { text: itemMenu.one ? I18n.tr("Rename…") : I18n.trn("Rename %1 Item…", "Rename %1 Items…", itemMenu.paths.length); glyph: "\u{f03eb}"; keys: "F2"; enabled: !itemMenu.trash; onTriggered: window.renameSelection() }
         AppMenuSeparator {}
-        AppMenuItem { text: "Extract Here"; glyph: "\u{f05c4}"; enabled: itemMenu.one && itemMenu.first.category === "archive" && !itemMenu.trash
-                      onTriggered: window.note(FilesBackend.extractArchive(itemMenu.paths[0]) ? "Extracted " + itemMenu.first.name : "Could not extract " + itemMenu.first.name) }
-        AppMenuItem { text: itemMenu.one ? "Compress…" : "Compress " + itemMenu.paths.length + " Items…"; glyph: "\u{f05c4}"
+        AppMenuItem { text: I18n.tr("Extract Here"); glyph: "\u{f05c4}"; enabled: itemMenu.one && itemMenu.first.category === "archive" && !itemMenu.trash
+                      onTriggered: window.note(FilesBackend.extractArchive(itemMenu.paths[0]) ? I18n.tr("Extracted %1", itemMenu.first.name) : I18n.tr("Could not extract %1", itemMenu.first.name)) }
+        AppMenuItem { text: itemMenu.one ? I18n.tr("Compress…") : I18n.trn("Compress %1 Item…", "Compress %1 Items…", itemMenu.paths.length); glyph: "\u{f05c4}"
                       enabled: !itemMenu.trash && !FilesBackend.busy; onTriggered: compressDialog.ask(itemMenu.paths, itemMenu.first) }
-        AppMenuItem { text: "Set as Wallpaper"; glyph: "\u{f02e9}"; enabled: itemMenu.one && itemMenu.first.category === "image" && !itemMenu.trash
-                      onTriggered: { FilesBackend.setWallpaper(itemMenu.paths[0]); window.note("Wallpaper set"); } }
-        AppMenuItem { text: "Add to Bookmarks"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.addBookmark(itemMenu.paths[0]) }
-        AppMenuItem { text: "Copy Path"; glyph: "\u{f0219}"; keys: "Ctrl+Shift+C"; onTriggered: { FilesBackend.copyText(itemMenu.paths.join("\n")); window.note("Path copied"); } }
-        AppMenuItem { text: "Properties"; glyph: "\u{f02fd}"; keys: "Ctrl+I"; onTriggered: window.showInfo = true }
+        AppMenuItem { text: I18n.tr("Set as Wallpaper"); glyph: "\u{f02e9}"; enabled: itemMenu.one && itemMenu.first.category === "image" && !itemMenu.trash
+                      onTriggered: { FilesBackend.setWallpaper(itemMenu.paths[0]); window.note(I18n.tr("Wallpaper set")); } }
+        AppMenuItem { text: I18n.tr("Add to Bookmarks"); glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.addBookmark(itemMenu.paths[0]) }
+        AppMenuItem { text: I18n.tr("Copy Path"); glyph: "\u{f0219}"; keys: "Ctrl+Shift+C"; onTriggered: { FilesBackend.copyText(itemMenu.paths.join("\n")); window.note(I18n.tr("Path copied")); } }
+        AppMenuItem { text: I18n.tr("Properties"); glyph: "\u{f02fd}"; keys: "Ctrl+I"; onTriggered: window.showInfo = true }
         AppMenuSeparator {}
-        AppMenuItem { text: "Move to Trash"; glyph: "\u{f0a7a}"; keys: "Del"; tone: Design.danger; enabled: !itemMenu.trash; onTriggered: window.trashSelection() }
-        AppMenuItem { text: "Delete Permanently…"; glyph: "\u{f05e8}"; keys: itemMenu.trash ? "Del" : "Shift+Del"; tone: Design.danger; onTriggered: confirmDelete.ask(itemMenu.paths) }
+        AppMenuItem { text: I18n.tr("Move to Trash"); glyph: "\u{f0a7a}"; keys: "Del"; tone: Design.danger; enabled: !itemMenu.trash; onTriggered: window.trashSelection() }
+        AppMenuItem { text: I18n.tr("Delete Permanently…"); glyph: "\u{f05e8}"; keys: itemMenu.trash ? "Del" : "Shift+Del"; tone: Design.danger; onTriggered: confirmDelete.ask(itemMenu.paths) }
     }
 
     AppMenu {
         id: bgMenu
-        AppMenuItem { text: "Undo " + FilesBackend.undoLabel; glyph: "\u{f054c}"; keys: "Ctrl+Z"; enabled: FilesBackend.undoLabel !== ""; onTriggered: FilesBackend.undo() }
-        AppMenuItem { text: "Paste"; glyph: "\u{f0192}"; keys: "Ctrl+V"; enabled: !FilesBackend.inTrash && FilesBackend.clipboardHasFiles() && !FilesBackend.busy; onTriggered: FilesBackend.paste() }
-        AppMenuItem { text: "New Folder…"; glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfolder", "", "New Folder") }
-        AppMenuItem { text: "New File…"; glyph: "\u{f0224}"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfile", "", "New File.txt") }
-        AppMenuItem { text: "Select All"; glyph: "\u{f0486}"; keys: "Ctrl+A"; enabled: fm.count > 0; onTriggered: fm.selectAll() }
-        AppMenuItem { text: "Empty Trash…"; glyph: "\u{f0a7a}"; tone: Design.danger; enabled: FilesBackend.inTrash && FilesBackend.trashCount > 0; onTriggered: confirmEmpty.open() }
-        AppMenuItem { text: "Delete Items After 30 Days"; checkable: true; checked: window.trashPurgeDays > 0; enabled: FilesBackend.inTrash
+        AppMenuItem { text: I18n.tr("Undo %1", FilesBackend.undoLabel); glyph: "\u{f054c}"; keys: "Ctrl+Z"; enabled: FilesBackend.undoLabel !== ""; onTriggered: FilesBackend.undo() }
+        AppMenuItem { text: I18n.tr("Paste"); glyph: "\u{f0192}"; keys: "Ctrl+V"; enabled: !FilesBackend.inTrash && FilesBackend.clipboardHasFiles() && !FilesBackend.busy; onTriggered: FilesBackend.paste() }
+        AppMenuItem { text: I18n.tr("New Folder…"); glyph: "\u{f0b9d}"; keys: "Ctrl+Shift+N"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfolder", "", I18n.tr("New Folder")) }
+        AppMenuItem { text: I18n.tr("New File…"); glyph: "\u{f0224}"; enabled: !FilesBackend.inTrash; onTriggered: window.askName("newfile", "", I18n.tr("New File") + ".txt") }
+        AppMenuItem { text: I18n.tr("Select All"); glyph: "\u{f0486}"; keys: "Ctrl+A"; enabled: fm.count > 0; onTriggered: fm.selectAll() }
+        AppMenuItem { text: I18n.tr("Empty Trash…"); glyph: "\u{f0a7a}"; tone: Design.danger; enabled: FilesBackend.inTrash && FilesBackend.trashCount > 0; onTriggered: confirmEmpty.open() }
+        AppMenuItem { text: I18n.tr("Delete Items After 30 Days"); checkable: true; checked: window.trashPurgeDays > 0; enabled: FilesBackend.inTrash
                       onTriggered: window.trashPurgeDays = window.trashPurgeDays > 0 ? 0 : 30 }
         AppMenuSeparator {}
-        AppMenuItem { text: "Open Terminal Here"; glyph: "\u{f018d}"; keys: "Ctrl+T"; enabled: !FilesBackend.inTrash; onTriggered: FilesBackend.openTerminal(window.currentPath) }
-        AppMenuItem { text: "Bookmark This Folder"; glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: !FilesBackend.inTrash; onTriggered: window.addBookmark(window.currentPath) }
-        AppMenuItem { text: "Copy Folder Path"; glyph: "\u{f0219}"; onTriggered: { FilesBackend.copyText(window.currentPath); window.note("Path copied"); } }
-        AppMenuItem { text: "Refresh"; glyph: "\u{f0450}"; keys: "F5"; onTriggered: FilesBackend.refresh() }
+        AppMenuItem { text: I18n.tr("Open Terminal Here"); glyph: "\u{f018d}"; keys: "F4"; enabled: !FilesBackend.inTrash; onTriggered: FilesBackend.openTerminal(window.currentPath) }
+        AppMenuItem { text: I18n.tr("Bookmark This Folder"); glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: !FilesBackend.inTrash; onTriggered: window.addBookmark(window.currentPath) }
+        AppMenuItem { text: I18n.tr("Copy Folder Path"); glyph: "\u{f0219}"; onTriggered: { FilesBackend.copyText(window.currentPath); window.note(I18n.tr("Path copied")); } }
+        AppMenuItem { text: I18n.tr("Refresh"); glyph: "\u{f0450}"; keys: "F5"; onTriggered: FilesBackend.refresh() }
     }
 
     AppMenu {
         id: viewMenu
-        AppMenuItem { text: "Show Hidden Files"; checkable: true; checked: FilesBackend.showHidden; keys: "Ctrl+H"; onTriggered: FilesBackend.showHidden = !FilesBackend.showHidden }
-        AppMenuItem { text: "Folders First"; checkable: true; checked: FilesBackend.dirsFirst; onTriggered: FilesBackend.dirsFirst = !FilesBackend.dirsFirst }
+        AppMenuItem { text: I18n.tr("Show Hidden Files"); checkable: true; checked: FilesBackend.showHidden; keys: "Ctrl+H"; onTriggered: FilesBackend.showHidden = !FilesBackend.showHidden }
+        AppMenuItem { text: I18n.tr("Folders First"); checkable: true; checked: FilesBackend.dirsFirst; onTriggered: FilesBackend.dirsFirst = !FilesBackend.dirsFirst }
         AppMenuSeparator {}
-        AppMenuItem { text: "Sort by Name"; checkable: true; checked: FilesBackend.sortField === "name"; onTriggered: FilesBackend.sortField = "name" }
-        AppMenuItem { text: "Sort by Size"; checkable: true; checked: FilesBackend.sortField === "size"; onTriggered: FilesBackend.sortField = "size" }
-        AppMenuItem { text: "Sort by Kind"; checkable: true; checked: FilesBackend.sortField === "type"; onTriggered: FilesBackend.sortField = "type" }
-        AppMenuItem { text: "Sort by Date Modified"; checkable: true; checked: FilesBackend.sortField === "time"; onTriggered: FilesBackend.sortField = "time" }
-        AppMenuItem { text: "Reverse Order"; checkable: true; checked: !FilesBackend.sortAscending; onTriggered: FilesBackend.sortAscending = !FilesBackend.sortAscending }
+        AppMenuItem { text: I18n.tr("Sort by Name"); checkable: true; checked: FilesBackend.sortField === "name"; onTriggered: FilesBackend.sortField = "name" }
+        AppMenuItem { text: I18n.tr("Sort by Size"); checkable: true; checked: FilesBackend.sortField === "size"; onTriggered: FilesBackend.sortField = "size" }
+        AppMenuItem { text: I18n.tr("Sort by Kind"); checkable: true; checked: FilesBackend.sortField === "type"; onTriggered: FilesBackend.sortField = "type" }
+        AppMenuItem { text: I18n.tr("Sort by Date Modified"); checkable: true; checked: FilesBackend.sortField === "time"; onTriggered: FilesBackend.sortField = "time" }
+        AppMenuItem { text: I18n.tr("Reverse Order"); checkable: true; checked: !FilesBackend.sortAscending; onTriggered: FilesBackend.sortAscending = !FilesBackend.sortAscending }
     }
 
     // ── Dialogs ──────────────────────────────────────────────────────────────
@@ -1129,12 +1227,12 @@ C.ApplicationWindow {
         id: nameDialog
         property string mode: ""
         property string target: ""
-        title: mode === "rename" ? "Rename"
-             : mode === "newfolder" ? "New folder"
-             : mode === "newfile" ? "New file" : "Go to folder"
+        title: mode === "rename" ? I18n.tr("Rename")
+             : mode === "newfolder" ? I18n.tr("New folder")
+             : mode === "newfile" ? I18n.tr("New file") : I18n.tr("Go to folder")
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         Component.onCompleted: standardButton(C.Dialog.Ok).text = Qt.binding(() =>
-            mode === "rename" ? "Rename" : mode === "goto" ? "Go" : "Create")
+            mode === "rename" ? I18n.tr("Rename") : mode === "goto" ? I18n.tr("Go") : I18n.tr("Create"))
         onOpened: {
             nameField.focusInput();
             // A rename selects the name without its extension, as everywhere.
@@ -1154,7 +1252,7 @@ C.ApplicationWindow {
                 width: parent.width
                 spacing: Design.s(Design.space.sm)
                 Label {
-                    text: nameDialog.mode === "goto" ? "Path (~ for home)" : "Name"
+                    text: nameDialog.mode === "goto" ? I18n.tr("Path (~ for home)") : I18n.tr("Name")
                     role: "caption"
                     dim: true
                 }
@@ -1167,13 +1265,165 @@ C.ApplicationWindow {
         id: confirmDelete
         property var paths: []
         function ask(p) { paths = p; open(); }
-        title: paths.length === 1 ? "Delete “" + String(paths[0]).split("/").pop() + "” permanently?"
-                                  : "Delete " + paths.length + " items permanently?"
-        message: "This cannot be undone. Nothing goes to the trash."
+        title: paths.length === 1 ? I18n.tr("Delete “%1” permanently?", String(paths[0]).split("/").pop())
+                                  : I18n.trn("Delete %1 item permanently?", "Delete %1 items permanently?", paths.length)
+        message: I18n.tr("This cannot be undone. Nothing goes to the trash.")
         acceptTone: Design.danger
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Delete"
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Delete")
         onAccepted: FilesBackend.deletePermanently(paths)
+    }
+
+    AppDialog {
+        id: batchDialog
+        property var paths: []
+        property string mode: "pattern"         // pattern | replace
+        property string caseMode: "keep"        // keep | lower | upper | title
+        function ask(p) {
+            paths = p.slice().sort(naturalCompare);
+            patternField.text = "{name}";
+            findField.text = ""; replaceField.text = "";
+            open();
+        }
+        // img2 before img10, as the views sort. QML's localeCompare ignores
+        // the {numeric: true} option, so the digits are compared by hand.
+        function naturalCompare(a, b) {
+            const x = String(a).toLowerCase().match(/\d+|\D+/g) || [];
+            const y = String(b).toLowerCase().match(/\d+|\D+/g) || [];
+            for (let i = 0; i < Math.min(x.length, y.length); ++i) {
+                if (x[i] === y[i]) continue;
+                const nx = /^\d/.test(x[i]), ny = /^\d/.test(y[i]);
+                if (nx && ny) return parseInt(x[i], 10) - parseInt(y[i], 10);
+                return x[i] < y[i] ? -1 : 1;
+            }
+            return x.length - y.length;
+        }
+        // "photo.jpg" -> ["photo", ".jpg"]; folders and dotfiles keep it all.
+        function split(path) {
+            const name = String(path).split("/").pop();
+            const it = fm.get(fm.indexOfPath(path));
+            const dot = name.lastIndexOf(".");
+            return (it && it.isDir) || dot <= 0 ? [name, ""] : [name.substring(0, dot), name.substring(dot)];
+        }
+        function recase(t) {
+            switch (caseMode) {
+            case "lower": return t.toLowerCase();
+            case "upper": return t.toUpperCase();
+            case "title": return t.toLowerCase().replace(/(^|[\s_\-.])(\S)/g, (m, a, b) => a + b.toUpperCase());
+            default: return t;
+            }
+        }
+        // The new name for each path, in order; the extension is left alone.
+        readonly property var names: {
+            const out = [];
+            const pad = (n, w) => String(n).padStart(w, "0");
+            for (let i = 0; i < paths.length; ++i) {
+                const [base, ext] = split(paths[i]);
+                let b;
+                if (mode === "pattern") {
+                    b = String(patternField.text)
+                        .replace(/\{nnn\}/g, pad(i + 1, 3)).replace(/\{nn\}/g, pad(i + 1, 2))
+                        .replace(/\{n\}/g, String(i + 1)).replace(/\{name\}/g, base);
+                } else {
+                    b = findField.text === "" ? base : base.split(findField.text).join(replaceField.text);
+                }
+                out.push(recase(b) + ext);
+            }
+            return out;
+        }
+        title: I18n.trn("Rename %1 item", "Rename %1 items", paths.length)
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Rename")
+        onOpened: (mode === "pattern" ? patternField : findField).focusInput()
+        onAccepted: {
+            const why = FilesBackend.renameMany(paths, names);
+            window.note(why !== "" ? why : I18n.trn("Renamed %1 item · Ctrl+Z undoes it", "Renamed %1 items · Ctrl+Z undoes it", paths.length));
+        }
+        onRejected: window.currentView().forceActiveFocus()
+        contentItem: Item {
+            implicitWidth: Design.s(460)
+            implicitHeight: batchBody.implicitHeight
+            ColumnLayout {
+                id: batchBody
+                width: parent.width
+                spacing: Design.s(Design.space.sm)
+                RowLayout {
+                    spacing: Design.s(Design.space.xs)
+                    Pill { label: I18n.tr("Pattern"); active: batchDialog.mode === "pattern"; onClicked: batchDialog.mode = "pattern" }
+                    Pill { label: I18n.tr("Find & replace"); active: batchDialog.mode === "replace"; onClicked: batchDialog.mode = "replace" }
+                }
+                ColumnLayout {
+                    visible: batchDialog.mode === "pattern"
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.xs)
+                    Field { id: patternField; Layout.fillWidth: true; mono: true }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        role: "caption"; dim: true
+                        text: "{name} is the old name, {n} counts 1, 2, 3 — {nn} and {nnn} pad it to 01 or 001"
+                    }
+                }
+                RowLayout {
+                    visible: batchDialog.mode === "replace"
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Field { id: findField; Layout.fillWidth: true; placeholder: I18n.tr("Find") }
+                    Field { id: replaceField; Layout.fillWidth: true; placeholder: I18n.tr("Replace with") }
+                }
+                RowLayout {
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: [{ id: "keep", label: I18n.tr("As is") }, { id: "lower", label: "lower" },
+                                { id: "upper", label: I18n.tr("UPPER") }, { id: "title", label: I18n.tr("Title") }]
+                        delegate: Pill {
+                            required property var modelData
+                            label: modelData.label
+                            active: batchDialog.caseMode === modelData.id
+                            onClicked: batchDialog.caseMode = modelData.id
+                        }
+                    }
+                }
+                // What it will do, before it does it.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: renamePreview.implicitHeight + Design.s(Design.space.sm) * 2
+                    radius: Design.s(Design.radius.ctl)
+                    color: Design.sunken
+                    Column {
+                        id: renamePreview
+                        anchors.fill: parent
+                        anchors.margins: Design.s(Design.space.sm)
+                        spacing: Design.s(2)
+                        Repeater {
+                            model: Math.min(6, batchDialog.paths.length)
+                            delegate: RowLayout {
+                                required property int index
+                                width: renamePreview.width
+                                spacing: Design.s(Design.space.sm)
+                                Label {
+                                    Layout.preferredWidth: renamePreview.width * 0.45
+                                    text: String(batchDialog.paths[index]).split("/").pop()
+                                    role: "caption"; dim: true; elide: Text.ElideMiddle
+                                }
+                                Label { text: "→"; role: "caption"; dim: true }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: batchDialog.names[index] || ""
+                                    role: "caption"; elide: Text.ElideMiddle
+                                    color: text === String(batchDialog.paths[index]).split("/").pop() ? Design.textDim : Design.text
+                                }
+                            }
+                        }
+                        Label {
+                            visible: batchDialog.paths.length > 6
+                            text: I18n.tr("…and %1 more", batchDialog.paths.length - 6)
+                            role: "caption"; dim: true
+                        }
+                    }
+                }
+            }
+        }
     }
 
     AppDialog {
@@ -1183,15 +1433,15 @@ C.ApplicationWindow {
         function ask(p, first) {
             paths = p;
             // One item: its own name, without the extension; several: "Archive".
-            const n = p.length === 1 ? String(first.name || p[0].split("/").pop()) : "Archive";
+            const n = p.length === 1 ? String(first.name || p[0].split("/").pop()) : I18n.tr("Archive");
             const dot = p.length === 1 && !first.isDir ? n.lastIndexOf(".") : -1;
             archiveName.text = dot > 0 ? n.substring(0, dot) : n;
             open();
         }
-        title: paths.length === 1 ? "Compress “" + String(paths[0]).split("/").pop() + "”"
-                                  : "Compress " + paths.length + " items"
+        title: paths.length === 1 ? I18n.tr("Compress “%1”", String(paths[0]).split("/").pop())
+                                  : I18n.trn("Compress %1 item", "Compress %1 items", paths.length)
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Compress"
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Compress")
         onOpened: archiveName.focusInput()
         onAccepted: if (archiveName.text.trim() !== "") FilesBackend.compressItems(paths, archiveName.text.trim(), format)
         onRejected: window.currentView().forceActiveFocus()
@@ -1205,21 +1455,21 @@ C.ApplicationWindow {
                 id: compressBody
                 width: parent.width
                 spacing: Design.s(Design.space.sm)
-                Label { text: "Name"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Name"); role: "caption"; dim: true }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(Design.space.sm)
                     Field { id: archiveName; Layout.fillWidth: true }
                     Label { text: "." + compressDialog.format; dim: true }
                 }
-                Label { text: "Format"; role: "caption"; dim: true; Layout.topMargin: Design.s(Design.space.xs) }
+                Label { text: I18n.tr("Format"); role: "caption"; dim: true; Layout.topMargin: Design.s(Design.space.xs) }
                 RowLayout {
                     spacing: Design.s(Design.space.xs)
                     Repeater {
                         model: [
-                            { id: "zip", label: "ZIP" },
-                            { id: "tar.gz", label: "TAR.GZ" },
-                            { id: "tar.zst", label: "TAR.ZST" },
+                            { id: "zip", label: I18n.tr("ZIP") },
+                            { id: "tar.gz", label: I18n.tr("TAR.GZ") },
+                            { id: "tar.zst", label: I18n.tr("TAR.ZST") },
                             { id: "7z", label: "7Z" }
                         ]
                         delegate: Pill {
@@ -1235,10 +1485,10 @@ C.ApplicationWindow {
                     wrapMode: Text.WordWrap
                     role: "caption"
                     dim: true
-                    text: ({ "zip": "Opens anywhere, Windows and macOS included.",
-                             "tar.gz": "Keeps Unix permissions; the usual archive on Linux.",
-                             "tar.zst": "Smaller and much faster than gzip; needs a recent system to open.",
-                             "7z": "Usually the smallest, and the slowest to make." })[compressDialog.format]
+                    text: ({ "zip": I18n.tr("Opens anywhere, Windows and macOS included."),
+                             "tar.gz": I18n.tr("Keeps Unix permissions; the usual archive on Linux."),
+                             "tar.zst": I18n.tr("Smaller and much faster than gzip; needs a recent system to open."),
+                             "7z": I18n.tr("Usually the smallest, and the slowest to make.") })[compressDialog.format]
                 }
             }
         }
@@ -1246,11 +1496,11 @@ C.ApplicationWindow {
 
     AppDialog {
         id: confirmEmpty
-        title: "Empty the trash?"
-        message: FilesBackend.trashCount + (FilesBackend.trashCount === 1 ? " item is" : " items are") + " deleted for good."
+        title: I18n.tr("Empty the trash?")
+        message: I18n.trn("%1 item is deleted for good.", "%1 items are deleted for good.", FilesBackend.trashCount)
         acceptTone: Design.danger
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = "Empty Trash"
+        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Empty Trash")
         onAccepted: FilesBackend.emptyTrash()
     }
 
@@ -1293,12 +1543,12 @@ C.ApplicationWindow {
         ]
         BarButton {
             visible: sr.removable && (sr.hovered || hovered)
-            glyph: "\u{f0156}"; small: true; tip: "Remove bookmark"
+            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Remove bookmark")
             onClicked: sr.remove()
         }
         BarButton {
             visible: sr.ejectable
-            glyph: "\u{f01ea}"; small: true; tip: "Unmount"
+            glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Unmount")
             onClicked: sr.eject()
         }
     }

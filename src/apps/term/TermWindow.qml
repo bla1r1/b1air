@@ -29,7 +29,7 @@ Window {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: "Terminal"
+    title: I18n.tr("Terminal")
     width: Design.s(840)
     height: Design.s(540)
     minimumWidth: Design.s(450)
@@ -116,86 +116,19 @@ Window {
 
                         Repeater {
                             model: tabsModel
-                            delegate: Rectangle {
-                                id: tabPill
-                                Layout.preferredHeight: Design.s(30)
-                                Layout.preferredWidth: Math.min(Design.s(200), tabRow.implicitWidth + Design.s(18))
-                                radius: Design.s(Design.radius.ctl)
-                                color: window.currentTabIndex === index
-                                    ? Design.tint(Design.accent, 0.22)
-                                    : (tabArea.containsMouse ? Design.hover : "transparent")
-                                border.color: window.currentTabIndex === index ? Design.accent : Design.line
-                                border.width: 1
-
-                                // Declared first so it sits under the close button.
-                                // Middle-click closes too, as in every browser.
-                                MouseArea {
-                                    id: tabArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: mouse => {
-                                        if (mouse.button === Qt.MiddleButton) window.closeTab(index);
-                                        else window.currentTabIndex = index;
-                                    }
-                                }
-
-                                RowLayout {
-                                    id: tabRow
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Design.s(6)
-                                    anchors.rightMargin: Design.s(4)
-                                    spacing: Design.s(4)
-
-                                    Label {
-                                        text: (index + 1) + ": " + (model.tabTitle || "fish")
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.caption + 1)
-                                        font.weight: window.currentTabIndex === index ? Design.weight.semibold : Design.weight.regular
-                                        color: window.currentTabIndex === index ? Design.text : Design.textDim
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
-                                    }
-
-                                    // Close Tab Button (×)
-                                    Rectangle {
-                                        Layout.preferredWidth: Design.s(18)
-                                        Layout.preferredHeight: Design.s(18)
-                                        radius: Design.s(3)
-                                        color: closeHover.hovered ? Design.tint(Design.danger, 0.25) : "transparent"
-                                        visible: tabsModel.count > 1
-
-                                        Label {
-                                            anchors.centerIn: parent
-                                            text: "×"
-                                            font.pixelSize: Design.s(Design.font.caption)
-                                            font.bold: true
-                                            color: Design.subtext0
-                                        }
-
-                                        // A MouseArea, above the tab's own: the
-                                        // tab's MouseArea covered the whole pill
-                                        // and was on top, so it took every press
-                                        // and the TapHandler that was here never
-                                        // saw one — the × selected the tab and
-                                        // closed nothing.
-                                        MouseArea {
-                                            id: closeHover
-                                            readonly property bool hovered: containsMouse
-                                            anchors.fill: parent
-                                            anchors.margins: -Design.s(3)
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: window.closeTab(index)
-                                        }
-                                    }
-                                }
+                            delegate: AppTab {
+                                required property int index
+                                required property var model
+                                label: (index + 1) + ": " + (model.tabTitle || "fish")
+                                active: window.currentTabIndex === index
+                                closable: tabsModel.count > 1
+                                onClicked: window.currentTabIndex = index
+                                onCloseRequested: window.closeTab(index)
                             }
                         }
 
                         // Add Tab Button (+)
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: "New tab (Ctrl+Shift+T)"; onClicked: window.createNewTab("", "") }
+                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
                     }
 
                     Item { Layout.fillWidth: true } // Spacer
@@ -204,12 +137,12 @@ Window {
                     Row {
                         spacing: Design.s(Design.space.xs)
                         Layout.alignment: Qt.AlignVCenter
-                        BarButton { small: true; glyph: "\u{f0374}"; tip: "Smaller text (Ctrl+−)"; onClicked: currentTermView().zoomOut() }
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: "Larger text (Ctrl+=)"; onClicked: currentTermView().zoomIn() }
+                        BarButton { small: true; glyph: "\u{f0374}"; tip: I18n.tr("Smaller text (Ctrl+−)"); onClicked: currentTermView().zoomOut() }
+                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("Larger text (Ctrl+=)"); onClicked: currentTermView().zoomIn() }
                         Rectangle { width: 1; height: Design.s(16); color: Design.line; anchors.verticalCenter: parent.verticalCenter }
-                        BarButton { small: true; glyph: "\u{f018f}"; tip: "Copy (Ctrl+Shift+C)"; onClicked: currentTermView().copySelection() }
-                        BarButton { small: true; glyph: "\u{f0192}"; tip: "Paste (Ctrl+Shift+V)"; onClicked: currentTermView().pasteClipboard() }
-                        BarButton { small: true; glyph: "\u{f00e2}"; tip: "Clear"; onClicked: currentTermView().clear() }
+                        BarButton { small: true; glyph: "\u{f018f}"; tip: I18n.tr("Copy (Ctrl+Shift+C)"); onClicked: currentTermView().copySelection() }
+                        BarButton { small: true; glyph: "\u{f0192}"; tip: I18n.tr("Paste (Ctrl+Shift+V)"); onClicked: currentTermView().pasteClipboard() }
+                        BarButton { small: true; glyph: "\u{f00e2}"; tip: I18n.tr("Clear"); onClicked: currentTermView().clear() }
                     }
                 }
             }

@@ -28,6 +28,12 @@ class FileListModel : public QAbstractListModel {
     Q_PROPERTY(QString selectionSummary READ selectionSummary NOTIFY selectionChanged)
     /** "4 folders, 12 files" for the whole listing. */
     Q_PROPERTY(QString summary READ summary NOTIFY countChanged)
+    // The numbers behind summary and selectionSummary, for a UI that words
+    // them itself (in another language, say).
+    Q_PROPERTY(int folderCount READ folderCount NOTIFY countChanged)
+    Q_PROPERTY(int fileCount READ fileCount NOTIFY countChanged)
+    Q_PROPERTY(QString selectionSize READ selectionSize NOTIFY selectionChanged)
+    Q_PROPERTY(bool selectionHasFolders READ selectionHasFolders NOTIFY selectionChanged)
     /** The keyboard cursor and the anchor for Shift-selection. */
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
     /** Set when the directory could not be read (permissions, gone). */
@@ -72,6 +78,10 @@ public:
     int count() const { return int(m_entries.size()); }
     int selectionCount() const { return int(m_selected.size()); }
     QString selectionSummary() const;
+    int folderCount() const;
+    int fileCount() const { return int(m_entries.size()) - folderCount(); }
+    QString selectionSize() const;
+    bool selectionHasFolders() const;
     QString summary() const;
     int currentIndex() const { return m_current; }
     void setCurrentIndex(int i);

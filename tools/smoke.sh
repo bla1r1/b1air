@@ -22,6 +22,11 @@
 #                   in the copy nobody runs, which happened.
 #   ipc-targets     A toggle: command naming a widget WindowRegistry does not
 #                   know opens nothing at all.
+#   i18n            Every translation in src/shell/qml/Ui/i18n/*.json parses
+#                   and keeps the %1, %2… of its English key: one that drops a
+#                   placeholder shows text with a hole in it. Strings with no
+#                   translation yet are listed, not failed — a new English
+#                   string must not block a commit.
 #   daemon-cli      The read-only verbs still answer.
 #   shell-boot      The shell actually starts. Only when there is a Wayland
 #                   session to start it in; skipped otherwise.
@@ -551,8 +556,45 @@ PY_VENDOR
     else fail "could not check the vendored libraries"; fi
 }
 
+check_i18n() {
+    head_ "i18n"
+    python3 - "$REPO" <<'PY_I18N'
+import glob, json, os, re, sys
+repo = sys.argv[1]
+sources = glob.glob(os.path.join(repo, "src/apps/*/*.qml")) + glob.glob(os.path.join(repo, "src/shell/qml/**/*.qml"), recursive=True)
+lit = r'"((?:[^"\\]|\\.)*)"'
+used = set()
+for f in sources:
+    text = open(f, encoding="utf-8").read()
+    for m in re.finditer(r'I18n\.tr\(\s*' + lit, text): used.add(m.group(1))
+    for m in re.finditer(r'I18n\.trn\(\s*' + lit + r'\s*,\s*' + lit, text): used.add(m.group(2))
+ph = lambda s: sorted(set(re.findall(r'%\d', s)))
+problems, missing = [], {}
+for path in sorted(glob.glob(os.path.join(repo, "src/shell/qml/Ui/i18n/*.json"))):
+    lang = os.path.basename(path)[:-5]
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+    except ValueError as e:
+        problems.append(f"{lang}.json does not parse: {e}"); continue
+    for key, val in d.items():
+        for form in (val if isinstance(val, list) else [val]):
+            if not isinstance(form, str) or ph(form) != ph(key):
+                problems.append(f"{lang}: {key!r} -> {form!r} changes the placeholders")
+    missing[lang] = sorted(k for k in used if k not in d and re.search(r'[a-z]', k) and not k.startswith("Ctrl"))
+for p in problems: print("      " + p)
+for lang, keys in missing.items():
+    if keys:
+        print(f"      {lang}: {len(keys)} string(s) not translated yet")
+        for k in keys[:10]: print("        " + k)
+sys.exit(1 if problems else 0)
+PY_I18N
+    # shellcheck disable=SC2181
+    if [[ $? -eq 0 ]]; then pass "translations parse and keep their placeholders"
+    else fail "a translation is broken"; fi
+}
+
 # ── driver ───────────────────────────────────────────────────────────────────
-ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets daemon_cli shell_boot)
+ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n daemon_cli shell_boot)
 
 # Runnable by name, absent from the default run: it needs the network.
 EXTRA=(vendor_updates)

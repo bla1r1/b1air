@@ -180,6 +180,34 @@ void FileListModel::reload() {
     if (selChanged) emit selectionChanged();
 }
 
+// "file2" before "file10": digit runs compare as numbers, the rest through
+// the collator. QCollator's numeric mode does this only where the locale
+// backend supports it, and in the C/POSIX locale it silently does not.
+static int naturalCompare(const QCollator& coll, const QString& a, const QString& b) {
+    int i = 0, j = 0;
+    while (i < a.size() && j < b.size()) {
+        if (a[i].isDigit() && b[j].isDigit()) {
+            // Skip leading zeros, then the longer run is the larger number;
+            // equal lengths compare digit by digit.
+            while (i + 1 < a.size() && a[i] == u'0' && a[i + 1].isDigit()) ++i;
+            while (j + 1 < b.size() && b[j] == u'0' && b[j + 1].isDigit()) ++j;
+            const int si = i, sj = j;
+            while (i < a.size() && a[i].isDigit()) ++i;
+            while (j < b.size() && b[j].isDigit()) ++j;
+            if (i - si != j - sj) return (i - si) < (j - sj) ? -1 : 1;
+            const int c = QStringView(a).mid(si, i - si).compare(QStringView(b).mid(sj, j - sj));
+            if (c != 0) return c;
+        } else {
+            int si = i, sj = j;
+            while (i < a.size() && !a[i].isDigit()) ++i;
+            while (j < b.size() && !b[j].isDigit()) ++j;
+            const int c = coll.compare(a.mid(si, i - si), b.mid(sj, j - sj));
+            if (c != 0) return c;
+        }
+    }
+    return (a.size() - i) - (b.size() - j);
+}
+
 void FileListModel::sortEntries() {
     QCollator coll;
     coll.setNumericMode(true);          // "file2" before "file10"
@@ -192,7 +220,7 @@ void FileListModel::sortEntries() {
         if (field == "size") c = a.size < b.size ? -1 : (a.size > b.size ? 1 : 0);
         else if (field == "time") c = a.modified < b.modified ? -1 : (a.modified > b.modified ? 1 : 0);
         else if (field == "type") c = coll.compare(a.kind, b.kind);
-        if (c == 0) c = coll.compare(a.name, b.name);
+        if (c == 0) c = naturalCompare(coll, a.name, b.name);
         return asc ? c < 0 : c > 0;
     });
 }
@@ -204,6 +232,27 @@ QString FileListModel::summary() const {
     if (dirs) parts << QStringLiteral("%1 folder%2").arg(dirs).arg(dirs == 1 ? "" : "s");
     if (files) parts << QStringLiteral("%1 file%2").arg(files).arg(files == 1 ? "" : "s");
     return parts.isEmpty() ? QStringLiteral("Empty") : parts.join(", ");
+}
+
+int FileListModel::folderCount() const {
+    int dirs = 0;
+    for (const Entry& e : m_entries) if (e.isDir) ++dirs;
+    return dirs;
+}
+
+// Total size of the selected files ("" when none have a size); folders count
+// for nothing until they are measured.
+QString FileListModel::selectionSize() const {
+    qint64 bytes = 0;
+    for (const Entry& e : m_entries)
+        if (!e.isDir && m_selected.contains(e.path)) bytes += e.size;
+    return bytes > 0 ? formatSize(bytes) : QString();
+}
+
+bool FileListModel::selectionHasFolders() const {
+    for (const Entry& e : m_entries)
+        if (e.isDir && m_selected.contains(e.path)) return true;
+    return false;
 }
 
 QString FileListModel::selectionSummary() const {

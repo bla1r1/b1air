@@ -1,6 +1,7 @@
 module Ui
 
 singleton Design 1.0 Design.qml
+singleton I18n 1.0 I18n.qml
 
 # frame
 PopupShell 1.0 PopupShell.qml
@@ -36,6 +37,7 @@ AppMenu      1.0 AppMenu.qml
 AppMenuItem  1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
 AppToolbar   1.0 AppToolbar.qml
+AppTab       1.0 AppTab.qml
 BarButton    1.0 BarButton.qml
 BarGroup     1.0 BarGroup.qml
 AppSidebar   1.0 AppSidebar.qml

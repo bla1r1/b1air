@@ -31,7 +31,7 @@ Window {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: "System Settings"
+    title: I18n.tr("System Settings")
     width: Design.s(960)
     height: Design.s(640)
     minimumWidth: Design.s(760)

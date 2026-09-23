@@ -38,7 +38,7 @@ ApplicationWindow {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
 
-    title: "Camera"
+    title: I18n.tr("Camera")
     width: Design.s(900)
     height: Design.s(620)
     minimumWidth: 560
@@ -121,7 +121,7 @@ ApplicationWindow {
             id: capture
             onImageSaved: (id, path) => {
                 window.lastShot = path;
-                window.note("Saved " + path.split("/").pop());
+                window.note(I18n.tr("Saved %1", path.split("/").pop()));
             }
             onErrorOccurred: (id, error, message) => window.note(message)
         }
@@ -131,7 +131,7 @@ ApplicationWindow {
             onRecorderStateChanged: {
                 if (recorder.recorderState === MediaRecorder.StoppedState && recorder.actualLocation != "") {
                     window.lastShot = String(recorder.actualLocation).replace("file://", "");
-                    window.note("Saved " + window.lastShot.split("/").pop());
+                    window.note(I18n.tr("Saved %1", window.lastShot.split("/").pop()));
                 }
             }
             onErrorOccurred: (error, errorString) => window.note(errorString)
@@ -168,8 +168,8 @@ ApplicationWindow {
                     BarButton {
                         visible: devices.videoInputs.length > 1
                         glyph: "\u{f0567}"
-                        label: camera.cameraDevice.description || "Camera"
-                        tip: "Switch camera"
+                        label: camera.cameraDevice.description || I18n.tr("Camera")
+                        tip: I18n.tr("Switch camera")
                         onClicked: {
                             const list = devices.videoInputs;
                             let i = 0;
@@ -180,8 +180,8 @@ ApplicationWindow {
                     }
                     BarButton {
                         glyph: "\u{f024b}"
-                        label: "Open folder"
-                        tip: "Where photos and videos go (Ctrl+O)"
+                        label: I18n.tr("Open folder")
+                        tip: I18n.tr("Where photos and videos go (Ctrl+O)")
                         onClicked: Qt.openUrlExternally(Paths.fileUrl(window.shotsDir))
                     }
                 }
@@ -207,7 +207,7 @@ ApplicationWindow {
                     spacing: Design.s(Design.space.sm)
                     visible: devices.videoInputs.length === 0
                     Icon { Layout.alignment: Qt.AlignHCenter; text: "\u{f0567}"; role: "title"; color: Design.textDim }
-                    Label { Layout.alignment: Qt.AlignHCenter; text: "No camera found"; dim: true }
+                    Label { Layout.alignment: Qt.AlignHCenter; text: I18n.tr("No camera found"); dim: true }
                 }
 
                 // Rule of thirds.
@@ -259,7 +259,7 @@ ApplicationWindow {
                                 NumberAnimation { to: 1.0; duration: 600 }
                             }
                         }
-                        Label { text: "REC"; weight: Design.weight.bold; color: Design.accentText; isMono: true }
+                        Label { text: I18n.tr("REC"); weight: Design.weight.bold; color: Design.accentText; isMono: true }
                     }
                 }
 
@@ -384,21 +384,21 @@ ApplicationWindow {
                     BarGroup {
                         BarButton {
                             glyph: "\u{f051b}"
-                            label: window.timerSeconds === 0 ? "Off" : window.timerSeconds + "s"
-                            tip: "Self-timer: off, 3 s, 10 s"
+                            label: window.timerSeconds === 0 ? I18n.tr("Off") : window.timerSeconds + "s"
+                            tip: I18n.tr("Self-timer: off, 3 s, 10 s")
                             checked: window.timerSeconds > 0
                             onClicked: window.timerSeconds = window.timerSeconds === 0 ? 3
                                      : (window.timerSeconds === 3 ? 10 : 0)
                         }
                         BarButton {
                             glyph: "\u{f11fd}"
-                            tip: "Mirror (M)"
+                            tip: I18n.tr("Mirror (M)")
                             checked: window.mirrored
                             onClicked: window.mirrored = !window.mirrored
                         }
                         BarButton {
                             glyph: "\u{f02c1}"
-                            tip: "Grid (G)"
+                            tip: I18n.tr("Grid (G)")
                             checked: window.showGrid
                             onClicked: window.showGrid = !window.showGrid
                         }
@@ -418,7 +418,7 @@ ApplicationWindow {
                     elide: Text.ElideMiddle
                 }
 
-                Label { text: "Space shoot · R record · G grid · M mirror"; role: "caption"; color: Design.textFaint }
+                Label { text: I18n.tr("Space shoot · R record · G grid · M mirror"); role: "caption"; color: Design.textFaint }
             }
         }
     }

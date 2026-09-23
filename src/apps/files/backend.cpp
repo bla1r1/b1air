@@ -15,6 +15,7 @@
 #include <QMimeDatabase>
 #include <QDirIterator>
 #include <QPointer>
+#include <QSet>
 #include <QDateTime>
 #include <thread>
 #include <archive.h>
@@ -251,9 +252,9 @@ QVariantList FileManagerBackend::places() const {
 QString FileManagerBackend::diskFreeSpace() const {
     QStorageInfo storage(m_currentPath);
     if (storage.isValid()) {
-        return formatSize(storage.bytesAvailable()) + " free";
+        return formatSize(storage.bytesAvailable());     // the UI adds "free"
     }
-    return "0 B free";
+    return "0 B";
 }
 
 QString FileManagerBackend::diskTotalSpace() const {
@@ -532,6 +533,54 @@ bool FileManagerBackend::renameItem(const QString& oldPath, const QString& newNa
         return true;
     }
     return false;
+}
+
+QString FileManagerBackend::renameMany(const QStringList& paths, const QStringList& names) {
+    if (paths.isEmpty() || paths.size() != names.size()) return "Nothing to rename";
+    QList<QPair<QString, QString>> plan;            // old -> new, changed ones only
+    QSet<QString> targets;
+    QSet<QString> sources(paths.begin(), paths.end());
+    for (int i = 0; i < paths.size(); ++i) {
+        const QString name = names.at(i).trimmed();
+        if (name.isEmpty()) return "A name would be empty";
+        if (name.contains('/')) return "A name cannot contain /";
+        if (name == "." || name == "..") return "“" + name + "” is not a name";
+        const QFileInfo fi(paths.at(i));
+        if (!fi.exists() && !fi.isSymLink()) return fi.fileName() + " no longer exists";
+        const QString to = fi.dir().absoluteFilePath(name);
+        if (targets.contains(to)) return "Two items would both be called " + name;
+        targets.insert(to);
+        // Something already there that is not one of the items being renamed.
+        if (to != fi.absoluteFilePath() && QFileInfo::exists(to) && !sources.contains(to))
+            return "Something named " + name + " is already here";
+        if (to != fi.absoluteFilePath()) plan << qMakePair(fi.absoluteFilePath(), to);
+    }
+    if (plan.isEmpty()) return "The names are unchanged";
+
+    // Through temporary names first, so a swap (a→b, b→a) or a shift
+    // (1→2, 2→3) does not trip over itself. Undo replays these backwards.
+    QList<QPair<QString, QString>> done;
+    auto rollback = [&]() {
+        for (auto it = done.crbegin(); it != done.crend(); ++it) QFile::rename(it->second, it->first);
+    };
+    QList<QPair<QString, QString>> second;
+    for (const auto& step : plan) {
+        const QString tmp = QFileInfo(step.first).dir().absoluteFilePath(
+            ".b1air-rename-" + QString::number(QCoreApplication::applicationPid()) + "-" + QString::number(done.size()));
+        if (!QFile::rename(step.first, tmp)) { rollback(); refresh(); return "Could not rename " + QFileInfo(step.first).fileName(); }
+        done << qMakePair(step.first, tmp);
+        second << qMakePair(tmp, step.second);
+    }
+    for (const auto& step : second) {
+        if (!QFile::rename(step.first, step.second)) { rollback(); refresh(); return "Could not rename to " + QFileInfo(step.second).fileName(); }
+        done << step;
+    }
+    pushUndo({"rename", done, {}, QStringLiteral("Rename %1 items").arg(plan.size())});
+    refresh();
+    QStringList landed;
+    for (const auto& step : plan) landed << step.second;
+    m_files->selectPaths(landed);
+    return "";
 }
 
 static QString prefsPath() {
@@ -987,7 +1036,7 @@ void FileManagerBackend::updateVolumes() {
         v["name"] = s.displayName().isEmpty() || s.displayName() == root ? QFileInfo(root).fileName() : s.displayName();
         v["path"] = root;
         v["device"] = QString::fromUtf8(s.device());
-        v["free"] = FileListModel::formatSize(s.bytesAvailable()) + " free";
+        v["free"] = FileListModel::formatSize(s.bytesAvailable());     // the UI adds "free"
         v["percent"] = s.bytesTotal() > 0 ? 1.0 - double(s.bytesAvailable()) / double(s.bytesTotal()) : 0.0;
         list << v;
     }

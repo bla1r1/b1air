@@ -28,7 +28,7 @@ ApplicationWindow {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: ViewBackend.fileName ? ("Image Viewer — " + ViewBackend.fileName) : "Image Viewer"
+    title: ViewBackend.fileName ? I18n.tr("Image Viewer — %1", ViewBackend.fileName) : I18n.tr("Image Viewer")
 
     // With nothing open this window was a plain empty rectangle: the title bar
     // said "No Image Open" and the canvas said nothing at all, while the zoom,
@@ -125,20 +125,20 @@ ApplicationWindow {
                     spacing: 0
                     Label {
                         Layout.fillWidth: true
-                        text: ViewBackend.fileName || "No image open"
+                        text: ViewBackend.fileName || I18n.tr("No image open")
                         weight: Design.weight.semibold
                         elide: Text.ElideMiddle
                     }
                     Label {
                         visible: ViewBackend.imageResolution !== "" && ViewBackend.imageResolution !== "Unknown"
                         text: ViewBackend.imageResolution + "  ·  " + ViewBackend.fileSize
-                              + (ViewBackend.totalFiles > 1 ? "  ·  " + (ViewBackend.fileIndex + 1) + " of " + ViewBackend.totalFiles : "")
+                              + (ViewBackend.totalFiles > 1 ? "  ·  " + I18n.tr("%1 of %2", ViewBackend.fileIndex + 1, ViewBackend.totalFiles) : "")
                         role: "caption"
                         color: Design.textFaint
                     }
                 }
                 BarGroup {
-                    CtrlBtn { icon: "\u{f0374}"; tip: "Zoom out (−)"; onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                    CtrlBtn { icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
                     Label {
                         Layout.preferredWidth: Design.s(46)
                         horizontalAlignment: Text.AlignHCenter
@@ -147,14 +147,14 @@ ApplicationWindow {
                         role: "caption"
                         dim: true
                     }
-                    CtrlBtn { icon: "\u{f0415}"; tip: "Zoom in (+)"; onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
+                    CtrlBtn { icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
                 }
                 BarGroup {
-                    CtrlBtn { icon: "\u{f0450}"; tip: "Reset view (0)"; onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
-                    CtrlBtn { icon: "\u{f0467}"; tip: "Rotate 90° (R)"; onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
-                    CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: "Filmstrip"; active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                    CtrlBtn { icon: "\u{f0450}"; tip: I18n.tr("Reset view (0)"); onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
+                    CtrlBtn { icon: "\u{f0467}"; tip: I18n.tr("Rotate 90° (R)"); onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                    CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
                 }
-                BarButton { glyph: "\u{f0e09}"; label: "Set as wallpaper"; onClicked: ViewBackend.setWallpaper() }
+                BarButton { glyph: "\u{f0e09}"; label: I18n.tr("Set as wallpaper"); onClicked: ViewBackend.setWallpaper() }
             }
 
             // ── Main Image Canvas ────────────────────────────────────────────
@@ -215,8 +215,8 @@ ApplicationWindow {
                     width: parent.width - Design.s(Design.space.xl) * 2
                     visible: !window.hasImage
                     icon: "\u{f02e9}"
-                    title: "No image open"
-                    hint: "Open one from Files, or pass a path: b1air-view picture.png"
+                    title: I18n.tr("No image open")
+                    hint: I18n.tr("Open one from Files, or pass a path: b1air-view picture.png")
                 }
 
                 // Left Arrow Overlay (Prev)

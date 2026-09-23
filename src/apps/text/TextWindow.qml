@@ -28,7 +28,7 @@ Window {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: (TextBackend.isModified ? "● " : "") + "Text Editor — " + TextBackend.fileName
+    title: (TextBackend.isModified ? "● " : "") + I18n.tr("Text Editor — %1", TextBackend.fileName)
     width: Design.s(900)
     height: Design.s(620)
     minimumWidth: Design.s(680)
@@ -132,8 +132,8 @@ Window {
             Layout.fillWidth: true
 
             BarGroup {
-                BarButton { glyph: "\u{f0415}"; label: "New"; tip: "New file (Ctrl+N)"; onClicked: window.newFileWithConfirmation() }
-                BarButton { glyph: "\u{f0193}"; label: "Save"; primary: TextBackend.isModified; tip: "Save (Ctrl+S) · Save as (Ctrl+Shift+S)"; onClicked: window.save() }
+                BarButton { glyph: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
+                BarButton { glyph: "\u{f0193}"; label: I18n.tr("Save"); primary: TextBackend.isModified; tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
             }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -156,7 +156,7 @@ Window {
                 }
             }
             BarGroup {
-                BarButton { glyph: "\u{f05b6}"; tip: "Wrap long lines"; checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+                BarButton { glyph: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
             }
         }
 
@@ -322,7 +322,7 @@ Window {
 
                         Label {
                             Layout.alignment: Qt.AlignHCenter
-                            text: "Empty document"
+                            text: I18n.tr("Empty document")
                             weight: Design.weight.semibold
                             dim: true
                         }
@@ -330,7 +330,7 @@ Window {
                         Label {
                             Layout.alignment: Qt.AlignHCenter
                             horizontalAlignment: Text.AlignHCenter
-                            text: "Start typing, or open a file: b1air-text notes.md"
+                            text: I18n.tr("Start typing, or open a file: b1air-text notes.md")
                             role: "caption"
                             color: Design.textFaint
                         }
@@ -344,8 +344,8 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         AppStatusBar {
             Layout.fillWidth: true
-            Label { text: "Ln " + window.currentLine + ", Col " + window.currentCol; role: "caption"; isMono: true; dim: true }
-            Label { text: TextBackend.lineCount + " lines  ·  " + TextBackend.wordCount + " words"; role: "caption"; dim: true }
+            Label { text: I18n.tr("Ln %1, Col %2", window.currentLine, window.currentCol); role: "caption"; isMono: true; dim: true }
+            Label { text: I18n.trn("%1 line", "%1 lines", TextBackend.lineCount) + "  ·  " + I18n.trn("%1 word", "%1 words", TextBackend.wordCount); role: "caption"; dim: true }
             // A save or open that failed says so, where the eye already is.
             Label {
                 Layout.fillWidth: true
@@ -361,8 +361,8 @@ Window {
 
     AppDialog {
         id: unsavedDialog
-        title: "Unsaved changes"
-        message: "Save changes before starting a new file or closing the editor?"
+        title: I18n.tr("Unsaved changes")
+        message: I18n.tr("Save changes before starting a new file or closing the editor?")
         standardButtons: Dialog.Cancel | Dialog.Discard | Dialog.Save
         onAccepted: {
             window.afterSave = window.closeAfterSave ? "quit" : "new";
@@ -377,7 +377,7 @@ Window {
 
     AppDialog {
         id: saveAsDialog
-        title: "Save as"
+        title: I18n.tr("Save as")
         standardButtons: Dialog.Cancel | Dialog.Save
         onOpened: {
             savePathField.text = TextBackend.suggestedPath;
@@ -391,7 +391,7 @@ Window {
             spacing: Design.s(Design.space.sm)
 
             Label {
-                text: "Path"
+                text: I18n.tr("Path")
                 role: "caption"
                 dim: true
             }

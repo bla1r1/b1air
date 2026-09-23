@@ -28,7 +28,7 @@ Window {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: "System Monitor"
+    title: I18n.tr("System Monitor")
     width: Design.s(880)
     height: Design.s(580)
     minimumWidth: Design.s(720)
@@ -239,12 +239,12 @@ Window {
                 Layout.fillWidth: true
 
                 BarGroup {
-                    BarButton { glyph: "\u{f0128}"; label: "Overview"; tip: "Ctrl+1"; checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
-                    BarButton { glyph: "\u{f0279}"; label: "Processes"; tip: "Ctrl+2"; checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
+                    BarButton { glyph: "\u{f0128}"; label: I18n.tr("Overview"); tip: I18n.tr("Ctrl+1"); checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
+                    BarButton { glyph: "\u{f0279}"; label: I18n.tr("Processes"); tip: I18n.tr("Ctrl+2"); checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
                 }
                 Item { Layout.fillWidth: true }
                 BarGroup {
-                    BarButton { glyph: "\u{f0450}"; tip: "Refresh now (F5)"; onClicked: if (isNative) MonitorBackend.refresh() }
+                    BarButton { glyph: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
                 }
             }
 
@@ -280,16 +280,15 @@ Window {
                     MetricCard {
                         label: "CPU"
                         value: window.cpuPct.toFixed(1) + "%"
-                        sub: window.cpuCores + " cores  ·  load " + window.loadAvgStr.split(" ")[0]
+                        sub: I18n.trn("%1 core  ·  load %2", "%1 cores  ·  load %2", window.cpuCores, window.loadAvgStr.split(" ")[0])
                         pct: window.cpuPct
                         tone: Design.sapphire
                     }
 
                     MetricCard {
-                        label: "Memory"
+                        label: I18n.tr("Memory")
                         value: (window.ramUsedMb / 1024.0).toFixed(1) + " GB"
-                        sub: "of " + (window.ramTotalMb / 1024.0).toFixed(1) + " GB  ·  "
-                             + Math.round(window.ramPct) + "% used"
+                        sub: I18n.tr("of %1 GB  ·  %2% used", (window.ramTotalMb / 1024.0).toFixed(1), Math.round(window.ramPct))
                         pct: window.ramPct
                         tone: Design.mauve
                     }
@@ -298,10 +297,9 @@ Window {
                     // leaving it ambiguous whether the ring meant used or free.
                     // It is the used share, and the subtitle now says so.
                     MetricCard {
-                        label: "Storage"
-                        value: window.diskFreeGb.toFixed(1) + " GB free"
-                        sub: "of " + window.diskTotalGb.toFixed(1) + " GB  ·  "
-                             + Math.round(window.diskPct) + "% used"
+                        label: I18n.tr("Storage")
+                        value: I18n.tr("%1 GB free", window.diskFreeGb.toFixed(1))
+                        sub: I18n.tr("of %1 GB  ·  %2% used", window.diskTotalGb.toFixed(1), Math.round(window.diskPct))
                         pct: window.diskPct
                         tone: Design.peach
                     }
@@ -311,7 +309,7 @@ Window {
                     // count moved out of here — it has nothing to do with
                     // uptime and already has a home in the status bar.
                     MetricCard {
-                        label: "Uptime"
+                        label: I18n.tr("Uptime")
                         value: window.uptimeStr
                         sub: "since last boot"
                         pct: -1
@@ -344,8 +342,8 @@ Window {
                                 // rather than letting a short trace look like
                                 // a machine that was idle and then spiked.
                                 text: window.historyFull
-                                      ? "Activity, last 60 seconds"
-                                      : "Activity (collecting…)"
+                                      ? I18n.tr("Activity, last 60 seconds")
+                                      : I18n.tr("Activity (collecting…)")
                                 font.family: Design.font.sans
                                 font.weight: Design.weight.semibold
                                 font.pixelSize: Design.s(Design.font.body)
@@ -361,13 +359,13 @@ Window {
                                 RowLayout {
                                     spacing: Design.s(6)
                                     Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.sapphire }
-                                    Text { text: "CPU"; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+                                    Text { text: I18n.tr("CPU"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
 
                                 RowLayout {
                                     spacing: Design.s(6)
                                     Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.mauve }
-                                    Text { text: "Memory"; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+                                    Text { text: I18n.tr("Memory"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
                             }
                         }
@@ -505,14 +503,14 @@ Window {
                         Layout.preferredHeight: Design.s(36)
                         radius: height / 2
                         color: Design.raised
-                        placeholder: "Filter processes (Ctrl+F)"
+                        placeholder: I18n.tr("Filter processes (Ctrl+F)")
                         onEdited: value => {
                             window.procSearchQuery = value;
                             if (isNative) MonitorBackend.setProcessFilter(value);
                         }
                     }
                     Item { Layout.fillWidth: true }
-                    Label { text: "Sort by"; role: "caption"; color: Design.textFaint }
+                    Label { text: I18n.tr("Sort by"); role: "caption"; color: Design.textFaint }
                     BarGroup {
                         BarButton {
                             label: "CPU"
@@ -540,17 +538,17 @@ Window {
                     anchors.rightMargin: Design.s(Design.space.md)
                     spacing: Design.s(Design.space.sm)
 
-                    Text { text: "PID"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
-                    Text { text: "Process"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
+                    Text { text: I18n.tr("PID"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
+                    Text { text: I18n.tr("Process"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
                     // The name column was the only one with fillWidth, so it
                     // took every spare pixel: on a 1280px window it ran 950px
                     // wide for names that need two hundred, and the numbers
                     // anyone actually reads sat crushed against the far edge
                     // with a void between. The slack carries the reading now.
-                    Text { text: "Load"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.fillWidth: true }
-                    Text { text: "User"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
-                    Text { text: "CPU"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
-                    Text { text: "Memory"; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
+                    Text { text: I18n.tr("Load"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.fillWidth: true }
+                    Text { text: I18n.tr("User"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
+                    Text { text: I18n.tr("CPU"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
+                    Text { text: I18n.tr("Memory"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
                     Text { text: ""; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80); horizontalAlignment: Text.AlignHCenter }
                 }
             }
@@ -744,12 +742,12 @@ Window {
             Layout.fillWidth: true
             Label {
                 Layout.fillWidth: true
-                text: (isNative ? MonitorBackend.taskCount : 0) + " processes  ·  load " + window.loadAvgStr + "  ·  up " + window.uptimeStr
+                text: I18n.trn("%1 process  ·  load %2  ·  up %3", "%1 processes  ·  load %2  ·  up %3", isNative ? MonitorBackend.taskCount : 0, window.loadAvgStr, window.uptimeStr)
                 role: "caption"
                 dim: true
                 elide: Text.ElideRight
             }
-            Label { text: "Ctrl+1/2 tabs  ·  Ctrl+F search  ·  F5 refresh  ·  Esc close"; role: "caption"; color: Design.textFaint }
+            Label { text: I18n.tr("Ctrl+1/2 tabs  ·  Ctrl+F search  ·  F5 refresh  ·  Esc close"); role: "caption"; color: Design.textFaint }
         }
     }
 }
@@ -769,13 +767,13 @@ Window {
             killConfirm.force = force;
             open();
         }
-        title: (force ? "Force quit " : "End ") + procName + "?"
+        title: I18n.tr(force ? "Force quit %1?" : "End %1?", procName)
         message: force
-            ? "Process " + pid + " is stopped at once (SIGKILL). Anything unsaved in it is lost."
-            : "Process " + pid + " is asked to quit (SIGTERM)."
+            ? I18n.tr("Process %1 is stopped at once (SIGKILL). Anything unsaved in it is lost.", pid)
+            : I18n.tr("Process %1 is asked to quit (SIGTERM).", pid)
         acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
-        Component.onCompleted: standardButton(Dialog.Ok).text = "End Process"
+        Component.onCompleted: standardButton(Dialog.Ok).text = I18n.tr("End Process")
         onAccepted: MonitorBackend.killProcess(pid, force)
     }
 

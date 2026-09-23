@@ -114,6 +114,10 @@ public slots:
     bool createFolder(const QString& name);
     bool deleteItem(const QString& path);
     bool renameItem(const QString& oldPath, const QString& newName);
+    // Batch rename: paths[i] gets names[i], all in one undo step. Returns
+    // "" on success or why nothing was renamed — checked before any file
+    // moves, so it is all or none.
+    QString renameMany(const QStringList& paths, const QStringList& names);
 
     // Bookmarks were a plain QML array with a hard-coded first entry and no
     // store of any kind: the "+" in the sidebar appended to it, the row

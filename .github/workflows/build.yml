@@ -1,0 +1,39 @@
+# Builds the suite and runs the smoke tests on every push and pull request.
+#
+# In an Ubuntu 26.04 container: the suite needs Qt 6.6 or newer (install.sh
+# checks for it), and the runner's own Ubuntu 24.04 has Qt 6.4. 26.04 is also
+# what the suite is tested on by hand.
+#
+# tools/smoke.sh is what a contributor runs before committing; the shell-boot
+# check needs a Wayland session and skips itself here.
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - name: Build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates build-essential cmake ninja-build pkgconf python3 \
+            libssl-dev libsystemd-dev libpolkit-agent-1-dev libarchive-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-declarative-dev-tools \
+            qt6-wayland-dev qt6-multimedia-dev qt6-svg-dev liblayershellqtinterface-dev
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make -C src suite -j"$(nproc)"
+
+      - name: Smoke tests
+        # HOME is root's in the container; the daemon's read-only verbs
+        # create their state under it, which is part of what is tested.
+        run: make -C src smoke

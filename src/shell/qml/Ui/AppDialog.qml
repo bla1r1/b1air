@@ -81,7 +81,9 @@ C.Dialog {
             hoverEnabled: true
             contentItem: Text {
                 id: label
-                text: btn.text
+                // Cancel, OK, Save…: the standard buttons are named by Qt,
+                // whose own translations the suite does not ship.
+                text: I18n.tr(btn.text)
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 font.family: Design.font.sans

@@ -29,7 +29,7 @@ ApplicationWindow {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: GitBackend.repoName ? "Git — " + GitBackend.repoName : "Git"
+    title: GitBackend.repoName ? I18n.tr("Git — %1", GitBackend.repoName) : I18n.tr("Git")
     width: Design.s(1040)
     height: Design.s(680)
     // Low enough for a window tiled to half a small screen; the layout
@@ -94,31 +94,31 @@ ApplicationWindow {
     // The repository itself.
     ContextMenu {
         id: repoMenu
-        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(repoMenu.target) }
-        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(repoMenu.target) }
+        Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(repoMenu.target) }
+        Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(repoMenu.target) }
         MenuLine {}
         Action {
-            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? "View on GitLab" : "View on GitHub"
+            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? I18n.tr("View on GitLab") : I18n.tr("View on GitHub")
             enabled: GitBackend.webUrl !== ""
             onTriggered: GitBackend.openOnWeb()
         }
         Action {
-            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? "Create merge request" : "Create pull request"
+            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? I18n.tr("Create merge request") : I18n.tr("Create pull request")
             enabled: window.canOpenPr
             onTriggered: GitBackend.openPullRequest()
         }
         MenuLine {}
-        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(repoMenu.target)) }
+        Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(repoMenu.target)) }
     }
     // A repository in the list, which may not be the open one: target is
     // its absolute path, and the actions go straight to the tools.
     ContextMenu {
         id: repoListMenu
-        Action { text: "Open"; onTriggered: { GitBackend.openRepo(repoListMenu.target); } }
-        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(repoListMenu.target) }
-        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(repoListMenu.target) }
+        Action { text: I18n.tr("Open"); onTriggered: { GitBackend.openRepo(repoListMenu.target); } }
+        Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(repoListMenu.target) }
+        Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(repoListMenu.target) }
         MenuLine {}
-        Action { text: "Copy path"; onTriggered: GitBackend.copyText(repoListMenu.target) }
+        Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(repoListMenu.target) }
     }
     // A changed file. Stage and unstage are already a click on the checkbox;
     // here too because a right-click is where people look for them.
@@ -126,19 +126,19 @@ ApplicationWindow {
         id: fileMenu
         property bool staged: false
         property bool conflicted: false
-        Action { text: "Open"; onTriggered: GitBackend.openFile(fileMenu.target) }
-        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(fileMenu.target) }
-        Action { text: "Open folder in Terminal"; onTriggered: GitBackend.openTerminal(fileMenu.target) }
+        Action { text: I18n.tr("Open"); onTriggered: GitBackend.openFile(fileMenu.target) }
+        Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(fileMenu.target) }
+        Action { text: I18n.tr("Open folder in Terminal"); onTriggered: GitBackend.openTerminal(fileMenu.target) }
         MenuLine {}
-        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(fileMenu.target)) }
-        Action { text: "Copy relative path"; onTriggered: GitBackend.copyText(fileMenu.target) }
+        Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(fileMenu.target)) }
+        Action { text: I18n.tr("Copy relative path"); onTriggered: GitBackend.copyText(fileMenu.target) }
         MenuLine {}
         Action {
-            text: fileMenu.conflicted ? "Mark as resolved" : fileMenu.staged ? "Unstage" : "Stage"
+            text: fileMenu.conflicted ? I18n.tr("Mark as resolved") : fileMenu.staged ? I18n.tr("Unstage") : I18n.tr("Stage")
             onTriggered: fileMenu.staged ? GitBackend.unstageFile(fileMenu.target) : GitBackend.stageFile(fileMenu.target)
         }
         Action {
-            text: "Ignore file"
+            text: I18n.tr("Ignore file")
             onTriggered: GitBackend.ignorePattern("/" + fileMenu.target)
         }
         Action {
@@ -147,19 +147,19 @@ ApplicationWindow {
                 const i = name.lastIndexOf(".");
                 return i > 0 ? name.slice(i) : "";
             }
-            text: ext !== "" ? "Ignore all " + ext + " files" : "Ignore all files like this"
+            text: ext !== "" ? I18n.tr("Ignore all %1 files", ext) : I18n.tr("Ignore all files like this")
             enabled: ext !== ""
             onTriggered: GitBackend.ignorePattern("*" + ext)
         }
         MenuLine {}
         Action {
-            text: "Discard changes…"
+            text: I18n.tr("Discard changes…")
             onTriggered: {
                 const path = fileMenu.target;
                 window.ask({
-                    title: "Discard changes?",
-                    text: "Changes to " + path + " will be thrown away. A copy goes to the trash.",
-                    confirm: "Discard", destructive: true,
+                    title: I18n.tr("Discard changes?"),
+                    text: I18n.tr("Changes to %1 will be thrown away. A copy goes to the trash.", path),
+                    confirm: I18n.tr("Discard"), destructive: true,
                     accept: () => GitBackend.discardFiles([path])
                 });
             }
@@ -168,16 +168,16 @@ ApplicationWindow {
 
     ContextMenu {
         id: changesMenu
-        Action { text: "Stage all"; onTriggered: GitBackend.stageAll() }
-        Action { text: "Unstage all"; onTriggered: GitBackend.unstageAll() }
+        Action { text: I18n.tr("Stage all"); onTriggered: GitBackend.stageAll() }
+        Action { text: I18n.tr("Unstage all"); onTriggered: GitBackend.unstageAll() }
         MenuLine {}
         Action {
-            text: "Discard all changes…"
+            text: I18n.tr("Discard all changes…")
             enabled: GitBackend.changedFiles.length > 0
             onTriggered: window.ask({
-                title: "Discard all changes?",
-                text: GitBackend.changedFiles.length + " changed files will be reset. Copies go to the trash.",
-                confirm: "Discard all", destructive: true,
+                title: I18n.tr("Discard all changes?"),
+                text: I18n.trn("%1 changed file will be reset. A copy goes to the trash.", "%1 changed files will be reset. Copies go to the trash.", GitBackend.changedFiles.length),
+                confirm: I18n.tr("Discard all"), destructive: true,
                 accept: () => GitBackend.discardAll()
             })
         }
@@ -185,38 +185,38 @@ ApplicationWindow {
     // A file of a commit: the version on disk now, which is what opens.
     ContextMenu {
         id: commitFileMenu
-        Action { text: "Open"; onTriggered: GitBackend.openFile(commitFileMenu.target) }
-        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(commitFileMenu.target) }
+        Action { text: I18n.tr("Open"); onTriggered: GitBackend.openFile(commitFileMenu.target) }
+        Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(commitFileMenu.target) }
         MenuLine {}
-        Action { text: "Copy path"; onTriggered: GitBackend.copyText(GitBackend.absolutePath(commitFileMenu.target)) }
-        Action { text: "Copy relative path"; onTriggered: GitBackend.copyText(commitFileMenu.target) }
+        Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(commitFileMenu.target)) }
+        Action { text: I18n.tr("Copy relative path"); onTriggered: GitBackend.copyText(commitFileMenu.target) }
     }
     ContextMenu {
         id: commitMenu
         property string subject: ""
-        Action { text: "Copy SHA"; onTriggered: GitBackend.copyText(commitMenu.target) }
-        Action { text: "Copy message"; onTriggered: GitBackend.copyText(commitMenu.subject) }
+        Action { text: I18n.tr("Copy SHA"); onTriggered: GitBackend.copyText(commitMenu.target) }
+        Action { text: I18n.tr("Copy message"); onTriggered: GitBackend.copyText(commitMenu.subject) }
         MenuLine {}
         Action {
-            text: "Revert changes in commit"
+            text: I18n.tr("Revert changes in commit")
             enabled: !window.busy
             onTriggered: GitBackend.revertCommit(commitMenu.target)
         }
         Action {
-            text: "Create branch from commit…"
+            text: I18n.tr("Create branch from commit…")
             onTriggered: {
                 const hash = commitMenu.target;
-                window.ask({ title: "Create branch", text: "A new branch starting at this commit.",
-                             input: true, placeholder: "Branch name", confirm: "Create branch",
+                window.ask({ title: I18n.tr("Create branch"), text: I18n.tr("A new branch starting at this commit."),
+                             input: true, placeholder: I18n.tr("Branch name"), confirm: I18n.tr("Create branch"),
                              accept: v => GitBackend.createBranchAt(v, hash) });
             }
         }
         Action {
-            text: "Create tag…"
+            text: I18n.tr("Create tag…")
             onTriggered: {
                 const hash = commitMenu.target;
-                window.ask({ title: "Create tag", text: "A tag on this commit.",
-                             input: true, placeholder: "Tag name, e.g. v1.0", confirm: "Create tag",
+                window.ask({ title: I18n.tr("Create tag"), text: I18n.tr("A tag on this commit."),
+                             input: true, placeholder: I18n.tr("Tag name, e.g. v1.0"), confirm: I18n.tr("Create tag"),
                              accept: v => GitBackend.createTag(v, hash) });
             }
         }
@@ -255,22 +255,22 @@ ApplicationWindow {
         property string worktree: ""
         readonly property bool isCurrent: branchMenu.target === GitBackend.branchName
         Action {
-            text: "Merge into " + GitBackend.branchName
+            text: I18n.tr("Merge into %1", GitBackend.branchName)
             enabled: !branchMenu.isCurrent && !GitBackend.mergeState.active
             onTriggered: { window.branchDropdownOpen = false; GitBackend.mergeBranch(branchMenu.target); }
         }
         Action {
-            text: "Rename…"
+            text: I18n.tr("Rename…")
             onTriggered: {
                 const from = branchMenu.target;
-                window.ask({ title: "Rename branch", text: "New name for " + from + ".",
-                             input: true, value: from, placeholder: "Branch name", confirm: "Rename",
+                window.ask({ title: I18n.tr("Rename branch"), text: I18n.tr("New name for %1.", from),
+                             input: true, value: from, placeholder: I18n.tr("Branch name"), confirm: I18n.tr("Rename"),
                              accept: v => GitBackend.renameBranch(from, v) });
             }
         }
         MenuLine {}
         Action {
-            text: branchMenu.worktree !== "" ? "Open its worktree" : "Open in new worktree"
+            text: branchMenu.worktree !== "" ? I18n.tr("Open its worktree") : I18n.tr("Open in new worktree")
             enabled: !branchMenu.isCurrent
             onTriggered: {
                 const path = branchMenu.worktree !== "" ? branchMenu.worktree
@@ -283,13 +283,13 @@ ApplicationWindow {
     ContextMenu {
         id: worktreeMenu
         property bool removable: false
-        Action { text: "Open"; onTriggered: { window.branchDropdownOpen = false; GitBackend.openRepo(worktreeMenu.target); } }
-        Action { text: "Open in Terminal"; onTriggered: GitBackend.openTerminal(worktreeMenu.target) }
-        Action { text: "Show in Files"; onTriggered: GitBackend.openFileManager(worktreeMenu.target) }
+        Action { text: I18n.tr("Open"); onTriggered: { window.branchDropdownOpen = false; GitBackend.openRepo(worktreeMenu.target); } }
+        Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(worktreeMenu.target) }
+        Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(worktreeMenu.target) }
         MenuLine {}
-        Action { text: "Copy path"; onTriggered: GitBackend.copyText(worktreeMenu.target) }
+        Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(worktreeMenu.target) }
         Action {
-            text: "Remove worktree…"
+            text: I18n.tr("Remove worktree…")
             enabled: worktreeMenu.removable
             onTriggered: { window.branchDropdownOpen = true; window.pendingRemoveWorktree = worktreeMenu.target; }
         }
@@ -515,9 +515,9 @@ ApplicationWindow {
     // Read from the repository (FETCH_HEAD), so it survives a restart and
     // counts a fetch made in a terminal.
     readonly property string lastFetchText: {
-        if (!window.hasRepo) return "No repository";
-        if (!GitBackend.lastFetchTime) return "Never fetched";
-        return "Last fetched " + window.relTime(GitBackend.lastFetchTime);
+        if (!window.hasRepo) return I18n.tr("No repository");
+        if (!GitBackend.lastFetchTime) return I18n.tr("Never fetched");
+        return I18n.tr("Last fetched %1", window.relTime(GitBackend.lastFetchTime));
     }
     // The one action the sync cell offers, GitHub Desktop's order: a branch
     // with no upstream is published; with commits to pull, pulling comes
@@ -543,19 +543,18 @@ ApplicationWindow {
     }
     function relTime(t) {
         if (!t) return "";
-        const plural = (n, unit) => n + " " + unit + (n === 1 ? "" : "s") + " ago";
         const sec = Math.max(0, Math.floor(window.windowNow / 1000 - t));
-        if (sec < 60) return "just now";
+        if (sec < 60) return I18n.tr("just now");
         const min = Math.floor(sec / 60);
-        if (min < 60) return plural(min, "minute");
+        if (min < 60) return I18n.trn("%1 minute ago", "%1 minutes ago", min);
         const hr = Math.floor(min / 60);
-        if (hr < 24) return plural(hr, "hour");
+        if (hr < 24) return I18n.trn("%1 hour ago", "%1 hours ago", hr);
         const days = Math.floor(hr / 24);
-        if (days < 7) return days === 1 ? "yesterday" : plural(days, "day");
-        if (days < 28) return plural(Math.floor(days / 7), "week");
+        if (days < 7) return days === 1 ? I18n.tr("yesterday") : I18n.trn("%1 day ago", "%1 days ago", days);
+        if (days < 28) return I18n.trn("%1 week ago", "%1 weeks ago", Math.floor(days / 7));
         const months = Math.max(1, Math.floor(days / 30.44));
-        if (months < 12) return plural(months, "month");
-        return plural(Math.max(1, Math.floor(days / 365.25)), "year");
+        if (months < 12) return I18n.trn("%1 month ago", "%1 months ago", months);
+        return I18n.trn("%1 year ago", "%1 years ago", Math.max(1, Math.floor(days / 365.25)));
     }
 
     // A file's state as an icon rather than a letter: the Octicons git diff
@@ -572,9 +571,9 @@ ApplicationWindow {
              : st === "renamed" ? window.colCyan : window.colOrange;
     }
     function statusWord(st) {
-        if (st === "conflicted") return "Conflicted";
-        return st === "added" ? "Added" : st === "deleted" ? "Deleted"
-             : st === "renamed" ? "Renamed" : "Modified";
+        if (st === "conflicted") return I18n.tr("Conflicted");
+        return st === "added" ? I18n.tr("Added") : st === "deleted" ? I18n.tr("Deleted")
+             : st === "renamed" ? I18n.tr("Renamed") : I18n.tr("Modified");
     }
     // "Blair and Claude", "Blair and 2 others" — how GitHub Desktop names a
     // commit with co-authors. Only the author was shown before, so a commit
@@ -582,8 +581,8 @@ ApplicationWindow {
     function people(author, coAuthors) {
         const co = (coAuthors || []).filter(n => n !== author);
         if (co.length === 0) return author || "";
-        if (co.length === 1) return author + " and " + co[0];
-        return author + " and " + co.length + " others";
+        if (co.length === 1) return I18n.tr("%1 and %2", author, co[0]);
+        return I18n.trn("%2 and %1 other", "%2 and %1 others", co.length, author);
     }
     function initials(name) {
         const words = (name || "?").split(/[\s._-]+/).filter(w => w.length > 0);
@@ -689,8 +688,8 @@ ApplicationWindow {
                     ToolbarCell {
                         id: repoBtn
                         icon: "󰊢"
-                        caption: "Current repository"
-                        title: GitBackend.repoName || "No repository"
+                        caption: I18n.tr("Current repository")
+                        title: GitBackend.repoName || I18n.tr("No repository")
                         dropdown: true
                         open: window.repoDropdownOpen
                         onRightClicked: if (window.hasRepo) window.showMenu(repoMenu, "")
@@ -708,7 +707,7 @@ ApplicationWindow {
                         // pushing the rest of the bar along.
                         icon: ""
                         spinning: GitBackend.busy === "checkout" || GitBackend.busy === "merge"
-                        caption: spinning ? GitBackend.busyText : "Current branch"
+                        caption: spinning ? GitBackend.busyText : I18n.tr("Current branch")
                         title: window.hasRepo ? GitBackend.branchName : "—"
                         dropdown: true
                         open: window.branchDropdownOpen
@@ -727,17 +726,17 @@ ApplicationWindow {
                         icon: window.syncAction === "publish" ? "󰅧"
                             : window.syncAction === "pull" ? "󰁅"
                             : window.syncAction === "push" ? "󰁝" : "󰑐"
-                        title: window.syncAction === "publish" ? "Publish branch"
-                             : window.syncAction === "pull" ? "Pull " + GitBackend.remoteName
-                             : window.syncAction === "push" ? "Push " + GitBackend.remoteName
-                             : window.syncAction === "fetch" ? "Fetch " + GitBackend.remoteName
-                             : "Fetch origin"
+                        title: window.syncAction === "publish" ? I18n.tr("Publish branch")
+                             : window.syncAction === "pull" ? I18n.tr("Pull %1", GitBackend.remoteName)
+                             : window.syncAction === "push" ? I18n.tr("Push %1", GitBackend.remoteName)
+                             : window.syncAction === "fetch" ? I18n.tr("Fetch %1", GitBackend.remoteName)
+                             : I18n.tr("Fetch origin")
                         caption: window.syncBusy ? GitBackend.busyText
-                               : !window.hasRepo ? "No repository"
-                               : !GitBackend.hasRemote ? "This repository has no remote"
-                               : GitBackend.fetching ? "Fetching…"
-                               : GitBackend.upstreamGone ? "Deleted on " + GitBackend.remoteName + " — publish again?"
-                               : window.syncAction === "publish" ? "Publish this branch to " + GitBackend.remoteName
+                               : !window.hasRepo ? I18n.tr("No repository")
+                               : !GitBackend.hasRemote ? I18n.tr("This repository has no remote")
+                               : GitBackend.fetching ? I18n.tr("Fetching…")
+                               : GitBackend.upstreamGone ? I18n.tr("Deleted on %1 — publish again?", GitBackend.remoteName)
+                               : window.syncAction === "publish" ? I18n.tr("Publish this branch to %1", GitBackend.remoteName)
                                : window.lastFetchText
                         // Counts beside the title, as the original draws them:
                         // what is waiting in each direction.
@@ -762,7 +761,7 @@ ApplicationWindow {
                         compact: true
                         leftDivider: true
                         icon: "󰀉"
-                        title: window.githubAccount && window.githubAccount.login ? window.githubAccount.login : "Accounts"
+                        title: window.githubAccount && window.githubAccount.login ? window.githubAccount.login : I18n.tr("Accounts")
                         open: window.accountsDropdownOpen
                         onClicked: {
                             window.accountsDropdownOpen = !window.accountsDropdownOpen;
@@ -814,13 +813,13 @@ Item {
                                 BarGroup {
                                     anchors.centerIn: parent
                                     BarButton {
-                                        label: "Changes" + (GitBackend.changedFiles.length ? "  " + GitBackend.changedFiles.length : "")
+                                        label: I18n.tr("Changes") + (GitBackend.changedFiles.length ? "  " + GitBackend.changedFiles.length : "")
                                         glyph: "\u{f0279}"
                                         checked: window.currentTab === 0
                                         onClicked: window.currentTab = 0
                                     }
                                     BarButton {
-                                        label: "History"
+                                        label: I18n.tr("History")
                                         glyph: "\u{f02da}"
                                         checked: window.currentTab === 1
                                         onClicked: {
@@ -897,7 +896,7 @@ Item {
                                             }
 
                                             Text {
-                                                text: GitBackend.changedFiles.length === 0 ? "No changed files"
+                                                text: GitBackend.changedFiles.length === 0 ? I18n.tr("No changed files")
                                                     : GitBackend.changedFiles.length + (GitBackend.changedFiles.length === 1 ? " changed file" : " changed files")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
@@ -908,7 +907,7 @@ Item {
                                             }
 
                                             Text {
-                                                text: "Stage All"
+                                                text: I18n.tr("Stage All")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: window.colGreen
@@ -922,7 +921,7 @@ Item {
                                             }
                                             Text { text: "•"; font.pixelSize: Design.s(Design.font.caption); color: window.colDim }
                                             Text {
-                                                text: "Unstage All"
+                                                text: I18n.tr("Unstage All")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: window.colRed
@@ -952,10 +951,10 @@ Item {
                                             spacing: Design.s(10)
                                             Text {
                                                 Layout.fillWidth: true
-                                                text: "Merging " + (GitBackend.mergeState.branch || "") + " — "
-                                                      + (parent.parent.conflicts > 0
-                                                         ? parent.parent.conflicts + (parent.parent.conflicts === 1 ? " conflict" : " conflicts")
-                                                         : "ready")
+                                                text: I18n.tr("Merging %1 — %2", GitBackend.mergeState.branch || "",
+                                                             parent.parent.conflicts > 0
+                                                             ? I18n.trn("%1 conflict", "%1 conflicts", parent.parent.conflicts)
+                                                             : I18n.tr("ready"))
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.bold: true
@@ -963,7 +962,7 @@ Item {
                                                 elide: Text.ElideRight
                                             }
                                             Text {
-                                                text: GitBackend.busy === "commit" ? "Committing…" : "Commit merge"
+                                                text: GitBackend.busy === "commit" ? I18n.tr("Committing…") : I18n.tr("Commit merge")
                                                 visible: parent.parent.conflicts === 0
                                                 enabled: !window.busy
                                                 font.family: Design.font.sans
@@ -973,7 +972,7 @@ Item {
                                                 MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.commitMerge() }
                                             }
                                             Text {
-                                                text: "Abort"
+                                                text: I18n.tr("Abort")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: window.colDim
@@ -999,8 +998,8 @@ Item {
                                             spacing: Design.s(8)
                                             Text {
                                                 Layout.fillWidth: true
-                                                text: parent.parent.confirmDiscard ? "Delete the stash for good?"
-                                                    : "Stashed changes (" + (GitBackend.branchStash.files || 0) + ")"
+                                                text: parent.parent.confirmDiscard ? I18n.tr("Delete the stash for good?")
+                                                    : I18n.tr("Stashed changes (%1)", GitBackend.branchStash.files || 0)
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.bold: true
@@ -1008,7 +1007,7 @@ Item {
                                                 elide: Text.ElideRight
                                             }
                                             Text {
-                                                text: parent.parent.confirmDiscard ? "Delete" : "Restore"
+                                                text: parent.parent.confirmDiscard ? I18n.tr("Delete") : I18n.tr("Restore")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.bold: true
@@ -1026,7 +1025,7 @@ Item {
                                                 }
                                             }
                                             Text {
-                                                text: parent.parent.confirmDiscard ? "Keep" : "Discard"
+                                                text: parent.parent.confirmDiscard ? I18n.tr("Keep") : I18n.tr("Discard")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: window.colDim
@@ -1192,7 +1191,7 @@ Item {
                                                         Layout.fillWidth: true
                                                         spacing: 0
                                                         Text {
-                                                            text: "Committed " + window.relTime(GitBackend.lastCommit.time)
+                                                            text: I18n.tr("Committed %1", window.relTime(GitBackend.lastCommit.time))
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
                                                             color: window.colDim
@@ -1218,7 +1217,7 @@ Item {
                                                         Text {
                                                             id: undoText
                                                             anchors.centerIn: parent
-                                                            text: GitBackend.busy === "undo" ? "Undoing…" : "Undo"
+                                                            text: GitBackend.busy === "undo" ? I18n.tr("Undoing…") : I18n.tr("Undo")
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
                                                             font.bold: true
@@ -1240,7 +1239,7 @@ Item {
                                                 id: identityWarning
                                                 Layout.fillWidth: true
                                                 visible: window.hasRepo && (!GitBackend.identity.name || !GitBackend.identity.email)
-                                                text: "Set your name and email: git config user.name / user.email"
+                                                text: I18n.tr("Set your name and email: git config user.name / user.email")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: window.colOrange
@@ -1285,7 +1284,7 @@ Item {
                                                     }
 
                                                     Text {
-                                                        text: "Summary (required)"
+                                                        text: I18n.tr("Summary (required)")
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.body)
                                                         color: window.colDim
@@ -1324,7 +1323,7 @@ Item {
                                                     Text {
                                                         x: descInput.leftPadding
                                                         y: descInput.topPadding
-                                                        text: "Description"
+                                                        text: I18n.tr("Description")
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.body)
                                                         color: window.colDim
@@ -1356,7 +1355,7 @@ Item {
                                                         RotationAnimator on rotation { running: commitSpin.visible; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
                                                     }
                                                     Text {
-                                                        text: "Committing…"
+                                                        text: I18n.tr("Committing…")
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.caption)
                                                         font.bold: true
@@ -1371,10 +1370,10 @@ Item {
                                                     elide: Text.ElideMiddle
                                                     visible: !parent.committing
                                                     // Nothing ticked commits everything.
-                                                    text: !window.hasRepo ? "No repository open"
+                                                    text: !window.hasRepo ? I18n.tr("No repository open")
                                                           : window.stagedCount === 0 && GitBackend.changedFiles.length > 0
-                                                            ? "Commit all to " + GitBackend.branchName
-                                                            : "Commit to " + GitBackend.branchName
+                                                            ? I18n.tr("Commit all to %1", GitBackend.branchName)
+                                                            : I18n.tr("Commit to %1", GitBackend.branchName)
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.body)
                                                     font.bold: true
@@ -1429,7 +1428,7 @@ Item {
                                                 Layout.fillWidth: true
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: model.message || "Commit"
+                                                    text: model.message || I18n.tr("Commit")
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.caption)
                                                     font.bold: true
@@ -1459,7 +1458,7 @@ Item {
                                             Text {
                                                 Layout.fillWidth: true
                                                 elide: Text.ElideRight
-                                                text: window.people(model.author || "User", model.coAuthors) + " • " + window.relTime(model.time)
+                                                text: window.people(model.author || I18n.tr("User"), model.coAuthors) + " • " + window.relTime(model.time)
                                                       + (model.sync === "local" ? " • not pushed" : "")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
@@ -1483,8 +1482,8 @@ Item {
                                         }
                                         ToolTip.visible: hArea.containsMouse
                                         ToolTip.delay: 800
-                                        ToolTip.text: model.sync === "local" ? "Not pushed — on no remote yet"
-                                                    : model.sync === "pushed" ? "Pushed" : "This repository has no remote"
+                                        ToolTip.text: model.sync === "local" ? I18n.tr("Not pushed — on no remote yet")
+                                                    : model.sync === "pushed" ? I18n.tr("Pushed") : I18n.tr("This repository has no remote")
                                     }
                                 }
                             }
@@ -1645,7 +1644,7 @@ Item {
                                     }
                                     Text {
                                         Layout.alignment: Qt.AlignHCenter
-                                        text: GitBackend.isRepo ? "No changes to display" : "No Git Repository Open"
+                                        text: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(14)
                                         font.bold: true
@@ -1653,7 +1652,7 @@ Item {
                                     }
                                     Text {
                                         Layout.alignment: Qt.AlignHCenter
-                                        text: GitBackend.isRepo ? "Working directory is clean" : "Select a repository from the top menu or open a folder."
+                                        text: GitBackend.isRepo ? I18n.tr("Working directory is clean") : I18n.tr("Select a repository from the top menu or open a folder.")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.body)
                                         color: window.colDim
@@ -1672,17 +1671,17 @@ Item {
                                                 const items = [];
                                                 const remote = GitBackend.remoteName || "origin";
                                                 if (window.syncAction === "publish")
-                                                    items.push({ title: "Publish your branch", text: "Put " + GitBackend.branchName + " on " + remote + ".", button: "Publish branch", run: "push" });
+                                                    items.push({ title: I18n.tr("Publish your branch"), text: I18n.tr("Put %1 on %2.", GitBackend.branchName, remote), button: I18n.tr("Publish branch"), run: "push" });
                                                 else if (GitBackend.behindCount > 0)
-                                                    items.push({ title: "Pull " + GitBackend.behindCount + (GitBackend.behindCount === 1 ? " commit" : " commits") + " from " + remote, text: "They're on the remote and not here yet.", button: "Pull", run: "pull" });
+                                                    items.push({ title: I18n.trn("Pull %1 commit from %2", "Pull %1 commits from %2", GitBackend.behindCount, remote), text: I18n.tr("They're on the remote and not here yet."), button: I18n.tr("Pull"), run: "pull" });
                                                 else if (GitBackend.aheadCount > 0)
-                                                    items.push({ title: "Push " + GitBackend.aheadCount + (GitBackend.aheadCount === 1 ? " commit" : " commits") + " to " + remote, text: "They're only on this machine.", button: "Push", run: "push" });
+                                                    items.push({ title: I18n.trn("Push %1 commit to %2", "Push %1 commits to %2", GitBackend.aheadCount, remote), text: I18n.tr("They're only on this machine."), button: I18n.tr("Push"), run: "push" });
                                                 if (window.canOpenPr)
-                                                    items.push({ title: "Create a pull request", text: "From " + GitBackend.branchName + " into " + GitBackend.defaultBranch + ".", button: "Create pull request", run: "pr" });
-                                                items.push({ title: "Open in the terminal", text: GitBackend.repoPath, button: "Terminal", run: "term" });
-                                                items.push({ title: "Show in Files", text: "Browse the repository's folder.", button: "Files", run: "files" });
+                                                    items.push({ title: I18n.tr("Create a pull request"), text: I18n.tr("From %1 into %2.", GitBackend.branchName, GitBackend.defaultBranch), button: I18n.tr("Create pull request"), run: "pr" });
+                                                items.push({ title: I18n.tr("Open in the terminal"), text: GitBackend.repoPath, button: I18n.tr("Terminal"), run: "term" });
+                                                items.push({ title: I18n.tr("Show in Files"), text: I18n.tr("Browse the repository's folder."), button: I18n.tr("Files"), run: "files" });
                                                 if (GitBackend.webUrl !== "")
-                                                    items.push({ title: "View on the web", text: GitBackend.webUrl, button: "Open", run: "web" });
+                                                    items.push({ title: I18n.tr("View on the web"), text: GitBackend.webUrl, button: I18n.tr("Open"), run: "web" });
                                                 return items;
                                             }
                                             delegate: Rectangle {
@@ -2023,10 +2022,10 @@ Item {
                                             // to it instead of "nothing".
                                             readonly property var shown: GitBackend.commitFiles.find(f => f.path === GitBackend.commitFile)
                                             text: GitBackend.commitFiles.length === 0
-                                                  ? "This commit changes no files"
+                                                  ? I18n.tr("This commit changes no files")
                                                   : (shown && shown.oldPath)
-                                                    ? "Renamed from " + shown.oldPath + ", content unchanged"
-                                                    : "No textual changes in this file"
+                                                    ? I18n.tr("Renamed from %1, content unchanged", shown.oldPath)
+                                                    : I18n.tr("No textual changes in this file")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.body)
                                             color: window.colDim
@@ -2052,7 +2051,7 @@ Item {
                                 }
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: GitBackend.isRepo ? "Select a commit" : "No Git Repository Open"
+                                    text: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(14)
                                     font.bold: true
@@ -2060,8 +2059,8 @@ Item {
                                 }
                                 Text {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: GitBackend.isRepo ? "Its files and changes appear here."
-                                                            : "Select a repository from the top menu or open a folder."
+                                    text: GitBackend.isRepo ? I18n.tr("Its files and changes appear here.")
+                                                            : I18n.tr("Select a repository from the top menu or open a folder.")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.body)
                                     color: window.colDim
@@ -2121,7 +2120,7 @@ Item {
                             Layout.fillWidth: true
                             Text {
                                 Layout.fillWidth: true
-                                text: "Repositories"
+                                text: I18n.tr("Repositories")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
                                 font.bold: true
@@ -2155,7 +2154,7 @@ Item {
                                 spacing: Design.s(6)
                                 Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
                                 Text {
-                                    text: "Open repository…"
+                                    text: I18n.tr("Open repository…")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(11)
                                     font.bold: true
@@ -2209,7 +2208,7 @@ Item {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: repoFilterInput.text === ""
-                                        text: "Filter, or type a path"
+                                        text: I18n.tr("Filter, or type a path")
                                         font: repoFilterInput.font
                                         color: window.colDim
                                     }
@@ -2336,8 +2335,8 @@ Item {
                             Layout.fillWidth: true
                             visible: window.filteredRepos.length === 0
                             text: GitBackend.repos.length === 0
-                                ? "Nothing here yet — open a repository with the button above."
-                                : "Nothing matches that filter."
+                                ? I18n.tr("Nothing here yet — open a repository with the button above.")
+                                : I18n.tr("Nothing matches that filter.")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.caption)
                             color: window.colDim
@@ -2364,7 +2363,7 @@ Item {
 
                                 Text {
                                     Layout.fillWidth: true
-                                    text: "Move " + window.pendingTrashRepo + " to the trash? This deletes the whole working tree."
+                                    text: I18n.tr("Move %1 to the trash? This deletes the whole working tree.", window.pendingTrashRepo)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
                                     color: window.colFg
@@ -2375,7 +2374,7 @@ Item {
                                     spacing: Design.s(6)
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: "Cancel"
+                                        text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
@@ -2387,7 +2386,7 @@ Item {
                                         }
                                     }
                                     Text {
-                                        text: "Move to trash"
+                                        text: I18n.tr("Move to trash")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.bold: true
@@ -2434,7 +2433,7 @@ Item {
                         spacing: Design.s(8)
 
                         Text {
-                            text: "Branches"
+                            text: I18n.tr("Branches")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
                             font.bold: true
@@ -2483,7 +2482,7 @@ Item {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: newBranchInput.text === ""
-                                        text: "Filter, or type a new branch name"
+                                        text: I18n.tr("Filter, or type a new branch name")
                                         font: newBranchInput.font
                                         color: window.colDim
                                     }
@@ -2497,7 +2496,7 @@ Item {
                                     color: window.colGreen
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "New"
+                                        text: I18n.tr("New")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.bold: true
@@ -2651,7 +2650,7 @@ Item {
                             visible: GitBackend.worktrees.length > 1
 
                             Text {
-                                text: "Worktrees"
+                                text: I18n.tr("Worktrees")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
                                 font.bold: true
@@ -2731,7 +2730,7 @@ Item {
                                 spacing: Design.s(4)
                                 Text {
                                     Layout.fillWidth: true
-                                    text: "Remove the worktree at " + window.pendingRemoveWorktree + "?"
+                                    text: I18n.tr("Remove the worktree at %1?", window.pendingRemoveWorktree)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
                                     color: window.colFg
@@ -2741,14 +2740,14 @@ Item {
                                     spacing: Design.s(10)
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: "Cancel"
+                                        text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
                                         MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: window.pendingRemoveWorktree = "" }
                                     }
                                     Text {
-                                        text: "Remove"
+                                        text: I18n.tr("Remove")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.bold: true
@@ -2789,9 +2788,8 @@ Item {
 
                                 Text {
                                     Layout.fillWidth: true
-                                    text: "You have " + GitBackend.changedFiles.length
-                                          + (GitBackend.changedFiles.length === 1 ? " changed file" : " changed files")
-                                          + " on " + GitBackend.branchName + "."
+                                    text: I18n.trn("You have %1 changed file on %2.", "You have %1 changed files on %2.",
+                                                   GitBackend.changedFiles.length, GitBackend.branchName)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
                                     font.bold: true
@@ -2809,11 +2807,11 @@ Item {
                                     delegate: Rectangle {
                                         required property string modelData
                                         readonly property string title: modelData === "stash"
-                                            ? "Leave my changes on " + GitBackend.branchName
-                                            : "Bring my changes to " + window.pendingSwitch
+                                            ? I18n.tr("Leave my changes on %1", GitBackend.branchName)
+                                            : I18n.tr("Bring my changes to %1", window.pendingSwitch)
                                         readonly property string detail: modelData === "stash"
-                                            ? "They are stashed, and offered back when you return."
-                                            : "They come along, uncommitted."
+                                            ? I18n.tr("They are stashed, and offered back when you return.")
+                                            : I18n.tr("They come along, uncommitted.")
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: Design.s(36)
                                         radius: Design.s(4)
@@ -2859,7 +2857,7 @@ Item {
 
                                 Text {
                                     Layout.alignment: Qt.AlignRight
-                                    text: "Cancel"
+                                    text: I18n.tr("Cancel")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
                                     color: window.colDim
@@ -2901,7 +2899,7 @@ Item {
                                     spacing: Design.s(6)
                                     Item { Layout.fillWidth: true }
                                     Text {
-                                        text: "Cancel"
+                                        text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
@@ -2913,7 +2911,7 @@ Item {
                                         }
                                     }
                                     Text {
-                                        text: "Delete anyway"
+                                        text: I18n.tr("Delete anyway")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.bold: true
@@ -2961,7 +2959,7 @@ Item {
                         spacing: Design.s(8)
 
                         Text {
-                            text: "Accounts"
+                            text: I18n.tr("Accounts")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
                             font.bold: true
@@ -3008,9 +3006,9 @@ Item {
                                         Text {
                                             Layout.fillWidth: true
                                             elide: Text.ElideRight
-                                            text: !accItem.modelData.installed ? accItem.modelData.cli + " is not installed"
-                                                : accItem.signedIn ? "Signed in as " + accItem.modelData.login
-                                                : "Not signed in"
+                                            text: !accItem.modelData.installed ? I18n.tr("%1 is not installed", accItem.modelData.cli)
+                                                : accItem.signedIn ? I18n.tr("Signed in as %1", accItem.modelData.login)
+                                                : I18n.tr("Not signed in")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             color: accItem.signedIn ? window.colGreen : window.colDim
@@ -3030,7 +3028,7 @@ Item {
                                         Text {
                                             id: accBtnText
                                             anchors.centerIn: parent
-                                            text: accItem.signedIn ? "Sign out" : "Sign in"
+                                            text: accItem.signedIn ? I18n.tr("Sign out") : I18n.tr("Sign in")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             font.bold: !accItem.signedIn
@@ -3154,7 +3152,7 @@ Item {
                             Text {
                                 id: dlgBtnText
                                 anchors.centerIn: parent
-                                text: parent.isConfirm ? (window.dialog ? (window.dialog.confirm || "OK") : "OK") : "Cancel"
+                                text: parent.isConfirm ? (window.dialog ? (window.dialog.confirm || "OK") : "OK") : I18n.tr("Cancel")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.caption)
                                 font.bold: parent.isConfirm

@@ -28,7 +28,7 @@ ApplicationWindow {
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
-    title: NotesBackend.currentNoteId ? "Notes — " + NotesBackend.currentTitle : "Notes"
+    title: NotesBackend.currentNoteId ? I18n.tr("Notes — %1", NotesBackend.currentTitle) : I18n.tr("Notes")
     width: Design.s(960)
     height: Design.s(620)
     minimumWidth: 460
@@ -139,15 +139,15 @@ ApplicationWindow {
                 Layout.fillWidth: true
 
                 BarGroup {
-                    BarButton { glyph: "\u{f0415}"; label: "New note"; tip: "Ctrl+N"; onClicked: window.newNote() }
+                    BarButton { glyph: "\u{f0415}"; label: I18n.tr("New note"); tip: I18n.tr("Ctrl+N"); onClicked: window.newNote() }
                     // Left: re-read the vault (or choose one, the first time).
                     // Right-click: choose a different vault.
                     BarButton {
                         glyph: "\u{f0219}"
-                        label: NotesBackend.obsidianVaultPath ? "Obsidian" : "Connect Obsidian…"
+                        label: NotesBackend.obsidianVaultPath ? I18n.tr("Obsidian") : I18n.tr("Connect Obsidian…")
                         tip: NotesBackend.obsidianVaultPath
-                             ? "Re-read " + NotesBackend.obsidianVaultPath + " · right-click to choose another vault"
-                             : "Choose your Obsidian vault folder"
+                             ? I18n.tr("Re-read %1 · right-click to choose another vault", NotesBackend.obsidianVaultPath)
+                             : I18n.tr("Choose your Obsidian vault folder")
                         onClicked: { window.flushSave(); NotesBackend.syncWithObsidian(); }
                         MouseArea {
                             anchors.fill: parent
@@ -169,12 +169,12 @@ ApplicationWindow {
                 Field {
                     id: searchInput
                     Layout.preferredWidth: Design.s(220)
-                    placeholder: "Search notes"
+                    placeholder: I18n.tr("Search notes")
                     radius: height / 2
                     onEdited: value => window.searchQuery = value.toLowerCase()
                 }
                 BarGroup {
-                    BarButton { glyph: "\u{f0208}"; tip: "Preview (Ctrl+P)"; checked: window.showPreview; onClicked: window.showPreview = !window.showPreview }
+                    BarButton { glyph: "\u{f0208}"; tip: I18n.tr("Preview (Ctrl+P)"); checked: window.showPreview; onClicked: window.showPreview = !window.showPreview }
                 }
             }
 
@@ -240,7 +240,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         Text {
                                             Layout.fillWidth: true
-                                            text: modelData.title || "Untitled"
+                                            text: modelData.title || I18n.tr("Untitled")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.body)
                                             font.bold: true
@@ -315,7 +315,7 @@ ApplicationWindow {
                                 BarButton {
                                     glyph: "\u{f0a7a}"
                                     danger: true
-                                    tip: "Delete note"
+                                    tip: I18n.tr("Delete note")
                                     onClicked: deleteConfirm.open()
                                 }
                             }
@@ -340,7 +340,7 @@ ApplicationWindow {
                                     selectByMouse: true
 
                                     Text {
-                                        text: "Tags: write #tag anywhere in the note"
+                                        text: I18n.tr("Tags: write #tag anywhere in the note")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         color: window.colDim
@@ -460,14 +460,14 @@ ApplicationWindow {
 
     AppDialog {
         id: deleteConfirm
-        title: "Delete note?"
-        message: "This note will be permanently deleted."
+        title: I18n.tr("Delete note?")
+        message: I18n.tr("This note will be permanently deleted.")
         acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: {
             autoSaveTimer.stop();
             NotesBackend.deleteNote(NotesBackend.currentNoteId);
         }
-        Component.onCompleted: standardButton(Dialog.Ok).text = "Delete"
+        Component.onCompleted: standardButton(Dialog.Ok).text = I18n.tr("Delete")
     }
 }
