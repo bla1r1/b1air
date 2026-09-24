@@ -10,7 +10,7 @@ libopenssl-devel systemd-devel polkit-devel libarchive-devel polkit
 
 # Qt 6 development
 qt6-base-devel qt6-declarative-devel qt6-wayland-devel qt6-multimedia-devel
-qt6-svg-devel layer-shell-qt6-devel
+qt6-svg-devel layer-shell-qt6-devel wayland-devel wayland-protocols-devel
 
 # Qt 6 runtime
 qt6-wayland qt6-svg qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports

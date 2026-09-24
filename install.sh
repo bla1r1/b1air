@@ -961,7 +961,7 @@ post_install_checks() {
     local commands=(sway swaylock sddm quickshell
         b1air-daemon b1air-polkit-agent b1air-secret-service b1air-shell
         b1air-files b1air-settings b1air-monitor b1air-term b1air-text
-        b1air-view b1air-notes b1air-git b1air-camera)
+        b1air-view b1air-notes b1air-git b1air-camera b1air-bg)
     # The terminal niceties the fish config uses when present. Missing ones
     # cost a prettier prompt, not a working desktop.
     local recommended=(fish starship eza bat fzf)

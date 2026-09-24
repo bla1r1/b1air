@@ -3,7 +3,7 @@
 # AUR, or sway with --no-aur) is chosen by install.sh, not listed here.
 
 # Core & build
-base-devel git rsync curl unzip jq cmake ccache openssl polkit pkgconf
+base-devel git rsync curl unzip jq cmake ccache openssl polkit pkgconf wayland wayland-protocols
 
 # Wayland session
 swaybg swayidle swaylock xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk xorg-xwayland

@@ -668,7 +668,10 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Usage: " << argv[0] << " wallpaper set <path>\n";
                 return 1;
             }
-            // An optional output name: that screen only.
+            // An optional output name: that screen only. --workspace NAME:
+            // that workspace, on whichever screen shows it.
+            if (argc >= 6 && std::string(argv[4]) == "--workspace")
+                return SystemControl::wallpaper_set_workspace(argv[3], argv[5]) ? 0 : 1;
             if (argc >= 5) return SystemControl::wallpaper_set_output(argv[3], argv[4]) ? 0 : 1;
             return SystemControl::wallpaper_set(argv[3]) ? 0 : 1;
         } else if (sub == "random") {
@@ -679,8 +682,16 @@ int main(int argc, char* argv[]) {
         } else if (sub == "screens") {
             std::cout << SystemControl::wallpaper_overrides_json() << "\n";
             return 0;
+        } else if (sub == "workspaces") {
+            std::cout << SystemControl::wallpaper_workspaces_json() << "\n";
+            return 0;
+        } else if (sub == "unset" && argc >= 4) {
+            if (std::string(argv[3]) == "--workspace")
+                return argc >= 5 && SystemControl::wallpaper_unset("", argv[4]) ? 0 : 1;
+            return SystemControl::wallpaper_unset(argv[3]) ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " wallpaper {set <file> [output]|random [dir]|restore|screens}\n";
+            std::cerr << "Usage: " << argv[0] << " wallpaper {set <file> [output | --workspace <name>]"
+                      << "|unset <output> | unset --workspace <name>|random [dir]|restore|screens|workspaces}\n";
             return 1;
         }
     } else if (cmd == "night-light" || cmd == "nightlight") {

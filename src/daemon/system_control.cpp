@@ -3131,7 +3131,9 @@ bool SystemControl::wallpaper_set(const std::string& filepath, const std::string
                 for (const auto& o : outputs)
                     ipc.send_command(0, "output \"" + json_str(o, "name", "") + "\" bg '" + resolved_path + "' fill");
         }
-    } else {
+    } else if (!util::command_exists("b1air-bg")) {
+        // b1air-bg, where installed, picks the new picture up from the cache
+        // file on its own.
         (void)run_argv_status({"pkill", "-x", "swaybg"});
         (void)util::spawn_detached({"swaybg", "-m", "fill", "-i", resolved_path});
     }
@@ -3152,6 +3154,40 @@ std::string SystemControl::wallpaper_overrides_path() {
     return dir + "/wallpapers.json";
 }
 
+// The file is { "outputs": {identity: path}, "workspaces": {name: path} }
+// (plus whatever else b1air-bg reads, kept as found). It began as the outputs
+// map alone at the top level; that is read as such and written back in the
+// new shape.
+static nlohmann::json load_wallpaper_map() {
+    auto j = nlohmann::json::parse(read_file_string(SystemControl::wallpaper_overrides_path()), nullptr, false);
+    if (!j.is_object()) j = nlohmann::json::object();
+    if (!j.contains("outputs") && !j.contains("workspaces")) {
+        nlohmann::json legacy = j;
+        j = {{"outputs", legacy}};
+    }
+    for (const char* k : {"outputs", "workspaces"})
+        if (!j[k].is_object()) j[k] = nlohmann::json::object();
+    return j;
+}
+
+static bool save_wallpaper_map(const nlohmann::json& map) {
+    return write_private_file(SystemControl::wallpaper_overrides_path(), map.dump(2) + "\n");
+}
+
+// A copy in the cache under a name of its own, so the original can move.
+static std::string cache_wallpaper_copy(const std::string& resolved, const std::string& stem) {
+    const char* home = std::getenv("HOME");
+    const std::string cache_dir = std::string(home ? home : "/tmp") + "/.cache/b1air/wallpapers";
+    util::mkdir_p(cache_dir);
+    std::string safe = stem;
+    for (char& c : safe) if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
+    const std::string cached = cache_dir + "/" + safe + std::filesystem::path(resolved).extension().string();
+    std::error_code ec;
+    std::filesystem::copy_file(resolved, cached, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec || !safe_sway_path(cached)) return "";
+    return cached;
+}
+
 bool SystemControl::wallpaper_set_output(const std::string& filepath, const std::string& output) {
     std::string resolved;
     if (!safe_wallpaper_file(filepath, resolved) || access(resolved.c_str(), R_OK) != 0) return false;
@@ -3164,26 +3200,70 @@ bool SystemControl::wallpaper_set_output(const std::string& filepath, const std:
         if (json_str(o, "name", "") == output) identity = output_identity(o);
     if (identity.empty()) return false;
 
-    const char* home = std::getenv("HOME");
-    const std::string cache_dir = std::string(home ? home : "/tmp") + "/.cache/b1air/wallpapers";
-    util::mkdir_p(cache_dir);
-    std::string safe = identity;
-    for (char& c : safe) if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
-    const std::string cached = cache_dir + "/" + safe + std::filesystem::path(resolved).extension().string();
-    std::error_code ec;
-    std::filesystem::copy_file(resolved, cached, std::filesystem::copy_options::overwrite_existing, ec);
-    if (ec || !safe_sway_path(cached)) return false;
+    const std::string cached = cache_wallpaper_copy(resolved, identity);
+    if (cached.empty()) return false;
 
-    auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
-    if (!map.is_object()) map = nlohmann::json::object();
-    map[identity] = cached;
-    if (!write_private_file(wallpaper_overrides_path(), map.dump(2) + "\n")) return false;
+    auto map = load_wallpaper_map();
+    map["outputs"][identity] = cached;
+    if (!save_wallpaper_map(map)) return false;
+    // For swaybg, when b1air-bg is not the one drawing; harmless when it is.
     ipc.send_command(0, "output \"" + output + "\" bg '" + cached + "' fill");
     return true;
 }
 
+// A workspace's own picture. Only b1air-bg can show these — swaybg knows
+// outputs, not workspaces.
+bool SystemControl::wallpaper_set_workspace(const std::string& filepath, const std::string& workspace) {
+    std::string resolved;
+    if (workspace.empty() || !safe_wallpaper_file(filepath, resolved) || access(resolved.c_str(), R_OK) != 0)
+        return false;
+    const std::string cached = cache_wallpaper_copy(resolved, "workspace-" + workspace);
+    if (cached.empty()) return false;
+    auto map = load_wallpaper_map();
+    map["workspaces"][workspace] = cached;
+    return save_wallpaper_map(map);
+}
+
+// Back to the shared picture, for one screen or one workspace.
+bool SystemControl::wallpaper_unset(const std::string& output, const std::string& workspace) {
+    auto map = load_wallpaper_map();
+    std::string removed;
+    if (!workspace.empty()) {
+        const auto it = map["workspaces"].find(workspace);
+        if (it == map["workspaces"].end()) return true;
+        if (it->is_string()) removed = it->get<std::string>();
+        map["workspaces"].erase(it);
+    } else {
+        SwayIPC ipc;
+        if (!ipc.connect()) return false;
+        const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+        if (!outputs.is_array()) return false;
+        std::string identity;
+        for (const auto& o : outputs)
+            if (json_str(o, "name", "") == output) identity = output_identity(o);
+        const auto it = identity.empty() ? map["outputs"].end() : map["outputs"].find(identity);
+        if (it == map["outputs"].end()) return !identity.empty();
+        if (it->is_string()) removed = it->get<std::string>();
+        map["outputs"].erase(it);
+        const char* home = std::getenv("HOME");
+        const std::string shared = std::string(home ? home : "/tmp") + "/.cache/current_wallpaper.jpg";
+        if (access(shared.c_str(), R_OK) == 0 && safe_sway_path(shared))
+            ipc.send_command(0, "output \"" + output + "\" bg '" + shared + "' fill");
+    }
+    if (!save_wallpaper_map(map)) return false;
+    // The cached copy is ours; the original never was.
+    const char* home = std::getenv("HOME");
+    const std::string cache_dir = std::string(home ? home : "/tmp") + "/.cache/b1air/wallpapers/";
+    if (removed.rfind(cache_dir, 0) == 0) (void)unlink(removed.c_str());
+    return true;
+}
+
+std::string SystemControl::wallpaper_workspaces_json() {
+    return load_wallpaper_map()["workspaces"].dump();
+}
+
 bool SystemControl::wallpaper_apply_overrides() {
-    const auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
+    const auto map = load_wallpaper_map()["outputs"];
     if (!map.is_object() || map.empty()) return true;
     SwayIPC ipc;
     if (!ipc.connect()) return false;
@@ -3201,7 +3281,7 @@ bool SystemControl::wallpaper_apply_overrides() {
 
 std::string SystemControl::wallpaper_overrides_json() {
     nlohmann::json out = nlohmann::json::array();
-    const auto map = nlohmann::json::parse(read_file_string(wallpaper_overrides_path()), nullptr, false);
+    const auto map = load_wallpaper_map()["outputs"];
     SwayIPC ipc;
     if (!ipc.connect()) return out.dump();
     const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);

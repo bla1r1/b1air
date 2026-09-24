@@ -59,9 +59,10 @@ that a future reader can disagree with the reason rather than guess at it.
    Center, the bar, the launcher and the popups still speak English. The
    mechanism (`Ui/I18n`, `i18n/ru.json`) is the same one; what is left is
    wrapping roughly 770 strings and translating them.
-2. **Per-workspace wallpaper** (M7) — per screen is built; sway draws a
-   background per output, not per workspace, so this needs a background
-   layer of the shell's own that follows the focused workspace.
+2. **swayfx on a pinned wlroots** — the installer builds swayfx against a
+   wlroots bundled as a meson subproject when the distribution's does not
+   match, so the desktop stops depending on which wlroots a distribution
+   happens to ship.
 3. **Caps Lock as Escape or Control** (M8) — one line of `xkb_options`, and
    the Keyboard page already writes them.
 4. **Content search in Spotlight** (M9) — `rg` behind a prefix.
@@ -196,10 +197,15 @@ large-text preset in M13 are kept.
 - [x] Add external monitor hardware brightness control via DDC/CI in Control Center slider.
       In the Control Center's Battery & Power view and on Settings → Displays.
 - [ ] Add ICC/ICM color profile calibration importer in Display Settings.
-- [/] Add distinct per-workspace and per-monitor wallpaper assignment engine.
-      **Built:** per screen (Settings → Wallpaper, `wallpaper set <file> <output>`),
-      following the monitor to any connector. **Missing:** per workspace, which
-      sway's per-output backgrounds cannot do.
+- [x] Add distinct per-workspace and per-monitor wallpaper assignment engine.
+      Per screen (`wallpaper set <file> <output>`), following the monitor to
+      any connector, and per workspace (`wallpaper set <file> --workspace
+      <name>`), both from Settings → Wallpaper. Drawn by `b1air-bg`
+      (`src/bg`), which replaces swaybg: plain wayland-client, one layer-shell
+      surface per screen, the picture decoded at the screen's size straight
+      into the buffer the compositor gets and then let go, and the crossfade
+      done by the compositor (alpha-modifier). About 0.4–0.7 MB of its own
+      memory against swaybg's 1.5.
 - [x] Add per-monitor top bar content. The bar itself was already on every
       screen — `Main.qml` instantiates it through `Variants` over
       `Quickshell.screens`, fixed after a two-monitor desktop turned out to

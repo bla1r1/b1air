@@ -580,6 +580,44 @@ int SessionManager::run_session() {
     SystemControl::wallpaper_restore();
     mark("wallpaper restored");
 
+    // 5b. The background itself. sway's config says `swaybg_command -`, so
+    // b1air-bg is the only thing drawing it; an older config that still
+    // started swaybg is cleared out of its way. Kept running the way the
+    // shell is (below): a direct child, waited on, restarted a few times.
+    if (util::command_exists("b1air-bg")) {
+        (void)run_status({"pkill", "-x", "swaybg"});
+        std::thread bg_supervisor([] {
+            constexpr int kMaxRestarts = 5;
+            int restarts = 0;
+            while (g_session_running) {
+                const char* argv[] = {"b1air-bg", nullptr};
+                posix_spawnattr_t attr;
+                posix_spawnattr_init(&attr);
+                posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+                pid_t pid = 0;
+                const int rc = posix_spawnp(&pid, "b1air-bg", nullptr, &attr,
+                                            const_cast<char* const*>(argv), environ);
+                posix_spawnattr_destroy(&attr);
+                if (rc != 0) return;
+
+                const auto started = std::chrono::steady_clock::now();
+                int status = 0;
+                while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+                // A clean exit is sway going away, or another one already
+                // running (it holds a lock); neither wants a restart.
+                if (!g_session_running || (WIFEXITED(status) && WEXITSTATUS(status) == 0)) return;
+                if (std::chrono::steady_clock::now() - started > std::chrono::minutes(5)) restarts = 0;
+                if (++restarts > kMaxRestarts) {
+                    std::cerr << "[b1air-session] b1air-bg keeps exiting; not restarting it again\n";
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        });
+        bg_supervisor.detach();
+        mark("background started");
+    }
+
     // Night light was saved as on and never turned back on: the toggle kept
     // saying "Enabled" at every login over a screen at full blue.
     if (SettingsManager::get_json_bool("nightLightEnabled", false)) {

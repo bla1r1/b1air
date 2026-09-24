@@ -12,6 +12,8 @@ libssl-dev libsystemd-dev libpolkit-agent-1-dev libarchive-dev polkitd ca-certif
 # Qt 6 development (the b1air suite is built on this machine)
 qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev
 qt6-svg-dev liblayershellqtinterface-dev ?qmake6
+# b1air-bg talks Wayland itself: the client library, the scanner, the protocols
+libwayland-dev libwayland-bin wayland-protocols
 
 # Qt 6 runtime: platform plugins and the QML modules the shell and greeter import
 qt6-wayland libqt6svg6 ?qt6-svg-plugins layer-shell-qt

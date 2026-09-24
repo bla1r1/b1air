@@ -216,6 +216,11 @@ public:
     static bool wallpaper_restore();
     // One screen's own wallpaper, kept by the screen's identity.
     static bool wallpaper_set_output(const std::string& filepath, const std::string& output);
+    // One workspace's own wallpaper (drawn by b1air-bg), and taking a
+    // screen's or a workspace's own back to the shared one.
+    static bool wallpaper_set_workspace(const std::string& filepath, const std::string& workspace);
+    static bool wallpaper_unset(const std::string& output, const std::string& workspace = "");
+    static std::string wallpaper_workspaces_json();
     static bool wallpaper_apply_overrides();
     static std::string wallpaper_overrides_path();
     // [{name, id, wallpaper}] for the connected screens.

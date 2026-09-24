@@ -56,19 +56,69 @@ ColumnLayout {
             }
         }
     }
-    Timer { id: screenRecheck; interval: 1200; onTriggered: screenReader.running = true }
+    Timer {
+        id: screenRecheck
+        interval: 1200
+        onTriggered: { screenReader.running = true; workspaceReader.running = true; }
+    }
+
+    // The workspace this page is open on, and which workspaces have a picture
+    // of their own. b1air-bg shows those whenever the workspace is, on any
+    // screen. The target for one is "ws:<name>".
+    property string workspace: ""
+    property var workspaceWallpapers: ({})
+    readonly property bool targetIsWorkspace: target.startsWith("ws:")
+    readonly property bool targetHasOwn: targetIsWorkspace
+        ? (workspaceWallpapers[target.slice(3)] || "") !== ""
+        : target !== "" && screens.some(o => o.name === target && o.wallpaper !== "")
+    Process {
+        id: focusedReader
+        command: ["swaymsg", "-r", "-t", "get_workspaces"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const ws = JSON.parse(this.text).find(w => w.focused);
+                    section.workspace = ws ? String(ws.name) : "";
+                } catch (e) { section.workspace = ""; }
+            }
+        }
+    }
+    Process {
+        id: workspaceReader
+        command: ["b1air-daemon", "wallpaper", "workspaces"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { section.workspaceWallpapers = JSON.parse(this.text.trim() || "{}"); }
+                catch (e) { section.workspaceWallpapers = ({}); }
+            }
+        }
+    }
+
+    function unsetTarget() {
+        Cmd.run(section.targetIsWorkspace
+                    ? ["b1air-daemon", "wallpaper", "unset", "--workspace", section.target.slice(3)]
+                    : ["b1air-daemon", "wallpaper", "unset", section.target], "Use shared wallpaper");
+        screenRecheck.restart();
+    }
 
     function scan() {
         dirScanner.running = false;
         dirScanner.running = true;
     }
 
-    Component.onCompleted: { scan(); screenReader.running = true; }
+    Component.onCompleted: {
+        scan();
+        screenReader.running = true;
+        focusedReader.running = true;
+        workspaceReader.running = true;
+    }
     onWallpaperDirChanged: scan()
 
     function applyWallpaper(path) {
         section.activeWallpaper = path;
-        Cmd.run(section.target !== ""
+        Cmd.run(section.targetIsWorkspace
+                    ? ["b1air-daemon", "wallpaper", "set", path, "--workspace", section.target.slice(3)]
+                    : section.target !== ""
                     ? ["b1air-daemon", "wallpaper", "set", path, section.target]
                     : ["b1air-daemon", "wallpaper", "set", path], "Set wallpaper");
         screenRecheck.restart();
@@ -108,26 +158,41 @@ ColumnLayout {
             Item { Layout.fillWidth: true }
         }
 
-        // Which screen a click applies to. "All screens" also clears any one
-        // screen's own picture, which is what "all" says.
+        // Where a click applies: everywhere, one screen, or the workspace this
+        // page is open on. "Everywhere" also clears every screen's and
+        // workspace's own picture, which is what it says.
         Flow {
-            visible: section.screens.length > 1
+            visible: section.screens.length > 1 || section.workspace !== ""
             Layout.fillWidth: true
             spacing: Design.s(Design.space.xs)
             Pill {
-                label: "All screens"
+                label: section.screens.length > 1 ? "All screens" : "Everywhere"
                 icon: "\u{f0379}"
                 active: section.target === ""
                 onClicked: section.target = ""
             }
             Repeater {
-                model: section.screens
+                model: section.screens.length > 1 ? section.screens : []
                 delegate: Pill {
                     required property var modelData
                     label: modelData.name + (modelData.wallpaper !== "" ? " · own picture" : "")
                     active: section.target === modelData.name
                     onClicked: section.target = modelData.name
                 }
+            }
+            Pill {
+                visible: section.workspace !== ""
+                label: "Workspace " + section.workspace
+                       + ((section.workspaceWallpapers[section.workspace] || "") !== "" ? " · own picture" : "")
+                icon: "\u{f0570}"
+                active: section.target === "ws:" + section.workspace
+                onClicked: section.target = "ws:" + section.workspace
+            }
+            Pill {
+                visible: section.targetHasOwn
+                label: "Use shared picture"
+                icon: "\u{f0450}"
+                onClicked: section.unsetTarget()
             }
         }
 
