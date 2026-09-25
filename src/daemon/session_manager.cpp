@@ -410,10 +410,16 @@ void SessionManager::run_focus_tracker() {
 
 // ── Autotiling: Hyprland's dwindle, in sway ──────────────────────────────────
 //
-// Whenever focus lands on a tiled window, the next split is set along its
-// longer side, so each new window halves the one it opens next to and the
-// layout spirals the way Hyprland's dwindle did. Without it sway lines every
-// new window up in one row.
+// Each new window halves the one it opens next to along that one's longer
+// side, so the layout spirals the way Hyprland's dwindle did. Without it sway
+// lines every new window up in one row.
+//
+// b1air's swayfx does this itself, where the window is placed (`autotile`,
+// src/swayfx/patches/0001), and dims unfocused windows itself too
+// (`inactive_opacity`); then this thread only puts both back after a reload.
+// On any other sway it does the work from outside, as it always has: on
+// every focus change it sets the next split along the focused window's
+// longer side, and the opacity window by window.
 //
 // This used to live inside the screen-time tracker's event handler, so the
 // "Auto-Start FocusTime Daemon" switch on the Screen Time page quietly turned
@@ -427,6 +433,22 @@ void SessionManager::run_autotiler() {
         std::cerr << "[b1air-tiling] no sway IPC connection; autotiling off\n";
         return;
     }
+
+    // b1air's swayfx tiles and dims by itself (autotile, inactive_opacity).
+    // Nothing is left to do here but put those back after a `reload`, which
+    // resets them to the compositor's defaults.
+    if (SettingsManager::apply_compositor_extras(query)) {
+        std::cerr << "[b1air-tiling] the compositor tiles by itself; following reloads only\n";
+        events.subscribe_events({"workspace"}, [&](const std::string&, const std::string& payload) {
+            if (!g_session_running) return;
+            const auto evt = nlohmann::json::parse(payload, nullptr, false);
+            if (evt.is_object() && evt.value("change", "") == "reload")
+                SettingsManager::apply_compositor_extras(query);
+        });
+        return;
+    }
+
+    // Any other sway: the same, from outside, one command per event.
     // Windows already open when the daemon starts.
     {
         const WindowInfo win = query.get_focused_window();

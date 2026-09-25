@@ -80,7 +80,8 @@ Singleton {
     readonly property alias borderWidth: data.borderWidth
     readonly property alias smartBorders: data.smartBorders
     readonly property alias smartGaps: data.smartGaps
-    // Hyprland-style dwindle splitting, done by the daemon (run_autotiler).
+    // Hyprland-style dwindle splitting: b1air's swayfx does it itself
+    // (`autotile`, src/swayfx/patches); on any other sway the daemon does.
     readonly property alias autotiling: data.autotiling
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf

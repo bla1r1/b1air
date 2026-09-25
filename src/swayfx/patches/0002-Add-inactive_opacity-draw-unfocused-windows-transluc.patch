@@ -1,0 +1,170 @@
+From 6e3061f6b1c71c82a7bd70877411d02263d0f7b5 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 07:58:57 +0000
+Subject: [PATCH] Add inactive_opacity: draw unfocused windows translucent
+
+Every window but the focused one is drawn at this opacity, on top of its
+own opacity, as Hyprland's inactive_opacity. Applied where the scene is
+configured for each frame, so a focus change needs no command from
+outside: the session used to send `[all] opacity 0.5` and then reset
+the focused one on every focus event.
+
+inactive_opacity <0..1>, default 1 (off).
+---
+ include/sway/commands.h          |  1 +
+ include/sway/config.h            |  2 ++
+ sway/commands.c                  |  1 +
+ sway/commands/inactive_opacity.c | 29 +++++++++++++++++++++++++++++
+ sway/config.c                    |  1 +
+ sway/desktop/output.c            | 14 ++++++++++++++
+ sway/meson.build                 |  1 +
+ sway/sway.5.scd                  |  4 ++++
+ 8 files changed, 53 insertions(+)
+ create mode 100644 sway/commands/inactive_opacity.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index efda2fd6..d37e281f 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -111,6 +111,7 @@ sway_cmd cmd_exec_process;
+ sway_cmd cmd_allow_tearing;
+ sway_cmd cmd_animation_duration_ms;
+ sway_cmd cmd_autotile;
++sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_assign;
+ sway_cmd cmd_bar;
+ sway_cmd cmd_bindcode;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index 3144db6e..caf290a4 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -493,6 +493,8 @@ struct sway_config {
+ 	float animation_duration_ms;
+ 	// b1air: split the focused window along its longer side for each new one
+ 	bool autotile;
++	// b1air: opacity of every window but the focused one, 0..1
++	float inactive_opacity;
+ 	int corner_radius;
+ 	bool smart_corner_radius;
+ 
+diff --git a/sway/commands.c b/sway/commands.c
+index fd8bc411..c441041b 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -88,6 +88,7 @@ static const struct cmd_handler handlers[] = {
+ 	{ "fullscreen", cmd_fullscreen },
+ 	{ "gaps", cmd_gaps },
+ 	{ "hide_edge_borders", cmd_hide_edge_borders },
++	{ "inactive_opacity", cmd_inactive_opacity },
+ 	{ "input", cmd_input },
+ 	{ "layer_effects", cmd_layer_effects },
+ 	{ "mode", cmd_mode },
+diff --git a/sway/commands/inactive_opacity.c b/sway/commands/inactive_opacity.c
+new file mode 100644
+index 00000000..e9c297f2
+--- /dev/null
++++ b/sway/commands/inactive_opacity.c
+@@ -0,0 +1,29 @@
++#include <stdlib.h>
++#include "sway/commands.h"
++#include "sway/config.h"
++#include "sway/output.h"
++#include "sway/tree/root.h"
++
++// inactive_opacity <0..1>
++//
++// Every window but the focused one is drawn at this opacity, on top of its
++// own `opacity`: the focused window stands out and the rest recede, as
++// Hyprland's inactive_opacity. 1 (the default) turns it off.
++struct cmd_results *cmd_inactive_opacity(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "inactive_opacity", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	char *end;
++	float value = strtof(argv[0], &end);
++	if (*end || value < 0.0f || value > 1.0f) {
++		return cmd_results_new(CMD_INVALID, "inactive_opacity takes a value from 0 to 1");
++	}
++	config->inactive_opacity = value;
++	// Applied to every window now, as `opacity` does for one; the scene is
++	// configured again on every frame after this.
++	if (root && root->root_scene) {
++		output_configure_scene(NULL, &root->root_scene->tree.node, false, NULL);
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index 7054b23c..36e4892a 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -353,6 +353,7 @@ static void config_defaults(struct sway_config *config) {
+ 	// SwayFX defaults
+ 	config->animation_duration_ms = 0.0f;
+ 	config->autotile = false;
++	config->inactive_opacity = 1.0f;
+ 
+ 	config->corner_radius = 0;
+ 	config->smart_corner_radius = false;
+diff --git a/sway/desktop/output.c b/sway/desktop/output.c
+index 17964e56..2c29ecf3 100644
+--- a/sway/desktop/output.c
++++ b/sway/desktop/output.c
+@@ -233,6 +233,16 @@ static void configure_layer_shell_surface(struct wlr_scene_buffer *buffer,
+ 	);
+ }
+ 
++// The focused window, or a split it is inside of, as border colours count it.
++static bool container_is_focused_or_in_focus(struct sway_container *con) {
++	for (; con; con = con->current.parent) {
++		if (con->current.focused) {
++			return true;
++		}
++	}
++	return false;
++}
++
+ static bool could_container_overlap(struct sway_container *con) {
+ 	if (container_is_floating_or_child(con)) {
+ 		return true;
+@@ -275,6 +285,10 @@ void output_configure_scene(struct sway_output *output, struct wlr_scene_node *n
+ 			closest_con->current.workspace->animation_state.to_alpha,
+ 			&closest_con->current.workspace->animation_state.animation);
+ 	}
++	if (closest_con && config->inactive_opacity < 1.0f
++			&& !container_is_focused_or_in_focus(closest_con)) {
++		opacity *= config->inactive_opacity;
++	}
+ 	int corner_radius = closest_con && container_has_corner_radius(closest_con) ?
+ 		closest_con->corner_radius : 0;
+ 
+diff --git a/sway/meson.build b/sway/meson.build
+index eab243de..e2df7a88 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -46,6 +46,7 @@ sway_sources = files(
+ 
+ 	'commands/animation_duration_ms.c',
+ 	'commands/autotile.c',
++	'commands/inactive_opacity.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+diff --git a/sway/sway.5.scd b/sway/sway.5.scd
+index c6dbf068..3817cc28 100644
+--- a/sway/sway.5.scd
++++ b/sway/sway.5.scd
+@@ -422,6 +422,10 @@ animation_duration_ms <value>
+ 	Determines the duration of the animation applied to opening and closing
+ 	windows, between 0 (no animation) and 5000 (5 seconds).
+ 
++*inactive_opacity* <value>
++	Draws every window but the focused one at _value_ (0 to 1), on top of
++	its own *opacity*. 1, the default, turns it off.
++
+ *autotile* enable|disable|toggle
+ 	Each new tiled window splits the window it opens next to along that
+ 	window's longer side, so the layout becomes a spiral of halves (as
+-- 
+2.43.0
+

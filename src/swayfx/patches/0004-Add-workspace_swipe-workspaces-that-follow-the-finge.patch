@@ -1,0 +1,602 @@
+From e70c6839920c0f61165defcb84b96ca6234a4c8b Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 08:09:54 +0000
+Subject: [PATCH 4/4] Add workspace_swipe: workspaces that follow the fingers
+
+A horizontal touchpad swipe with the configured number of fingers moves
+the active workspace with the fingers and brings its neighbour on the
+same output in beside it, as GNOME and Hyprland do. Letting go switches
+to the neighbour when the swipe went a fifth of the way across or was
+flicked, and slides both back otherwise. Past the last workspace the
+screen gives a little and no more; there is no wrapping round.
+
+The axis is decided over the first 12 units of travel. A vertical swipe
+with the same fingers is handed back to the usual gesture handling with
+the movement so far, so bindgesture swipe:N:up/down keep working.
+
+The switch's own slide (workspace_animation slide) carries both
+workspaces on from where the fingers left them. With fading or no
+animation, they are put back before switching.
+
+workspace_swipe off|<fingers> [invert], default off. Also
+debug_workspace_swipe begin|update|end|cancel, which drives the same
+code from IPC for testing without a touchpad.
+---
+ include/sway/commands.h                |   2 +
+ include/sway/config.h                  |   3 +
+ include/sway/desktop/workspace_swipe.h |  35 +++
+ sway/commands.c                        |   2 +
+ sway/commands/workspace_swipe.c        |  29 +++
+ sway/config.c                          |   2 +
+ sway/desktop/workspace_swipe.c         | 305 +++++++++++++++++++++++++
+ sway/input/seatop_default.c            |  42 +++-
+ sway/meson.build                       |   2 +
+ sway/sway.5.scd                        |   9 +
+ 10 files changed, 424 insertions(+), 7 deletions(-)
+ create mode 100644 include/sway/desktop/workspace_swipe.h
+ create mode 100644 sway/commands/workspace_swipe.c
+ create mode 100644 sway/desktop/workspace_swipe.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index b5425d49..c77632fb 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -113,6 +113,8 @@ sway_cmd cmd_animation_duration_ms;
+ sway_cmd cmd_autotile;
+ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_workspace_animation;
++sway_cmd cmd_workspace_swipe;
++sway_cmd cmd_debug_workspace_swipe;
+ sway_cmd cmd_assign;
+ sway_cmd cmd_bar;
+ sway_cmd cmd_bindcode;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index b432b69f..0d5537b7 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -497,6 +497,9 @@ struct sway_config {
+ 	float inactive_opacity;
+ 	// b1air: how switching workspaces is animated
+ 	enum { WORKSPACE_ANIMATION_FADE, WORKSPACE_ANIMATION_SLIDE } workspace_animation;
++	// b1air: touchpad swipe that moves workspaces with the fingers (0: off)
++	uint32_t workspace_swipe_fingers;
++	bool workspace_swipe_invert;
+ 	int corner_radius;
+ 	bool smart_corner_radius;
+ 
+diff --git a/include/sway/desktop/workspace_swipe.h b/include/sway/desktop/workspace_swipe.h
+new file mode 100644
+index 00000000..674827bd
+--- /dev/null
++++ b/include/sway/desktop/workspace_swipe.h
+@@ -0,0 +1,35 @@
++#ifndef _SWAY_DESKTOP_WORKSPACE_SWIPE_H
++#define _SWAY_DESKTOP_WORKSPACE_SWIPE_H
++
++#include <stdbool.h>
++#include <stdint.h>
++
++struct sway_seat;
++
++// b1air: workspaces that follow the fingers on a touchpad swipe.
++//
++// With `workspace_swipe <fingers>` set, a horizontal swipe with that many
++// fingers moves the active workspace with the fingers and brings its
++// neighbour in beside it; on release it either switches to the neighbour or
++// slides back. A vertical swipe with the same fingers is handed back to the
++// usual gesture bindings.
++
++enum workspace_swipe_result {
++	WORKSPACE_SWIPE_NOT_OURS,   // not a workspace swipe: handle as usual
++	WORKSPACE_SWIPE_CONSUMED,   // taken
++	WORKSPACE_SWIPE_HANDOVER,   // turned out vertical: begin the usual handling
++};
++
++// True when this swipe is ours from the start (the finger count matches).
++bool workspace_swipe_begin(struct sway_seat *seat, uint32_t fingers);
++
++// On HANDOVER, *fingers, *dx and *dy say what to replay into the usual
++// handling: the swipe so far.
++enum workspace_swipe_result workspace_swipe_update(struct sway_seat *seat,
++	double dx, double dy, uint32_t time_msec,
++	uint32_t *fingers, double *acc_dx, double *acc_dy);
++
++// True when the swipe was ours.
++bool workspace_swipe_end(struct sway_seat *seat, bool cancelled);
++
++#endif
+diff --git a/sway/commands.c b/sway/commands.c
+index c0568c63..d8a291eb 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -122,6 +122,7 @@ static const struct cmd_handler handlers[] = {
+ 	{ "unbindsym", cmd_unbindsym },
+ 	{ "workspace", cmd_workspace },
+ 	{ "workspace_animation", cmd_workspace_animation },
++	{ "workspace_swipe", cmd_workspace_swipe },
+ 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth },
+ };
+ 
+@@ -142,6 +143,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "allow_tearing", cmd_allow_tearing },
+ 	{ "border", cmd_border },
+ 	{ "create_output", cmd_create_output },
++	{ "debug_workspace_swipe", cmd_debug_workspace_swipe },
+ 	{ "exit", cmd_exit },
+ 	{ "floating", cmd_floating },
+ 	{ "fullscreen", cmd_fullscreen },
+diff --git a/sway/commands/workspace_swipe.c b/sway/commands/workspace_swipe.c
+new file mode 100644
+index 00000000..1c32c2f0
+--- /dev/null
++++ b/sway/commands/workspace_swipe.c
+@@ -0,0 +1,29 @@
++#include <stdlib.h>
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/config.h"
++
++// workspace_swipe off|<fingers> [invert]
++//
++// A horizontal touchpad swipe with that many fingers moves the workspace
++// with the fingers and brings its neighbour in beside it; letting go switches
++// to it or slides back. Content follows the fingers (moving right brings in
++// the workspace before); `invert` turns that round.
++struct cmd_results *cmd_workspace_swipe(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "workspace_swipe", EXPECTED_AT_LEAST, 1))) {
++		return error;
++	}
++	if (strcasecmp(argv[0], "off") == 0 || strcasecmp(argv[0], "disable") == 0) {
++		config->workspace_swipe_fingers = 0;
++		return cmd_results_new(CMD_SUCCESS, NULL);
++	}
++	char *end;
++	long fingers = strtol(argv[0], &end, 10);
++	if (*end || fingers < 2 || fingers > 5) {
++		return cmd_results_new(CMD_INVALID, "Expected 'workspace_swipe off|<2-5 fingers> [invert]'");
++	}
++	config->workspace_swipe_fingers = (uint32_t)fingers;
++	config->workspace_swipe_invert = argc >= 2 && strcasecmp(argv[1], "invert") == 0;
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index fb318588..f381a54c 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -355,6 +355,8 @@ static void config_defaults(struct sway_config *config) {
+ 	config->autotile = false;
+ 	config->inactive_opacity = 1.0f;
+ 	config->workspace_animation = WORKSPACE_ANIMATION_FADE;
++	config->workspace_swipe_fingers = 0;
++	config->workspace_swipe_invert = false;
+ 
+ 	config->corner_radius = 0;
+ 	config->smart_corner_radius = false;
+diff --git a/sway/desktop/workspace_swipe.c b/sway/desktop/workspace_swipe.c
+new file mode 100644
+index 00000000..1c9df2d7
+--- /dev/null
++++ b/sway/desktop/workspace_swipe.c
+@@ -0,0 +1,305 @@
++#include <math.h>
++#include <stdlib.h>
++#include <string.h>
++#include "sway/animation_manager.h"
++#include "sway/config.h"
++#include "sway/desktop/workspace_swipe.h"
++#include "sway/input/seat.h"
++#include "sway/output.h"
++#include "sway/tree/arrange.h"
++#include "sway/tree/root.h"
++#include "sway/tree/workspace.h"
++#include "sway/commands.h"
++#include "sway/input/input-manager.h"
++#include "log.h"
++
++// Touchpad units (about a pixel each, before acceleration) the fingers move
++// before the swipe counts as horizontal or vertical.
++#define DECIDE_DISTANCE 12.0
++// How far across the screen a release has to be to switch.
++#define COMMIT_FRACTION 0.2
++// Or how fast it has to be moving towards the neighbour (units per ms): a
++// flick switches however short it was.
++#define FLICK_SPEED 0.6
++// Past the last workspace the screen still gives a little, this much at
++// most, so the swipe does not feel dead.
++#define EDGE_GIVE 0.06
++
++static struct {
++	enum { SWIPE_IDLE, SWIPE_DECIDING, SWIPE_ACTIVE, SWIPE_IGNORED } state;
++	uint32_t fingers;
++	double dx, dy;
++	double velocity;
++	uint32_t last_time;
++	struct sway_output *output;
++	struct sway_workspace *from;
++	struct sway_workspace *peek;
++	int span;
++} swipe;
++
++static bool output_alive(struct sway_output *output) {
++	for (int i = 0; root && i < root->outputs->length; i++) {
++		if (root->outputs->items[i] == output) {
++			return true;
++		}
++	}
++	return false;
++}
++
++static bool workspace_alive(struct sway_output *output, struct sway_workspace *ws) {
++	if (!ws || !output_alive(output) || ws->node.destroying) {
++		return false;
++	}
++	for (int i = 0; i < output->workspaces->length; i++) {
++		if (output->workspaces->items[i] == ws) {
++			return true;
++		}
++	}
++	return false;
++}
++
++// The workspace beside `ws` on its output: dir -1 the one before, +1 after.
++// No wrapping round: past the last one there is nothing to show.
++static struct sway_workspace *neighbour(struct sway_workspace *ws, int dir) {
++	list_t *list = ws->output->workspaces;
++	for (int i = 0; i < list->length; i++) {
++		if (list->items[i] == ws) {
++			int j = i + dir;
++			return j >= 0 && j < list->length ? list->items[j] : NULL;
++		}
++	}
++	return NULL;
++}
++
++static void stop_slide(struct sway_workspace *ws) {
++	finish_animation(&ws->animation_state.animation);
++	ws->animation_state.from_x = ws->animation_state.to_x = 0;
++}
++
++static void set_peek(struct sway_workspace *target) {
++	if (target == swipe.peek) {
++		return;
++	}
++	if (swipe.peek && workspace_alive(swipe.output, swipe.peek)) {
++		swipe.peek->swipe_peek = false;
++		swipe.peek->swipe_offset = 0;
++	}
++	swipe.peek = target;
++	if (target) {
++		stop_slide(target);
++		target->swipe_peek = true;
++	}
++	// Shown or hidden, laid out by the usual arrangement.
++	arrange_output(swipe.output);
++}
++
++static void apply(void) {
++	double offset = swipe.dx * (config->workspace_swipe_invert ? -1.0 : 1.0);
++	// Content follows the fingers: moving right brings in the one before.
++	struct sway_workspace *target = neighbour(swipe.from, offset > 0 ? -1 : 1);
++	if (!target) {
++		double give = swipe.span * EDGE_GIVE;
++		offset = copysign(give * (1.0 - exp(-fabs(offset) / give)), offset);
++	} else if (fabs(offset) > swipe.span) {
++		offset = copysign(swipe.span, offset);
++	}
++	set_peek(target);
++
++	swipe.from->swipe_offset = (int)lround(offset);
++	workspace_place(swipe.from);
++	if (swipe.peek) {
++		swipe.peek->swipe_offset = swipe.from->swipe_offset
++			+ (offset > 0 ? -swipe.span : swipe.span);
++		workspace_place(swipe.peek);
++	}
++}
++
++static bool activate(struct sway_seat *seat) {
++	struct sway_workspace *ws = seat_get_focused_workspace(seat);
++	if (!ws || !ws->output || ws->fullscreen || root->fullscreen_global) {
++		return false;
++	}
++	swipe.output = ws->output;
++	swipe.from = ws;
++	swipe.peek = NULL;
++	swipe.span = ws->output->usable_area.width > 0
++		? ws->output->usable_area.width : ws->output->width;
++	stop_slide(ws);
++	return true;
++}
++
++bool workspace_swipe_begin(struct sway_seat *seat, uint32_t fingers) {
++	if (config->workspace_swipe_fingers == 0 || fingers != config->workspace_swipe_fingers) {
++		return false;
++	}
++	if (swipe.state == SWIPE_ACTIVE) {
++		workspace_swipe_end(seat, true);
++	}
++	swipe.state = SWIPE_DECIDING;
++	swipe.fingers = fingers;
++	swipe.dx = swipe.dy = 0;
++	swipe.velocity = 0;
++	swipe.last_time = 0;
++	return true;
++}
++
++enum workspace_swipe_result workspace_swipe_update(struct sway_seat *seat,
++		double dx, double dy, uint32_t time_msec,
++		uint32_t *fingers, double *acc_dx, double *acc_dy) {
++	switch (swipe.state) {
++	case SWIPE_IDLE:
++		return WORKSPACE_SWIPE_NOT_OURS;
++	case SWIPE_IGNORED:
++		return WORKSPACE_SWIPE_CONSUMED;
++	case SWIPE_DECIDING:
++		swipe.dx += dx;
++		swipe.dy += dy;
++		if (hypot(swipe.dx, swipe.dy) < DECIDE_DISTANCE) {
++			return WORKSPACE_SWIPE_CONSUMED;
++		}
++		if (fabs(swipe.dy) > fabs(swipe.dx)) {
++			*fingers = swipe.fingers;
++			*acc_dx = swipe.dx;
++			*acc_dy = swipe.dy;
++			swipe.state = SWIPE_IDLE;
++			return WORKSPACE_SWIPE_HANDOVER;
++		}
++		if (!activate(seat)) {
++			swipe.state = SWIPE_IGNORED;
++			return WORKSPACE_SWIPE_CONSUMED;
++		}
++		swipe.state = SWIPE_ACTIVE;
++		swipe.last_time = time_msec;
++		apply();
++		return WORKSPACE_SWIPE_CONSUMED;
++	case SWIPE_ACTIVE:
++		if (!workspace_alive(swipe.output, swipe.from)) {
++			swipe.state = SWIPE_IGNORED;
++			return WORKSPACE_SWIPE_CONSUMED;
++		}
++		swipe.dx += dx;
++		if (time_msec > swipe.last_time) {
++			double instant = dx / (double)(time_msec - swipe.last_time);
++			swipe.velocity = 0.6 * swipe.velocity + 0.4 * instant;
++		}
++		swipe.last_time = time_msec;
++		apply();
++		return WORKSPACE_SWIPE_CONSUMED;
++	}
++	return WORKSPACE_SWIPE_NOT_OURS;
++}
++
++static void back_from_complete(void *data) {
++	struct sway_workspace *ws = data;
++	ws->animation_state.from_x = ws->animation_state.to_x = 0;
++	workspace_place(ws);
++}
++
++static void back_peek_complete(void *data) {
++	struct sway_workspace *ws = data;
++	ws->animation_state.from_x = ws->animation_state.to_x = 0;
++	ws->swipe_peek = false;
++	ws->swipe_offset = 0;
++	if (ws->output) {
++		arrange_output(ws->output);
++	}
++}
++
++static void slide_update(void *data) {
++	workspace_place(data);
++}
++
++// Both back where they were: the active one to the middle, the neighbour
++// out of sight, then hidden.
++static void slide_back(void) {
++	struct sway_workspace *from = swipe.from;
++	from->animation_state.from_alpha = from->animation_state.to_alpha = 1.0f;
++	from->animation_state.from_x = from->swipe_offset;
++	from->animation_state.to_x = 0;
++	from->swipe_offset = 0;
++	add_animation(&from->animation_state.animation, slide_update, back_from_complete);
++
++	struct sway_workspace *peek = swipe.peek;
++	if (peek && workspace_alive(swipe.output, peek)) {
++		peek->animation_state.from_alpha = peek->animation_state.to_alpha = 1.0f;
++		peek->animation_state.from_x = peek->swipe_offset;
++		peek->animation_state.to_x = peek->swipe_offset > 0 ? swipe.span : -swipe.span;
++		peek->swipe_offset = 0;
++		add_animation(&peek->animation_state.animation, slide_update, back_peek_complete);
++	}
++}
++
++bool workspace_swipe_end(struct sway_seat *seat, bool cancelled) {
++	switch (swipe.state) {
++	case SWIPE_IDLE:
++		return false;
++	case SWIPE_DECIDING:
++	case SWIPE_IGNORED:
++		swipe.state = SWIPE_IDLE;
++		return true;
++	case SWIPE_ACTIVE:
++		break;
++	}
++	swipe.state = SWIPE_IDLE;
++	if (!workspace_alive(swipe.output, swipe.from)) {
++		return true;
++	}
++	if (swipe.peek && !workspace_alive(swipe.output, swipe.peek)) {
++		swipe.peek = NULL;
++	}
++
++	double offset = swipe.from->swipe_offset;
++	double speed = swipe.velocity * (config->workspace_swipe_invert ? -1.0 : 1.0);
++	bool far_enough = fabs(offset) > swipe.span * COMMIT_FRACTION;
++	bool flicked = fabs(speed) > FLICK_SPEED && (speed > 0) == (offset > 0);
++
++	if (!cancelled && swipe.peek && (far_enough || flicked)) {
++		// The switch's own slide (arrange_output) carries both on from
++		// where the fingers left them. Where there will be no slide —
++		// animations off, fading set instead, a fullscreen window on
++		// either — they are simply put back first.
++		if (!config->animation_duration_ms
++				|| config->workspace_animation != WORKSPACE_ANIMATION_SLIDE
++				|| swipe.from->current.fullscreen || swipe.peek->current.fullscreen) {
++			swipe.from->swipe_offset = swipe.peek->swipe_offset = 0;
++			swipe.peek->swipe_peek = false;
++		}
++		workspace_switch(swipe.peek);
++	} else {
++		slide_back();
++	}
++	swipe.from = swipe.peek = NULL;
++	return true;
++}
++
++// debug_workspace_swipe begin <fingers> | update <dx> [<dy>] | end | cancel
++//
++// Drives the swipe above as a touchpad would, for testing on machines (and
++// in sessions) without one. Vertical hand-over is not replayed.
++struct cmd_results *cmd_debug_workspace_swipe(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "debug_workspace_swipe", EXPECTED_AT_LEAST, 1))) {
++		return error;
++	}
++	struct sway_seat *seat = input_manager_current_seat();
++	static uint32_t clock_ms = 0;
++	clock_ms += 16;   // a touchpad event per frame, more or less
++	if (strcmp(argv[0], "begin") == 0 && argc >= 2) {
++		if (!workspace_swipe_begin(seat, (uint32_t)atoi(argv[1]))) {
++			return cmd_results_new(CMD_FAILURE, "workspace_swipe is off or uses other fingers");
++		}
++	} else if (strcmp(argv[0], "update") == 0 && argc >= 2) {
++		uint32_t fingers;
++		double ax, ay;
++		workspace_swipe_update(seat, atof(argv[1]), argc >= 3 ? atof(argv[2]) : 0.0,
++			clock_ms, &fingers, &ax, &ay);
++	} else if (strcmp(argv[0], "end") == 0) {
++		workspace_swipe_end(seat, false);
++	} else if (strcmp(argv[0], "cancel") == 0) {
++		workspace_swipe_end(seat, true);
++	} else {
++		return cmd_results_new(CMD_INVALID,
++			"Expected 'debug_workspace_swipe begin <fingers>|update <dx> [<dy>]|end|cancel'");
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/input/seatop_default.c b/sway/input/seatop_default.c
+index df8232af..da30a32f 100644
+--- a/sway/input/seatop_default.c
++++ b/sway/input/seatop_default.c
+@@ -8,6 +8,7 @@
+ #include "sway/desktop/transaction.h"
+ #include "sway/input/cursor.h"
+ #include "sway/input/seat.h"
++#include "sway/desktop/workspace_swipe.h"
+ #include "sway/input/tablet.h"
+ #include "sway/layers.h"
+ #include "sway/output.h"
+@@ -1037,26 +1038,50 @@ static void handle_pinch_end(struct sway_seat *seat,
+ 	}
+ }
+ 
+-static void handle_swipe_begin(struct sway_seat *seat,
+-		struct wlr_pointer_swipe_begin_event *event) {
++static void begin_regular_swipe(struct sway_seat *seat, struct wlr_pointer *pointer,
++		uint32_t time_msec, uint32_t fingers) {
+ 	// Start tracking gesture if there is a matching binding ...
+-	struct sway_input_device *device =
+-		event->pointer ? event->pointer->base.data : NULL;
++	struct sway_input_device *device = pointer ? pointer->base.data : NULL;
+ 	list_t *bindings = config->current_mode->gesture_bindings;
+-	if (gesture_binding_check(bindings, GESTURE_TYPE_SWIPE, event->fingers, device)) {
++	if (gesture_binding_check(bindings, GESTURE_TYPE_SWIPE, fingers, device)) {
+ 		struct seatop_default_event *seatop = seat->seatop_data;
+-		gesture_tracker_begin(&seatop->gestures, GESTURE_TYPE_SWIPE, event->fingers);
++		gesture_tracker_begin(&seatop->gestures, GESTURE_TYPE_SWIPE, fingers);
+ 	} else {
+ 		// ... otherwise forward to client
+ 		struct sway_cursor *cursor = seat->cursor;
+ 		wlr_pointer_gestures_v1_send_swipe_begin(
+ 			server.input->pointer_gestures, cursor->seat->wlr_seat,
+-			event->time_msec, event->fingers);
++			time_msec, fingers);
+ 	}
+ }
+ 
++static void handle_swipe_begin(struct sway_seat *seat,
++		struct wlr_pointer_swipe_begin_event *event) {
++	// b1air: workspaces that follow the fingers take their swipes first.
++	if (workspace_swipe_begin(seat, event->fingers)) {
++		return;
++	}
++	begin_regular_swipe(seat, event->pointer, event->time_msec, event->fingers);
++}
++
+ static void handle_swipe_update(struct sway_seat *seat,
+ 		struct wlr_pointer_swipe_update_event *event) {
++	// b1air: a workspace swipe, or one that turned out vertical and goes
++	// on as a usual swipe from what has moved so far.
++	uint32_t fingers;
++	double acc_dx, acc_dy;
++	switch (workspace_swipe_update(seat, event->dx, event->dy, event->time_msec,
++			&fingers, &acc_dx, &acc_dy)) {
++	case WORKSPACE_SWIPE_CONSUMED:
++		return;
++	case WORKSPACE_SWIPE_HANDOVER:
++		begin_regular_swipe(seat, event->pointer, event->time_msec, fingers);
++		event->dx = acc_dx;
++		event->dy = acc_dy;
++		break;
++	case WORKSPACE_SWIPE_NOT_OURS:
++		break;
++	}
+ 
+ 	// Update any ongoing tracking ...
+ 	struct seatop_default_event *seatop = seat->seatop_data;
+@@ -1074,6 +1099,9 @@ static void handle_swipe_update(struct sway_seat *seat,
+ 
+ static void handle_swipe_end(struct sway_seat *seat,
+ 		struct wlr_pointer_swipe_end_event *event) {
++	if (workspace_swipe_end(seat, event->cancelled)) {
++		return;
++	}
+ 	// Ensure gesture is being tracked and was not cancelled
+ 	struct seatop_default_event *seatop = seat->seatop_data;
+ 	if (!gesture_tracker_check(&seatop->gestures, GESTURE_TYPE_SWIPE)) {
+diff --git a/sway/meson.build b/sway/meson.build
+index ce2dfada..06c06323 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -48,6 +48,8 @@ sway_sources = files(
+ 	'commands/autotile.c',
+ 	'commands/inactive_opacity.c',
+ 	'commands/workspace_animation.c',
++	'commands/workspace_swipe.c',
++	'desktop/workspace_swipe.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+diff --git a/sway/sway.5.scd b/sway/sway.5.scd
+index d623390b..49bd4b94 100644
+--- a/sway/sway.5.scd
++++ b/sway/sway.5.scd
+@@ -426,6 +426,15 @@ animation_duration_ms <value>
+ 	Draws every window but the focused one at _value_ (0 to 1), on top of
+ 	its own *opacity*. 1, the default, turns it off.
+ 
++*workspace_swipe* off|<fingers> [invert]
++	A horizontal touchpad swipe with _fingers_ fingers moves the active
++	workspace with the fingers and brings its neighbour on the same output
++	in beside it; letting go switches to it when the swipe went far or fast
++	enough, and slides back otherwise. Content follows the fingers: moving
++	right brings in the workspace before. _invert_ turns that round. A
++	vertical swipe with the same fingers goes to *bindgesture* as usual.
++	Best with *workspace_animation slide*. Default is _off_.
++
+ *workspace_animation* fade|slide
+ 	How switching workspaces is animated, when *animation_duration_ms* is
+ 	set: _fade_ (the default) fades the old workspace into the new one;
+-- 
+2.43.0
+

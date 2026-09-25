@@ -1,0 +1,151 @@
+From 49c7c7b65f7423609a40e67718410775e7443f20 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 07:58:32 +0000
+Subject: [PATCH] Add autotile: dwindle-style splitting of new windows
+
+Each new tiled window splits the window it opens next to along that
+window's longer side, as Hyprland's dwindle layout does. Done where the
+view is placed (view_map), so the split exists before the window is
+first laid out, instead of being sent as a split command afterwards.
+
+autotile enable|disable|toggle, default disable.
+---
+ include/sway/commands.h  |  1 +
+ include/sway/config.h    |  2 ++
+ sway/commands.c          |  1 +
+ sway/commands/autotile.c | 17 +++++++++++++++++
+ sway/config.c            |  1 +
+ sway/meson.build         |  1 +
+ sway/sway.5.scd          |  6 ++++++
+ sway/tree/view.c         | 13 +++++++++++++
+ 8 files changed, 42 insertions(+)
+ create mode 100644 sway/commands/autotile.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index d3be9164..efda2fd6 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -110,6 +110,7 @@ sway_cmd cmd_exec_process;
+ 
+ sway_cmd cmd_allow_tearing;
+ sway_cmd cmd_animation_duration_ms;
++sway_cmd cmd_autotile;
+ sway_cmd cmd_assign;
+ sway_cmd cmd_bar;
+ sway_cmd cmd_bindcode;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index 849411ba..3144db6e 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -491,6 +491,8 @@ enum xwayland_mode {
+  */
+ struct sway_config {
+ 	float animation_duration_ms;
++	// b1air: split the focused window along its longer side for each new one
++	bool autotile;
+ 	int corner_radius;
+ 	bool smart_corner_radius;
+ 
+diff --git a/sway/commands.c b/sway/commands.c
+index 9e9adefa..fd8bc411 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -44,6 +44,7 @@ struct cmd_results *checkarg(int argc, const char *name, enum expected_args type
+ static const struct cmd_handler handlers[] = {
+ 	{ "animation_duration_ms", cmd_animation_duration_ms },
+ 	{ "assign", cmd_assign },
++	{ "autotile", cmd_autotile },
+ 	{ "bar", cmd_bar },
+ 	{ "bindcode", cmd_bindcode },
+ 	{ "bindgesture", cmd_bindgesture },
+diff --git a/sway/commands/autotile.c b/sway/commands/autotile.c
+new file mode 100644
+index 00000000..9ce13d68
+--- /dev/null
++++ b/sway/commands/autotile.c
+@@ -0,0 +1,17 @@
++#include "sway/commands.h"
++#include "sway/config.h"
++#include "util.h"
++
++// autotile enable|disable|toggle
++//
++// Each new tiled window splits the window it opens next to along that
++// window's longer side: a wide window gains a neighbour on its right, a tall
++// one below. The layout becomes a spiral of halves, as Hyprland's dwindle.
++struct cmd_results *cmd_autotile(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "autotile", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	config->autotile = parse_boolean(argv[0], config->autotile);
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index d5ee34c9..7054b23c 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -352,6 +352,7 @@ static void config_defaults(struct sway_config *config) {
+ 
+ 	// SwayFX defaults
+ 	config->animation_duration_ms = 0.0f;
++	config->autotile = false;
+ 
+ 	config->corner_radius = 0;
+ 	config->smart_corner_radius = false;
+diff --git a/sway/meson.build b/sway/meson.build
+index ecd2865b..eab243de 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -45,6 +45,7 @@ sway_sources = files(
+ 	'config/input.c',
+ 
+ 	'commands/animation_duration_ms.c',
++	'commands/autotile.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+diff --git a/sway/sway.5.scd b/sway/sway.5.scd
+index 97a1f656..c6dbf068 100644
+--- a/sway/sway.5.scd
++++ b/sway/sway.5.scd
+@@ -422,6 +422,12 @@ animation_duration_ms <value>
+ 	Determines the duration of the animation applied to opening and closing
+ 	windows, between 0 (no animation) and 5000 (5 seconds).
+ 
++*autotile* enable|disable|toggle
++	Each new tiled window splits the window it opens next to along that
++	window's longer side, so the layout becomes a spiral of halves (as
++	Hyprland's dwindle layout). Tabbed and stacked containers are left as
++	they are. Default is _disable_.
++
+ *assign* <criteria> [→] [workspace] [number] <workspace>
+ 	Assigns windows matching _criteria_ (see *CRITERIA* for details) to
+ 	_workspace_. The → (U+2192) is optional and cosmetic. This command is
+diff --git a/sway/tree/view.c b/sway/tree/view.c
+index 764e56de..ce5fc92e 100644
+--- a/sway/tree/view.c
++++ b/sway/tree/view.c
+@@ -926,6 +926,19 @@ void view_map(struct sway_view *view, struct wlr_surface *wlr_surface,
+ 			&view->foreign_destroy);
+ 
+ 	struct sway_container *container = view->container;
++	if (target_sibling && config->autotile
++			&& target_sibling->pending.fullscreen_mode == FULLSCREEN_NONE
++			&& !container_is_floating_or_child(target_sibling)) {
++		// Dwindle: the window opened next to is split in two along its
++		// longer side, and the new one takes the second half. A tabbed or
++		// stacked parent was chosen by hand and is left alone.
++		enum sway_container_layout parent = container_parent_layout(target_sibling);
++		if (parent == L_HORIZ || parent == L_VERT) {
++			container_split(target_sibling,
++				target_sibling->pending.width >= target_sibling->pending.height
++					? L_HORIZ : L_VERT);
++		}
++	}
+ 	if (target_sibling) {
+ 		container_add_sibling(target_sibling, container, 1);
+ 	} else if (ws) {
+-- 
+2.43.0
+

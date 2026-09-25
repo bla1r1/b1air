@@ -2,8 +2,10 @@
 # Format: see lib/distro.sh. `?name` = optional.
 #
 # Quickshell is not packaged here; install.sh builds it from source with the
-# dependencies in packages/quickshell-build/debian.txt. The compositor is plain
-# sway (swayFX is not packaged either), so blur and rounded corners are off.
+# dependencies in packages/quickshell-build/debian.txt. swayFX is not packaged
+# either: install.sh builds it with its own wlroots (tools/build-swayfx.sh,
+# dependencies in packages/swayfx-build/debian.txt). Plain sway below is the
+# fallback should that build fail.
 
 # Core & build
 build-essential git rsync curl unzip xz-utils jq cmake ninja-build ccache pkgconf

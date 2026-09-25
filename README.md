@@ -57,9 +57,17 @@ Matches the desktop Tokyo Night theme with digital clock, user avatar synchroniz
 | Family | Versions | Quickshell | Compositor |
 | :--- | :--- | :--- | :--- |
 | **Arch** (EndeavourOS, Manjaro, CachyOS, …) | rolling | official repo | swayFX (AUR), or sway with `--no-aur` |
-| **Debian / Ubuntu** (Mint, Pop!_OS, …) | Debian 13+, Ubuntu 25.04+ | built from source | sway |
+| **Debian / Ubuntu** (Mint, Pop!_OS, …) | Debian 13+, Ubuntu 25.04+ | built from source | swayFX, built from source with its own wlroots |
 | **Fedora** (Nobara, …) | 40+ | COPR `errornointernet/quickshell`, else source | swayFX |
-| **openSUSE** *(experimental)* | Tumbleweed / Slowroll | repo if present, else source | swayFX if present, else sway |
+| **openSUSE** *(experimental)* | Tumbleweed / Slowroll | repo if present, else source | swayFX if present, else built from source |
+
+Where swayFX is built from source (`tools/build-swayfx.sh`), it is built the
+way the sway fork scroll ships: swayFX 0.6 with its own copies of wlroots
+0.20.2 and scenefx 0.5 in its `subprojects/`, installed to `/usr/local` with
+the two libraries in a private `/usr/local/lib/b1air-swayfx`. Whatever wlroots
+the distribution has (Ubuntu 26.04: 0.19) is not used and not touched. The
+versions are pinned in the script and move together; wlroots is fetched from
+gitlab.freedesktop.org at install time.
 
 The family is detected from `/etc/os-release`; derivatives are matched through
 `ID_LIKE`, and `--distro arch|debian|fedora|opensuse` overrides it. The desktop
@@ -120,7 +128,10 @@ For an interactive menu:
 
 Environment variables: `QUICKSHELL_REF` (tag built from source, default
 `v0.3.1`), `B1AIR_QUICKSHELL_FROM_SOURCE=1` (build Quickshell even where a
-package exists), `B1AIR_SKIP_QT_CHECK=1` (skip the Qt version check).
+package exists), `B1AIR_SWAYFX_FROM_SOURCE=1` (build swayFX with its own
+wlroots even where a package exists), `SWAYFX_REF` / `SCENEFX_REF` /
+`WLROOTS_REF` and the matching `*_REPO` (other versions or mirrors for that
+build), `B1AIR_SKIP_QT_CHECK=1` (skip the Qt version check).
 
 An interrupted install resumes where it stopped; `--restart` starts over.
 

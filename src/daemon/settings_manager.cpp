@@ -305,10 +305,35 @@ static void apply_keyboard(SwayIPC* ipc, const std::string& layout, const std::s
     applied_options = options;
 }
 
+static bool command_ok(const std::string& reply) {
+    const auto j = nlohmann::json::parse(reply, nullptr, false);
+    return j.is_array() && !j.empty() && j[0].is_object() && j[0].value("success", false);
+}
+
+bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
+    // The same 0.5 the session's own tiler used to set window by window.
+    (void)ipc.send_command(0, "inactive_opacity 0.5");
+    // swayfx's own (0.6+); plain sway and older swayfx refuse it harmlessly.
+    (void)ipc.send_command(0, "animation_duration_ms 200");
+    // Workspaces slide sideways, and a three-finger swipe moves them with
+    // the fingers (src/swayfx/patches/0003, 0004). "Natural" in Settings is
+    // the workspace following the fingers, which is the patch's own default;
+    // off, it turns round. Where this is taken, the three-finger
+    // bindgestures in input.conf are never reached for sideways swipes; on
+    // any other sway they still switch workspaces at the end of the swipe.
+    (void)ipc.send_command(0, "workspace_animation slide");
+    (void)ipc.send_command(0, !get_json_bool("touchpadSwipeWorkspace", true)
+        ? std::string("workspace_swipe off")
+        : std::string("workspace_swipe 3") + (get_json_bool("touchpadNaturalSwipe", true) ? "" : " invert"));
+    return command_ok(ipc.send_command(0, std::string("autotile ")
+        + (get_json_bool("autotiling", true) ? "enable" : "disable")));
+}
+
 bool SettingsManager::apply_to_sway(const DesktopSettings& s) {
     SwayIPC ipc;
     const bool connected = ipc.connect();
     if (connected) {
+        apply_compositor_extras(ipc);
         ipc.send_command(0, "gaps inner all set " + std::to_string(s.gapsInner));
         ipc.send_command(0, "gaps outer all set " + std::to_string(s.gapsOuter));
         // `gaps outer` sets all four edges, and look-and-feel.conf keeps the

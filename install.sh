@@ -261,20 +261,53 @@ install_compositor() {
             [[ "$NO_AUR" -eq 1 ]] && install_one_of sway
             return 0 ;;
         debian)
-            # Listed in packages/debian.txt: there is no swayfx package.
+            # No swayfx package here: built from source with its own wlroots.
+            # Plain sway (packages/debian.txt) stays as the fallback.
+            build_swayfx_from_source \
+                || warn "swayfx build failed — using plain sway (no blur or rounded corners)."
             return 0 ;;
     esac
+    if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-0}" == "1" ]]; then
+        build_swayfx_from_source && return 0
+        warn "swayfx build failed — falling back to the distribution's packages."
+    fi
     if pkg_installed "$DISTRO" sway && ! pkg_installed "$DISTRO" swayfx; then
         log "Plain sway is already installed; keeping it (install swayfx yourself for blur and rounded corners)."
         return 0
     fi
     if install_one_of swayfx; then
         ok "Compositor: swayfx"
+    elif build_swayfx_from_source; then
+        ok "Compositor: swayfx (built from source)"
     elif install_one_of sway; then
         warn "swayfx is not in your repositories — using plain sway (no blur or rounded corners)."
     else
         err "Neither swayfx nor sway could be installed."; exit 1
     fi
+}
+
+# swayfx with its own wlroots and scenefx (tools/build-swayfx.sh), into
+# /usr/local, where the session finds `swayfx` first. Rebuilt only when the
+# versions pinned in that script change.
+build_swayfx_from_source() {
+    local script="$REPO_DIR/tools/build-swayfx.sh"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would build swayfx with its own wlroots ($script) and install it to /usr/local"
+        return 0
+    fi
+    if "$script" --check; then
+        ok "swayfx (own wlroots) is up to date in /usr/local"
+        return 0
+    fi
+    local deps="$REPO_DIR/packages/swayfx-build/${DISTRO}.txt"
+    if [[ -f "$deps" ]]; then
+        install_package_set "$deps"
+    else
+        warn "No build dependency list for ${DISTRO}; building swayfx with what is installed."
+    fi
+    log "Building swayfx with its own wlroots (takes a few minutes)..."
+    "$script" >&2 || return 1
+    hash -r
 }
 
 # ── Quickshell ───────────────────────────────────────────────────────────────

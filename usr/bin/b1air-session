@@ -14,6 +14,9 @@ export XDG_SESSION_TYPE="wayland"
 # "command not found" with nothing surfacing the failure. Everything spawned
 # from this session (sway, quickshell, the daemon) inherits this PATH.
 export PATH="$HOME/.local/bin:$PATH"
+# swayfx built from source (tools/build-swayfx.sh) lives in /usr/local/bin,
+# which a display manager's PATH does not always carry.
+case ":$PATH:" in *:/usr/local/bin:*) ;; *) export PATH="/usr/local/bin:$PATH" ;; esac
 
 # Wayland & Toolkit Defaults
 export MOZ_ENABLE_WAYLAND=1

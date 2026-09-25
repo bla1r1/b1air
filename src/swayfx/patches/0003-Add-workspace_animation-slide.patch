@@ -1,0 +1,366 @@
+From 203d7147d61ff0646ff9113d0355d147379822d6 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 08:07:32 +0000
+Subject: [PATCH 3/4] Add workspace_animation slide
+
+Switching workspaces can slide both sideways, the new one in from the
+side it lies on, as Hyprland and GNOME do, instead of swayfx's fade.
+Each workspace slides from wherever it is drawn: mid-slide, or held
+aside by a swipe (swipe_offset/swipe_peek, used by the swipe patch).
+Floating windows move with their workspace; while it slides they are
+placed without the per-window move animation, which would pull them
+back on every frame.
+
+workspace_animation fade|slide, default fade.
+---
+ include/sway/commands.h             |   1 +
+ include/sway/config.h               |   2 +
+ include/sway/tree/workspace.h       |  16 ++++
+ sway/commands.c                     |   1 +
+ sway/commands/workspace_animation.c |  23 +++++
+ sway/config.c                       |   1 +
+ sway/desktop/transaction.c          | 137 +++++++++++++++++++++++++++-
+ sway/meson.build                    |   1 +
+ sway/sway.5.scd                     |   5 +
+ 9 files changed, 184 insertions(+), 3 deletions(-)
+ create mode 100644 sway/commands/workspace_animation.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index d37e281f..b5425d49 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -112,6 +112,7 @@ sway_cmd cmd_allow_tearing;
+ sway_cmd cmd_animation_duration_ms;
+ sway_cmd cmd_autotile;
+ sway_cmd cmd_inactive_opacity;
++sway_cmd cmd_workspace_animation;
+ sway_cmd cmd_assign;
+ sway_cmd cmd_bar;
+ sway_cmd cmd_bindcode;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index caf290a4..b432b69f 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -495,6 +495,8 @@ struct sway_config {
+ 	bool autotile;
+ 	// b1air: opacity of every window but the focused one, 0..1
+ 	float inactive_opacity;
++	// b1air: how switching workspaces is animated
++	enum { WORKSPACE_ANIMATION_FADE, WORKSPACE_ANIMATION_SLIDE } workspace_animation;
+ 	int corner_radius;
+ 	bool smart_corner_radius;
+ 
+diff --git a/include/sway/tree/workspace.h b/include/sway/tree/workspace.h
+index a7da6220..1c1caca7 100644
+--- a/include/sway/tree/workspace.h
++++ b/include/sway/tree/workspace.h
+@@ -59,9 +59,25 @@ struct sway_workspace {
+ 		struct animation animation;
+ 		float from_alpha;
+ 		float to_alpha;
++		// b1air: horizontal offset while sliding in or out, in layout pixels
++		float from_x;
++		float to_x;
+ 	} animation_state;
++
++	// b1air: where a touchpad swipe holds this workspace (layout pixels),
++	// and whether it is shown beside the active one for that swipe
++	int swipe_offset;
++	bool swipe_peek;
+ };
+ 
++// b1air: the horizontal offset this workspace is drawn at right now, from a
++// slide in progress or a swipe holding it.
++int workspace_slide_offset(struct sway_workspace *ws);
++
++// b1air: puts a shown workspace's tiling layer and floating windows at its
++// current slide offset.
++void workspace_place(struct sway_workspace *ws);
++
+ struct workspace_config *workspace_find_config(const char *ws_name);
+ 
+ struct sway_output *workspace_get_initial_output(const char *name);
+diff --git a/sway/commands.c b/sway/commands.c
+index c441041b..c0568c63 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -121,6 +121,7 @@ static const struct cmd_handler handlers[] = {
+ 	{ "unbindswitch", cmd_unbindswitch },
+ 	{ "unbindsym", cmd_unbindsym },
+ 	{ "workspace", cmd_workspace },
++	{ "workspace_animation", cmd_workspace_animation },
+ 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth },
+ };
+ 
+diff --git a/sway/commands/workspace_animation.c b/sway/commands/workspace_animation.c
+new file mode 100644
+index 00000000..df47cde2
+--- /dev/null
++++ b/sway/commands/workspace_animation.c
+@@ -0,0 +1,23 @@
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/config.h"
++
++// workspace_animation fade|slide
++//
++// How switching workspaces is animated (when animation_duration_ms is set):
++// the old one fading into the new, or both sliding sideways, the new one in
++// from the side it lies on, as Hyprland and GNOME do.
++struct cmd_results *cmd_workspace_animation(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "workspace_animation", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	if (strcasecmp(argv[0], "fade") == 0) {
++		config->workspace_animation = WORKSPACE_ANIMATION_FADE;
++	} else if (strcasecmp(argv[0], "slide") == 0) {
++		config->workspace_animation = WORKSPACE_ANIMATION_SLIDE;
++	} else {
++		return cmd_results_new(CMD_INVALID, "Expected 'workspace_animation fade|slide'");
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index 36e4892a..fb318588 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -354,6 +354,7 @@ static void config_defaults(struct sway_config *config) {
+ 	config->animation_duration_ms = 0.0f;
+ 	config->autotile = false;
+ 	config->inactive_opacity = 1.0f;
++	config->workspace_animation = WORKSPACE_ANIMATION_FADE;
+ 
+ 	config->corner_radius = 0;
+ 	config->smart_corner_radius = false;
+diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
+index 3a37b40f..567db3e1 100644
+--- a/sway/desktop/transaction.c
++++ b/sway/desktop/transaction.c
+@@ -1,4 +1,5 @@
+ #include <assert.h>
++#include <math.h>
+ #include <stdbool.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -115,11 +116,44 @@ static void workspace_fade_update_callback(void *data) {
+ 	workspace_for_each_container(ws, _fade_container_update, NULL);
+ }
+ 
++int workspace_slide_offset(struct sway_workspace *ws) {
++	if (ws->animation_state.animation.initialized
++			&& ws->animation_state.from_x != ws->animation_state.to_x) {
++		return (int)roundf(get_animated_value(ws->animation_state.from_x,
++			ws->animation_state.to_x, &ws->animation_state.animation));
++	}
++	return ws->swipe_offset;
++}
++
++void workspace_place(struct sway_workspace *ws) {
++	if (!ws || !ws->output) {
++		return;
++	}
++	struct wlr_box *area = &ws->output->usable_area;
++	struct side_gaps *gaps = &ws->current_gaps;
++	int offset = workspace_slide_offset(ws);
++	wlr_scene_node_set_position(&ws->layers.tiling->node,
++		gaps->left + area->x + offset, gaps->top + area->y);
++	for (int i = 0; i < ws->current.floating->length; i++) {
++		struct sway_container *floater = ws->current.floating->items[i];
++		if (floater->current.fullscreen_mode != FULLSCREEN_NONE) {
++			continue;
++		}
++		wlr_scene_node_set_position(&floater->scene_tree->node,
++			floater->current.x + offset, floater->current.y);
++	}
++}
++
++static void workspace_slide_update_callback(void *data) {
++	workspace_place(data);
++}
++
+ static void workspace_fade_complete_callback(void *data) {
+ 	struct sway_workspace *ws = data;
+ 	if (!ws || !ws->output) {
+ 		return;
+ 	}
++	ws->animation_state.from_x = ws->animation_state.to_x = 0;
+ 	struct sway_output *output = ws->output;
+ 	if (output->current.active_workspace == ws) {
+ 		return;
+@@ -857,6 +891,31 @@ static void arrange_workspace_floating(struct sway_workspace *ws) {
+ 	}
+ }
+ 
++// b1air: is this workspace sliding, or held aside by a swipe?
++static bool workspace_is_sliding(struct sway_workspace *ws) {
++	return ws->animation_state.from_x != ws->animation_state.to_x
++		|| ws->swipe_peek || ws->swipe_offset != 0;
++}
++
++// b1air: the floating windows of a sliding workspace, placed without the
++// per-window move animation: that animation sets each window's position on
++// every frame and would pull it back against the slide.
++static void arrange_workspace_floating_still(struct sway_workspace *ws) {
++	for (int i = 0; i < ws->current.floating->length; i++) {
++		struct sway_container *floater = ws->current.floating->items[i];
++		if (floater->current.fullscreen_mode != FULLSCREEN_NONE) {
++			continue;
++		}
++		finish_animation(&floater->animation_state.animation);
++		wlr_scene_node_reparent(&floater->scene_tree->node, root->layers.floating);
++		wlr_scene_node_set_enabled(&floater->scene_tree->node, true);
++		wlr_scene_node_set_enabled(&floater->shadow->node, container_has_shadow(floater) && floater->view);
++		wlr_scene_node_set_enabled(&floater->border.tree->node, true);
++		_arrange_container(floater, floater->current.width, floater->current.height,
++			floater->current.x, floater->current.y, true, ws->gaps_inner);
++	}
++}
++
+ static void arrange_workspace_tiling(struct sway_workspace *ws,
+ 		int width, int height) {
+ 	arrange_children(ws->current.layout, ws->current.tiling,
+@@ -883,6 +942,62 @@ static void disable_workspace(struct sway_workspace *ws) {
+ 	}
+ }
+ 
++static int workspace_index_on(struct sway_output *output, struct sway_workspace *ws) {
++	for (int i = 0; i < output->current.workspaces->length; i++) {
++		if (output->current.workspaces->items[i] == ws) {
++			return i;
++		}
++	}
++	return -1;
++}
++
++static void workspace_slide_complete_callback(void *data) {
++	struct sway_workspace *ws = data;
++	ws->animation_state.from_x = ws->animation_state.to_x = 0;
++	workspace_place(ws);
++}
++
++// Both workspaces slide: the old one out to one side, the new one in from
++// the other. Each starts from wherever it is drawn now — mid-slide, or held
++// by a swipe — so a switch never jumps.
++static void start_workspace_slide(struct sway_output *output,
++		struct sway_workspace *old_active, struct sway_workspace *new_active) {
++	int span = output->usable_area.width > 0 ? output->usable_area.width : output->width;
++	int dir = workspace_index_on(output, new_active) >= workspace_index_on(output, old_active) ? 1 : -1;
++	// A swipe already holding the new one beside the old knows its side.
++	if (new_active->swipe_peek && new_active->swipe_offset != 0) {
++		dir = new_active->swipe_offset > 0 ? 1 : -1;
++	}
++	float old_from = workspace_slide_offset(old_active);
++	float new_from = new_active->swipe_peek
++		? workspace_slide_offset(new_active) : old_from + dir * span;
++
++	old_active->swipe_offset = new_active->swipe_offset = 0;
++	old_active->swipe_peek = new_active->swipe_peek = false;
++
++	// An empty workspace is destroyed as it is left: nothing to slide out
++	// (swayfx's fade skips it the same way).
++	bool old_empty = old_active->current.tiling->length == 0
++		&& old_active->current.floating->length == 0;
++	if (!old_empty) {
++		old_active->animation_state.from_alpha = old_active->animation_state.to_alpha = 1.0f;
++		old_active->animation_state.from_x = old_from;
++		old_active->animation_state.to_x = -dir * span;
++	}
++
++	finish_animation(&new_active->animation_state.animation);
++	new_active->animation_state.from_alpha = new_active->animation_state.to_alpha = 1.0f;
++	new_active->animation_state.from_x = new_from;
++	new_active->animation_state.to_x = 0;
++
++	if (!old_empty) {
++		add_animation(&old_active->animation_state.animation,
++			workspace_slide_update_callback, workspace_fade_complete_callback);
++	}
++	add_animation(&new_active->animation_state.animation,
++		workspace_slide_update_callback, workspace_slide_complete_callback);
++}
++
+ static void arrange_output(struct sway_output *output, int width, int height) {
+ 	struct sway_workspace *new_active = output->current.active_workspace;
+ 	struct sway_workspace *old_active = output->prev_active_workspace;
+@@ -891,7 +1006,11 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		&& output->wlr_output->enabled && config->animation_duration_ms > 0 &&
+ 		!(old_active->current.fullscreen || new_active->current.fullscreen);
+ 
+-	if (is_ws_switch) {
++	if (is_ws_switch && config->workspace_animation == WORKSPACE_ANIMATION_SLIDE) {
++		start_workspace_slide(output, old_active, new_active);
++	} else if (is_ws_switch) {
++		old_active->animation_state.from_x = old_active->animation_state.to_x = 0;
++		new_active->animation_state.from_x = new_active->animation_state.to_x = 0;
+ 		new_active->animation_state.from_alpha = 0.0f;
+ 
+ 		if (old_active->current.tiling->length == 0
+@@ -921,7 +1040,9 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		struct sway_workspace *child = output->current.workspaces->items[i];
+ 
+ 		bool activated = output->current.active_workspace == child && output->wlr_output->enabled;
+-		bool animating = child->animation_state.animation.initialized;
++		// b1air: a workspace held beside the active one by a swipe is shown
++		// the way one sliding or fading out is.
++		bool animating = child->animation_state.animation.initialized || child->swipe_peek;
+ 
+ 		wlr_scene_node_reparent(&child->layers.tiling->node, output->layers.tiling);
+ 		wlr_scene_node_reparent(&child->layers.fullscreen->node, output->layers.fullscreen);
+@@ -960,7 +1081,12 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 				arrange_workspace_tiling(child,
+ 					area->width - gaps->left - gaps->right,
+ 					area->height - gaps->top - gaps->bottom);
+-				arrange_workspace_floating(child);
++				if (workspace_is_sliding(child)) {
++					arrange_workspace_floating_still(child);
++				} else {
++					arrange_workspace_floating(child);
++				}
++				workspace_place(child);
+ 			}
+ 		} else if (animating && !activated) {
+ 			// Workspace fading out - keep visible, alpha handled by render path
+@@ -976,6 +1102,11 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 			arrange_workspace_tiling(child,
+ 				area->width - gaps->left - gaps->right,
+ 				area->height - gaps->top - gaps->bottom);
++			// b1air: its floating windows go with it while it slides
++			if (workspace_is_sliding(child)) {
++				arrange_workspace_floating_still(child);
++			}
++			workspace_place(child);
+ 		} else {
+ 			wlr_scene_node_set_enabled(&child->layers.tiling->node, false);
+ 			wlr_scene_node_set_enabled(&child->layers.fullscreen->node, false);
+diff --git a/sway/meson.build b/sway/meson.build
+index e2df7a88..ce2dfada 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -47,6 +47,7 @@ sway_sources = files(
+ 	'commands/animation_duration_ms.c',
+ 	'commands/autotile.c',
+ 	'commands/inactive_opacity.c',
++	'commands/workspace_animation.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+diff --git a/sway/sway.5.scd b/sway/sway.5.scd
+index 3817cc28..d623390b 100644
+--- a/sway/sway.5.scd
++++ b/sway/sway.5.scd
+@@ -426,6 +426,11 @@ animation_duration_ms <value>
+ 	Draws every window but the focused one at _value_ (0 to 1), on top of
+ 	its own *opacity*. 1, the default, turns it off.
+ 
++*workspace_animation* fade|slide
++	How switching workspaces is animated, when *animation_duration_ms* is
++	set: _fade_ (the default) fades the old workspace into the new one;
++	_slide_ moves both sideways, the new one in from the side it lies on.
++
+ *autotile* enable|disable|toggle
+ 	Each new tiled window splits the window it opens next to along that
+ 	window's longer side, so the layout becomes a spiral of halves (as
+-- 
+2.43.0
+

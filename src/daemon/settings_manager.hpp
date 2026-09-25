@@ -5,6 +5,8 @@
 
 namespace b1air {
 
+class SwayIPC;
+
 struct DesktopSettings {
     // Keyboard & input
     //
@@ -61,6 +63,13 @@ public:
     static bool save(const DesktopSettings& s, const std::string& path = "");
 
     static bool apply_to_sway(const DesktopSettings& s);
+    // What b1air's swayfx does itself (src/swayfx/patches): dwindle tiling,
+    // translucent unfocused windows, sliding workspaces that follow a
+    // three-finger swipe, and swayfx's open/close animations.
+    // Sent over IPC, never written into the config: a compositor without
+    // them only answers "unknown command", where a config line would stop it
+    // loading. True when the compositor took `autotile`, i.e. it is ours.
+    static bool apply_compositor_extras(SwayIPC& ipc);
     static bool apply_from_file(const std::string& path = "");
 
     static std::string get_json_string(const std::string& key);
