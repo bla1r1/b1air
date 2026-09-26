@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 
 // =============================================================================
@@ -148,12 +149,11 @@ Singleton {
     }
 
     function _announce(title, body) {
-        // Through notify-send rather than the shell's own notification service:
+        // Over D-Bus like any app's, rather than into the shell's own service:
         // this has to arrive while "Auto-Silence Notifications in Focus Mode"
         // is suppressing everything else, and the whole point of the timer is
         // that it tells you when the interval is over.
-        Quickshell.execDetached(["notify-send", "-a", "FocusTime", "-i", "alarm-symbolic",
-                                 title, body]);
+        Sys.notify("FocusTime", title, body, "alarm-symbolic");
     }
 
     Timer {

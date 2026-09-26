@@ -23,6 +23,7 @@
 // likely to be needed.
 // =============================================================================
 
+#include "proc_scan.hpp"
 #include <QGuiApplication>
 #include <QDir>
 #include <QQmlApplicationEngine>
@@ -68,7 +69,7 @@ int main(int argc, char* argv[]) {
         else if (argv[i][0] != '-') page = argv[i];
     }
 
-    const bool shellRunning = system("pgrep -r DRSW -x quickshell >/dev/null 2>&1") == 0;
+    const bool shellRunning = b1air::proc::running("quickshell");
     if (forceShell || (shellRunning && !forceStandalone)) {
         if (std::strlen(page) > 0)
             execlp("b1air-shell", "b1air-shell", "open", "settings", page, (char*)nullptr);

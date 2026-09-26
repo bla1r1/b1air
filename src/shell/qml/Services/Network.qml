@@ -212,7 +212,7 @@ Singleton {
     Process {
         id: ipReader
         running: root._users > 0
-        command: ["bash", "-c", "ip -j -p addr show 2>/dev/null"]
+        command: ["ip", "-j", "-p", "addr", "show"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {

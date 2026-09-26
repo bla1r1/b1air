@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import "../../Ui"
 import "../../Services"
 
@@ -34,31 +35,31 @@ ColumnLayout {
     // was applied and then forgotten — see Services/SwayConfig.
     function setGapsInner(val) {
         Settings.set("gapsInner", val);
-        Quickshell.execDetached(["swaymsg", "gaps", "inner", "all", "set", String(val)]);
+        Sway.command("gaps inner all set " + Number(val));
         SwayConfig.writeLook();
     }
 
     function setGapsOuter(val) {
         Settings.set("gapsOuter", val);
-        Quickshell.execDetached(["swaymsg", "gaps", "outer", "all", "set", String(val)]);
+        Sway.command("gaps outer all set " + Number(val));
         SwayConfig.writeLook();
     }
 
     function setBorderWidth(val) {
         Settings.set("borderWidth", val);
-        Quickshell.execDetached(["swaymsg", "default_border", "pixel", String(val)]);
+        Sway.command("default_border pixel " + Number(val));
         SwayConfig.writeLook();
     }
 
     function toggleSmartBorders(val) {
         Settings.set("smartBorders", val);
-        Quickshell.execDetached(["swaymsg", "smart_borders", val ? "on" : "off"]);
+        Sway.command("smart_borders " + (val ? "on" : "off"));
         SwayConfig.writeLook();
     }
 
     function toggleSmartGaps(val) {
         Settings.set("smartGaps", val);
-        Quickshell.execDetached(["swaymsg", "smart_gaps", val ? "on" : "off"]);
+        Sway.command("smart_gaps " + (val ? "on" : "off"));
         SwayConfig.writeLook();
     }
 

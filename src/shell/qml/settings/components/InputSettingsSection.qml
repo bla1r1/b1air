@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import "../../Ui"
 import "../../Services"
 
@@ -35,19 +36,20 @@ ColumnLayout {
     // the toggle still showing what the user had chosen.
     //
     // Services/SwayConfig writes the same state into conf.d/custom_input.conf,
-    // which sway includes after its defaults. Live application stays: swaymsg
-    // for this session, the file for the next.
+    // which sway includes after its defaults. Live application stays: a sway
+    // command for this session, the file for the next.
     function _persist() { SwayConfig.writeInput(); }
+    function _en(on) { return on ? "enabled" : "disabled"; }
 
     function setNaturalScroll(on) {
         Settings.set("naturalScroll", on);
-        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "natural_scroll", on ? "enabled" : "disabled"]);
+        Sway.command("input type:touchpad natural_scroll " + section._en(on));
         section._persist();
     }
 
     function setTapToClick(on) {
         Settings.set("tapToClick", on);
-        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "tap", on ? "enabled" : "disabled"]);
+        Sway.command("input type:touchpad tap " + section._en(on));
         section._persist();
     }
 
@@ -57,33 +59,32 @@ ColumnLayout {
     // menu anywhere could be opened the way people expect to open it.
     function setClickfinger(on) {
         Settings.set("touchpadClickfinger", on);
-        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "click_method",
-                                 on ? "clickfinger" : "button_areas"]);
+        Sway.command("input type:touchpad click_method " + (on ? "clickfinger" : "button_areas"));
         section._persist();
     }
 
     function setDwt(on) {
         Settings.set("dwt", on);
-        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "dwt", on ? "enabled" : "disabled"]);
+        Sway.command("input type:touchpad dwt " + section._en(on));
         section._persist();
     }
 
     function setPointerAccel(val) {
         Settings.set("pointerAccel", val);
-        Quickshell.execDetached(["swaymsg", "input", "type:pointer", "pointer_accel", String(val)]);
-        Quickshell.execDetached(["swaymsg", "input", "type:touchpad", "pointer_accel", String(val)]);
+        Sway.command("input type:pointer pointer_accel " + Number(val)
+                     + "; input type:touchpad pointer_accel " + Number(val));
         section._persist();
     }
 
     function setAccelProfile(prof) {
         Settings.set("accelProfile", prof);
-        Quickshell.execDetached(["swaymsg", "input", "type:pointer", "accel_profile", prof]);
+        Sway.command("input type:pointer accel_profile " + (prof === "flat" ? "flat" : "adaptive"));
         section._persist();
     }
 
     function setLeftHanded(on) {
         Settings.set("leftHanded", on);
-        Quickshell.execDetached(["swaymsg", "input", "type:pointer", "left_handed", on ? "enabled" : "disabled"]);
+        Sway.command("input type:pointer left_handed " + section._en(on));
         section._persist();
     }
 
@@ -117,26 +118,23 @@ ColumnLayout {
     function _applyFourFinger(enabled, natural) {
         for (const g of SwayConfig.fourFingerGestures(natural)) {
             if (enabled)
-                // Quoted for swaymsg: bare, sway splits a chained command
-                // at the ";" before the binding sees it and runs the second
-                // half on the spot. (A config file is the other way round —
-                // there the quotes would be kept and the binding would fail.)
-                Quickshell.execDetached(["swaymsg", "bindgesture " + g[0] + " \"" + g[1] + "\""]);
+                // Quoted: bare, sway splits a chained command at the ";"
+                // before the binding sees it and runs the second half on the
+                // spot. (A config file is the other way round — there the
+                // quotes would be kept and the binding would fail.)
+                Sway.command("bindgesture " + g[0] + " " + Sway.quote(g[1]));
             else
-                Quickshell.execDetached(["swaymsg", "unbindgesture", g[0]]);
+                Sway.command("unbindgesture " + g[0]);
         }
     }
 
     function _applyGestures(enabled, natural) {
         if (!enabled) {
-            Quickshell.execDetached(["swaymsg", "unbindgesture", "swipe:3:left"]);
-            Quickshell.execDetached(["swaymsg", "unbindgesture", "swipe:3:right"]);
+            Sway.command("unbindgesture swipe:3:left; unbindgesture swipe:3:right");
             return;
         }
-        Quickshell.execDetached(["swaymsg", "bindgesture", "swipe:3:left", "workspace",
-                                 natural ? "prev" : "next"]);
-        Quickshell.execDetached(["swaymsg", "bindgesture", "swipe:3:right", "workspace",
-                                 natural ? "next" : "prev"]);
+        Sway.command("bindgesture swipe:3:left workspace " + (natural ? "prev" : "next")
+                     + "; bindgesture swipe:3:right workspace " + (natural ? "next" : "prev"));
     }
 
     // ── 1. Touchpad Card ─────────────────────────────────────────────────────

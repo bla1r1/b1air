@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 
 // =============================================================================
@@ -40,8 +41,7 @@ Singleton {
         const label = root._current ? root._current.label : "Command";
         const detail = (stderrText || "").trim().split("\n").filter(l => l.trim() !== "").pop()
                     || ("exited with code " + exitCode);
-        Quickshell.execDetached(["notify-send", "-a", "b1air", "-u", "critical",
-                                 label + " failed", detail]);
+        Sys.notify("b1air", label + " failed", detail, "", "critical");
     }
 
     Process {

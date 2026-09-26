@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
@@ -71,17 +72,11 @@ ColumnLayout {
     readonly property bool targetHasOwn: targetIsWorkspace
         ? (workspaceWallpapers[target.slice(3)] || "") !== ""
         : target !== "" && screens.some(o => o.name === target && o.wallpaper !== "")
-    Process {
-        id: focusedReader
-        command: ["swaymsg", "-r", "-t", "get_workspaces"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const ws = JSON.parse(this.text).find(w => w.focused);
-                    section.workspace = ws ? String(ws.name) : "";
-                } catch (e) { section.workspace = ""; }
-            }
-        }
+    function readFocusedWorkspace() {
+        Sway.query("workspaces", list => {
+            const ws = Array.isArray(list) ? list.find(w => w.focused) : null;
+            section.workspace = ws ? String(ws.name) : "";
+        });
     }
     Process {
         id: workspaceReader
@@ -109,7 +104,7 @@ ColumnLayout {
     Component.onCompleted: {
         scan();
         screenReader.running = true;
-        focusedReader.running = true;
+        section.readFocusedWorkspace();
         workspaceReader.running = true;
     }
     onWallpaperDirChanged: scan()

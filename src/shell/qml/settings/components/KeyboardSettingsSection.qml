@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
@@ -507,17 +508,10 @@ ColumnLayout {
                 out += "unbindsym --to-code " + b.keys + "\n";
                 out += "bindsym --to-code " + keys + " " + b.cmd + "\n";
             }
-            // The text goes in as an argument, never into the script, and the
-            // reload waits for the rename.
-            bindWriter.command = ["bash", "-c",
-                "f=\"$HOME/.config/sway/conf.d/custom_keybinds.conf\"; "
-                + "printf '%s' \"$1\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && swaymsg reload",
-                "--", out];
-            bindWriter.running = false;
-            bindWriter.running = true;
+            // Written whole (temporary file, then renamed) before sway reads it.
+            if (Sys.writeFile("~/.config/sway/conf.d/custom_keybinds.conf", out))
+                Sway.command("reload");
         }
-
-        Process { id: bindWriter }
 
         Timer {
             id: statusTimer

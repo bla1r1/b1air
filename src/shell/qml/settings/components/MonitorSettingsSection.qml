@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
@@ -883,8 +884,8 @@ ColumnLayout {
                 name: mon.name, resW: mon.resW, resH: mon.resH,
                 rate: mon.rate, sysScale: mon.sysScale, x: 0, y: 0
             }]);
-            Quickshell.execDetached(["notify-send", "Display Update",
-                "Applied: " + mon.resW + "x" + mon.resH + " @ " + mon.rate + "Hz"]);
+            Sys.notify("Displays", "Display Update",
+                       "Applied: " + mon.resW + "x" + mon.resH + " @ " + mon.rate + "Hz");
             section.dirty = false;
             return;
         }
@@ -933,8 +934,7 @@ ColumnLayout {
         }));
 
         Monitors.apply(layout);
-        Quickshell.execDetached(["notify-send", "Display Update",
-            "Applied layout for: " + layout.map(r => r.name).join(" ")]);
+        Sys.notify("Displays", "Display Update", "Applied layout for: " + layout.map(r => r.name).join(" "));
         section.dirty = false;
     }
 }

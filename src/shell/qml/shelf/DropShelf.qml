@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import B1air.Daemon
 import "../Ui"
 
 // =============================================================================
@@ -34,7 +35,7 @@ PopupShell {
         }
         if (paths.length > 0) {
             Quickshell.execDetached(["wl-copy", paths.join("\n")]);
-            Quickshell.execDetached(["notify-send", "-a", "DropShelf", "Paths Copied", paths.length + " file paths copied to clipboard"]);
+            Sys.notify("DropShelf", "Paths Copied", paths.length + " file paths copied to clipboard");
         }
     }
 

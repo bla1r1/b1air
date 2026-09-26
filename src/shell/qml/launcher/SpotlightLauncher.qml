@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../Ui"
 import "../Services"
@@ -111,7 +112,7 @@ PopupShell {
         const value = (cmd || "").trim();
         const forbidden = [";", "&", "|", "`", "$", "<", ">", "\\", "\n", "\r", "(", ")", "{", "}", "[", "]", "*", "?", "!", "~"];
         if (!value || value.length > 512 || forbidden.some(c => value.includes(c))) return false;
-        Quickshell.execDetached(["swaymsg", "exec", value]);
+        Sway.command("exec " + value);
         return true;
     }
 

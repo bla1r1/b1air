@@ -9,6 +9,8 @@
 #include <qqml.h>
 
 #include "b1airdaemon.hpp"
+#include "sway_client.hpp"
+#include "sys_util.hpp"
 
 class B1airDaemonPlugin : public QQmlExtensionPlugin {
     Q_OBJECT
@@ -25,6 +27,18 @@ public:
                 d->setEngine(engine);
                 return d;
             });
+        // sway's IPC, spoken directly (sway_client.hpp).
+        qmlRegisterSingletonType<SwayClient>(
+            uri, 1, 0, "Sway",
+            [](QQmlEngine* engine, QJSEngine*) -> QObject* {
+                auto* s = new SwayClient();
+                s->setEngine(engine);
+                return s;
+            });
+        // Files and PATH, in place of `bash -c` (sys_util.hpp).
+        qmlRegisterSingletonType<SysUtil>(
+            uri, 1, 0, "Sys",
+            [](QQmlEngine*, QJSEngine*) -> QObject* { return new SysUtil(); });
     }
 };
 

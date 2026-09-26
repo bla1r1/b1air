@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
@@ -39,25 +40,25 @@ ColumnLayout {
     // applied and then forgotten — see Services/SwayConfig.
     function setCornerRadius(val) {
         Settings.set("cornerRadius", val);
-        Quickshell.execDetached(["swaymsg", "corner_radius", String(val)]);
+        Sway.command("corner_radius " + Number(val));
         SwayConfig.writeLook();
     }
 
     function toggleBlur(enabled) {
         Settings.set("blurEnabled", enabled);
-        Quickshell.execDetached(["swaymsg", "blur", enabled ? "enable" : "disable"]);
+        Sway.command("blur " + (enabled ? "enable" : "disable"));
         SwayConfig.writeLook();
     }
 
     function toggleShadows(enabled) {
         Settings.set("shadowsEnabled", enabled);
-        Quickshell.execDetached(["swaymsg", "shadows", enabled ? "enable" : "disable"]);
+        Sway.command("shadows " + (enabled ? "enable" : "disable"));
         SwayConfig.writeLook();
     }
 
     function toggleDimInactive(enabled) {
         Settings.set("dimInactive", enabled);
-        Quickshell.execDetached(["swaymsg", "default_dim_inactive", enabled ? "0.20" : "0.0"]);
+        Sway.command("default_dim_inactive " + (enabled ? "0.20" : "0.0"));
         SwayConfig.writeLook();
     }
 
@@ -175,12 +176,7 @@ ColumnLayout {
     // switches moved and nothing on screen changed. Ask the running
     // compositor (its binary, not whichever `sway` is first on PATH: swayfx
     // installs itself as `sway`).
-    property bool hasSwayfx: true
-    Process {
-        running: true
-        command: ["sh", "-c", "p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>&1 | grep -qi swayfx && echo yes || echo no"]
-        stdout: StdioCollector { onStreamFinished: section.hasSwayfx = this.text.trim() !== "no" }
-    }
+    readonly property bool hasSwayfx: Sway.swayfx
 
     Card {
         title: "Compositor Effects"

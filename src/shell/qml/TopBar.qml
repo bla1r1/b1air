@@ -16,39 +16,8 @@ import "./Services"
 PanelWindow {
     id: topBar
 
-    // The sway IPC socket, resolved once and kept current.
-    //
-    // Every swaymsg call below used to open a shell purely to run
-    //     SWAYSOCK=$(ls -t /run/user/$(id -u)/sway-ipc.*.sock | head -n1)
-    // because a shell that outlives a sway restart would otherwise inherit a
-    // dead socket. The concern is real, the per-call glob is not: listing the
-    // directory here follows a restart by itself, and the value is handed to
-    // each process through its environment instead of through `bash -c`.
-    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000"
-
-    property string swaySock: Quickshell.env("SWAYSOCK") || ""
-
-    FolderListModel {
-        id: swaySockets
-        folder: "file://" + topBar.runtimeDir
-        showDirs: false
-        showFiles: true
-        showDotAndDotDot: false
-        sortField: FolderListModel.Time
-        onCountChanged: {
-            // nameFilters matches files, and these are sockets, so the newest
-            // sway-ipc.*.sock is picked out by hand.
-            for (let i = 0; i < count; ++i) {
-                const n = String(get(i, "fileName"));
-                if (n.startsWith("sway-ipc.") && n.endsWith(".sock")) {
-                    topBar.swaySock = topBar.runtimeDir + "/" + n;
-                    return;
-                }
-            }
-        }
-    }
-
-    readonly property var swayEnv: ({ "SWAYSOCK": topBar.swaySock })
+    // sway itself is reached through B1air.Daemon's Sway, which finds its
+    // socket and follows it across a sway restart.
 
     // ── Which screen this bar is on ──────────────────────────────────────────
     //
@@ -246,7 +215,7 @@ PanelWindow {
         const value = (cmd || "").trim();
         const forbidden = [";", "&", "|", "`", "$", "<", ">", "\\", "\n", "\r", "(", ")", "{", "}", "[", "]", "*", "?", "!", "~"];
         if (!value || value.length > 512 || forbidden.some(c => value.includes(c))) return false;
-        Quickshell.execDetached(["bash", "-c", value]);
+        Sway.command("exec " + value);
         return true;
     }
 
@@ -260,13 +229,20 @@ PanelWindow {
     property var runningApps: []
 
     function refreshRunningApps() {
-        runningAppsProcess.running = false;
-        runningAppsProcess.running = true;
+        Sway.query("tree", tree => {
+            if (!tree)
+                return;
+            let apps = [];
+            topBar.collectSwayNodes([tree], apps, "");
+            topBar.runningApps = apps;
+        });
     }
 
     function refreshWorkspaces() {
-        workspacesProcess.running = false;
-        workspacesProcess.running = true;
+        Sway.query("workspaces", ws => {
+            if (Array.isArray(ws) && ws.length > 0)
+                topBar.workspacesList = ws;
+        });
     }
 
     Component.onCompleted: {
@@ -431,43 +407,34 @@ PanelWindow {
     }
 
     // Read once at startup and then only when sway says the layout changed.
-    Process {
-        id: layoutProbe
-        command: ["swaymsg", "-t", "get_inputs"]
-        environment: topBar.swayEnv
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const inputs = JSON.parse(this.text);
-                    for (const dev of inputs) {
-                        const name = dev.xkb_active_layout_name;
-                        if (!name)
-                            continue;
-                        // The layout's own code, by position: sway's layouts
-                        // are the ones Settings -> Keyboard wrote, in order.
-                        // Cutting the name down gave "UK" for Ukrainian, "GE"
-                        // for German and "PO" for Polish, though the comment
-                        // here promised "UA".
-                        const codes = String(Settings.language || "").split(",")
-                            .map(x => x.trim()).filter(x => x !== "");
-                        const idx = Number(dev.xkb_active_layout_index);
-                        if (idx >= 0 && idx < codes.length && codes.length === (dev.xkb_layout_names || []).length) {
-                            topBar.kbdLayout = codes[idx].slice(0, 3).toUpperCase();
-                            return;
-                        }
-                        // "English (US)" -> "US".
-                        const paren = name.match(/\(([^)]+)\)/);
-                        topBar.kbdLayout = (paren ? paren[1] : name).slice(0, 2).toUpperCase();
-                        return;
-                    }
-                } catch (e) {}
+    function applyLayout(inputs) {
+        if (!Array.isArray(inputs))
+            return;
+        for (const dev of inputs) {
+            const name = dev.xkb_active_layout_name;
+            if (!name)
+                continue;
+            // The layout's own code, by position: sway's layouts
+            // are the ones Settings -> Keyboard wrote, in order.
+            // Cutting the name down gave "UK" for Ukrainian, "GE"
+            // for German and "PO" for Polish, though the comment
+            // here promised "UA".
+            const codes = String(Settings.language || "").split(",")
+                .map(x => x.trim()).filter(x => x !== "");
+            const idx = Number(dev.xkb_active_layout_index);
+            if (idx >= 0 && idx < codes.length && codes.length === (dev.xkb_layout_names || []).length) {
+                topBar.kbdLayout = codes[idx].slice(0, 3).toUpperCase();
+                return;
             }
+            // "English (US)" -> "US".
+            const paren = name.match(/\(([^)]+)\)/);
+            topBar.kbdLayout = (paren ? paren[1] : name).slice(0, 2).toUpperCase();
+            return;
         }
     }
 
     function refreshLayout() {
-        layoutProbe.running = false;
-        layoutProbe.running = true;
+        Sway.query("inputs", inputs => topBar.applyLayout(inputs));
     }
 
     Timer {
@@ -476,78 +443,24 @@ PanelWindow {
         onTriggered: topBar.refreshLayout()
     }
 
-    Process {
-        id: workspacesProcess
-        command: ["swaymsg", "-t", "get_workspaces"]
-        environment: topBar.swayEnv
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let ws = JSON.parse(this.text);
-                    if (Array.isArray(ws) && ws.length > 0) topBar.workspacesList = ws;
-                } catch (e) {}
-            }
-        }
-    }
 
-    Process {
-        id: runningAppsProcess
-        // Resolve the current socket on every refresh: Sway assigns a new
-        // socket after a restart, so inheriting an old SWAYSOCK hides windows.
-        command: ["swaymsg", "-t", "get_tree"]
-        environment: topBar.swayEnv
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let tree = JSON.parse(this.text);
-                    let apps = [];
-                    topBar.collectSwayNodes([tree], apps, "");
-                    topBar.runningApps = apps;
-                } catch (e) {
-                    topBar.runningApps = [];
-                }
-            }
+    // Sway pushes window/workspace events, so there is nothing to poll for.
+    // Bursts are coalesced: dragging a window emits a stream of events, and
+    // one refresh each would ask for the tree dozens of times a second.
+    Connections {
+        target: Sway
+        function onWindowEvent(e) { swayCoalesce.restart(); }
+        function onWorkspaceEvent(e) { swayCoalesce.restart(); }
+        function onInputEvent(e) {
+            if (e && e.change === "xkb_layout")
+                layoutCoalesce.restart();
         }
-    }
-
-    // Sway pushes window/workspace events, so there is nothing to poll for:
-    // one long-lived subscription replaces a get_tree spawn every second.
-    Process {
-        id: swayEvents
-        running: true
-        command: [
-            "bash", "-c",
-            // SWAYSOCK arrives through `environment` below; the shell is still
-            // needed here only for the pgrep/kill reap loop.
-            // swaymsg blocks on the sway socket and never notices its stdout closing,
-            // so it outlives the shell instead of dying with it. Reap the previous
-            // one here: at most one stale subscription can ever exist.
-            "for p in $(pgrep -f 'swaymsg -t subscribe -m' 2>/dev/null); do " +
-            "  [ \"$p\" != \"$$\" ] && kill \"$p\" 2>/dev/null; done; " +
-            "exec swaymsg -t subscribe -m '[\"window\",\"workspace\",\"input\"]'"
-        ]
-        environment: topBar.swayEnv
-        stdout: SplitParser {
-            // Coalesce bursts: dragging a window emits a stream of events, and one
-            // refresh per event would spawn more processes than the old polling did.
-            //
-            // sway pretty-prints its replies, so an input event arrives as many
-            // lines and one of them is `"change": "xkb_layout"`. Matching that
-            // line is safe in a way that matching a substring of the whole
-            // document is not — which is the trap six features in this project
-            // fell into.
-            onRead: (line) => {
-                const text = ("" + line).trim();
-                if (!text)
-                    return;
-                if (text.includes("xkb_layout"))
-                    layoutCoalesce.restart();
-                else
-                    swayCoalesce.restart();
-            }
+        // A restarted sway is a new session's worth of state.
+        function onReconnected() {
+            topBar.refreshRunningApps();
+            topBar.refreshWorkspaces();
+            topBar.refreshLayout();
         }
-        // Sway restarts hand out a new socket; reconnect instead of going stale.
-        onExited: swayResubscribe.restart()
     }
 
     Timer {
@@ -556,17 +469,6 @@ PanelWindow {
         onTriggered: {
             topBar.refreshRunningApps();
             topBar.refreshWorkspaces();
-        }
-    }
-
-    Timer {
-        id: swayResubscribe
-        interval: 2000
-        onTriggered: {
-            topBar.refreshRunningApps();
-            topBar.refreshWorkspaces();
-            topBar.refreshLayout();
-            swayEvents.running = true;
         }
     }
 
@@ -782,8 +684,7 @@ PanelWindow {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     const workspace = String(wsPill.modelData.name);
-                                    if (/^[A-Za-z0-9_.-]+$/.test(workspace))
-                                        Quickshell.execDetached(["swaymsg", "workspace", workspace]);
+                                    Sway.command("workspace " + Sway.quote(workspace));
                                 }
                             }
                         }
@@ -795,9 +696,9 @@ PanelWindow {
                     z: -1
                     onWheel: (wheel) => {
                         if (wheel.angleDelta.y > 0) {
-                            Quickshell.execDetached({ command: ["swaymsg", "workspace", "prev"], environment: topBar.swayEnv });
+                            Sway.command("workspace prev");
                         } else if (wheel.angleDelta.y < 0) {
-                            Quickshell.execDetached({ command: ["swaymsg", "workspace", "next"], environment: topBar.swayEnv });
+                            Sway.command("workspace next");
                         }
                     }
                 }
@@ -834,10 +735,7 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Quickshell.execDetached({
-                                command: ["swaymsg", "[con_id=" + String(modelData.id) + "] focus"],
-                                environment: topBar.swayEnv
-                            })
+                            onClicked: Sway.command("[con_id=" + Number(modelData.id) + "] focus")
                         }
 
                         // No ToolTip, for the reason given at the Control
@@ -1273,10 +1171,7 @@ PanelWindow {
                         MouseArea {
                             id: kbdArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                Quickshell.execDetached({
-                                    command: ["swaymsg", "input", "type:keyboard", "xkb_switch_layout", "next"],
-                                    environment: topBar.swayEnv
-                                });
+                                Sway.command("input type:keyboard xkb_switch_layout next");
                                 Quickshell.execDetached(["b1air-daemon", "layout"]);
                             }
                         }

@@ -5,8 +5,10 @@
 # for b1air-daemon, by the Makefile again for its own b1air-polkit-agent, and
 # by the shell's CMakeLists for b1air-shell and a second polkit agent.
 add_library(b1air-core STATIC
+    backlight.cpp
     daemon_dbus.cpp
     focustime_db.cpp
+    notify.cpp
     secret_store.cpp
     session_manager.cpp
     settings_manager.cpp
@@ -16,6 +18,7 @@ add_library(b1air-core STATIC
 )
 target_include_directories(b1air-core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/common
     ${PROJECT_SOURCE_DIR}/third_party)
 target_link_libraries(b1air-core PUBLIC
     b1air-sqlite Threads::Threads systemd PkgConfig::LIBCRYPTO)

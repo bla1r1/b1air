@@ -8,6 +8,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Pam
+import B1air.Daemon
 import "./Ui"
 // Aliased: QtCore's own `Settings` type collides with Services/Settings.qml's
 // singleton of the same name, and an unaliased directory import made the
@@ -150,8 +151,10 @@ ShellRoot {
                 // reuse it instead of re-guessing from sysfs.
                 readonly property string batPct: Services.Power.hasBattery ? String(Services.Power.capacity) : "100"
                 readonly property string batStatus: Services.Power.hasBattery ? (Services.Power.charging ? "Charging" : "Discharging") : "AC"
-                property string currentUser: "User"
-                property string faceIconPath: ""
+                property string currentUser: Quickshell.env("USER") || "User"
+                // The account picture, where the login screen keeps it too.
+                property string faceIconPath: Sys.exists("~/.face.icon") ? Paths.fileUrl(Quickshell.env("HOME") + "/.face.icon")
+                                            : Sys.exists("~/.face") ? Paths.fileUrl(Quickshell.env("HOME") + "/.face") : ""
                 property string kbLayout: "US"
                 property string weatherIcon: ""
                 property string weatherTemp: "--°C"
@@ -161,11 +164,12 @@ ShellRoot {
                 property bool powerMenuOpen: false
                 property bool inputActive: false 
                 property bool isPlayingIntro: true
-                property bool isDesktop: false
+                // No battery under power_supply: a desktop.
+                property bool isDesktop: !Sys.listDir("/sys/class/power_supply").some(n => n.startsWith("BAT"))
                 
                 Component.onCompleted: {
                     introSequence.start();
-                    kbPoller.running = true;   // seed the layout; updates arrive by event
+                    readLayout();   // seed the layout; updates arrive by event
                 }
 
                 property real globalOrbitAngle: 0
@@ -186,87 +190,31 @@ ShellRoot {
                 // BACKGROUND DATA POLLING 
                 // ---------------------------------------------------------
 
-                Process {
-                    id: chassisDetector
-                    running: true
-                    command: ["bash", "-c", "if ls /sys/class/power_supply/BAT* 1> /dev/null 2>&1; then echo 'laptop'; else echo 'desktop'; fi"]
-                    stdout: StdioCollector {
-                        onStreamFinished: {
-                            screenRoot.isDesktop = (this.text.trim() === "desktop");
-                        }
-                    }
-                }
 
-                Process {
-                    id: userPoller
-                    command: [
-                        "bash", 
-                        "-c", 
-                        "USER_VAR=$(whoami); ICON_PATH=\"\"; if [ -f ~/.face.icon ]; then ICON_PATH=$(readlink -f ~/.face.icon); elif [ -f ~/.face ]; then ICON_PATH=$(readlink -f ~/.face); fi; echo -n \"$USER_VAR|$ICON_PATH\""
-                    ]
-                    stdout: StdioCollector {
-                        onStreamFinished: {
-                            let parts = this.text.trim().split("|");
-                            if (parts.length > 0 && parts[0] !== "") screenRoot.currentUser = parts[0];
-                            if (parts.length > 1 && parts[1].trim() !== "") {
-                                let path = parts[1].trim();
-                                screenRoot.faceIconPath = Paths.fileUrl(path);
-                            }
-                        }
-                    }
-                    Component.onCompleted: running = true
-                }
                 
-                Process {
-                    id: kbPoller
-                    // swaymsg speaks JSON and QML parses JSON, so the answer
-                    // needs one process rather than the five this used to
-                    // pipe together — bash, jq, cut, tr and head — on a
-                    // locked, idle machine.
-                    command: ["swaymsg", "-t", "get_inputs"]
-                    stdout: StdioCollector {
-                        onStreamFinished: {
-                            let name = "";
-                            try {
-                                for (const dev of JSON.parse(this.text)) {
-                                    if (dev.type === "keyboard" && dev.xkb_active_layout_name) {
-                                        name = String(dev.xkb_active_layout_name);
-                                        break;
-                                    }
-                                }
-                            } catch (e) {
-                                return;   // sway not up yet; keep the last value
+                // The layout shown on the lock screen, asked of sway when it
+                // locks and again when sway says the layout changed — never
+                // polled: a locked, idle machine should be doing nothing.
+                function readLayout() {
+                    Sway.query("inputs", inputs => {
+                        if (!Array.isArray(inputs))
+                            return;   // sway not up yet; keep the last value
+                        let name = "";
+                        for (const dev of inputs) {
+                            if (dev.type === "keyboard" && dev.xkb_active_layout_name) {
+                                name = String(dev.xkb_active_layout_name);
+                                break;
                             }
-                            const layout = (name || "US").substring(0, 2).toUpperCase();
-                            if (layout !== "")
-                                screenRoot.kbLayout = layout;
                         }
-                    }
+                        const layout = (name || "US").substring(0, 2).toUpperCase();
+                        if (layout !== "")
+                            screenRoot.kbLayout = layout;
+                    });
                 }
-                // Sway emits an `input` event when the layout changes, so the
-                // layout is read on change instead of six times a second. The
-                // old 150ms poll ran a five-process pipeline every tick, which
-                // is the last thing a locked, idle machine should be doing.
-                Process {
-                    id: kbEvents
-                    running: true
-                    // Reap a previous lock's subscription: swaymsg blocks on the
-                    // sway socket and never notices its stdout closing, so it
-                    // outlives the instance that spawned it.
-                    command: ["bash", "-c",
-                        "for p in $(pgrep -f 'swaymsg -t subscribe -m .\\[.input' 2>/dev/null); do " +
-                        "  [ \"$p\" != \"$$\" ] && kill \"$p\" 2>/dev/null; done; " +
-                        "exec swaymsg -t subscribe -m '[\"input\"]'"]
-                    stdout: SplitParser {
-                        onRead: (line) => { if (("" + line).trim()) kbPoller.running = true; }
-                    }
-                    onExited: kbResubscribe.restart()
-                }
-
-                Timer {
-                    id: kbResubscribe
-                    interval: 2000
-                    onTriggered: { kbPoller.running = true; kbEvents.running = true; }
+                Connections {
+                    target: Sway
+                    function onInputEvent(e) { if (e && e.change === "xkb_layout") screenRoot.readLayout(); }
+                    function onReconnected() { screenRoot.readLayout(); }
                 }
 
                 Process {

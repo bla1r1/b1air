@@ -15,8 +15,7 @@ Scope {
     Connections {
         target: Daemon
         function onFailed(method, message) {
-            Quickshell.execDetached(["notify-send", "-a", "b1air", "-u", "critical",
-                                     method + " failed", message]);
+            Sys.notify("b1air", method + " failed", message, "", "critical");
         }
     }
 }

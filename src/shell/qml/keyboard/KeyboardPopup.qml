@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../Ui"
 import "../Services"
@@ -62,38 +63,24 @@ PopupShell {
         return str.split(",").map(x => x.trim()).filter(x => x.length > 0);
     }
 
-    Process {
-        id: layoutFetcher
-        // One process instead of a bash+jq+head pipeline: swaymsg already
-        // emits JSON and QML already parses it.
-        command: ["swaymsg", "-t", "get_inputs"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let idx = NaN;
-                try {
-                    for (const dev of JSON.parse(this.text)) {
-                        if (dev.type === "keyboard") {
-                            idx = Number(dev.xkb_active_layout_index || 0);
-                            break;
-                        }
-                    }
-                } catch (e) {
-                    return;   // sway not answering yet
-                }
-                if (!isNaN(idx)) {
-                    window.activeIndex = idx;
-                    if (window.configuredLanguages.length > idx) {
-                        window.activeCode = window.configuredLanguages[idx];
-                    }
-                }
-            }
+    // Which layout is active, asked of sway when the popup opens.
+    Component.onCompleted: Sway.query("inputs", inputs => {
+        if (!Array.isArray(inputs))
+            return;   // sway not answering yet
+        for (const dev of inputs) {
+            if (dev.type !== "keyboard")
+                continue;
+            const idx = Number(dev.xkb_active_layout_index || 0);
+            window.activeIndex = idx;
+            if (window.configuredLanguages.length > idx)
+                window.activeCode = window.configuredLanguages[idx];
+            return;
         }
-    }
+    })
 
     function switchLayout(idx) {
         window.activeIndex = idx;
-        Quickshell.execDetached(["swaymsg", "input", "type:keyboard", "xkb_switch_layout", idx.toString()]);
+        Sway.command("input type:keyboard xkb_switch_layout " + Number(idx));
         window.close();
     }
 

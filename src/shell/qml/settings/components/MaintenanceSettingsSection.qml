@@ -379,12 +379,8 @@ ColumnLayout {
     // ── 4. System Restore Points & Snapshots (M4) ─────────────────────────────
     // Which snapshot tool exists, so the button is not offered where it can
     // only fail ("timeshift" first: the daemon tries it first too).
-    property string snapshotTool: ""
-    Process {
-        running: true
-        command: ["sh", "-c", "command -v timeshift >/dev/null && echo timeshift || { command -v snapper >/dev/null && echo snapper; } || true"]
-        stdout: StdioCollector { onStreamFinished: section.snapshotTool = this.text.trim() }
-    }
+    readonly property string snapshotTool: Sys.commandExists("timeshift") ? "timeshift"
+                                         : Sys.commandExists("snapper") ? "snapper" : ""
 
     Card {
         title: "Restore Points"
@@ -423,7 +419,10 @@ ColumnLayout {
                 icon: "\u{f07c}"
                 label: "Open Secure Vaults Location"
                 tone: Design.peach
-                onActivated: Quickshell.execDetached(["bash", "-c", "mkdir -p ~/.vaults && xdg-open ~/.vaults"])
+                onActivated: {
+                    Sys.makeDir("~/.vaults");
+                    Quickshell.execDetached(["xdg-open", Quickshell.env("HOME") + "/.vaults"]);
+                }
             }
         }
     }

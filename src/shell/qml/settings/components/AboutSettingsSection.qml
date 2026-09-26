@@ -67,34 +67,31 @@ ColumnLayout {
         section.suiteVersion === "…" ? "…"
         : (section.suiteVersion === "unknown" ? "unknown" : "v" + section.suiteVersion)
 
-    Component.onCompleted: Daemon.requestVersion()
-
-    Process {
-        running: true
-        // awk's separator comes from -v OFS, not from quotes inside the
-        // program. It used to be `print $3 \" / \" $2`, and by the time that
-        // string had been through QML escaping and the shell, awk received
-        // literal backslashes and refused the program outright:
-        //
-        //   awk: cmd. line:1: backslash not last character on line
-        //
-        // So line four of the output was empty and "Memory Usage" on this page
-        // had no value at all. Nothing reported the failure; awk's complaint
-        // went to a stderr nobody reads.
-        command: ["bash", "-c", "printf '%s\\n' \"$(uname -r)\" \"$(grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"')\" \"$(uname -n)\" \"$(free -h 2>/dev/null | awk -v OFS=' / ' '/^Mem:/ {print $3, $2}')\" \"$(p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>/dev/null | head -1 || sway --version 2>/dev/null | head -1)\""]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const lines = this.text.trim().split("\n");
-                    if (lines.length >= 1) section.kernelVer = lines[0];
-                    if (lines.length >= 2) section.osName = lines[1];
-                    if (lines.length >= 3) section.hostName = lines[2];
-                    if (lines.length >= 4) section.memInfo = lines[3];
-                    if (lines.length >= 5) section.swayVer = lines[4];
-                } catch (e) {}
-            }
-        }
+    Component.onCompleted: {
+        Daemon.requestVersion();
+        section.readSystem();
+        if (Sway.versionText) section.swayVer = Sway.versionText;
     }
+
+    // Read from the kernel's own files, not from a bash pipeline of uname,
+    // grep, cut, tr, free and awk — whose quoting broke the memory line once
+    // already, silently.
+    function readSystem() {
+        section.kernelVer = Sys.readFile("/proc/sys/kernel/osrelease").trim();
+        section.hostName = Sys.readFile("/proc/sys/kernel/hostname").trim();
+        const os = Sys.readFile("/etc/os-release").match(/^PRETTY_NAME="?([^"\n]*)"?$/m);
+        section.osName = os ? os[1] : "Linux";
+        // Used is what free(1) counts: total less available.
+        const kb = key => {
+            const m = Sys.readFile("/proc/meminfo").match(new RegExp("^" + key + ":\\s+(\\d+)", "m"));
+            return m ? Number(m[1]) : 0;
+        };
+        const gib = k => (k / 1048576).toFixed(1) + "Gi";
+        const total = kb("MemTotal");
+        section.memInfo = total ? gib(total - kb("MemAvailable")) + " / " + gib(total) : "";
+    }
+    readonly property string swayVerLive: Sway.versionText
+    onSwayVerLiveChanged: if (swayVerLive) section.swayVer = swayVerLive
 
     // (The page title is in the Settings header bar now.)
 
@@ -249,7 +246,7 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f0446}"
                 label: "Reload Sway & Quickshell"
-                onActivated: Quickshell.execDetached(["bash", "-c", "swaymsg reload; b1air-shell forceReload"])
+                onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
             }
 
             ActionButton {

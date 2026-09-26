@@ -178,10 +178,8 @@ Singleton {
                 && root.capacity <= root.criticalThreshold && !root._warnedCritical) {
             root._warnedCritical = true;
             root._warnedLow = true;
-            Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Power",
-                                     "-i", "battery-caution",
-                                     "Battery critical — " + root.capacity + "%",
-                                     "Suspending now to save the session."]);
+            Sys.notify("Power", "Battery critical — " + root.capacity + "%",
+                       "Suspending now to save the session.", "battery-caution", "critical");
             // A moment for the notification to be drawn and for anything
             // mid-write to finish before the machine goes down.
             criticalDelay.start();
@@ -191,11 +189,9 @@ Singleton {
         if (Settings.batteryLowWarning !== false
                 && root.capacity <= root.lowThreshold && !root._warnedLow) {
             root._warnedLow = true;
-            Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Power",
-                                     "-i", "battery-low",
-                                     "Battery low — " + root.capacity + "%",
-                                     "Plug in, or the machine will suspend at "
-                                         + root.criticalThreshold + "%."]);
+            Sys.notify("Power", "Battery low — " + root.capacity + "%",
+                       "Plug in, or the machine will suspend at " + root.criticalThreshold + "%.",
+                       "battery-low", "critical");
         }
     }
 
@@ -238,16 +234,7 @@ Singleton {
 
     // ── Profile ──────────────────────────────────────────────────────────────
     property string profile: "balanced"
-    property bool hasProfiles: false
-    Process {
-        running: true
-        command: ["bash", "-c", "which powerprofilesctl >/dev/null 2>&1 && echo 'yes' || echo 'no'"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.hasProfiles = (this.text.trim() === "yes");
-            }
-        }
-    }
+    readonly property bool hasProfiles: Sys.commandExists("powerprofilesctl")
 
     // ── Charge control ───────────────────────────────────────────────────────
     // The charge limit and charging behaviour, as KDE's power applet has them.
@@ -326,16 +313,15 @@ Singleton {
     // The laptop panel. External monitors are a different device on a different
     // protocol (DDC) and stay with MonitorPopup.
     //
-    // Split on purpose: READ from sysfs, WRITE through brightnessctl.
+    // Split on purpose: READ from sysfs, WRITE through the daemon.
     //
     // Reading natively takes brightness out of the 1.5s poll loop entirely —
     // sysfs emits inotify on change, so FileView sees a keypress immediately
     // instead of up to a second and a half later.
     //
-    // Writing stays with the tool because `brightnessctl -e4 -n2` is not a
-    // number being stored: -e4 is a logarithmic curve matching how brightness
-    // is actually perceived, and -n2 keeps the panel from going fully dark.
-    // Writing raw values to sysfs would silently lose both.
+    // Writing goes to the daemon (daemon/backlight.cpp): through logind, so no
+    // root is needed, with the keys stepping along a perceptual curve and a
+    // floor that keeps the panel from going fully dark.
     property int brightness: 0
     property int brightnessRaw: 0
     property int brightnessMax: 0
@@ -362,20 +348,19 @@ Singleton {
     }
 
     function setBrightness(pct) {
-        // `-e4` maps the given percentage through a perceptual curve before
-        // writing it — great for a relative +/- step, but the slider reads
-        // back a plain linear raw/max off sysfs, so dragging to what looks
-        // like 80% actually lands the hardware near 40% and the number jumps
-        // straight back to something else. Absolute sets stay linear so the
-        // slider position and the displayed percentage agree.
+        // Linear (the daemon's BrightnessSet): the slider reads back a plain
+        // raw/max off sysfs, and through the perceptual curve dragging to
+        // what looks like 80% landed the hardware near 40%.
         root.brightness = pct;   // optimistic; the FileView confirms
-        Quickshell.execDetached(["brightnessctl", "-c", "backlight", "-n2", "set", pct + "%"]);
+        Daemon.brightnessSet(pct);
     }
 
+    // Through the daemon's perceptual curve, as the brightness keys step.
     function stepBrightness(delta) {
-        const sign = delta >= 0 ? "+" : "-";
-        Quickshell.execDetached(["brightnessctl", "-c", "backlight", "-e4", "-n2",
-                                 "set", Math.abs(delta) + "%" + sign]);
+        if (delta >= 0)
+            Daemon.brightnessUp(delta);
+        else
+            Daemon.brightnessDown(-delta);
     }
 
     function refresh() { poller.running = true; }
@@ -387,25 +372,16 @@ Singleton {
 
     // ── Polling ──────────────────────────────────────────────────────────────
 
+    // The profile from the daemon; the uptime straight from /proc.
     Process {
         id: poller
-        command: ["bash", "-c",
-            "b1air-daemon power-profile get 2>/dev/null || echo 'balanced'; " +
-            "awk '{print int($1/3600)\"h \"int(($1%3600)/60)\"m\"}' /proc/uptime 2>/dev/null || echo '0h 0m'"
-        ]
+        command: ["b1air-daemon", "power-profile", "get"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const lines = this.text.trim().split("\n");
-                if (lines.length < 2)
-                    return;
-
-                root.profile = lines[0];
-
-                const up = lines[1].split("h ");
-                if (up.length === 2) {
-                    root.upHours = parseInt(up[0]) || 0;
-                    root.upMins = parseInt(up[1].replace("m", "")) || 0;
-                }
+                root.profile = this.text.trim() || "balanced";
+                const seconds = parseFloat(Sys.readFile("/proc/uptime")) || 0;
+                root.upHours = Math.floor(seconds / 3600);
+                root.upMins = Math.floor((seconds % 3600) / 60);
             }
         }
     }

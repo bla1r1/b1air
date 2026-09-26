@@ -7,6 +7,8 @@
 #include "daemon_dbus.hpp"
 #include "runtime.hpp"
 #include "proc_util.hpp"
+#include "proc_scan.hpp"
+#include "notify.hpp"
 #include <spawn.h>
 #include <cstring>
 
@@ -123,16 +125,13 @@ static bool safe_custom_command(const std::string& cmd) {
     return true;
 }
 
-// A zombie is not running.
-//
-// pgrep lists processes in every state, defunct included, so this answered yes
-// about a helper that had exited and was waiting to be reaped. `-r` restricts
-// the match to running, sleeping and disk-wait — everything except Z and T —
-// which is the question actually being asked here: is this thing still doing
-// its job.
+// Is this thing still doing its job: a live process (not a zombie) named
+// `pattern`, or, for a pattern with a space ("b1air-daemon polkit"), one
+// whose command line contains it. Read from /proc (common/proc_scan.hpp);
+// pgrep counted zombies, and `pgrep -f` matched its own caller.
 static bool is_process_running(const std::string& pattern) {
-    return run_status({"pgrep", "-r", "DRSW", "-x", pattern})
-        || run_status({"pgrep", "-r", "DRSW", "-f", pattern});
+    return pattern.find(' ') == std::string::npos ? proc::running(pattern)
+                                                  : proc::running_with(pattern);
 }
 
 // ── Focus Tracker Thread ─────────────────────────────────────────────────────
@@ -184,19 +183,13 @@ std::string build_swayidle_command(const DesktopSettings& settings) {
 } // namespace
 
 bool SessionManager::restart_swayidle() {
-    spawn_shell_detached("pkill -x swayidle");
+    (void)proc::kill_all("swayidle");
 
-    // pkill returns before the process is gone, and a new swayidle overlapping
-    // the old one leaves two sets of timers running against the same seat —
-    // the shorter one wins and the change appears not to have applied.
-    //
-    // A fixed pause rather than polling is_process_running(): that spawns two
-    // pgreps per check, and pgrep counts a zombie as running, so a swayidle
-    // that sway has not reaped yet would keep the loop going to its limit
-    // every single time. swayidle exits on SIGTERM at once; a quarter second
-    // is room to spare, and a stale one would be killed by the next reload
-    // anyway.
-    usleep(250 * 1000);
+    // A new swayidle overlapping the old one leaves two sets of timers running
+    // against the same seat — the shorter one wins and the change appears not
+    // to have applied — so wait for the old one to be gone, a second at most.
+    // (The scan skips zombies, so one not yet reaped does not hold this up.)
+    for (int i = 0; i < 20 && proc::running("swayidle"); ++i) usleep(50 * 1000);
 
     spawn_shell_detached(build_swayidle_command(SettingsManager::load()));
     return true;
@@ -265,7 +258,7 @@ void SessionManager::run_focus_tracker() {
 
     auto notify = [](const std::string& title, const std::string& body,
                      const std::string& icon) {
-        (void)util::spawn_detached({"notify-send", "-a", "FocusTime", "-i", icon, title, body});
+        (void)util::notify({.app = "FocusTime", .title = title, .body = body, .icon = icon});
     };
 
     std::thread reminder_th([&notify]() {
@@ -607,7 +600,7 @@ int SessionManager::run_session() {
     // started swaybg is cleared out of its way. Kept running the way the
     // shell is (below): a direct child, waited on, restarted a few times.
     if (util::command_exists("b1air-bg")) {
-        (void)run_status({"pkill", "-x", "swaybg"});
+        (void)proc::kill_all("swaybg");
         std::thread bg_supervisor([] {
             constexpr int kMaxRestarts = 5;
             int restarts = 0;
@@ -745,7 +738,7 @@ int SessionManager::run_session() {
             // found: a test script named the binary, the guard saw it, and the
             // bar never appeared.
             while (g_session_running
-                   && run_status({"pgrep", "-r", "DRSW", "-x", "quickshell"})) {
+                   && proc::running("quickshell")) {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
 
@@ -791,11 +784,11 @@ int SessionManager::run_session() {
                     std::cerr << "[b1air-session] the shell has exited " << kMaxRestarts
                               << " times in " << kFailureWindowSec
                               << "s; not restarting it again\n";
-                    (void)util::spawn_detached({"notify-send", "-u", "critical",
-                        "-a", "b1air", "-i", "dialog-error",
-                        "Desktop shell keeps crashing",
-                        "Giving up after " + std::to_string(kMaxRestarts)
-                            + " restarts. Run `quickshell -p " + qs_main + "` to see why."});
+                    (void)util::notify({.app = "b1air",
+                        .title = "Desktop shell keeps crashing",
+                        .body = "Giving up after " + std::to_string(kMaxRestarts)
+                            + " restarts. Run `quickshell -p " + qs_main + "` to see why.",
+                        .icon = "dialog-error", .urgency = "critical"});
                     return;
                 }
 
@@ -833,7 +826,7 @@ int SessionManager::run_session() {
         if (driver.empty()) software_render = true;  // no DRM device at all
     }
     if (software_render) {
-        run_status({"swaymsg", "blur disable; shadows disable; default_dim_inactive 0.0"});
+        (void)SwayIPC::run("blur disable; shadows disable; default_dim_inactive 0.0");
     }
     mark("glxinfo / renderer detection done");
 

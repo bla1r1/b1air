@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Dialogs
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
@@ -289,24 +290,21 @@ ColumnLayout {
     //
     // Both badges were constants — "b1air (SwayFX)" and "b1air SDDM Theme" —
     // shown whatever was running, plain sway included. They are read now.
-    property string compositorName: "…"
-    property string greeterTheme: "…"
-    Process {
-        running: true
-        command: ["sh", "-c",
-            "p=$(pgrep -x sway | head -n1); " +
-            "if [ -n \"$p\" ]; then \"$(readlink -f /proc/$p/exe)\" --version 2>/dev/null | head -n1; else echo 'not sway'; fi; " +
-            "cat /etc/sddm.conf /etc/sddm.conf.d/*.conf 2>/dev/null | sed -n 's/^Current=//p' | tail -n1"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const lines = this.text.trim().split("\n");
-                const v = (lines[0] || "").trim();
-                section.compositorName = v.toLowerCase().startsWith("swayfx") ? "swayFX " + (v.split(" ")[2] || "")
-                                       : v.startsWith("sway") ? "sway " + (v.split(" ")[2] || "")
-                                       : "—";
-                section.greeterTheme = (lines[1] || "").trim() || "SDDM default";
+    readonly property string compositorName: Sway.compositorName || "—"
+    // SDDM's theme: the last `Current=` in its config, conf.d files read in
+    // name order after the main one, as SDDM reads them.
+    readonly property string greeterTheme: {
+        const files = ["/etc/sddm.conf"].concat(
+            Sys.listDir("/etc/sddm.conf.d").filter(n => n.endsWith(".conf")).sort()
+                .map(n => "/etc/sddm.conf.d/" + n));
+        let theme = "";
+        for (const f of files) {
+            for (const line of Sys.readFile(f).split("\n")) {
+                const m = line.match(/^Current=(.*)$/);
+                if (m) theme = m[1].trim();
             }
         }
+        return theme || "SDDM default";
     }
 
     Card {

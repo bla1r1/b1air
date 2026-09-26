@@ -132,7 +132,7 @@ static int run_dbus_call(int argc, char* argv[]) {
     auto flag = [&](int i) { const std::string v = arg(i, "false"); return v == "true" || v == "1"; };
 
     if (m == "Lock")               SystemControl::lock_session_async();
-    else if (m == "Reload")        { util::spawn_detached({"swaymsg", "reload"}); util::spawn_detached({"b1air-shell", "forceReload"}); }
+    else if (m == "Reload")        { (void)SwayIPC::run("reload"); util::spawn_detached({"b1air-shell", "forceReload"}); }
     else if (m == "VolumeUp")      SystemControl::volume_up(num(0, 5));
     else if (m == "VolumeDown")    SystemControl::volume_down(num(0, 5));
     else if (m == "ToggleMute")    SystemControl::volume_toggle_mute();

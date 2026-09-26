@@ -13,7 +13,7 @@ import B1air.Daemon
 // section wanted a model and nothing in the shell owned one. It does now, and
 // the popup is gone.
 //
-// Reads `swaymsg -t get_outputs`, writes through tools/monitors.sh (which
+// Reads sway's outputs (and follows its output events while in use), writes through tools/monitors.sh (which
 // applies and remembers the layout) and controls/monitor-brightness.sh (DDC).
 // =============================================================================
 
@@ -52,16 +52,19 @@ Singleton {
     // ── Reads ────────────────────────────────────────────────────────────────
 
     function refresh() {
-        outputReader.running = true;
+        root.readOutputs();
         brightnessReader.running = true;
     }
 
-    Process {
-        id: outputReader
-        command: ["swaymsg", "-t", "get_outputs"]
-        stdout: StdioCollector {
-            onStreamFinished: root._parseOutputs(this.text)
-        }
+    function readOutputs() {
+        Sway.query("outputs", outs => root._parseOutputs(outs));
+    }
+
+    // Plugged in, unplugged, reconfigured: sway says so.
+    Connections {
+        target: Sway
+        enabled: root._users > 0
+        function onOutputEvent(e) { root.readOutputs(); }
     }
 
     Process {
@@ -72,19 +75,11 @@ Singleton {
         }
     }
 
-    // Re-read while the page is open: sway is the authority, and a monitor can
-    // be plugged in while you are looking at the list.
-    Timer {
-        interval: 5000
-        repeat: true
-        running: root._users > 0
-        onTriggered: outputReader.running = true
-    }
 
     function _parseOutputs(txt) {
         let data;
         try {
-            data = JSON.parse((txt || "").trim() || "[]");
+            data = Array.isArray(txt) ? txt : JSON.parse((txt || "").trim() || "[]");
         } catch (e) {
             console.warn("Monitors: cannot parse outputs —", e);
             return;
@@ -186,18 +181,20 @@ Singleton {
     }
 
     function setTransform(name, rot) {
-        Quickshell.execDetached(["swaymsg", "output", name, "transform", String(rot)]);
+        Sway.command("output " + Sway.quote(name) + " transform " + Number(rot));
         applyRecheck.restart();
     }
 
     function identify() {
-        Quickshell.execDetached(["notify-send", "-t", "4000", "Display Identification", "Active displays: " + root.outputs.map((o, idx) => "[" + (idx + 1) + "] " + o.name + " (" + o.resW + "x" + o.resH + "@" + o.rate + "Hz)").join("\n")]);
+        Sys.notify("Displays", "Display Identification",
+                   "Active displays: " + root.outputs.map((o, idx) => "[" + (idx + 1) + "] " + o.name
+                       + " (" + o.resW + "x" + o.resH + "@" + o.rate + "Hz)").join("\n"), "", "", 4000);
     }
 
     Timer {
         id: applyRecheck
         interval: 1200
-        onTriggered: outputReader.running = true
+        onTriggered: root.readOutputs()
     }
 
     function setBrightness(id, pct) {

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import "../Ui"
 
@@ -152,8 +153,8 @@ PopupShell {
                 icon: "\u{f0c5}"
                 label: "Copy Path"
                 onActivated: {
-                    Quickshell.execDetached(["wl-copy", root.filePath]);
-                    Quickshell.execDetached(["notify-send", "-a", "QuickLook", "Copied", root.filePath]);
+                    Quickshell.execDetached(["wl-copy", "--", root.filePath]);
+                    Sys.notify("QuickLook", "Copied", root.filePath);
                 }
             }
 

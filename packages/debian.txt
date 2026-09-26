@@ -61,7 +61,7 @@ fonts-liberation fontconfig
 
 # Tools the shell and daemon call out to
 imagemagick tesseract-ocr tesseract-ocr-eng zbar-tools qrencode
-power-profiles-daemon pamixer poppler-utils gocryptfs ?easyeffects
+power-profiles-daemon poppler-utils gocryptfs ?easyeffects
 xdg-utils file libglib2.0-bin ?wlsunset ?snapper
 
 # Storage & archives

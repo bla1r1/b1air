@@ -52,7 +52,7 @@ google-noto-sans-fonts google-noto-emoji-fonts google-noto-sans-cjk-fonts
 ImageMagick tesseract tesseract-langpack-eng zbar qrencode
 # Fedora 41+ ships tuned-ppd, which provides the same D-Bus API and conflicts
 # with power-profiles-daemon — so this one is optional.
-?power-profiles-daemon pamixer poppler-utils ?gocryptfs ?easyeffects
+?power-profiles-daemon poppler-utils ?gocryptfs ?easyeffects
 xdg-utils file glib2 ?wlsunset ?snapper
 
 # Storage & archives

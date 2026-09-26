@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 namespace b1air {
 
@@ -25,33 +26,48 @@ SwayIPC::~SwayIPC() {
     disconnect();
 }
 
+// sway-ipc.<uid>.<pid>.sock outlives its sway (a crash, a restart), so a
+// name that exists says nothing; the pid in it says whether anyone listens.
+static bool sway_socket_alive(const std::string& path) {
+    const std::string name = path.substr(path.rfind('/') + 1);
+    // sway-ipc . <uid> . <pid> . sock
+    const size_t a = name.find('.'), b = name.find('.', a + 1), c = name.find('.', b + 1);
+    if (a == std::string::npos || b == std::string::npos || c == std::string::npos) return false;
+    return access(("/proc/" + name.substr(b + 1, c - b - 1)).c_str(), F_OK) == 0;
+}
+
+// SWAYSOCK (or I3SOCK) while its sway lives; otherwise the newest live
+// socket in the runtime directory. The first one found was taken before, and
+// a directory that had seen a sway restart held dead ones to find first.
 std::string SwayIPC::find_socket_path() {
-    const char* env = std::getenv("SWAYSOCK");
-    if (env && env[0] != '\0') {
-        return std::string(env);
-    }
-    const char* i3_env = std::getenv("I3SOCK");
-    if (i3_env && i3_env[0] != '\0') {
-        return std::string(i3_env);
+    for (const char* var : {"SWAYSOCK", "I3SOCK"}) {
+        const char* env = std::getenv(var);
+        if (env && env[0] != '\0' && access(env, F_OK) == 0
+                && (std::strncmp(var, "I3SOCK", 6) == 0 || sway_socket_alive(env)))
+            return env;
     }
 
-    // Fallback: look in /run/user/<UID>/sway-ipc.*.sock
-    uid_t uid = getuid();
-    std::string user_run = "/run/user/" + std::to_string(uid);
-    DIR* dir = opendir(user_run.c_str());
-    if (dir) {
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (std::strncmp(entry->d_name, "sway-ipc.", 9) == 0) {
-                std::string res = user_run + "/" + entry->d_name;
-                closedir(dir);
-                return res;
+    const char* xdg = std::getenv("XDG_RUNTIME_DIR");
+    const std::string dir_path = xdg && *xdg ? xdg : "/run/user/" + std::to_string(getuid());
+    std::string best;
+    time_t newest = 0;
+    if (DIR* dir = opendir(dir_path.c_str())) {
+        while (struct dirent* entry = readdir(dir)) {
+            if (std::strncmp(entry->d_name, "sway-ipc.", 9) != 0) continue;
+            const std::string path = dir_path + "/" + entry->d_name;
+            struct stat st {};
+            if (!sway_socket_alive(path) || stat(path.c_str(), &st) != 0) continue;
+            if (best.empty() || st.st_mtime > newest) {
+                best = path;
+                newest = st.st_mtime;
             }
         }
         closedir(dir);
     }
-
-    return "";
+    if (!best.empty()) return best;
+    // Nothing alive: the variable as given, so the error names it.
+    const char* env = std::getenv("SWAYSOCK");
+    return env ? env : "";
 }
 
 bool SwayIPC::connect() {
@@ -162,6 +178,20 @@ std::string SwayIPC::send_command(uint32_t type, const std::string& payload) {
         return "";
     }
     return response;
+}
+
+bool SwayIPC::run_command(const std::string& cmd) {
+    if (!is_connected() && !connect()) return false;
+    const auto reply = nlohmann::json::parse(send_command(0, cmd), nullptr, false);
+    if (!reply.is_array() || reply.empty()) return false;
+    for (const auto& r : reply)
+        if (!r.is_object() || !r.value("success", false)) return false;
+    return true;
+}
+
+bool SwayIPC::run(const std::string& cmd) {
+    SwayIPC ipc;
+    return ipc.run_command(cmd);
 }
 
 std::string SwayIPC::get_tree() {

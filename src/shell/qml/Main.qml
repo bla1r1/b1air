@@ -24,12 +24,7 @@ Scope {
     // Translucent panels only where the compositor blurs behind them: swayFX
     // with blur on. Plain sway shows the wallpaper sharp through a
     // translucent panel, and over a busy picture the text is unreadable.
-    property bool compositorBlurs: true
-    Process {
-        running: true
-        command: ["sh", "-c", "p=$(pgrep -x sway | head -n1); [ -n \"$p\" ] && \"$(readlink -f /proc/$p/exe)\" --version 2>&1 | grep -qi swayfx && echo yes || echo no"]
-        stdout: StdioCollector { onStreamFinished: rootScope.compositorBlurs = this.text.trim() !== "no" }
-    }
+    readonly property bool compositorBlurs: Sway.swayfx
     Binding {
         target: Design
         property: "translucent"

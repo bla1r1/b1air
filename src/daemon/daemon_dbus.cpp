@@ -1,5 +1,6 @@
 #include "proc_util.hpp"
 #include "daemon_dbus.hpp"
+#include "sway_ipc.hpp"
 #include "system_control.hpp"
 #include "focustime_db.hpp"
 #include "runtime.hpp"
@@ -57,7 +58,7 @@ static int method_lock(sd_bus_message *m, void *userdata, sd_bus_error *ret_erro
 static int method_reload(sd_bus_message *m, void *userdata, sd_bus_error *ret_error) {
     (void)userdata; (void)ret_error;
     REQUIRE_SESSION_USER();
-    util::spawn_detached({"swaymsg", "reload"});
+    (void)SwayIPC::run("reload");
     util::spawn_detached({"b1air-shell", "forceReload"});
     return sd_bus_reply_method_return(m, "");
 }

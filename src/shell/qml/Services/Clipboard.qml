@@ -280,7 +280,10 @@ Singleton {
     function copyToClipboard(text) {
         if (!text) return;
         root.lastText = text;
-        Quickshell.execDetached(["bash", "-c", "printf '%s' \"$1\" | wl-copy", "--", text]);
+        // wl-copy takes the text as its argument; "--" so a text starting
+        // with "-" is not read as an option. (data-control, so no focus
+        // needed — the shell's own surfaces rarely have it.)
+        Quickshell.execDetached(["wl-copy", "--", text]);
     }
 
     /**

@@ -1,4 +1,5 @@
 #include "b1air_bridge.hpp"
+#include "sway_ipc.hpp"
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -172,14 +173,21 @@ void B1AirBridge::copyToClipboard(const QString& text) {
     }
 }
 
+// Straight to sway's socket, as the daemon talks to it, rather than a
+// swaymsg process per click.
+static void sway_command(const std::string& cmd) {
+    b1air::SwayIPC ipc;
+    if (ipc.connect()) (void)ipc.send_command(0, cmd);
+}
+
 void B1AirBridge::focusWindow(qint64 con_id) {
     if (con_id <= 0) return;
-    QProcess::startDetached("swaymsg", QStringList() << ("[con_id=" + QString::number(con_id) + "]") << "focus");
+    sway_command("[con_id=" + std::to_string(con_id) + "] focus");
 }
 
 void B1AirBridge::minimizeWindow(qint64 con_id) {
     if (con_id > 0) {
-        QProcess::startDetached("swaymsg", QStringList() << ("[con_id=" + QString::number(con_id) + "]") << "mark" << "--add" << "_b1air_minimized," << "move" << "scratchpad");
+        sway_command("[con_id=" + std::to_string(con_id) + "] mark --add _b1air_minimized, move scratchpad");
     } else {
         SystemControl::window_minimize();
     }

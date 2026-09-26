@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 
@@ -36,16 +37,8 @@ Singleton {
     property var defaultSink: null
     property var defaultSource: null
 
-    property bool hasAudioSys: true
-    Process {
-        running: true
-        command: ["bash", "-c", "cat /proc/asound/cards 2>/dev/null | grep -E '[0-9]+ \\[' | head -1"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (this.text.trim() !== "") root.hasAudioSys = true;
-            }
-        }
-    }
+    // A sound card the kernel knows of: a line like " 0 [PCH            ]:".
+    readonly property bool hasAudioSys: /\d+ \[/.test(Sys.readFile("/proc/asound/cards"))
     readonly property bool hasAudio: root.hasAudioSys || root.defaultSink !== null || root.sinkNodes.length > 0
 
     // ── Consumers ────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 
 Singleton {
@@ -50,34 +51,17 @@ Singleton {
     }
 
     function save() {
-        let jsonStr = JSON.stringify(root.pinnedList);
-        saveProc.command = ["bash", "-c", "mkdir -p -- \"$1\" && printf '%s' \"$3\" > \"$2\"", "--",
-                            (Quickshell.env("HOME") || "/tmp") + "/.config/b1air",
-                            (Quickshell.env("HOME") || "/tmp") + "/.config/b1air/pinned_apps.json", jsonStr];
-        saveProc.running = true;
+        Sys.writeFile("~/.config/b1air/pinned_apps.json", JSON.stringify(root.pinnedList));
     }
 
-    Process {
-        id: loadProc
-        running: true
-        command: ["bash", "-c", "cat ~/.config/b1air/pinned_apps.json 2>/dev/null || echo ''"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let t = this.text.trim();
-                if (t && t.startsWith("[")) {
-                    try {
-                        let parsed = JSON.parse(t);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            root.pinnedList = parsed;
-                        }
-                    } catch(e) {}
-                }
-            }
-        }
-    }
-
-    Process {
-        id: saveProc
-        running: false
+    Component.onCompleted: {
+        const t = Sys.readFile("~/.config/b1air/pinned_apps.json").trim();
+        if (!t.startsWith("["))
+            return;
+        try {
+            const parsed = JSON.parse(t);
+            if (Array.isArray(parsed) && parsed.length > 0)
+                root.pinnedList = parsed;
+        } catch (e) {}
     }
 }

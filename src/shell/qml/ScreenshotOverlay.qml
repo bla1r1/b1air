@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Controls as QQC
 import QtQuick.Layouts
 import Quickshell
+import B1air.Daemon
 import Quickshell.Wayland
 import Quickshell.Io
 import "Ui"
@@ -38,7 +39,7 @@ PanelWindow {
     property bool isVideoMode: cachedMode === "true"
 
     onIsVideoModeChanged: {
-        Quickshell.execDetached(["bash", "-c", "echo '" + (root.isVideoMode ? "true" : "false") + "' > ~/.cache/qs_screenshot_mode"]);
+        Sys.writeFile("~/.cache/qs_screenshot_mode", root.isVideoMode ? "true\n" : "false\n");
         
         // Smart Geometry Snapping for Portal Support
         if (root.isVideoMode) {
@@ -73,7 +74,7 @@ PanelWindow {
 
     function saveAudioPrefs() {
         let data = `${deskVol},${deskMute},${micVol},${micMute},${micDevice}`
-        Quickshell.execDetached(["bash", "-c", "printf '%s' \"$1\" > \"$2\"", "--", data, (Quickshell.env("HOME") || "/tmp") + "/.cache/qs_audio_prefs"])
+        Sys.writeFile("~/.cache/qs_audio_prefs", data);
     }
 
     // --- Dynamic Mic Loader ---
@@ -145,7 +146,7 @@ PanelWindow {
     function saveCache() {
         if (root.hasSelection && !root.isVideoMode) {
             let data = Math.round(root.selX) + "," + Math.round(root.selY) + "," + Math.round(root.selW) + "," + Math.round(root.selH);
-            Quickshell.execDetached(["bash", "-c", "printf '%s' \"$1\" > \"$2\"", "--", data, (Quickshell.env("HOME") || "/tmp") + "/.cache/qs_screenshot_geom"]);
+            Sys.writeFile("~/.cache/qs_screenshot_geom", data);
         }
     }
 
@@ -722,7 +723,7 @@ PanelWindow {
 
             root.isQrSuccess = anySuccess;
             root.showQrPopup = true
-            Quickshell.execDetached(["bash", "-c", "rm -f -- \"${1}\"", "--", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/qr_result"])
+            Sys.removeFile((Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/qr_result")
         }
     }
     
@@ -734,7 +735,7 @@ PanelWindow {
     }
     
     function performQrScan() {
-            Quickshell.execDetached(["bash", "-c", "rm -f -- \"${1}\"", "--", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/qr_result"])
+            Sys.removeFile((Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/qr_result")
         root.isScanningQr = true; root.showQrPopup = false; qrModel.clear()
         Quickshell.execDetached(["b1air-daemon", "scan-qr", root.geometryString])
         qrWaitTimer.start()

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import B1air.Daemon
 import Quickshell.Io
 import Quickshell.Widgets
 import "../Ui"
@@ -206,7 +207,7 @@ PopupShell {
             return true;
         }
 
-        Quickshell.execDetached(["swaymsg", "exec", value]);
+        Sway.command("exec " + value);
         return true;
     }
 

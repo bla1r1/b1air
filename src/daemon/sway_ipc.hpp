@@ -27,6 +27,11 @@ public:
     bool is_connected() const { return fd_ >= 0; }
 
     std::string send_command(uint32_t type, const std::string& payload = "");
+    // A sway command (several, ';'-separated); true when sway accepted every
+    // part. Connects first if this one is not connected yet.
+    bool run_command(const std::string& cmd);
+    // The same on a connection of its own, for a one-off.
+    static bool run(const std::string& cmd);
     std::string get_tree();
     std::string get_inputs();
     std::string get_outputs();

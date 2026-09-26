@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Quickshell
+import B1air.Daemon
 import "../Ui"
 
 // =============================================================================
@@ -28,7 +29,7 @@ PopupShell {
 
     function copyDimensions() {
         Quickshell.execDetached(["wl-copy", measureW + "x" + measureH]);
-        Quickshell.execDetached(["notify-send", "-a", "Screen Ruler", "Dimensions Copied", measureW + "x" + measureH + " px"]);
+        Sys.notify("Screen Ruler", "Dimensions Copied", measureW + "x" + measureH + " px");
         root.close();
     }
 

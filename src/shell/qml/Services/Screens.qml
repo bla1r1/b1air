@@ -2,7 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
+import B1air.Daemon
 
 // =============================================================================
 // Which screen to put a transient surface on.
@@ -36,26 +36,17 @@ Singleton {
     }
 
     function refresh() {
-        reader.running = false;
-        reader.running = true;
+        Sway.query("outputs", outs => {
+            // Not under sway, or sway is not answering: `focused` falls back
+            // to the first screen, which is where these surfaces used to be
+            // pinned anyway.
+            if (!Array.isArray(outs))
+                return;
+            for (const o of outs) {
+                if (o.focused) { root.focusedName = o.name; return; }
+            }
+        });
     }
 
-    Process {
-        id: reader
-        running: true
-        command: ["swaymsg", "-t", "get_outputs"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    for (const o of JSON.parse(this.text)) {
-                        if (o.focused) { root.focusedName = o.name; return; }
-                    }
-                } catch (e) {
-                    // Not under sway, or sway is not answering. `focused`
-                    // falls back to the first screen, which is where these
-                    // surfaces used to be pinned anyway.
-                }
-            }
-        }
-    }
+    Component.onCompleted: refresh()
 }
