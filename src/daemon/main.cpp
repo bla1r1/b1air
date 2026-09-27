@@ -498,6 +498,15 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " volume {get|up [N]|down [N]|mute}\n";
             return 1;
         }
+    } else if (cmd == "dpms") {
+        // Screens off and on, for swayidle's timeouts: `output * power`,
+        // which sway took over from the older `dpms` command.
+        const std::string sub = argc >= 3 ? argv[2] : "";
+        if (sub != "on" && sub != "off") {
+            std::cerr << "Usage: " << argv[0] << " dpms {on|off}\n";
+            return 1;
+        }
+        return SwayIPC::run("output * power " + sub) ? 0 : 1;
     } else if (cmd == "mic") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
         // "status" is the name; "waybar" is what it was called when a bar of

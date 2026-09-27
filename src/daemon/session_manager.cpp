@@ -146,24 +146,36 @@ namespace {
  * the timer below the switch. The setting is honoured here — the timeout is
  * simply not part of the command when it is off.
  */
-std::string build_swayidle_command(const DesktopSettings& settings) {
+std::vector<std::string> build_swayidle_command(const DesktopSettings& settings) {
     const bool auto_suspend = SettingsManager::get_json_bool("autoSuspend", true);
 
-    std::string cmd = "swayidle -w "
-        "lock 'b1air-daemon lock' "
+    // An argument list, not a shell line: each command below is one argument,
+    // which swayidle itself hands to sh. The whole line used to go through a
+    // shell of ours first, with the inner commands in single quotes and
+    // swaymsg's in double quotes inside those.
+    std::vector<std::string> argv = {
+        "swayidle", "-w",
+        "lock", "b1air-daemon lock",
         // The dim timeout is already the desktop's "nobody is here" signal, so
         // the break reminder rides on it rather than running a second idle
         // watch. Without this, continuous screen time was only ever reset by
-        // locking, and a machine that never locks reported "600 minutes at the
-        // screen without a break" to someone who had been asleep for nine
-        // hours.
-        "timeout " + std::to_string(settings.dimTimeout) + " 'b1air-daemon ddc dim; b1air-daemon focus away' resume 'b1air-daemon ddc undim; b1air-daemon focus back' "
-        "timeout " + std::to_string(settings.lockTimeout) + " 'b1air-daemon power lock' resume 'b1air-daemon ddc undim' "
-        "timeout " + std::to_string(settings.dpmsTimeout) + " 'swaymsg \"output * dpms off\"' resume 'swaymsg \"output * dpms on\"; b1air-daemon ddc undim' ";
-
+        // locking, and a machine that never locks reported "600 minutes at
+        // the screen without a break" to someone who had been asleep for
+        // nine hours.
+        "timeout", std::to_string(settings.dimTimeout),
+            "b1air-daemon ddc dim; b1air-daemon focus away",
+            "resume", "b1air-daemon ddc undim; b1air-daemon focus back",
+        "timeout", std::to_string(settings.lockTimeout),
+            "b1air-daemon power lock",
+            "resume", "b1air-daemon ddc undim",
+        "timeout", std::to_string(settings.dpmsTimeout),
+            "b1air-daemon dpms off",
+            "resume", "b1air-daemon dpms on; b1air-daemon ddc undim",
+    };
     if (auto_suspend) {
-        cmd += "timeout " + std::to_string(settings.suspendTimeout) +
-               " 'b1air-daemon power suspend' resume 'swaymsg \"output * dpms on\"; b1air-daemon ddc undim' ";
+        argv.insert(argv.end(), {"timeout", std::to_string(settings.suspendTimeout),
+                                 "b1air-daemon power suspend",
+                                 "resume", "b1air-daemon dpms on; b1air-daemon ddc undim"});
     }
 
     // `loginctl lock-session` only asks logind to emit the session's Lock
@@ -176,8 +188,8 @@ std::string build_swayidle_command(const DesktopSettings& settings) {
     // started before sleep finally got to run. Calling the lock command
     // directly, the same one `lock` above uses, blocks before-sleep until the
     // screen is actually up.
-    cmd += "before-sleep 'b1air-daemon lock'";
-    return cmd;
+    argv.insert(argv.end(), {"before-sleep", "b1air-daemon lock"});
+    return argv;
 }
 
 } // namespace
@@ -191,7 +203,7 @@ bool SessionManager::restart_swayidle() {
     // (The scan skips zombies, so one not yet reaped does not hold this up.)
     for (int i = 0; i < 20 && proc::running("swayidle"); ++i) usleep(50 * 1000);
 
-    spawn_shell_detached(build_swayidle_command(SettingsManager::load()));
+    spawn_argv_detached(build_swayidle_command(SettingsManager::load()));
     return true;
 }
 
@@ -681,7 +693,7 @@ int SessionManager::run_session() {
 
     // 9. Launch Swayidle
     if (!is_process_running("swayidle")) {
-        spawn_shell_detached(build_swayidle_command(settings));
+        spawn_argv_detached(build_swayidle_command(settings));
     }
 
     // 10. The desktop shell, and a supervisor that owns it.

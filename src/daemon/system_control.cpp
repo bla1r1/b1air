@@ -1228,27 +1228,50 @@ std::string SystemControl::apps_list_json(const std::string& category) {
 }
 
 // ── Color Dropper / Pixel Picker ─────────────────────────────────────────────
+// slurp's answer, without the newline it ends with; "" when cancelled.
+static std::string slurp(const std::vector<std::string>& extra = {}) {
+    std::vector<std::string> argv = {"slurp"};
+    argv.insert(argv.end(), extra.begin(), extra.end());
+    std::string out = run_argv_capture(argv);
+    while (!out.empty() && std::isspace(static_cast<unsigned char>(out.back()))) out.pop_back();
+    return out;
+}
+
+// The first pixel of a binary PPM (P6), as #rrggbb.
+static std::string ppm_first_pixel(const std::string& ppm) {
+    // P6 <ws> width <ws> height <ws> maxval <one ws> then the samples.
+    size_t pos = 0;
+    int fields = 0;
+    long values[3] = {0, 0, 0};
+    if (ppm.compare(0, 2, "P6") != 0) return "";
+    pos = 2;
+    while (fields < 3 && pos < ppm.size()) {
+        if (ppm[pos] == '#') { while (pos < ppm.size() && ppm[pos] != '\n') ++pos; continue; }
+        if (std::isspace(static_cast<unsigned char>(ppm[pos]))) { ++pos; continue; }
+        long v = 0;
+        while (pos < ppm.size() && std::isdigit(static_cast<unsigned char>(ppm[pos]))) v = v * 10 + (ppm[pos++] - '0');
+        values[fields++] = v;
+    }
+    if (fields < 3 || values[2] != 255 || pos + 1 + 3 > ppm.size()) return "";
+    ++pos;   // the single whitespace after maxval
+    char hex[8];
+    std::snprintf(hex, sizeof hex, "#%02x%02x%02x", static_cast<unsigned char>(ppm[pos]),
+                  static_cast<unsigned char>(ppm[pos + 1]), static_cast<unsigned char>(ppm[pos + 2]));
+    return hex;
+}
+
+// One pixel under a point the user picks. grim's PPM is read here: it was
+// piped through ImageMagick's convert (or tail | xxd | sed when that failed)
+// in a shell line with slurp's answer spliced into it. The first pixel, not
+// the last: on a scaled screen a 1x1 logical box is several real pixels.
 std::string SystemControl::pick_color() {
-    std::string pos = exec_cmd("slurp -p 2>/dev/null");
-    if (pos.empty()) return "";
-    while (!pos.empty() && (pos.back() == '\n' || pos.back() == '\r' || pos.back() == ' ')) pos.pop_back();
-    if (!valid_geometry(pos)) return "";
-
-    std::string hex = exec_cmd("grim -g \"" + pos + " 1x1\" -t ppm - 2>/dev/null | convert - -format '%[pixel:p{0,0}]' info: 2>/dev/null");
-    
-    if (hex.empty() || hex[0] != '#') {
-        hex = exec_cmd("grim -g \"" + pos + " 1x1\" -t ppm - 2>/dev/null | tail -c 3 | xxd -p | sed 's/^/#/' 2>/dev/null");
-    }
-
-    if (!hex.empty()) {
-        while (!hex.empty() && (hex.back() == '\n' || hex.back() == '\r' || hex.back() == ' ')) hex.pop_back();
-        if (hex.size() != 7 || hex[0] != '#' ||
-            !std::all_of(hex.begin() + 1, hex.end(), [](unsigned char c) { return std::isxdigit(c); })) return "";
-        (void)run_argv_with_stdin({"wl-copy"}, hex);
-        notify_user("b1air DE", "Color Picked", hex + " copied to clipboard", "color-picker");
-        return hex;
-    }
-    return "";
+    const std::string pos = slurp({"-p"});
+    if (pos.empty() || !valid_geometry(pos)) return "";
+    const std::string hex = ppm_first_pixel(run_argv_capture({"grim", "-g", pos + " 1x1", "-t", "ppm", "-"}));
+    if (hex.empty()) return "";
+    (void)run_argv_with_stdin({"wl-copy"}, hex);
+    notify_user("b1air DE", "Color Picked", hex + " copied to clipboard", "color-picker");
+    return hex;
 }
 
 // ── Window Minimization & Window Switcher ────────────────────────────────────
@@ -4822,7 +4845,7 @@ bool SystemControl::qr_generate(const std::string& text, const std::string& out_
 bool SystemControl::ocr_screen(const std::string& geom) {
     std::string g = geom;
     if (g.empty()) {
-        g = exec_cmd("slurp 2>/dev/null");
+        g = slurp();
         if (g.empty()) return false; // User canceled
     }
     if (!valid_geometry(g)) return false;
@@ -4920,7 +4943,7 @@ std::string SystemControl::pip_status() {
 
 bool SystemControl::force_quit() {
     // slurp -p selects a single pixel/point
-    std::string point = exec_cmd("slurp -p -b '#f7768e66' -c '#f7768e' 2>/dev/null");
+    const std::string point = slurp({"-p", "-b", "#f7768e66", "-c", "#f7768e"});
     if (point.empty()) return false;
 
     int click_x = 0, click_y = 0;
@@ -5138,7 +5161,7 @@ bool SystemControl::mic_rnnoise_toggle() {
 bool SystemControl::record_gif(const std::string& geom) {
     std::string g = geom;
     if (g.empty()) {
-        g = exec_cmd("slurp 2>/dev/null");
+        g = slurp();
         if (g.empty()) return false;
     }
     if (!valid_geometry(g)) return false;

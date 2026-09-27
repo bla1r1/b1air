@@ -117,7 +117,6 @@ Singleton {
     function toggleWifi() {
         const next = !Networking.wifiEnabled;
         Networking.wifiEnabled = next;
-        Quickshell.execDetached(["nmcli", "radio", "wifi", next ? "on" : "off"]);
         root._rebuild();
     }
 
@@ -130,9 +129,17 @@ Singleton {
         else n.connect();
     }
 
-    /** Deleting the saved connection is the only way to stop NM auto-joining. */
+    /**
+     * Deleting the saved connection is the only way to stop NM auto-joining.
+     * A network in range is forgotten through Quickshell.Networking; one out of
+     * range is not in its list at all, so that one still goes to nmcli.
+     */
     function forgetWifi(ssid) {
-        Quickshell.execDetached(["nmcli", "connection", "delete", "id", ssid]);
+        const n = root.wifiDevice ? root.wifiDevice.networks.values.find(x => x.name === ssid) : null;
+        if (n && n.known)
+            n.forget();
+        else
+            Quickshell.execDetached(["nmcli", "connection", "delete", "id", ssid]);
         savedReader.restart();
     }
 
@@ -194,7 +201,6 @@ Singleton {
     function toggleBluetooth() {
         const next = !(root.adapter && root.adapter.enabled);
         if (root.adapter) root.adapter.enabled = next;
-        Quickshell.execDetached(["bluetoothctl", "power", next ? "on" : "off"]);
         root._rebuild();
     }
 
@@ -280,23 +286,31 @@ Singleton {
 
     function startScan() {
         if (root.adapter) root.adapter.discovering = true;
-        Quickshell.execDetached(["bluetoothctl", "scan", "on"]);
         root.scanning = true;
     }
 
     function stopScan() {
         if (root.adapter) root.adapter.discovering = false;
-        Quickshell.execDetached(["bluetoothctl", "scan", "off"]);
         root.scanning = false;
     }
 
+    // BlueZ through Quickshell.Bluetooth, as everything else here. Each of
+    // these also ran bluetoothctl beside the property it had just set, so
+    // every action happened twice by two routes.
+    function _device(address) {
+        return Bluetooth.devices.values.find(x => x.address === address) || null;
+    }
+
     function pairDevice(address) {
+        const d = root._device(address);
+        if (!d) return;
         root.setBusy(address, true);
-        Quickshell.execDetached(["bluetoothctl", "pair", address]);
+        d.pair();
     }
 
     function trustDevice(address, trust) {
-        Quickshell.execDetached(["bluetoothctl", trust ? "trust" : "untrust", address]);
+        const d = root._device(address);
+        if (d) d.trusted = trust;
     }
 
     function disconnectDevice(address) {
@@ -307,7 +321,6 @@ Singleton {
     function forgetDevice(address) {
         const d = Bluetooth.devices.values.find(x => x.address === address);
         if (d) d.forget();
-        Quickshell.execDetached(["bluetoothctl", "remove", address]);
     }
 
     function refresh() {
