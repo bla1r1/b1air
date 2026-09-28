@@ -1,0 +1,16 @@
+# Build dependencies of swayfx with its own wlroots and scenefx
+# (tools/build-swayfx.sh). Format: see lib/distro.sh. `?name` = optional.
+
+# Tools
+meson ninja pkgconf git gcc
+
+# wlroots: Wayland, DRM/KMS, input, session, rendering
+wayland wayland-protocols hwdata
+libdrm mesa libdisplay-info ?libliftoff
+libinput systemd-libs seatd libxkbcommon pixman ?lcms2
+
+# wlroots: Xwayland, for X11 applications
+xorg-xwayland libxcb xcb-util-wm xcb-util-renderutil ?xcb-util-errors
+
+# sway itself, swaybar and swaynag
+json-c pcre2 pango cairo gdk-pixbuf2 libevdev

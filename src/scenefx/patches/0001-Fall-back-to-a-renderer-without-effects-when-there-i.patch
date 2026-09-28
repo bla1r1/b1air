@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 12:19:23 +0000
+Subject: [PATCH] Fall back to a renderer without effects when there is no
+ GLES2
+
+Without a GPU (a virtual machine with no 3D, a broken driver, no /dev/dri)
+fx_renderer_create failed and the compositor could not start at all. Fall
+back to wlroots' own renderer choice, which ends in its software renderer,
+and have the scene draw plain rects and textures through it: windows,
+layouts and animations work; blur, shadows and rounded corners are left
+out. WLR_RENDERER=pixman asks for the fallback outright.
+---
+ render/fx_renderer/fx_renderer.c | 22 +++++++++++++++++++++-
+ types/scene/wlr_scene.c          | 31 +++++++++++++++++++++++++------
+ 2 files changed, 46 insertions(+), 7 deletions(-)
+
+diff --git a/render/fx_renderer/fx_renderer.c b/render/fx_renderer/fx_renderer.c
+index 8d0a7b2..4847085 100644
+--- a/render/fx_renderer/fx_renderer.c
++++ b/render/fx_renderer/fx_renderer.c
+@@ -8,11 +8,13 @@
+ #include <GLES2/gl2.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <string.h>
+ #include <unistd.h>
+ #include <wlr/backend.h>
+ #include <wlr/render/allocator.h>
+ #include <wlr/render/egl.h>
+ #include <wlr/render/interface.h>
++#include <wlr/render/wlr_renderer.h>
+ #include <wlr/util/box.h>
+ #include <wlr/util/log.h>
+ #include <xf86drm.h>
+@@ -350,8 +352,26 @@ struct wlr_renderer *fx_renderer_create_with_drm_fd(int drm_fd) {
+ 	return renderer_autocreate(NULL, drm_fd);
+ }
+ 
++// Without a GPU (a virtual machine with no 3D, a broken driver, a missing
++// /dev/dri) there is no GLES2 and so no FX renderer. Rather than leave the
++// compositor unable to start, fall back to wlroots' own choice, which ends in
++// its software renderer: windows, layouts and animations still draw, only
++// blur, shadows and rounded corners are left out (see scene_entry_render).
++// WLR_RENDERER=pixman asks for the fallback outright.
+ struct wlr_renderer *fx_renderer_create(struct wlr_backend *backend) {
+-	return renderer_autocreate(backend, -1);
++	const char *wanted = getenv("WLR_RENDERER");
++	if (wanted == NULL || strcmp(wanted, "gles2") == 0) {
++		struct wlr_renderer *renderer = renderer_autocreate(backend, -1);
++		if (renderer != NULL || wanted != NULL) {
++			return renderer;
++		}
++		wlr_log(WLR_ERROR, "No GLES2: falling back to a renderer without effects");
++	}
++	struct wlr_renderer *renderer = wlr_renderer_autocreate(backend);
++	if (renderer != NULL) {
++		wlr_log(WLR_INFO, "Rendering without effects: no blur, shadows or rounded corners");
++	}
++	return renderer;
+ }
+ 
+ static bool link_shaders(struct fx_renderer *renderer) {
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index 9a9fcc0..91d39c4 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -18,6 +18,7 @@
+ #include <wlr/util/transform.h>
+ 
+ #include "render/color.h"
++#include "render/fx_renderer/fx_renderer.h"
+ #include "render/tracy.h"
+ #include "scenefx/render/fx_renderer/fx_offscreen_buffers.h"
+ #include "scenefx/render/pass.h"
+@@ -1956,7 +1957,11 @@ static float get_luminance_multiplier(const struct wlr_color_luminances *src_lum
+ 
+ static void scene_entry_render(struct render_list_entry *entry, const struct render_data *data) {
+ 	struct wlr_scene_node *node = entry->node;
+-	struct fx_gles_render_pass *fx_pass = fx_get_render_pass(data->render_pass);
++	// NULL when rendering without effects (fx_renderer_create fell back to a
++	// renderer that is not ours): plain rects and textures, nothing else.
++	struct fx_gles_render_pass *fx_pass =
++		wlr_renderer_is_fx(data->output->output->renderer) ?
++		fx_get_render_pass(data->render_pass) : NULL;
+ 
+ 	pixman_region32_t render_region;
+ 	pixman_region32_init(&render_region);
+@@ -2027,7 +2032,9 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		};
+ 
+ 		// TODO: Use the base wlr_render_pass_add_rect as a fast-path in the future
+-		if (!fx_corner_radii_is_empty(&rect_corners)) {
++		if (fx_pass == NULL) {
++			wlr_render_pass_add_rect(data->render_pass, &rect_options.base);
++		} else if (!fx_corner_radii_is_empty(&rect_corners)) {
+ 			struct fx_render_rounded_rect_options rounded_rect_options = {
+ 				.base = rect_options.base,
+ 				.corners = fx_corner_radii_scale(rect_corners, data->scale),
+@@ -2110,7 +2117,11 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		};
+ 
+ 		// TODO: Use the base wlr_render_pass_add_texture as a fast-path in the future
+-		fx_render_pass_add_texture(fx_pass, &tex_options);
++		if (fx_pass == NULL) {
++			wlr_render_pass_add_texture(data->render_pass, &tex_options.base);
++		} else {
++			fx_render_pass_add_texture(fx_pass, &tex_options);
++		}
+ 
+ 		struct wlr_scene_output_sample_event sample_event = {
+ 			.output = data->output,
+@@ -2129,6 +2140,9 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		}
+ 		break;
+ 	case WLR_SCENE_NODE_SHADOW:;
++		if (fx_pass == NULL) {
++			break;
++		}
+ 		struct wlr_scene_shadow *scene_shadow = wlr_scene_shadow_from_node(node);
+ 
+ 		struct wlr_box shadow_clipped_region_box = scene_shadow->clipped_region.area;
+@@ -2163,7 +2177,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		struct wlr_scene_optimized_blur *scene_blur = wlr_scene_optimized_blur_from_node(node);
+ 		// Re-render the optimized blur buffer when needed. Retry rendering
+ 		// until there's a visible blur_node.
+-		if (fx_pass->has_blur && is_scene_blur_enabled(&scene->blur_data)
++		if (fx_pass != NULL && fx_pass->has_blur && is_scene_blur_enabled(&scene->blur_data)
+ 				&& scene_blur->dirty) {
+ 			const float opacity = 1.0f;
+ 			enum wl_output_transform transform =
+@@ -2191,6 +2205,9 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		}
+ 		break;
+ 	case WLR_SCENE_NODE_BLUR:;
++		if (fx_pass == NULL) {
++			break;
++		}
+ 		struct wlr_scene_blur *blur = wlr_scene_blur_from_node(node);
+ 
+ 		struct wlr_texture *tex = NULL;
+@@ -3290,9 +3307,11 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
+ 	wlr_damage_ring_rotate_buffer(&scene_output->damage_ring, buffer,
+ 		&render_data.damage);
+ 
+-	struct fx_gles_render_pass *fx_pass = fx_get_render_pass(render_pass);
++	// Without effects there is no blur, and nothing to compensate for.
++	struct fx_gles_render_pass *fx_pass = wlr_renderer_is_fx(output->renderer) ?
++		fx_get_render_pass(render_pass) : NULL;
+ 	bool should_compensate_blur = false;
+-	if (fx_render_pass_init_offscreen_buffers(render_pass, output)
++	if (fx_pass != NULL && fx_render_pass_init_offscreen_buffers(render_pass, output)
+ 			&& pixman_region32_not_empty(&render_data.damage)) {
+ 		// Blur artifact prevention
+ 		// Note: Supports individual blur node blur_data

@@ -1,0 +1,378 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 12:42:41 +0000
+Subject: [PATCH 5/6] Add special_workspace: a workspace called up over the
+ others
+
+Hyprland's special workspace. `special_workspace toggle|show|hide` brings
+a workspace of its own, named "special", up over the one in front of you,
+and puts it away again; the one beneath stays drawn, dimmed, and its
+floating windows are hidden while it is covered. Windows go to it with
+`move container to workspace special`. Showing it follows the focused
+screen. No slide or fade either way.
+
+It is called up, never stepped to: workspace next/prev, next_on_output and
+the workspace swipe all pass it by.
+---
+ include/sway/commands.h           |  1 +
+ include/sway/output.h             |  5 ++
+ include/sway/tree/workspace.h     |  4 ++
+ sway/commands.c                   |  1 +
+ sway/commands/special_workspace.c | 76 +++++++++++++++++++++++++++++++
+ sway/desktop/transaction.c        | 35 +++++++++++++-
+ sway/desktop/workspace_swipe.c    |  9 +++-
+ sway/meson.build                  |  1 +
+ sway/tree/output.c                | 15 ++++++
+ sway/tree/workspace.c             | 27 ++++++++++-
+ 10 files changed, 169 insertions(+), 5 deletions(-)
+ create mode 100644 sway/commands/special_workspace.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index c77632fb..335f5b4c 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -111,6 +111,7 @@ sway_cmd cmd_exec_process;
+ sway_cmd cmd_allow_tearing;
+ sway_cmd cmd_animation_duration_ms;
+ sway_cmd cmd_autotile;
++sway_cmd cmd_special_workspace;
+ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_workspace_animation;
+ sway_cmd cmd_workspace_swipe;
+diff --git a/include/sway/output.h b/include/sway/output.h
+index 3d1d1ad1..1d484dab 100644
+--- a/include/sway/output.h
++++ b/include/sway/output.h
+@@ -41,6 +41,11 @@ struct sway_output {
+ 	// is black.
+ 	struct wlr_scene_rect *fullscreen_background;
+ 
++	// b1air: the special workspace (special_workspace) is shown over the one
++	// it was opened from, which stays visible under this dimming rect.
++	struct wlr_scene_rect *special_dim;
++	char *special_under; // the name of the workspace it was opened from
++
+ 	struct wlr_output *wlr_output;
+ 	struct wlr_scene_output *scene_output;
+ 	struct sway_server *server;
+diff --git a/include/sway/tree/workspace.h b/include/sway/tree/workspace.h
+index 1c1caca7..c79ca4e2 100644
+--- a/include/sway/tree/workspace.h
++++ b/include/sway/tree/workspace.h
+@@ -102,6 +102,10 @@ struct sway_workspace *workspace_by_number(const char* name);
+ 
+ struct sway_workspace *workspace_by_name(const char*);
+ 
++// b1air: the workspace special_workspace shows over the others.
++#define SPECIAL_WORKSPACE_NAME "special"
++bool workspace_is_special(struct sway_workspace *ws);
++
+ struct sway_workspace *workspace_output_next(struct sway_workspace *current);
+ 
+ struct sway_workspace *workspace_next(struct sway_workspace *current);
+diff --git a/sway/commands.c b/sway/commands.c
+index cff2728d..22d57aaf 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -160,6 +160,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "resize", cmd_resize },
+ 	{ "scratchpad", cmd_scratchpad },
+ 	{ "shortcuts_inhibitor", cmd_shortcuts_inhibitor },
++	{ "special_workspace", cmd_special_workspace },
+ 	{ "split", cmd_split },
+ 	{ "splith", cmd_splith },
+ 	{ "splitt", cmd_splitt },
+diff --git a/sway/commands/special_workspace.c b/sway/commands/special_workspace.c
+new file mode 100644
+index 00000000..b1348740
+--- /dev/null
++++ b/sway/commands/special_workspace.c
+@@ -0,0 +1,76 @@
++#include <stdlib.h>
++#include <string.h>
++#include "sway/commands.h"
++#include "sway/input/seat.h"
++#include "sway/output.h"
++#include "sway/tree/arrange.h"
++#include "sway/tree/workspace.h"
++#include "log.h"
++
++// special_workspace toggle|show|hide
++//
++// Hyprland's special workspace: a workspace of its own (named "special")
++// that is called up over the one in front of you and put away again, the
++// one beneath staying in view, dimmed. Windows go to it the usual way:
++// `move container to workspace special`.
++struct cmd_results *cmd_special_workspace(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "special_workspace", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	struct sway_seat *seat = config->handler_context.seat;
++	struct sway_workspace *current = seat ? seat_get_focused_workspace(seat) : NULL;
++	if (!current || !current->output) {
++		return cmd_results_new(CMD_FAILURE, "No workspace to show it over");
++	}
++	struct sway_output *output = current->output;
++
++	bool shown = workspace_is_special(current);
++	bool want;
++	if (strcmp(argv[0], "toggle") == 0) {
++		want = !shown;
++	} else if (strcmp(argv[0], "show") == 0) {
++		want = true;
++	} else if (strcmp(argv[0], "hide") == 0) {
++		want = false;
++	} else {
++		return cmd_results_new(CMD_INVALID,
++			"Expected 'special_workspace toggle|show|hide'");
++	}
++	if (want == shown) {
++		return cmd_results_new(CMD_SUCCESS, NULL);
++	}
++
++	struct sway_workspace *target;
++	if (want) {
++		target = workspace_by_name(SPECIAL_WORKSPACE_NAME);
++		if (target && target->output != output) {
++			// Shown on the screen it is called up on: it follows.
++			struct sway_output *old_output = target->output;
++			workspace_move_to_output(target, output);
++			arrange_output(old_output);
++		}
++		if (!target) {
++			target = workspace_create(output, SPECIAL_WORKSPACE_NAME);
++		}
++		if (!target) {
++			return cmd_results_new(CMD_FAILURE, "Could not create the special workspace");
++		}
++		free(output->special_under);
++		output->special_under = strdup(current->name);
++	} else {
++		// Back to the one beneath; if it has gone (it was empty, and sway
++		// drops empty workspaces it leaves), the same name again.
++		const char *under = output->special_under;
++		target = under ? workspace_by_name(under) : NULL;
++		if (!target && under) {
++			target = workspace_create(output, under);
++		}
++		if (!target) {
++			return cmd_results_new(CMD_FAILURE, "No workspace to go back to");
++		}
++	}
++	workspace_switch(target);
++	seat_consider_warp_to_focus(seat);
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
+index 567db3e1..a09e9159 100644
+--- a/sway/desktop/transaction.c
++++ b/sway/desktop/transaction.c
+@@ -1006,6 +1006,22 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		&& output->wlr_output->enabled && config->animation_duration_ms > 0 &&
+ 		!(old_active->current.fullscreen || new_active->current.fullscreen);
+ 
++	// b1air: the special workspace appears over the one it was opened from,
++	// which stays drawn, dimmed, beneath it: no slide or fade either way.
++	struct sway_workspace *special_under = NULL;
++	if (workspace_is_special(new_active) && output->special_under) {
++		special_under = workspace_by_name(output->special_under);
++		if (special_under && special_under->output != output) {
++			special_under = NULL;
++		}
++	}
++	if (workspace_is_special(old_active) || workspace_is_special(new_active)) {
++		is_ws_switch = false;
++		if (old_active) {
++			finish_animation(&old_active->animation_state.animation);
++		}
++	}
++
+ 	if (is_ws_switch && config->workspace_animation == WORKSPACE_ANIMATION_SLIDE) {
+ 		start_workspace_slide(output, old_active, new_active);
+ 	} else if (is_ws_switch) {
+@@ -1043,6 +1059,11 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		// b1air: a workspace held beside the active one by a swipe is shown
+ 		// the way one sliding or fading out is.
+ 		bool animating = child->animation_state.animation.initialized || child->swipe_peek;
++		// b1air: under the special workspace: drawn, but its floating
++		// windows (in the shared floating layer, above every workspace's
++		// tiling) would cover the special one's, so they stay hidden.
++		bool under_special = child == special_under;
++		animating = animating || under_special;
+ 
+ 		wlr_scene_node_reparent(&child->layers.tiling->node, output->layers.tiling);
+ 		wlr_scene_node_reparent(&child->layers.fullscreen->node, output->layers.fullscreen);
+@@ -1050,7 +1071,8 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		for (int i = 0; i < child->current.floating->length; i++) {
+ 			struct sway_container *floater = child->current.floating->items[i];
+ 			wlr_scene_node_reparent(&floater->scene_tree->node, root->layers.floating);
+-			wlr_scene_node_set_enabled(&floater->scene_tree->node, activated || animating);
++			wlr_scene_node_set_enabled(&floater->scene_tree->node,
++				activated || (animating && !under_special));
+ 		}
+ 
+ 		if (activated) {
+@@ -1115,6 +1137,17 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		}
+ 	}
+ 
++	if (special_under && !new_active->current.fullscreen) {
++		// Bottom to top: the workspace beneath, the dimming, the special one.
++		wlr_scene_rect_set_size(output->special_dim, width, height);
++		wlr_scene_node_raise_to_top(&special_under->layers.tiling->node);
++		wlr_scene_node_raise_to_top(&output->special_dim->node);
++		wlr_scene_node_raise_to_top(&new_active->layers.tiling->node);
++		wlr_scene_node_set_enabled(&output->special_dim->node, true);
++	} else {
++		wlr_scene_node_set_enabled(&output->special_dim->node, false);
++	}
++
+ 	output->prev_active_workspace = new_active;
+ }
+ 
+diff --git a/sway/desktop/workspace_swipe.c b/sway/desktop/workspace_swipe.c
+index 1c9df2d7..ff4f0202 100644
+--- a/sway/desktop/workspace_swipe.c
++++ b/sway/desktop/workspace_swipe.c
+@@ -64,8 +64,13 @@ static struct sway_workspace *neighbour(struct sway_workspace *ws, int dir) {
+ 	list_t *list = ws->output->workspaces;
+ 	for (int i = 0; i < list->length; i++) {
+ 		if (list->items[i] == ws) {
+-			int j = i + dir;
+-			return j >= 0 && j < list->length ? list->items[j] : NULL;
++			// b1air: past the special workspace, which is never swiped to.
++			for (int j = i + dir; j >= 0 && j < list->length; j += dir) {
++				if (!workspace_is_special(list->items[j])) {
++					return list->items[j];
++				}
++			}
++			return NULL;
+ 		}
+ 	}
+ 	return NULL;
+diff --git a/sway/meson.build b/sway/meson.build
+index 06c06323..2ffc0ecf 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -46,6 +46,7 @@ sway_sources = files(
+ 
+ 	'commands/animation_duration_ms.c',
+ 	'commands/autotile.c',
++	'commands/special_workspace.c',
+ 	'commands/inactive_opacity.c',
+ 	'commands/workspace_animation.c',
+ 	'commands/workspace_swipe.c',
+diff --git a/sway/tree/output.c b/sway/tree/output.c
+index 51813a8a..58743c79 100644
+--- a/sway/tree/output.c
++++ b/sway/tree/output.c
+@@ -90,6 +90,9 @@ static void restore_workspaces(struct sway_output *output) {
+ 
+ static void destroy_scene_layers(struct sway_output *output) {
+ 	wlr_scene_node_destroy(&output->fullscreen_background->node);
++	if (output->special_dim) {
++		wlr_scene_node_destroy(&output->special_dim->node);
++	}
+ 
+ 	scene_node_disown_children(output->layers.tiling);
+ 	scene_node_disown_children(output->layers.fullscreen);
+@@ -129,6 +132,17 @@ struct sway_output *output_create(struct wlr_output *wlr_output) {
+ 		}
+ 	}
+ 
++	if (!failed) {
++		output->special_dim = wlr_scene_rect_create(
++			output->layers.tiling, 0, 0, (float[4]){0.f, 0.f, 0.f, 0.45f});
++		if (!output->special_dim) {
++			sway_log(SWAY_ERROR, "Unable to allocate a dimming rect");
++			failed = true;
++		} else {
++			wlr_scene_node_set_enabled(&output->special_dim->node, false);
++		}
++	}
++
+ 	if (failed) {
+ 		destroy_scene_layers(output);
+ 		wlr_scene_output_destroy(output->scene_output);
+@@ -278,6 +292,7 @@ void output_destroy(struct sway_output *output) {
+ 	list_free(output->workspaces);
+ 	list_free(output->current.workspaces);
+ 	wlr_color_transform_unref(output->color_transform);
++	free(output->special_under);
+ 	free(output);
+ }
+ 
+diff --git a/sway/tree/workspace.c b/sway/tree/workspace.c
+index 401e3e7e..e2727e73 100644
+--- a/sway/tree/workspace.c
++++ b/sway/tree/workspace.c
+@@ -516,6 +516,10 @@ static bool _workspace_by_name(struct sway_workspace *ws, void *data) {
+ 	return strcasecmp(ws->name, data) == 0;
+ }
+ 
++bool workspace_is_special(struct sway_workspace *ws) {
++	return ws && ws->name && strcmp(ws->name, SPECIAL_WORKSPACE_NAME) == 0;
++}
++
+ struct sway_workspace *workspace_by_name(const char *name) {
+ 	struct sway_seat *seat = input_manager_current_seat();
+ 	struct sway_workspace *current = seat_get_focused_workspace(seat);
+@@ -563,6 +567,9 @@ struct sway_workspace *workspace_prev(struct sway_workspace *workspace) {
+ 			struct sway_output *output = root->outputs->items[i];
+ 			for (int j = output->workspaces->length - 1; j >= 0; j--) {
+ 				struct sway_workspace *ws = output->workspaces->items[j];
++				if (workspace_is_special(ws)) {
++					continue; // b1air: called up, never stepped to
++				}
+ 				int wsn = workspace_get_number(ws);
+ 				if (!last) {
+ 					// The first workspace in reverse order
+@@ -588,6 +595,9 @@ struct sway_workspace *workspace_prev(struct sway_workspace *workspace) {
+ 			struct sway_output *output = root->outputs->items[i];
+ 			for (int j = output->workspaces->length - 1; j >= 0; j--) {
+ 				struct sway_workspace *ws = output->workspaces->items[j];
++				if (workspace_is_special(ws)) {
++					continue; // b1air: called up, never stepped to
++				}
+ 				int wsn = workspace_get_number(ws);
+ 				if (!last || (wsn >= 0 && wsn > lastn)) {
+ 					// The greatest numbered (or last) workspace
+@@ -628,6 +638,9 @@ struct sway_workspace *workspace_next(struct sway_workspace *workspace) {
+ 			struct sway_output *output = root->outputs->items[i];
+ 			for (int j = 0; j < output->workspaces->length; j++) {
+ 				struct sway_workspace *ws = output->workspaces->items[j];
++				if (workspace_is_special(ws)) {
++					continue; // b1air: called up, never stepped to
++				}
+ 				int wsn = workspace_get_number(ws);
+ 				if (!first) {
+ 					// The first named workspace
+@@ -653,6 +666,9 @@ struct sway_workspace *workspace_next(struct sway_workspace *workspace) {
+ 			struct sway_output *output = root->outputs->items[i];
+ 			for (int j = 0; j < output->workspaces->length; j++) {
+ 				struct sway_workspace *ws = output->workspaces->items[j];
++				if (workspace_is_special(ws)) {
++					continue; // b1air: called up, never stepped to
++				}
+ 				int wsn = workspace_get_number(ws);
+ 				if (!first || (wsn >= 0 && wsn < firstn)) {
+ 					// The first (or least numbered) workspace
+@@ -700,8 +716,15 @@ static struct sway_workspace *workspace_output_prev_next_impl(
+ 	}
+ 
+ 	int index = list_find(output->workspaces, workspace);
+-	size_t new_index = wrap(index + dir, output->workspaces->length);
+-	return output->workspaces->items[new_index];
++	// b1air: the special workspace is called up, never stepped to.
++	for (int k = 0; k < output->workspaces->length; k++) {
++		index = wrap(index + dir, output->workspaces->length);
++		struct sway_workspace *ws = output->workspaces->items[index];
++		if (!workspace_is_special(ws) || ws == workspace) {
++			return ws;
++		}
++	}
++	return workspace;
+ }
+ 
+ 

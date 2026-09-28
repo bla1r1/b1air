@@ -65,8 +65,18 @@ pkg_available() {
         debian)   local policy
                   policy="$(apt-cache policy "$pkg" 2>/dev/null)"
                   grep -qE '^[[:space:]]*Candidate:[[:space:]]+[^(]' <<< "$policy" ;;
-        fedora)   dnf -q info "$pkg" >/dev/null 2>&1 ;;
-        opensuse) zypper -n -q search -x "$pkg" >/dev/null 2>&1 ;;
+        # A capability such as pkgconfig(libseat) is looked up by what
+        # provides it; a plain name by name.
+        fedora)   if [[ "$pkg" == *"("* ]]; then
+                      [[ -n "$(dnf -q repoquery --whatprovides "$pkg" 2>/dev/null)" ]]
+                  else
+                      dnf -q info "$pkg" >/dev/null 2>&1
+                  fi ;;
+        opensuse) if [[ "$pkg" == *"("* ]]; then
+                      zypper -n -q search --provides -x "$pkg" >/dev/null 2>&1
+                  else
+                      zypper -n -q search -x "$pkg" >/dev/null 2>&1
+                  fi ;;
         *) return 1 ;;
     esac
 }

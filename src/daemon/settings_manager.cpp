@@ -325,6 +325,15 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
     (void)ipc.send_command(0, !get_json_bool("touchpadSwipeWorkspace", true)
         ? std::string("workspace_swipe off")
         : std::string("workspace_swipe 3") + (get_json_bool("touchpadNaturalSwipe", true) ? "" : " invert"));
+    // Mod+S calls up the special workspace, as under Hyprland, where the
+    // compositor has it (src/swayfx/patches/0005); keybinds.conf keeps it on
+    // the scratchpad for any other sway. Asked without an argument, to learn
+    // whether the command exists without showing or hiding anything: a sway
+    // that knows it wants an argument, one that does not names it unknown.
+    if (ipc.send_command(0, "special_workspace").find("Unknown/invalid command") == std::string::npos) {
+        (void)ipc.send_command(0, "bindsym --to-code $mod+s special_workspace toggle");
+        (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+shift+s move container to workspace special");
+    }
     return command_ok(ipc.send_command(0, std::string("autotile ")
         + (get_json_bool("autotiling", true) ? "enable" : "disable")));
 }

@@ -1,6 +1,7 @@
 # Arch Linux (and derivatives) — official repositories.
-# Format: see lib/distro.sh. `?name` = optional. The compositor (swayfx from the
-# AUR, or sway with --no-aur) is chosen by install.sh, not listed here.
+# Format: see lib/distro.sh. `?name` = optional. The compositor (our swayfx built
+# from source, see packages/swayfx-build/arch.txt; else swayfx from the AUR, or
+# sway with --no-aur) is chosen by install.sh, not listed here.
 
 # Core & build
 base-devel git rsync curl unzip jq cmake ccache openssl polkit pkgconf wayland wayland-protocols

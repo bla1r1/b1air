@@ -67,7 +67,9 @@ way the sway fork scroll ships: swayFX 0.6 with its own copies of wlroots
 the two libraries in a private `/usr/local/lib/b1air-swayfx`. Whatever wlroots
 the distribution has (Ubuntu 26.04: 0.19) is not used and not touched. The
 versions are pinned in the script and move together; wlroots is fetched from
-gitlab.freedesktop.org at install time.
+gitlab.freedesktop.org at install time. Our own changes are patch series on
+top (`src/swayfx/`), among them a fallback that lets swayFX start without a
+GPU, on a software renderer without effects, rather than not start at all.
 
 The family is detected from `/etc/os-release`; derivatives are matched through
 `ID_LIKE`, and `--distro arch|debian|fedora|opensuse` overrides it. The desktop

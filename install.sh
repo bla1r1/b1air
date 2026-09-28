@@ -252,25 +252,28 @@ enable_multilib_repo() {
     # ponytail: no -Sy here; the packages step syncs databases anyway
 }
 
-# The compositor. swayFX where it can be had, plain sway otherwise — the
-# session config is the same, minus the effects (see strip_swayfx_directives).
+# The compositor. Our swayFX — built from source with its own wlroots and our
+# patches (src/swayfx, src/scenefx) — on every family, so that every machine
+# runs the same compositor: the distributions' swayfx packages lack the
+# patches (autotiling, the workspace swipe, starting without a GPU, ...).
+# B1AIR_SWAYFX_FROM_SOURCE=0, or a failed build, takes the distribution's
+# compositor instead: its swayfx, or plain sway — the session config is the
+# same, minus the effects (see strip_swayfx_directives), and the daemon tiles
+# by itself where the compositor does not.
 install_compositor() {
+    if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]]; then
+        build_swayfx_from_source && return 0
+        warn "swayfx build failed — falling back to the distribution's compositor (without our patches)."
+    fi
     case "$DISTRO" in
         arch)
-            # swayfx comes from the AUR step; --no-aur means plain sway.
+            # swayfx then comes from the AUR step; --no-aur means plain sway.
             [[ "$NO_AUR" -eq 1 ]] && install_one_of sway
             return 0 ;;
         debian)
-            # No swayfx package here: built from source with its own wlroots.
-            # Plain sway (packages/debian.txt) stays as the fallback.
-            build_swayfx_from_source \
-                || warn "swayfx build failed — using plain sway (no blur or rounded corners)."
+            # No swayfx package here; plain sway (packages/debian.txt).
             return 0 ;;
     esac
-    if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-0}" == "1" ]]; then
-        build_swayfx_from_source && return 0
-        warn "swayfx build failed — falling back to the distribution's packages."
-    fi
     if pkg_installed "$DISTRO" sway && ! pkg_installed "$DISTRO" swayfx; then
         log "Plain sway is already installed; keeping it (install swayfx yourself for blur and rounded corners)."
         return 0
@@ -584,6 +587,8 @@ install_aur_packages() {
     log "Installing AUR packages with ${aur_helper}..."
     for pkg in "${pkgs[@]}"; do
         pacman -Qi "$pkg" >/dev/null 2>&1 && continue
+        # Our own build is in /usr/local already (install_compositor).
+        [[ "$pkg" == swayfx ]] && "$REPO_DIR/tools/build-swayfx.sh" --check && continue
         if [[ "$DRY_RUN" -eq 1 ]]; then
             log "Would install AUR: $pkg"
         else

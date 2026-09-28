@@ -1,0 +1,267 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 12:50:53 +0000
+Subject: [PATCH 6/6] Add window_animation: popin, fade, slide or none
+
+swayfx animates windows opening (growing from 80% while fading in) and
+closing (the reverse), with no way to choose. window_animation picks the
+style, as Hyprland's `animation = windows` does:
+
+  popin [<percent>]  the existing one, from <percent> of the size (80)
+  fade               fade in and out in place
+  slide              come in from the nearest edge of the workspace, and
+                     leave by it
+  none               appear and vanish at once; moves still animate
+---
+ include/sway/commands.h          |  1 +
+ include/sway/config.h            |  5 ++
+ sway/commands.c                  |  1 +
+ sway/commands/window_animation.c | 48 ++++++++++++++++++
+ sway/config.c                    |  2 +
+ sway/desktop/transaction.c       | 84 ++++++++++++++++++++++++++------
+ sway/meson.build                 |  1 +
+ 7 files changed, 127 insertions(+), 15 deletions(-)
+ create mode 100644 sway/commands/window_animation.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index 335f5b4c..9e7d7f47 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -114,6 +114,7 @@ sway_cmd cmd_autotile;
+ sway_cmd cmd_special_workspace;
+ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_workspace_animation;
++sway_cmd cmd_window_animation;
+ sway_cmd cmd_workspace_swipe;
+ sway_cmd cmd_debug_workspace_swipe;
+ sway_cmd cmd_assign;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index 0d5537b7..e6c2c63b 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -497,6 +497,11 @@ struct sway_config {
+ 	float inactive_opacity;
+ 	// b1air: how switching workspaces is animated
+ 	enum { WORKSPACE_ANIMATION_FADE, WORKSPACE_ANIMATION_SLIDE } workspace_animation;
++	enum {
++		WINDOW_ANIMATION_POPIN, WINDOW_ANIMATION_FADE,
++		WINDOW_ANIMATION_SLIDE, WINDOW_ANIMATION_NONE,
++	} window_animation;
++	float window_popin_factor; // popin: the size a window grows from, 0..1
+ 	// b1air: touchpad swipe that moves workspaces with the fingers (0: off)
+ 	uint32_t workspace_swipe_fingers;
+ 	bool workspace_swipe_invert;
+diff --git a/sway/commands.c b/sway/commands.c
+index 22d57aaf..a70f0f77 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -120,6 +120,7 @@ static const struct cmd_handler handlers[] = {
+ 	{ "unbindgesture", cmd_unbindgesture },
+ 	{ "unbindswitch", cmd_unbindswitch },
+ 	{ "unbindsym", cmd_unbindsym },
++	{ "window_animation", cmd_window_animation },
+ 	{ "workspace", cmd_workspace },
+ 	{ "workspace_animation", cmd_workspace_animation },
+ 	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth },
+diff --git a/sway/commands/window_animation.c b/sway/commands/window_animation.c
+new file mode 100644
+index 00000000..a6576742
+--- /dev/null
++++ b/sway/commands/window_animation.c
+@@ -0,0 +1,48 @@
++#include <stdlib.h>
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/config.h"
++
++// window_animation popin [<percent>]|fade|slide|none
++//
++// How windows open and close (when animation_duration_ms is set), the
++// styles of Hyprland's `animation = windows`:
++//   popin  grow from the middle while fading in, from <percent> of the
++//          final size (default 80); shrink the same way on closing
++//   fade   fade in and out in place
++//   slide  come in from the nearest edge of the workspace, and leave by it
++//   none   appear and vanish at once; moves and resizes still animate
++struct cmd_results *cmd_window_animation(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "window_animation", EXPECTED_AT_LEAST, 1))) {
++		return error;
++	}
++	const char *usage = "Expected 'window_animation popin [<percent>]|fade|slide|none'";
++	if (strcasecmp(argv[0], "popin") == 0) {
++		float factor = 0.8f;
++		if (argc >= 2) {
++			char *end;
++			long percent = strtol(argv[1], &end, 10);
++			if (*end == '%') {
++				end++;
++			}
++			if (*end || percent < 0 || percent > 100) {
++				return cmd_results_new(CMD_INVALID, "%s", usage);
++			}
++			factor = percent / 100.0f;
++		}
++		config->window_animation = WINDOW_ANIMATION_POPIN;
++		config->window_popin_factor = factor;
++	} else if (argc > 1) {
++		return cmd_results_new(CMD_INVALID, "%s", usage);
++	} else if (strcasecmp(argv[0], "fade") == 0) {
++		config->window_animation = WINDOW_ANIMATION_FADE;
++	} else if (strcasecmp(argv[0], "slide") == 0) {
++		config->window_animation = WINDOW_ANIMATION_SLIDE;
++	} else if (strcasecmp(argv[0], "none") == 0) {
++		config->window_animation = WINDOW_ANIMATION_NONE;
++	} else {
++		return cmd_results_new(CMD_INVALID, "%s", usage);
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index f381a54c..cede5a9a 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -355,6 +355,8 @@ static void config_defaults(struct sway_config *config) {
+ 	config->autotile = false;
+ 	config->inactive_opacity = 1.0f;
+ 	config->workspace_animation = WORKSPACE_ANIMATION_FADE;
++	config->window_animation = WINDOW_ANIMATION_POPIN;
++	config->window_popin_factor = 0.8f;
+ 	config->workspace_swipe_fingers = 0;
+ 	config->workspace_swipe_invert = false;
+ 
+diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
+index a09e9159..34d7b26c 100644
+--- a/sway/desktop/transaction.c
++++ b/sway/desktop/transaction.c
+@@ -22,7 +22,6 @@
+ #include "list.h"
+ #include "log.h"
+ 
+-#define POPIN_FACTOR 0.8f
+ 
+ struct sway_transaction {
+ 	struct wl_event_source *timer;
+@@ -179,6 +178,51 @@ static void snap_animation_position(struct sway_container *con) {
+ 	con->animation_state.from_y = con->scene_tree->node.y + global_delta_y;
+ }
+ 
++// b1air: where a window comes from as it opens, and goes as it closes, for
++// window_animation; the box in the coordinates of its parent, like x and y.
++static void window_anim_away(struct sway_container *con,
++		float x, float y, float w, float h,
++		int *ax, int *ay, int *aw, int *ah) {
++	*ax = x; *ay = y; *aw = w; *ah = h;
++	switch (config->window_animation) {
++	case WINDOW_ANIMATION_POPIN:;
++		float f = config->window_popin_factor;
++		*ax = x + w * (1.0f - f) / 2.0f;
++		*ay = y + h * (1.0f - f) / 2.0f;
++		*aw = w * f;
++		*ah = h * f;
++		break;
++	case WINDOW_ANIMATION_SLIDE:;
++		// Beyond the nearest edge of its workspace, worked out in layout
++		// coordinates (a window inside a split is placed relative to it).
++		struct sway_workspace *ws = con->current.workspace
++			? con->current.workspace : con->pending.workspace;
++		struct wlr_scene_tree *parent = con->scene_tree->node.parent;
++		if (!ws || !parent) {
++			break;
++		}
++		int px, py;
++		wlr_scene_node_coords(&parent->node, &px, &py);
++		float cx = px + x + w / 2.0f, cy = py + y + h / 2.0f;
++		float left = cx - ws->x, right = ws->x + ws->width - cx;
++		float top = cy - ws->y, bottom = ws->y + ws->height - cy;
++		float nearest = fminf(fminf(left, right), fminf(top, bottom));
++		if (nearest == left) {
++			*ax = ws->x - w - px;
++		} else if (nearest == right) {
++			*ax = ws->x + ws->width - px;
++		} else if (nearest == top) {
++			*ay = ws->y - h - py;
++		} else {
++			*ay = ws->y + ws->height - py;
++		}
++		break;
++	case WINDOW_ANIMATION_FADE:
++	case WINDOW_ANIMATION_NONE:
++		break;
++	}
++}
++
+ static void transaction_destroy(struct sway_transaction *transaction) {
+ 	// Free instructions
+ 	for (int i = 0; i < transaction->instructions->length; ++i) {
+@@ -201,8 +245,12 @@ static void transaction_destroy(struct sway_transaction *transaction) {
+ 				workspace_destroy(node->sway_workspace);
+ 				break;
+ 			case N_CONTAINER:
+-				// close animation — pop-out: shrink and fade out centered
+-				if (node->sway_container->view) {
++				// close animation — the way window_animation says it leaves
++				if (node->sway_container->view
++						&& config->window_animation == WINDOW_ANIMATION_NONE) {
++					view_remove_saved_buffer(node->sway_container->view);
++					container_destroy(node->sway_container);
++				} else if (node->sway_container->view) {
+ 					struct sway_container *con = node->sway_container;
+ 					snap_animation_position(con);
+ 					con->animation_state.from_alpha = get_animated_value(con->animation_state.from_alpha,
+@@ -212,12 +260,10 @@ static void transaction_destroy(struct sway_transaction *transaction) {
+ 						con->animation_state.to_width, &con->animation_state.animation);
+ 					con->animation_state.from_height = get_animated_value(con->animation_state.from_height,
+ 						con->animation_state.to_height, &con->animation_state.animation);
+-					con->animation_state.to_x = con->animation_state.from_x +
+-						(con->animation_state.from_width * (1.0f - POPIN_FACTOR)) / 2.0f;
+-					con->animation_state.to_y = con->animation_state.from_y +
+-						(con->animation_state.from_height * (1.0f - POPIN_FACTOR)) / 2.0f;
+-					con->animation_state.to_width = con->animation_state.from_width * POPIN_FACTOR;
+-					con->animation_state.to_height = con->animation_state.from_height * POPIN_FACTOR;
++					window_anim_away(con, con->animation_state.from_x, con->animation_state.from_y,
++						con->animation_state.from_width, con->animation_state.from_height,
++						&con->animation_state.to_x, &con->animation_state.to_y,
++						&con->animation_state.to_width, &con->animation_state.to_height);
+ 					add_animation(&con->animation_state.animation, anim_update_callback, close_anim_complete_callback);
+ 				} else {
+ 					container_destroy(node->sway_container);
+@@ -789,12 +835,20 @@ static void arrange_container(struct sway_container *con,
+ 	con->animation_state.to_height = height;
+ 	con->animation_state.to_alpha = 1.0f;
+ 
+-	// open animation — pop-in: grow from center while fading in
+-	if (con->animation_state.from_x == -1) {
+-		con->animation_state.from_x = x + width * (1.0f - POPIN_FACTOR) / 2.0f;
+-		con->animation_state.from_y = y + height * (1.0f - POPIN_FACTOR) / 2.0f;
+-		con->animation_state.from_width = width * POPIN_FACTOR;
+-		con->animation_state.from_height = height * POPIN_FACTOR;
++	// open animation — the way window_animation says it comes in
++	if (con->animation_state.from_x == -1
++			&& config->window_animation == WINDOW_ANIMATION_NONE) {
++		con->animation_state.from_x = x;
++		con->animation_state.from_y = y;
++		con->animation_state.from_width = width;
++		con->animation_state.from_height = height;
++		con->animation_state.from_alpha = 1.0f;
++		_arrange_container(con, width, height, x, y, title_bar, gaps);
++		return;
++	} else if (con->animation_state.from_x == -1) {
++		window_anim_away(con, x, y, width, height,
++			&con->animation_state.from_x, &con->animation_state.from_y,
++			&con->animation_state.from_width, &con->animation_state.from_height);
+ 		con->animation_state.from_alpha = 0.0f;
+ 		add_animation(&con->animation_state.animation, anim_update_callback, NULL);
+ 	} else {
+diff --git a/sway/meson.build b/sway/meson.build
+index 2ffc0ecf..0dbc588c 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -49,6 +49,7 @@ sway_sources = files(
+ 	'commands/special_workspace.c',
+ 	'commands/inactive_opacity.c',
+ 	'commands/workspace_animation.c',
++	'commands/window_animation.c',
+ 	'commands/workspace_swipe.c',
+ 	'desktop/workspace_swipe.c',
+ 	'commands/allow_tearing.c',

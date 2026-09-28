@@ -17,9 +17,10 @@
 # (Not static: scenefx carries copies of a few wlroots internals, which only
 # stay apart when each library keeps its own symbols to itself.)
 #
-# Our own changes to swayfx are a patch series, src/swayfx/patches/*.patch,
-# applied in name order onto the pinned release (see the README there). The
-# installed build records a hash of them, so changing a patch rebuilds.
+# Our own changes are patch series, src/swayfx/patches/*.patch onto swayfx and
+# src/scenefx/patches/*.patch onto scenefx, applied in name order onto the
+# pinned releases (see the README in src/swayfx). The installed build records
+# a hash of them, so changing a patch rebuilds.
 #
 #   tools/build-swayfx.sh            build and install (sudo for the install)
 #   tools/build-swayfx.sh --check    exit 0 if the installed build matches
@@ -38,13 +39,16 @@ WLROOTS_REF="${WLROOTS_REF:-0.20.2}"
 PREFIX="${PREFIX:-/usr/local}"
 SRC="${B1AIR_SWAYFX_SRC:-${XDG_CACHE_HOME:-$HOME/.cache}/b1air/swayfx-src}"
 
-PATCH_DIR="${B1AIR_SWAYFX_PATCHES:-$(cd "$(dirname "$0")/.." && pwd)/src/swayfx/patches}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PATCH_DIR="${B1AIR_SWAYFX_PATCHES:-$ROOT/src/swayfx/patches}"
+SCENEFX_PATCH_DIR="${B1AIR_SCENEFX_PATCHES:-$ROOT/src/scenefx/patches}"
 shopt -s nullglob
 PATCHES=("$PATCH_DIR"/*.patch)
+SCENEFX_PATCHES=("$SCENEFX_PATCH_DIR"/*.patch)
 shopt -u nullglob
 PATCH_HASH="none"
-if [[ ${#PATCHES[@]} -gt 0 ]]; then
-    PATCH_HASH="$(cat "${PATCHES[@]}" | sha256sum | cut -c1-12)"
+if [[ $(( ${#PATCHES[@]} + ${#SCENEFX_PATCHES[@]} )) -gt 0 ]]; then
+    PATCH_HASH="$(cat "${PATCHES[@]}" "${SCENEFX_PATCHES[@]}" | sha256sum | cut -c1-12)"
 fi
 
 STAMP="$PREFIX/share/b1air/swayfx.stamp"
@@ -71,11 +75,16 @@ fetch "$WLROOTS_REPO" "$WLROOTS_REF" "$SRC/subprojects/wlroots"
 
 # A patch that no longer applies stops the build here, with its name, rather
 # than producing a swayfx that silently lacks it.
-for patch in "${PATCHES[@]}"; do
-    echo "build-swayfx: applying $(basename "$patch")"
-    git -C "$SRC" apply --whitespace=nowarn "$patch" || {
-        echo "build-swayfx: $(basename "$patch") does not apply to swayfx $SWAYFX_REF" >&2; exit 1; }
-done
+apply_series() {   # apply_series <dir> <what> <patch>...
+    local dir="$1" what="$2" patch; shift 2
+    for patch in "$@"; do
+        echo "build-swayfx: applying $(basename "$patch") to $what"
+        git -C "$dir" apply --whitespace=nowarn "$patch" || {
+            echo "build-swayfx: $(basename "$patch") does not apply to $what" >&2; exit 1; }
+    done
+}
+apply_series "$SRC" "swayfx $SWAYFX_REF" "${PATCHES[@]}"
+apply_series "$SRC/subprojects/scenefx" "scenefx $SCENEFX_REF" "${SCENEFX_PATCHES[@]}"
 
 # swayfx's meson.build already looks in subprojects/ first (`fallback:`),
 # and scenefx, a subproject itself, finds the same wlroots there.
@@ -84,11 +93,16 @@ done
 #                           wlroots exists, so every machine runs the same
 #   backends drm,libinput   a real session; no nested X11 backend
 #   renderers gles2         what sway uses; Vulkan would need glslang to build
+#   werror false            a release meeting newer headers than it was written
+#                           against warns (Arch's libinput 1.31 added a scroll
+#                           method sway's switch does not name); it must still
+#                           build, as the distributions build it
 LIBDIR="lib/b1air-swayfx"
 meson setup "$SRC/build" "$SRC" \
     --prefix="$PREFIX" \
     --libdir="$LIBDIR" \
     --buildtype=release \
+    -Dwerror=false \
     -Dc_link_args="-Wl,-rpath,$PREFIX/$LIBDIR" \
     -Dforce_fallback_for=wlroots,scenefx \
     -Dwlroots:examples=false \

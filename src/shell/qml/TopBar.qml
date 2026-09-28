@@ -114,6 +114,9 @@ PanelWindow {
         // workspace focused somewhere else.
         const mine = {};
         for (const w of topBar.workspacesList) {
+            // Called up over the others (Mod+S), never a pill of its own.
+            if (w.name === "special")
+                continue;
             if (!topBar.isPrimary && w.output !== undefined && topBar.outputName !== ""
                     && w.output !== topBar.outputName)
                 continue;

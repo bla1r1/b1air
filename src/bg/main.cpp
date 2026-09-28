@@ -491,14 +491,26 @@ void ipc_message(App& app, uint32_t type, const std::string& body) {
                     app.identity[o["name"].get<std::string>()] = output_identity(o);
         app.have_outputs = true;
         break;
-    case SwayIpc::kGetWorkspaces:
-        app.workspace.clear();
+    case SwayIpc::kGetWorkspaces: {
+        std::map<std::string, std::string> shown;
         if (j.is_array())
             for (const auto& ws : j)
-                if (ws.value("visible", false) && ws.contains("output") && ws.contains("name"))
-                    app.workspace[ws["output"].get<std::string>()] = ws["name"].get<std::string>();
+                if (ws.value("visible", false) && ws.contains("output") && ws.contains("name")) {
+                    const std::string out = ws["output"].get<std::string>();
+                    const std::string name = ws["name"].get<std::string>();
+                    // The special workspace is called up over another one,
+                    // which stays in view beneath it: so do its wallpaper.
+                    if (name == "special") {
+                        const auto before = app.workspace.find(out);
+                        if (before != app.workspace.end()) shown[out] = before->second;
+                        continue;
+                    }
+                    shown[out] = name;
+                }
+        app.workspace = std::move(shown);
         app.have_workspaces = true;
         break;
+    }
     case SwayIpc::kWorkspaceEvent:
         // Asked again rather than followed: "focus", "move", "rename" and
         // "empty" each change things differently, and one answer covers all.

@@ -1,0 +1,21 @@
+# Build dependencies of swayfx with its own wlroots and scenefx
+# (tools/build-swayfx.sh). Format: see lib/distro.sh. `?name` = optional.
+
+# Tools, and Xwayland itself
+meson ninja-build pkgconf-pkg-config git gcc xorg-x11-server-Xwayland
+
+# Libraries, by the pkg-config name meson asks for: dnf and zypper install
+# whatever provides it, so package renames between releases do not matter.
+
+# wlroots: Wayland, DRM/KMS, input, session, rendering
+pkgconfig(wayland-server) pkgconfig(wayland-client) pkgconfig(wayland-scanner) pkgconfig(wayland-protocols) pkgconfig(hwdata)
+pkgconfig(libdrm) pkgconfig(gbm) pkgconfig(egl) pkgconfig(glesv2) pkgconfig(libdisplay-info) ?pkgconfig(libliftoff)
+pkgconfig(libinput) pkgconfig(libudev) pkgconfig(libseat) pkgconfig(xkbcommon) pkgconfig(pixman-1) ?pkgconfig(lcms2)
+
+# wlroots: Xwayland, for X11 applications
+pkgconfig(xwayland) pkgconfig(xcb) pkgconfig(xcb-composite) pkgconfig(xcb-icccm) pkgconfig(xcb-render)
+pkgconfig(xcb-res) pkgconfig(xcb-xfixes) pkgconfig(xcb-ewmh) ?pkgconfig(xcb-errors)
+
+# sway itself, swaybar and swaynag
+pkgconfig(json-c) pkgconfig(libpcre2-8) pkgconfig(pango) pkgconfig(pangocairo) pkgconfig(cairo)
+pkgconfig(gdk-pixbuf-2.0) pkgconfig(libevdev)

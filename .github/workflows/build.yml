@@ -38,3 +38,70 @@ jobs:
         # HOME is root's in the container; the daemon's read-only verbs
         # create their state under it, which is part of what is tested.
         run: make -C src smoke
+
+  # swayfx with our patch series, built the way install.sh builds it, on
+  # every family install.sh supports, then started headless on the software
+  # renderer (no GPU on the runner — which is itself what scenefx patch 0001
+  # is for) and checked over IPC. A patch that stops applying after a version
+  # bump, a build dependency list that names a missing package, or a patch
+  # that stops doing what it says fails here instead of on someone's machine.
+  swayfx:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: debian
+            image: ubuntu:26.04
+            install: apt-get install -y --no-install-recommends
+            refresh: apt-get update
+            extras: ca-certificates python3 foot fonts-dejavu-core util-linux passwd
+          - family: fedora
+            image: fedora:latest
+            install: dnf install -y
+            refresh: "true"
+            extras: python3 foot dejavu-sans-mono-fonts util-linux shadow-utils
+          - family: arch
+            image: archlinux:latest
+            install: pacman -S --noconfirm --needed
+            refresh: pacman -Syu --noconfirm
+            extras: python foot ttf-dejavu util-linux shadow
+          - family: opensuse
+            image: opensuse/tumbleweed
+            install: zypper -n install
+            refresh: zypper -n refresh
+            extras: python3 foot dejavu-fonts util-linux shadow tar gzip
+    name: swayfx (${{ matrix.family }})
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          ${{ matrix.refresh }}
+          ${{ matrix.install }} git ${{ matrix.extras }}
+
+      - uses: actions/checkout@v4
+
+      - name: Build dependencies of swayfx
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          . lib/distro.sh
+          list=packages/swayfx-build/${{ matrix.family }}.txt
+          ${{ matrix.install }} $(read_package_list "$list" required)
+          for pkg in $(read_package_list "$list" optional); do
+            ${{ matrix.install }} "$pkg" || echo "optional $pkg: not available"
+          done
+
+      - name: Build swayfx
+        run: B1AIR_SWAYFX_SRC="$RUNNER_TEMP/swayfx-src" tools/build-swayfx.sh
+
+      - name: Test swayfx
+        # As an ordinary user, as it runs in a session.
+        run: |
+          useradd -m tester
+          runuser -u tester -- tools/test-swayfx.sh /usr/local/bin/swayfx

@@ -2,7 +2,7 @@
 # (tools/build-swayfx.sh). Format: see lib/distro.sh. `?name` = optional.
 
 # Tools
-meson ninja-build pkgconf git
+meson ninja-build pkgconf git gcc
 
 # wlroots: Wayland, DRM/KMS, input, session, rendering
 libwayland-dev libwayland-bin wayland-protocols hwdata

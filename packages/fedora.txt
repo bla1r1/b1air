@@ -2,8 +2,9 @@
 # Format: see lib/distro.sh. `?name` = optional.
 #
 # Quickshell comes from the errornointernet/quickshell COPR, or is built from
-# source when that is unavailable. swayFX is in Fedora's own repositories and
-# install.sh picks it over sway.
+# source when that is unavailable. swayFX is built from source with its own
+# wlroots (packages/swayfx-build/fedora.txt); Fedora's own swayfx package is
+# the fallback.
 
 # Core & build
 gcc-c++ make git rsync curl unzip xz jq cmake ninja-build ccache pkgconf-pkg-config

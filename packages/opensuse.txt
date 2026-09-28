@@ -2,7 +2,9 @@
 # Format: see lib/distro.sh. `?name` = optional.
 #
 # Quickshell is installed from the repositories when they have it and built
-# from source otherwise. swayFX is used when the repositories carry it.
+# from source otherwise. swayFX is built from source with its own
+# wlroots (packages/swayfx-build/opensuse.txt); the repositories' swayfx, or
+# sway, is the fallback.
 
 # Core & build
 gcc-c++ make git rsync curl unzip xz jq cmake ninja ccache pkgconf

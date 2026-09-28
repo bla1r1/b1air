@@ -18,8 +18,28 @@ long-lived branch.
 | 0002 | `inactive_opacity <0..1>` | Every window but the focused one drawn at that opacity. |
 | 0003 | `workspace_animation fade\|slide` | Switching workspaces slides them sideways instead of fading. |
 | 0004 | `workspace_swipe off\|<fingers> [invert]` | A sideways touchpad swipe moves the workspace with the fingers, its neighbour in beside it; letting go switches or slides back. |
+| 0005 | `special_workspace toggle\|show\|hide` | Hyprland's special workspace: one of its own, named `special`, called up over the current workspace (which stays in view, dimmed) and put away again. `move container to workspace special` sends a window there; next/prev and the swipe pass it by. Mod+S / Mod+Ctrl+Shift+S, bound by the daemon where the command exists. |
+| 0006 | `window_animation popin [<percent>]\|fade\|slide\|none` | How windows open and close, as Hyprland's `animation = windows`: swayfx's own grow-from-80% (popin, now with its size), a fade in place, a slide in from the nearest edge of the workspace and out by it, or none. Default popin, as swayfx had it. |
 
-None of them changes anything until its command is given. The session daemon
+Hyprland's `togglesplit` needs no patch: it is sway's own `layout toggle
+split`, bound to Mod+J.
+
+`tools/test-swayfx.sh` starts the built swayfx headless (no screen, no GPU)
+and checks each of these over IPC; CI runs it on every push, on every
+distribution family the installer supports.
+
+And one patch to scenefx, in `../scenefx/patches/`, applied to the copy in
+swayfx's `subprojects/`:
+
+| Patch | What it does |
+|---|---|
+| scenefx 0001 | Without GLES2 (no GPU, a VM without 3D, a broken driver) swayfx starts anyway, on wlroots' software renderer, instead of not starting at all. Windows, tiling, opacity and the workspace animations all work; blur, shadows and rounded corners are left out. `WLR_RENDERER=pixman` asks for it outright, which is what the session sets in a VM. |
+
+This is the spare for when something is broken: a login into a working,
+if plainer, desktop, from which the driver can be fixed. scroll and plain
+sway do the same; swayfx did not, because scenefx's renderer is GLES2 only.
+
+None of the swayfx patches changes anything until its command is given. The session daemon
 gives them over IPC (`SettingsManager::apply_compositor_extras`) at login, on
 every settings change and after every reload — never from the config file, so
 a sway without these patches is not stopped by an unknown command. When the
@@ -34,6 +54,11 @@ for i in $(seq 1 30); do swaymsg debug_workspace_swipe update -20; sleep 0.02; d
 swaymsg debug_workspace_swipe end      # or: cancel
 ```
 
+A patch adding a command puts it in its table in `sway/commands.c` in
+alphabetical order: sway finds commands by binary search, and one out of
+order makes the commands after it unknown (0004 once did that to
+`workspace_auto_back_and_forth`; the test now checks it).
+
 ## Writing a patch
 
 ```sh
@@ -47,6 +72,9 @@ git format-patch -1 -o ../DotsFiles/src/swayfx/patches --start-number <next>
 
 Name them `NNNN-short-description.patch`; the number is the order. Each one
 should build and run on its own on top of the ones before it.
+
+A scenefx patch is written the same way, in a clone of scenefx at the pinned
+release (`--branch 0.5`), into `../scenefx/patches`.
 
 ## Licence
 

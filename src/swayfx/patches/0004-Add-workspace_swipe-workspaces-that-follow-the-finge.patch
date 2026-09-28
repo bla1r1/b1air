@@ -1,7 +1,7 @@
-From e70c6839920c0f61165defcb84b96ca6234a4c8b Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: b1air <dimazzzzz342@gmail.com>
 Date: Sat, 3 Oct 2026 08:09:54 +0000
-Subject: [PATCH 4/4] Add workspace_swipe: workspaces that follow the fingers
+Subject: [PATCH 4/6] Add workspace_swipe: workspaces that follow the fingers
 
 A horizontal touchpad swipe with the configured number of fingers moves
 the active workspace with the fingers and brings its neighbour on the
@@ -106,17 +106,17 @@ index 00000000..674827bd
 +
 +#endif
 diff --git a/sway/commands.c b/sway/commands.c
-index c0568c63..d8a291eb 100644
+index c0568c63..cff2728d 100644
 --- a/sway/commands.c
 +++ b/sway/commands.c
-@@ -122,6 +122,7 @@ static const struct cmd_handler handlers[] = {
- 	{ "unbindsym", cmd_unbindsym },
+@@ -123,6 +123,7 @@ static const struct cmd_handler handlers[] = {
  	{ "workspace", cmd_workspace },
  	{ "workspace_animation", cmd_workspace_animation },
-+	{ "workspace_swipe", cmd_workspace_swipe },
  	{ "workspace_auto_back_and_forth", cmd_ws_auto_back_and_forth },
++	{ "workspace_swipe", cmd_workspace_swipe },
  };
  
+ /* Config-time only commands. Keep alphabetized */
 @@ -142,6 +143,7 @@ static const struct cmd_handler command_handlers[] = {
  	{ "allow_tearing", cmd_allow_tearing },
  	{ "border", cmd_border },
@@ -597,6 +597,3 @@ index d623390b..49bd4b94 100644
  *workspace_animation* fade|slide
  	How switching workspaces is animated, when *animation_duration_ms* is
  	set: _fade_ (the default) fades the old workspace into the new one;
--- 
-2.43.0
-
