@@ -755,6 +755,11 @@ deploy_dotfiles() {
     # The desktop's own cursor theme (src/cursors), named by input.conf and the
     # GTK settings. cp -a keeps its alias names as symlinks.
     if [[ -d "$REPO_DIR/.local/share/icons/b1air-cursors" ]]; then
+        # A new account has no ~/.local/share/icons yet; without it the copy
+        # failed, and with it the whole install stopped right here — before
+        # the suite was built — leaving every keybinding pointing at programs
+        # that were never installed.
+        mkdir -p "$HOME/.local/share/icons"
         rm -rf "$HOME/.local/share/icons/b1air-cursors"
         cp -a "$REPO_DIR/.local/share/icons/b1air-cursors" "$HOME/.local/share/icons/"
     fi

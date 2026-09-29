@@ -105,3 +105,41 @@ jobs:
         run: |
           useradd -m tester
           runuser -u tester -- tools/test-swayfx.sh /usr/local/bin/swayfx
+
+  # A first install, as on a new machine: a new account, install.sh from
+  # start to end with its packages, then the session started the way the
+  # login screen starts it and its shortcuts pressed. A clean install once
+  # stopped half way (on a missing ~/.local/share/icons) and left every
+  # shortcut pointing at programs that were never built; nothing above
+  # would have seen it, since they all start from a prepared machine.
+  clean-install:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: A bare system with a user who can sudo
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends sudo git ca-certificates python3 rsync
+          useradd -m -s /bin/bash tester
+          echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
+
+      - uses: actions/checkout@v4
+
+      - name: install.sh
+        # No services: there is no systemd to enable them with in a container.
+        run: |
+          cp -a "$GITHUB_WORKSPACE" /home/tester/DotsFiles
+          chown -R tester /home/tester/DotsFiles
+          runuser -u tester -- env DEBIAN_FRONTEND=noninteractive \
+            bash -c 'cd ~/DotsFiles && ./install.sh --skip-services </dev/null'
+
+      - name: Everything the config starts is installed
+        run: runuser -u tester -- bash -c '~/DotsFiles/tools/check-install.sh'
+
+      - name: The session starts and answers its shortcuts
+        run: runuser -u tester -- bash -c '~/DotsFiles/tools/test-session.sh'

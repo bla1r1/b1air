@@ -32,6 +32,14 @@ ColumnLayout {
 
     property int activeEditIndex: 0
     property bool dirty: false
+    // Edits other than moving a screen (resolution, rate, scale): those wait
+    // for Apply. A move alone is applied as soon as the screen is dropped.
+    property bool otherEdits: false
+    // Bumped when the canvas should fit the arrangement again: on load and on
+    // dropping a screen, never while one is being dragged, or the canvas would
+    // slide and zoom under the pointer. (Reading monitorsModel.get() in a
+    // binding does not follow later changes, so the fit needs this anyway.)
+    property int layoutRev: 0
 
     property color selectedResAccent: Design.accentAlt
     property color selectedRateAccent: Design.accent
@@ -115,6 +123,8 @@ ColumnLayout {
         if (section.activeEditIndex >= monitorsModel.count)
             section.activeEditIndex = 0;
         section.dirty = false;
+        section.otherEdits = false;
+        section.layoutRev++;
         section.currentSysScale = monitorsModel.count > 0
             ? monitorsModel.get(section.activeEditIndex).sysScale : 1.0;
     }
@@ -124,7 +134,8 @@ ColumnLayout {
             section.currentSysScale = monitorsModel.get(section.activeEditIndex).sysScale;
     }
 
-    function markDirty() { section.dirty = true; }
+    function markDirty() { section.dirty = true; section.otherEdits = true; }
+    function markMoved() { section.dirty = true; }
 
     // ── Layout maths, carried over from the popup ────────────────────────────
     function isOverlapping(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -201,6 +212,7 @@ ColumnLayout {
                 // Fit whatever the arrangement spans into the canvas, one screen
                 // or five.
                 readonly property real spanScale: {
+                    section.layoutRev;   // refit on load and on drop
                     if (monitorsModel.count === 0) return 1.0;
                     let minX = 999999, minY = 999999, maxX = -999999, maxY = -999999;
 
@@ -220,6 +232,7 @@ ColumnLayout {
                 }
 
                 readonly property real offsetX: {
+                    section.layoutRev;   // refit on load and on drop
                     if (monitorsModel.count === 0) return 0;
                     let minX = 999999, maxX = -999999;
                     for (let i = 0; i < monitorsModel.count; i++) {
@@ -232,6 +245,7 @@ ColumnLayout {
                 }
 
                 readonly property real offsetY: {
+                    section.layoutRev;   // refit on load and on drop
                     if (monitorsModel.count === 0) return 0;
                     let minY = 999999, maxY = -999999;
                     for (let i = 0; i < monitorsModel.count; i++) {
@@ -295,9 +309,10 @@ ColumnLayout {
                                 Item {
                                     anchors.centerIn: parent
                                     width: 120
-                                    height: 76
+                                    // A fourth line for the main display's mark.
+                                    height: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name ? 92 : 76
 
-                                    property real idealScale: Math.min(1.2, parent.width / 120, parent.height / 76) / transformNode.scale
+                                    property real idealScale: Math.min(1.2, parent.width / width, parent.height / height) / transformNode.scale
                                     property real maxPhysicalScale: Math.min((parent.width * 0.92) / width, (parent.height * 0.92) / height)
                                     scale: Math.min(idealScale, maxPhysicalScale)
 
@@ -329,6 +344,14 @@ ColumnLayout {
                                             color: Design.textDim
                                             text: monitorNode.resW + "×" + monitorNode.resH
                                                 + " @ " + monitorNode.rate + "Hz"
+                                        }
+                                        Text {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            visible: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name
+                                            font.pixelSize: 10
+                                            font.weight: Font.DemiBold
+                                            color: section.selectedResAccent
+                                            text: "★ Main"
                                         }
                                     }
                                 }
@@ -407,13 +430,17 @@ ColumnLayout {
                                         if (!section.isOverlappingAny(bestX, bestY, mW, mH, monitorNode.index)) {
                                             monitorsModel.setProperty(monitorNode.index, "uiX", bestX);
                                             monitorsModel.setProperty(monitorNode.index, "uiY", bestY);
-                                            section.markDirty();
+                                            section.markMoved();
                                         }
                                     }
 
                                     onReleased: {
-                                        ghostDrag.x = monitorNode.model.uiX;
-                                        ghostDrag.y = monitorNode.model.uiY;
+                                        ghostDrag.x = monitorNode.uiX;
+                                        ghostDrag.y = monitorNode.uiY;
+                                        section.layoutRev++;
+                                        // Dropped somewhere new: that is the arrangement now.
+                                        if (section.dirty && !section.otherEdits)
+                                            section.applyLayout();
                                     }
                                 }
                             }
@@ -575,6 +602,20 @@ ColumnLayout {
             : ""
         icon: "\u{f0379}"
         accentColor: section.selectedRateAccent
+
+        // The main display: full bar, workspace 1, the focus at login.
+        Toggle {
+            visible: monitorsModel.count > 1
+            label: "Main display"
+            subtitle: "Carries the full bar and workspace 1, and has the focus at login"
+            checked: section.activeMonitor ? Screens.primaryName === section.activeMonitor.name : false
+            onToggled: {
+                if (!section.activeMonitor) return;
+                // Turning it off hands the role back to the first screen.
+                Settings.set("barPrimaryOutput",
+                             Screens.primaryName === section.activeMonitor.name ? "" : section.activeMonitor.name);
+            }
+        }
 
         // Display power / state toggle
         Toggle {
@@ -934,7 +975,9 @@ ColumnLayout {
         }));
 
         Monitors.apply(layout);
-        Sys.notify("Displays", "Display Update", "Applied layout for: " + layout.map(r => r.name).join(" "));
+        if (section.otherEdits)
+            Sys.notify("Displays", "Display Update", "Applied layout for: " + layout.map(r => r.name).join(" "));
         section.dirty = false;
+        section.otherEdits = false;
     }
 }

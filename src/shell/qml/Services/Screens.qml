@@ -35,6 +35,23 @@ Singleton {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
     }
 
+    /**
+     * The main display: the one named in Settings → Displays (stored as
+     * barPrimaryOutput) while it is connected, else the first one sway
+     * reports. It carries the full bar, and the daemon gives it workspace 1
+     * and, at login, the focus.
+     */
+    readonly property string primaryName: {
+        const pinned = Settings.barPrimaryOutput || "";
+        const all = Quickshell.screens;
+        for (const s of all)
+            if (s.name === pinned) return pinned;
+        return all.length > 0 ? all[0].name : "";
+    }
+    /** True when the main display was chosen rather than taken as the first. */
+    readonly property bool primaryChosen: (Settings.barPrimaryOutput || "") === root.primaryName
+        && root.primaryName !== ""
+
     function refresh() {
         Sway.query("outputs", outs => {
             // Not under sway, or sway is not answering: `focused` falls back

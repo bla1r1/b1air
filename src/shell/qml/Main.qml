@@ -383,8 +383,8 @@ Scope {
 
     Connections {
         target: Screen
-        function onWidthChanged() { handleNativeScreenChange(); }
-        function onHeightChanged() { handleNativeScreenChange(); }
+        function onWidthChanged() { masterWindow.handleNativeScreenChange(); }
+        function onHeightChanged() { masterWindow.handleNativeScreenChange(); }
     }
 
     Connections {

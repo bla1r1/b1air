@@ -83,16 +83,10 @@ PanelWindow {
         onTriggered: capsLed.reload()
     }
 
-    readonly property bool isPrimary: {
-        const pinned = Settings.barPrimaryOutput || "";
-        if (pinned !== "")
-            return topBar.outputName === pinned;
-        // Nothing pinned: the first screen the compositor reports. Also true
-        // when there is only one, which is what keeps a single-monitor desktop
-        // exactly as it was.
-        const all = Quickshell.screens;
-        return !all || all.length === 0 || !all[0] || all[0].name === topBar.outputName;
-    }
+    // The main display (Settings → Displays). If the chosen one is unplugged,
+    // the first screen sway reports takes over, rather than no bar at all
+    // being the full one. Always true with a single screen.
+    readonly property bool isPrimary: Screens.primaryName === "" || topBar.outputName === Screens.primaryName
 
     /** A second or third bar carries less unless told otherwise. */
     readonly property bool reduced: !topBar.isPrimary && Settings.barSecondaryReduced

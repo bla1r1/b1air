@@ -117,7 +117,7 @@ ColumnLayout {
 
             Label {
                 Layout.fillWidth: true
-                text: "Automatic uses the first screen the compositor reports. Naming one keeps it across replugs."
+                text: "The same choice as Main display in Displays: it also gets workspace 1 and the focus at login. Automatic uses the first screen the compositor reports; naming one keeps it across replugs."
                 role: "caption"; dim: true; wrapMode: Text.WordWrap
             }
         }

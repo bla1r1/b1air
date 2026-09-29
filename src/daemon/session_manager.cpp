@@ -601,6 +601,12 @@ int SessionManager::run_session() {
     // 4. Load Desktop Settings
     DesktopSettings settings = SettingsManager::load();
     SettingsManager::apply_to_sway(settings);
+    // At login the main display also takes the focus: the first windows,
+    // the launcher and workspace 1 open there.
+    {
+        SwayIPC ipc;
+        if (ipc.connect()) SettingsManager::apply_primary_output(ipc, settings, true);
+    }
     mark("settings loaded and applied");
 
     // 5. Restore Wallpaper

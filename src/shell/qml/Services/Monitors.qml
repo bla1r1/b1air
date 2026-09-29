@@ -139,8 +139,17 @@ Singleton {
     function apply(layout) {
         if (!layout || layout.length === 0)
             return;
+        // Only a scale change needs the shell reloaded (below); a move or a
+        // new mode does not, and reloading closed Settings under the pointer
+        // after every screen dropped on the arrangement canvas.
+        const scaleChanged = layout.some(l => {
+            const o = root.outputs.find(x => x.name === l.name);
+            return o && Math.abs((o.sysScale || 1) - (l.sysScale || 1)) > 0.001;
+        });
         Daemon.monitorsApply(JSON.stringify(layout));
         applyRecheck.restart();
+        if (!scaleChanged)
+            return;
         // Design.uiScale follows Screen.devicePixelRatio, but nothing tells
         // TopBar's or a popup's own PanelWindow surface to renegotiate its
         // actual Wayland buffer size against the new scale — only a reload

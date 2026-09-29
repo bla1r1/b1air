@@ -356,6 +356,7 @@ bool SettingsManager::apply_to_sway(const DesktopSettings& s) {
         for (const auto& [mon, ws] : s.monitorWorkspaces) {
             ipc.send_command(0, "workspace " + ws + " output " + mon);
         }
+        apply_primary_output(ipc, s, false);
     }
 
     apply_keyboard(connected ? &ipc : nullptr, s.language, s.kbOptions);
@@ -363,6 +364,50 @@ bool SettingsManager::apply_to_sway(const DesktopSettings& s) {
     // The native Quickshell bar observes settings through the shell reload;
     // there is no legacy Waybar process to signal.
     return true;
+}
+
+void SettingsManager::apply_primary_output(SwayIPC& ipc, const DesktopSettings& s, bool focus) {
+    const std::string primary = get_json_string("barPrimaryOutput");
+    if (primary.empty()) return;
+
+    // Only a display that is connected and on; a docked laptop's remembered
+    // monitor may be away.
+    const auto outputs = nlohmann::json::parse(ipc.send_command(3), nullptr, false);   // GET_OUTPUTS
+    bool present = false;
+    if (outputs.is_array())
+        for (const auto& o : outputs)
+            if (o.value("name", "") == primary && o.value("active", false)) present = true;
+    if (!present) return;
+
+    std::string quoted = "\"";
+    for (char c : primary) { if (c == '"' || c == '\\') quoted += '\\'; quoted += c; }
+    quoted += '"';
+
+    // Workspace 1 is the main display's, unless it was given to another one.
+    bool mapped = false;
+    for (const auto& [mon, ws] : s.monitorWorkspaces)
+        if (ws == "1") mapped = true;
+    if (!mapped) {
+        (void)ipc.send_command(0, "workspace 1 output " + quoted);
+        // The assignment only governs where it is created next; one that
+        // already exists elsewhere is moved, without leaving the focus there.
+        const auto wss = nlohmann::json::parse(ipc.send_command(1), nullptr, false);   // GET_WORKSPACES
+        std::string focused_ws, ws1_output;
+        if (wss.is_array())
+            for (const auto& w : wss) {
+                if (w.value("focused", false)) focused_ws = w.value("name", "");
+                if (w.value("name", "") == "1") ws1_output = w.value("output", "");
+            }
+        if (!ws1_output.empty() && ws1_output != primary) {
+            // sway moves only the focused workspace: go to 1, move it, and
+            // (but at login) go back to where the focus was.
+            (void)ipc.send_command(0, "workspace number 1; move workspace to output " + quoted);
+            if (!focus && !focused_ws.empty() && focused_ws != "1")
+                (void)ipc.send_command(0, "workspace \"" + focused_ws + "\"");
+        }
+    }
+    if (focus)
+        (void)ipc.send_command(0, "focus output " + quoted);
 }
 
 bool SettingsManager::apply_from_file(const std::string& path) {

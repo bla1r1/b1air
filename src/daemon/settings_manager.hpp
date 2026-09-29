@@ -63,6 +63,15 @@ public:
     static bool save(const DesktopSettings& s, const std::string& path = "");
 
     static bool apply_to_sway(const DesktopSettings& s);
+
+    /**
+     * The main display (Settings → Displays, `barPrimaryOutput`): workspace 1
+     * lives there unless a workspace mapping says otherwise, and is moved
+     * there if sway put it elsewhere. With focus, the main display also takes
+     * the focus — at login, so the first windows open on it. No-op when no
+     * display is named (the first one sway reports is the main one then).
+     */
+    static void apply_primary_output(SwayIPC& ipc, const DesktopSettings& s, bool focus);
     // What b1air's swayfx does itself (src/swayfx/patches): dwindle tiling,
     // translucent unfocused windows, sliding workspaces that follow a
     // three-finger swipe, and swayfx's open/close animations.
