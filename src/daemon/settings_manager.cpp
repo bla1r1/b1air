@@ -311,28 +311,55 @@ static bool command_ok(const std::string& reply) {
 }
 
 bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
-    // The same 0.5 the session's own tiler used to set window by window.
-    (void)ipc.send_command(0, "inactive_opacity 0.5");
-    // swayfx's own (0.6+); plain sway and older swayfx refuse it harmlessly.
-    (void)ipc.send_command(0, "animation_duration_ms 200");
-    // Workspaces slide sideways, and a three-finger swipe moves them with
-    // the fingers (src/swayfx/patches/0003, 0004). "Natural" in Settings is
-    // the workspace following the fingers, which is the patch's own default;
-    // off, it turns round. Where this is taken, the three-finger
-    // bindgestures in input.conf are never reached for sideways swipes; on
-    // any other sway they still switch workspaces at the end of the swipe.
-    (void)ipc.send_command(0, "workspace_animation slide");
+    // Settings → Animations. Each of these is our swayfx's own (or swayfx
+    // 0.6+'s, for the duration); any other sway refuses them harmlessly.
+    const auto pick = [](const std::string& v, std::initializer_list<const char*> allowed, const char* def) {
+        for (const char* a : allowed) if (v == a) return std::string(a);
+        return std::string(def);
+    };
+
+    // Unfocused windows drawn at this much opacity; 100% is off.
+    const int inactive = std::clamp(get_json_int("inactiveOpacityPercent", 50), 10, 100);
+    (void)ipc.send_command(0, "inactive_opacity " + std::to_string(inactive / 100.0).substr(0, 4));
+
+    // 0 turns every animation off: windows and workspaces alike.
+    const int duration = std::clamp(get_json_int("animationDuration", 200), 0, 1000);
+    (void)ipc.send_command(0, "animation_duration_ms " + std::to_string(duration));
+
+    // Workspaces slide sideways (or fade), and a three-finger swipe moves
+    // them with the fingers (src/swayfx/patches/0003, 0004). "Natural" in
+    // Settings is the workspace following the fingers, which is the patch's
+    // own default; off, it turns round. Where this is taken, the
+    // three-finger bindgestures in input.conf are never reached for
+    // sideways swipes; on any other sway they still switch workspaces at the
+    // end of the swipe.
+    (void)ipc.send_command(0, "workspace_animation "
+        + pick(get_json_string("workspaceAnimation"), {"slide", "fade"}, "slide"));
     (void)ipc.send_command(0, !get_json_bool("touchpadSwipeWorkspace", true)
         ? std::string("workspace_swipe off")
         : std::string("workspace_swipe 3") + (get_json_bool("touchpadNaturalSwipe", true) ? "" : " invert"));
+
+    // How windows open and close (patch 0006); popin grows from a share of
+    // the final size.
+    const std::string window = pick(get_json_string("windowAnimation"), {"popin", "fade", "slide", "none"}, "popin");
+    (void)ipc.send_command(0, "window_animation " + window + (window == "popin"
+        ? " " + std::to_string(std::clamp(get_json_int("popinPercent", 80), 10, 100)) : std::string()));
+
     // Mod+S calls up the special workspace, as under Hyprland, where the
-    // compositor has it (src/swayfx/patches/0005); keybinds.conf keeps it on
-    // the scratchpad for any other sway. Asked without an argument, to learn
-    // whether the command exists without showing or hiding anything: a sway
-    // that knows it wants an argument, one that does not names it unknown.
-    if (ipc.send_command(0, "special_workspace").find("Unknown/invalid command") == std::string::npos) {
+    // compositor has it (src/swayfx/patches/0005) and Settings has not
+    // turned it off; keybinds.conf keeps it on the scratchpad, and that is
+    // put back when it is off. Asked without an argument, to learn whether
+    // the command exists without showing or hiding anything: a sway that
+    // knows it wants an argument, one that does not names it unknown.
+    const bool has_special =
+        ipc.send_command(0, "special_workspace").find("Unknown/invalid command") == std::string::npos;
+    if (has_special && get_json_bool("specialWorkspace", true)) {
         (void)ipc.send_command(0, "bindsym --to-code $mod+s special_workspace toggle");
         (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+shift+s move container to workspace special");
+    } else if (has_special) {
+        (void)ipc.send_command(0, "special_workspace hide");
+        (void)ipc.send_command(0, "bindsym --to-code $mod+s scratchpad show");
+        (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+shift+s move scratchpad");
     }
     return command_ok(ipc.send_command(0, std::string("autotile ")
         + (get_json_bool("autotiling", true) ? "enable" : "disable")));

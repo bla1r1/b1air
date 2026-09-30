@@ -579,6 +579,10 @@ int main(int argc, char* argv[]) {
         std::string sub = (argc >= 3) ? argv[2] : "restore";
         if (sub == "restore") {
             return SystemControl::monitors_restore() ? 0 : 1;
+        } else if (sub == "arm") {
+            // What the session does on its own after every change of screens.
+            SystemControl::monitors_arm_hotplug();
+            return 0;
         } else if (sub == "apply") {
             if (argc < 4) {
                 std::cerr << "Usage: " << argv[0] << " monitors apply <layout-json>\n";

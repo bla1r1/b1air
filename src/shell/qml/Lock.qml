@@ -589,6 +589,14 @@ ShellRoot {
                                     }
 
                                     Keys.onPressed: (event) => {
+                                        // A desktop shortcut pressed out of habit (Super+3 to
+                                        // change workspace) is refused by sway while locked,
+                                        // but its key still reached this field: "3" went into
+                                        // the password and the next attempt failed.
+                                        if (event.modifiers & Qt.MetaModifier) {
+                                            event.accepted = true;
+                                            return;
+                                        }
                                         if (event.key === Qt.Key_Escape) {
                                             screenRoot.inputActive = false;
                                             lockUI.peek = false;

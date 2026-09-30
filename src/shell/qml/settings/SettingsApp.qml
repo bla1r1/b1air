@@ -33,6 +33,7 @@ Item {
         // not "blur"/"corners": those live on Appearance, and listing them here
         // sent a search for either to a page that has neither.
         { id: "windows",     icon: "\u{f0379}", label: "Window & Gaps", desc: "Gaps, borders and how new windows are tiled",    color: Design.sapphire, tags: "gaps border padding tiling sway layout inner outer smart borders smart gaps autotiling dwindle split hyprland spiral" },
+        { id: "animations",  icon: "\u{f0e1e}", label: "Animations", desc: "How windows and workspaces move, and how faded unfocused ones are", color: Design.mauve, tags: "animation animations motion slide fade popin duration speed swipe inactive opacity transparency special workspace scratchpad hyprland effects" },
         { id: "nightlight",  icon: "\u{f0599}", label: "Night Light", desc: "Warmer screen colours at night, and how warm",      color: Design.yellow,   tags: "night light wlsunset blue light temperature schedule eye protect" },
 
         // ── Input & Navigation ────────────────────────────────────────────────
@@ -281,6 +282,17 @@ Item {
                     visible: active
                     sourceComponent: Component {
                         Sections.UserSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: app.page === "animations"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.AnimationSettingsSection {
                             width: parent ? parent.width : 0
                         }
                     }

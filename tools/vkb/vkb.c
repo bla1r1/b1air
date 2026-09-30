@@ -49,6 +49,11 @@ int main(int argc, char **argv) {
 	if (write(fd, s, len) != (ssize_t)len) return 1;
 	zwp_virtual_keyboard_v1_keymap(kb, WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, fd, len);
 	struct xkb_state *st = xkb_state_new(km);
+	// A new keyboard: let the focused client take in its keymap first.
+	// Without this a Qt client dropped the first key it was sent (the lock
+	// screen lost a password's first letter); sway's own bindings did not.
+	wl_display_roundtrip(dpy);
+	usleep(150000);
 
 	uint32_t modcodes[4]; int nmods = 0;  // evdev codes of the modifiers held
 	if (strcmp(argv[1], "-")) {

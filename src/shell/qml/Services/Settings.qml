@@ -83,6 +83,14 @@ Singleton {
     // Hyprland-style dwindle splitting: b1air's swayfx does it itself
     // (`autotile`, src/swayfx/patches); on any other sway the daemon does.
     readonly property alias autotiling: data.autotiling
+    // Settings → Animations (applied by the daemon over IPC).
+    readonly property alias workspaceAnimation: data.workspaceAnimation
+    readonly property alias windowAnimation: data.windowAnimation
+    readonly property alias popinPercent: data.popinPercent
+    readonly property alias animationDuration: data.animationDuration
+    readonly property alias inactiveOpacityPercent: data.inactiveOpacityPercent
+    readonly property alias specialWorkspace: data.specialWorkspace
+    readonly property alias notificationsOnMain: data.notificationsOnMain
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
     // so the UI shows what the session actually booted with.
@@ -464,6 +472,13 @@ Singleton {
         smartBorders: true,
         smartGaps: false,
         autotiling: true,
+        workspaceAnimation: "slide",
+        windowAnimation: "popin",
+        popinPercent: 80,
+        animationDuration: 200,
+        inactiveOpacityPercent: 50,
+        specialWorkspace: true,
+        notificationsOnMain: false,
         themeName: "catppuccin-mocha",
         appColorScheme: "auto",
         accentName: "",
@@ -586,6 +601,13 @@ Singleton {
             property bool smartBorders: true
             property bool smartGaps: false
             property bool autotiling: true
+            property string workspaceAnimation: "slide"
+            property string windowAnimation: "popin"
+            property int popinPercent: 80
+            property int animationDuration: 200
+            property int inactiveOpacityPercent: 50
+            property bool specialWorkspace: true
+            property bool notificationsOnMain: false
             property string themeName: "catppuccin-mocha"
             property string appColorScheme: "auto"
             property string accentName: ""

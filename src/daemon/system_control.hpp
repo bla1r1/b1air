@@ -35,6 +35,9 @@ public:
     // Saved layouts, one per set of screens: [{key, screens, saved, current}].
     static std::string monitors_profiles_json();
     static bool monitors_forget(const std::string& key);
+    // Gives sway, ahead of time, the saved settings of each screen that would
+    // complete a saved layout, so it comes up as saved when plugged in.
+    static void monitors_arm_hotplug();
     // Re-applies the matching profile whenever the set of screens changes.
     // Blocks; the session runs it on its own thread.
     static void watch_outputs();

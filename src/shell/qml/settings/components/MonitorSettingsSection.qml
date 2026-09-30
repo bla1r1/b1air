@@ -617,6 +617,17 @@ ColumnLayout {
             }
         }
 
+        Toggle {
+            visible: monitorsModel.count > 1 && section.activeMonitor !== null
+                && Screens.primaryName === section.activeMonitor.name
+            label: "Notifications on the main display"
+            subtitle: Settings.notificationsOnMain
+                ? "Every notification appears here"
+                : "Notifications appear on the screen you are using"
+            checked: Settings.notificationsOnMain
+            onToggled: Settings.set("notificationsOnMain", !Settings.notificationsOnMain)
+        }
+
         // Display power / state toggle
         Toggle {
             label: "Enable display"

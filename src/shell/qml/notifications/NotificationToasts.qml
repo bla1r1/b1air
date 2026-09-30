@@ -29,8 +29,9 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     focusable: false
     
-    // Toasts belong on the screen in use, not always the first one.
-    screen: Screens.focused
+    // Toasts belong on the screen in use, not always the first one — unless
+    // Settings → Displays sends them all to the main display.
+    screen: Settings.notificationsOnMain ? Screens.primary : Screens.focused
 
     anchors.top: true
     anchors.right: true
@@ -68,8 +69,11 @@ PanelWindow {
 
                 radius: Design.s(Design.radius.card)
                 color: Design.ground
-                border.color: model.urgency === 2 ? Design.red : Design.glassBorder
-                border.width: model.urgency === 2 ? 2 : 1
+                // One quiet edge for every toast. Critical ones had a 2px red
+                // ring and a red timer bar, which read as an error frame
+                // round anything urgent (a low battery, a failed call).
+                border.color: Design.glassBorder
+                border.width: 1
 
                 property bool isHovered: hoverArea.containsMouse
                 property real progress: 1.0
@@ -214,7 +218,7 @@ PanelWindow {
                             anchors.bottom: parent.bottom
                             width: parent.width * toastCard.progress
                             radius: 1
-                            color: toastCard.model.urgency === 2 ? Design.red : Design.accentAlt
+                            color: Design.accentAlt
                         }
                     }
                 }

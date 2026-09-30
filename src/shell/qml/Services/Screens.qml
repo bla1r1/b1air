@@ -48,6 +48,13 @@ Singleton {
             if (s.name === pinned) return pinned;
         return all.length > 0 ? all[0].name : "";
     }
+    /** The main display's ShellScreen. */
+    readonly property var primary: {
+        for (const s of Quickshell.screens)
+            if (s.name === root.primaryName) return s;
+        return root.focused;
+    }
+
     /** True when the main display was chosen rather than taken as the first. */
     readonly property bool primaryChosen: (Settings.barPrimaryOutput || "") === root.primaryName
         && root.primaryName !== ""

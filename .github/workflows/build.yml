@@ -126,6 +126,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends sudo git ca-certificates python3 rsync
           useradd -m -s /bin/bash tester
+          echo 'tester:b1airtest' | chpasswd     # for the lock screen check
           echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
 
       - uses: actions/checkout@v4
@@ -142,4 +143,4 @@ jobs:
         run: runuser -u tester -- bash -c '~/DotsFiles/tools/check-install.sh'
 
       - name: The session starts and answers its shortcuts
-        run: runuser -u tester -- bash -c '~/DotsFiles/tools/test-session.sh'
+        run: runuser -u tester -- env B1AIR_TEST_PASSWORD=b1airtest bash -c '~/DotsFiles/tools/test-session.sh'

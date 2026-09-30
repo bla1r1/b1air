@@ -1947,6 +1947,40 @@ static std::string outputs_key(const nlohmann::json& outputs) {
     return key;
 }
 
+// The identifier sway matches an `output` command against when the screen is
+// not connected yet: make, model and serial, "Unknown" where one is missing.
+static std::string sway_identifier(const nlohmann::json& o) {
+    std::string id;
+    for (const char* k : {"make", "model", "serial"}) {
+        const std::string v = json_str(o, k, "");
+        id += (id.empty() ? "" : " ") + (v.empty() ? std::string("Unknown") : v);
+    }
+    return id;
+}
+
+// One saved layout entry as sway commands for `target` (a connector name or
+// an identifier): off, or mode, position, scale and rotation.
+static std::vector<std::string> output_commands(const std::string& target, const nlohmann::json& e) {
+    const std::string q = "output \"" + target + "\" ";
+    if (e.value("active", true) == false) return {q + "disable"};
+    const int w = e.value("resW", 0), h = e.value("resH", 0);
+    if (w <= 0 || h <= 0) return {};
+    std::stringstream mode, scale;
+    mode << w << "x" << h;
+    const double rate = e.contains("rate") && e["rate"].is_number() ? e["rate"].get<double>()
+                      : e.contains("rate") && e["rate"].is_string() ? std::atof(e["rate"].get<std::string>().c_str()) : 0;
+    if (rate > 0) mode << "@" << rate << "Hz";
+    scale << std::fixed << std::setprecision(2) << (e.contains("sysScale") && e["sysScale"].is_number() ? e["sysScale"].get<double>() : 1.0);
+    std::vector<std::string> cmds = {
+        q + "enable",
+        q + "mode \"" + mode.str() + "\" position " + std::to_string(e.value("x", 0)) + " "
+          + std::to_string(e.value("y", 0)) + " scale " + scale.str()
+    };
+    const std::string tr = json_str(e, "transform", "");
+    if (!tr.empty() && tr != "normal") cmds.push_back(q + "transform " + tr);
+    return cmds;
+}
+
 static nlohmann::json load_profiles() {
     const auto j = nlohmann::json::parse(read_file_string(display_profiles_path()), nullptr, false);
     return j.is_object() ? j : nlohmann::json::object();
@@ -1964,7 +1998,10 @@ bool SystemControl::monitors_save(const std::string& layout_json) {
     for (auto& entry : layout) {
         const std::string name = json_str(entry, "name", "");
         for (const auto& o : outputs)
-            if (json_str(o, "name", "") == name) entry["id"] = output_identity(o);
+            if (json_str(o, "name", "") == name) {
+                entry["id"] = output_identity(o);
+                entry["swayId"] = sway_identifier(o);
+            }
     }
     auto profiles = load_profiles();
     profiles[outputs_key(outputs)] = {
@@ -2002,6 +2039,51 @@ bool SystemControl::monitors_forget(const std::string& key) {
     return write_private_file(display_profiles_path(), profiles.dump(2) + "\n");
 }
 
+// A screen that is about to be plugged in comes up as its saved layout says,
+// in the compositor, at the moment it appears — not first as sway's default
+// (its preferred mode, to the right of the others) and then, after the
+// layout is restored, again as saved: two mode changes and a flash.
+//
+// For every saved layout that is the screens connected now plus exactly
+// one more, that one's settings are given to sway now, ahead of time, by
+// its identifier: sway keeps output settings for screens it has not seen
+// and applies them when the screen connects. The screens already there are
+// still moved by monitors_restore() afterwards, which for them is usually a
+// change of position only.
+void SystemControl::monitors_arm_hotplug() {
+    SwayIPC ipc;
+    if (!ipc.connect()) return;
+    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+    if (!outputs.is_array()) return;
+    std::vector<std::string> now;
+    for (const auto& o : outputs) now.push_back(output_identity(o));
+
+    const auto profiles = load_profiles();
+    for (const auto& [key, p] : profiles.items()) {
+        if (!p.is_object() || !p.contains("layout") || !p["layout"].is_array()) continue;
+        const auto& layout = p["layout"];
+        if (layout.size() != now.size() + 1) continue;
+        // Everything connected now is in this layout; what is left over is the
+        // screen that would complete it.
+        std::vector<std::string> left = now;
+        const nlohmann::json* extra = nullptr;
+        bool more_than_one = false;
+        for (const auto& e : layout) {
+            auto it = std::find(left.begin(), left.end(), json_str(e, "id", json_str(e, "name", "")));
+            if (it != left.end()) { left.erase(it); continue; }
+            if (extra) more_than_one = true;
+            extra = &e;
+        }
+        if (!extra || more_than_one || !left.empty()) continue;
+        // sway's identifier when it was saved; a screen with no EDID to tell
+        // it by (a virtual output) by its connector name.
+        std::string target = json_str(*extra, "swayId", "");
+        if (target.empty() || target == "Unknown Unknown Unknown") target = json_str(*extra, "name", "");
+        if (target.empty()) continue;
+        for (const auto& cmd : output_commands(target, *extra)) (void)ipc.send_command(0, cmd);
+    }
+}
+
 void SystemControl::watch_outputs() {
     SwayIPC events, query;
     if (!events.connect() || !query.connect()) return;
@@ -2010,6 +2092,7 @@ void SystemControl::watch_outputs() {
         return o.is_array() ? outputs_key(o) : std::string();
     };
     std::string last = key_now();
+    monitors_arm_hotplug();
     // sway sends a burst of output events while a screen comes up; the set is
     // read once things settle, and only a different set restores anything —
     // applying a layout raises output events of its own.
@@ -2021,6 +2104,7 @@ void SystemControl::watch_outputs() {
         std::cerr << "[b1air-displays] screens now: " << key << "\n";
         monitors_restore();
         wallpaper_apply_overrides();
+        monitors_arm_hotplug();
     });
 }
 
@@ -2103,6 +2187,7 @@ bool SystemControl::monitors_apply(const std::string& layout_json) {
     }
 
     monitors_save(layout_json);
+    monitors_arm_hotplug();
     return true;
 }
 
