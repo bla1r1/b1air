@@ -9,10 +9,10 @@ import "../../Services"
 // Animations & Effects
 //
 // The compositor's own motion: how workspaces and windows come and go, how
-// long that takes, how faded unfocused windows are, and the special
-// workspace on Mod+S. Each control writes settings.json; the daemon sees the
-// change and sends it to sway over IPC at once (apply_compositor_extras), so
-// nothing here needs a reload. These are our swayfx's (src/swayfx/patches);
+// long that takes, how faded unfocused windows are, the special workspace
+// on Mod+S and the overview on Mod+O. Each control writes settings.json; the
+// daemon sees the change and sends it to sway over IPC at once
+// (apply_compositor_extras), so nothing here needs a reload. These are our swayfx's (src/swayfx/patches);
 // any other sway refuses them and keeps its own behaviour.
 // =============================================================================
 
@@ -171,6 +171,20 @@ ColumnLayout {
                 : "Mod+S shows the scratchpad instead"
             checked: Settings.specialWorkspace
             onToggled: Settings.set("specialWorkspace", !Settings.specialWorkspace)
+        }
+    }
+
+    Card {
+        title: "Workspace overview"
+        subtitle: "Every workspace of the screen side by side, live"
+        icon: "\u{f0570}"
+        accentColor: Design.green
+
+        Toggle {
+            label: "Mod+O shows the overview"
+            subtitle: "Click a workspace, or pick one with the arrows and Enter, to go there; Escape leaves"
+            checked: Settings.workspaceOverview
+            onToggled: Settings.set("workspaceOverview", !Settings.workspaceOverview)
         }
     }
 

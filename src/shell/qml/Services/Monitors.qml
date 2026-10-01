@@ -194,10 +194,10 @@ Singleton {
         applyRecheck.restart();
     }
 
+    // Each screen shows its number (osd/IdentifyOverlay.qml). Asked of the
+    // shell by command, since Settings may be its own process.
     function identify() {
-        Sys.notify("Displays", "Display Identification",
-                   "Active displays: " + root.outputs.map((o, idx) => "[" + (idx + 1) + "] " + o.name
-                       + " (" + o.resW + "x" + o.resH + "@" + o.rate + "Hz)").join("\n"), "", "", 4000);
+        Quickshell.execDetached(["b1air-shell", "open", "identify"]);
     }
 
     Timer {

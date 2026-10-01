@@ -10,7 +10,9 @@ import "../Services"
 // =============================================================================
 // On-Screen Display (OSD) Overlay
 //
-// Shows volume, microphone, and screen brightness changes with smooth animations.
+// Shows volume, microphone, and screen brightness changes with smooth animations,
+// and the status lines of Services/Osd.qml (a mode turned on, something
+// copied): a title and a detail, with a level bar only when they carry one.
 // =============================================================================
 
 PanelWindow {
@@ -44,6 +46,8 @@ PanelWindow {
     property int osdValue: 0
     property bool osdMuted: false
     property color osdColor: Design.sapphire
+    property string osdDetail: ""       // a status line's second line
+    property bool osdHasLevel: true     // false: a status line without a bar
 
     // Flag to ignore initial bindings on startup
     property bool _ready: false
@@ -72,8 +76,28 @@ PanelWindow {
         osdWindow.osdValue = Math.max(0, Math.min(100, Math.round(value)));
         osdWindow.osdMuted = muted;
         osdWindow.osdColor = color || Design.sapphire;
+        osdWindow.osdDetail = "";
+        osdWindow.osdHasLevel = true;
         osdWindow.osdOpacity = 1.0;
+        hideTimer.interval = 1800;
         hideTimer.restart();
+    }
+
+    Connections {
+        target: Osd
+        function onShown(glyph, title, detail, tone, value) {
+            osdWindow.osdIcon = glyph;
+            osdWindow.osdTitle = title;
+            osdWindow.osdDetail = detail;
+            osdWindow.osdHasLevel = value >= 0;
+            osdWindow.osdValue = Math.max(0, Math.min(100, value));
+            osdWindow.osdMuted = false;
+            osdWindow.osdColor = tone;
+            osdWindow.osdOpacity = 1.0;
+            // A line to read stays a little longer than a level to glance at.
+            hideTimer.interval = detail !== "" ? 2600 : 1800;
+            hideTimer.restart();
+        }
     }
 
     // ── Track Volume Changes ─────────────────────────────────────────────────
@@ -143,7 +167,8 @@ PanelWindow {
         Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
         Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
-        implicitWidth: Design.s(260)
+        implicitWidth: osdWindow.osdHasLevel ? Design.s(260)
+            : Math.min(Design.s(440), Math.max(Design.s(260), statusText.implicitWidth + Design.s(84)))
         implicitHeight: Design.s(60)
 
         radius: Design.s(30)
@@ -177,7 +202,30 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Design.s(4)
 
+                // A status line: title, and the detail under it.
+                ColumnLayout {
+                    id: statusText
+                    visible: !osdWindow.osdHasLevel
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: osdWindow.osdTitle
+                        weight: Design.weight.semibold
+                        role: "caption"
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: osdWindow.osdDetail !== ""
+                        text: osdWindow.osdDetail
+                        role: "caption"; dim: true
+                        elide: Text.ElideMiddle
+                    }
+                }
+
                 RowLayout {
+                    visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
                     Label {
                         text: osdWindow.osdTitle
@@ -195,6 +243,7 @@ PanelWindow {
 
                 // Progress Level Bar
                 Rectangle {
+                    visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(6)
                     radius: Design.s(3)

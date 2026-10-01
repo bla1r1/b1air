@@ -361,6 +361,17 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
         (void)ipc.send_command(0, "bindsym --to-code $mod+s scratchpad show");
         (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+shift+s move scratchpad");
     }
+
+    // Mod+O lays every workspace of the screen out side by side (patch
+    // 0007); a click or Enter goes to one, Escape leaves. Asked the same way.
+    const bool has_overview =
+        ipc.send_command(0, "overview").find("Unknown/invalid command") == std::string::npos;
+    if (has_overview && get_json_bool("workspaceOverview", true)) {
+        (void)ipc.send_command(0, "bindsym --to-code $mod+o overview toggle");
+    } else if (has_overview) {
+        (void)ipc.send_command(0, "overview hide");
+        (void)ipc.send_command(0, "unbindsym --to-code $mod+o");
+    }
     return command_ok(ipc.send_command(0, std::string("autotile ")
         + (get_json_bool("autotiling", true) ? "enable" : "disable")));
 }

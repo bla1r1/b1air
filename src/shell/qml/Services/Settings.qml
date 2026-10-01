@@ -90,6 +90,7 @@ Singleton {
     readonly property alias animationDuration: data.animationDuration
     readonly property alias inactiveOpacityPercent: data.inactiveOpacityPercent
     readonly property alias specialWorkspace: data.specialWorkspace
+    readonly property alias workspaceOverview: data.workspaceOverview
     readonly property alias notificationsOnMain: data.notificationsOnMain
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
@@ -478,6 +479,7 @@ Singleton {
         animationDuration: 200,
         inactiveOpacityPercent: 50,
         specialWorkspace: true,
+        workspaceOverview: true,
         notificationsOnMain: false,
         themeName: "catppuccin-mocha",
         appColorScheme: "auto",
@@ -607,6 +609,7 @@ Singleton {
             property int animationDuration: 200
             property int inactiveOpacityPercent: 50
             property bool specialWorkspace: true
+            property bool workspaceOverview: true
             property bool notificationsOnMain: false
             property string themeName: "catppuccin-mocha"
             property string appColorScheme: "auto"

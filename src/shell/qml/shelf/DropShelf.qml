@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import B1air.Daemon
 import "../Ui"
+import "../Services"
 
 // =============================================================================
 // DropShelf Floating Batch File Staging Tray (Super + Shift + D)
@@ -35,7 +36,7 @@ PopupShell {
         }
         if (paths.length > 0) {
             Quickshell.execDetached(["wl-copy", paths.join("\n")]);
-            Sys.notify("DropShelf", "Paths Copied", paths.length + " file paths copied to clipboard");
+            Osd.show("edit-copy", paths.length === 1 ? "Path copied" : paths.length + " paths copied", "In the clipboard");
         }
     }
 

@@ -701,6 +701,12 @@ Scope {
             let targetWidget = parts.length > 1 ? parts[1] : "";
             let arg = parts.length > 2 ? parts.slice(2).join(":") : "";
 
+            // Not a panel: a number shown on every screen for a moment.
+            if (targetWidget === "identify") {
+                if (identifyOverlay.item) identifyOverlay.item.show();
+                return;
+            }
+
             delayedClear.stop();
 
             if (targetWidget === masterWindow.currentActive) {
@@ -782,6 +788,13 @@ Scope {
     Loader {
         active: true
         source: "osd/OsdOverlay.qml"
+    }
+
+    // A number on every screen: Settings → Displays → Identify.
+    Loader {
+        id: identifyOverlay
+        active: true
+        source: "osd/IdentifyOverlay.qml"
     }
 }
 }

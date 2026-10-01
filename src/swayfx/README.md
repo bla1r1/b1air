@@ -20,6 +20,7 @@ long-lived branch.
 | 0004 | `workspace_swipe off\|<fingers> [invert]` | A sideways touchpad swipe moves the workspace with the fingers, its neighbour in beside it; letting go switches or slides back. |
 | 0005 | `special_workspace toggle\|show\|hide` | Hyprland's special workspace: one of its own, named `special`, called up over the current workspace (which stays in view, dimmed) and put away again. `move container to workspace special` sends a window there; next/prev and the swipe pass it by. Mod+S / Mod+Ctrl+Shift+S, bound by the daemon where the command exists. |
 | 0006 | `window_animation popin [<percent>]\|fade\|slide\|none` | How windows open and close, as Hyprland's `animation = windows`: swayfx's own grow-from-80% (popin, now with its size), a fade in place, a slide in from the nearest edge of the workspace and out by it, or none. Default popin, as swayfx had it. |
+| 0007 | `overview toggle\|show\|hide` | Every workspace of the focused screen side by side, live and scaled down (scenefx 0002): the current one shrinks from the full screen into its place. A click, or the arrows and Enter, goes to one; Escape or a click beside them leaves. Floating windows and the special workspace are left out while it is up. Mod+O, bound by the daemon where the command exists. |
 
 Hyprland's `togglesplit` needs no patch: it is sway's own `layout toggle
 split`, bound to Mod+J.
@@ -28,14 +29,15 @@ split`, bound to Mod+J.
 and checks each of these over IPC; CI runs it on every push, on every
 distribution family the installer supports.
 
-And one patch to scenefx, in `../scenefx/patches/`, applied to the copy in
+And two patches to scenefx, in `../scenefx/patches/`, applied to the copy in
 swayfx's `subprojects/`:
 
 | Patch | What it does |
 |---|---|
 | scenefx 0001 | Without GLES2 (no GPU, a VM without 3D, a broken driver) swayfx starts anyway, on wlroots' software renderer, instead of not starting at all. Windows, tiling, opacity and the workspace animations all work; blur, shadows and rounded corners are left out. `WLR_RENDERER=pixman` asks for it outright, which is what the session sets in a VM. |
+| scenefx 0002 | `wlr_scene_tree_set_scale()`: a tree drawn scaled about its own origin, with everything in it, for the overview. The scale is kept beside the tree, not in it, so the struct keeps the layout wlroots' own code expects of it. |
 
-This is the spare for when something is broken: a login into a working,
+The first is the spare for when something is broken: a login into a working,
 if plainer, desktop, from which the driver can be fixed. scroll and plain
 sway do the same; swayfx did not, because scenefx's renderer is GLES2 only.
 

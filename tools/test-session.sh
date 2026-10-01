@@ -59,6 +59,17 @@ before="$(views)"
 for _ in $(seq 1 50); do [[ "$(views)" -gt "$before" ]] && break; sleep 0.2; done
 [[ "$(views)" -gt "$before" ]] && ok "Mod+T opens a terminal" || fail "Mod+T opened nothing"
 
+# The overview, where the compositor has it (our swayfx): from an empty
+# workspace 2, Mod+O, Left to workspace 1 (the terminal's), Enter goes there.
+# KEY_2=3, KEY_O=24, KEY_LEFT=105, KEY_ENTER=28
+if ! swaymsg overview 2>&1 | grep -q "Unknown/invalid command"; then
+    "$VKB" logo 3; sleep 1
+    "$VKB" logo 24; sleep 1
+    "$VKB" - 105; sleep 0.3
+    "$VKB" - 28; sleep 1
+    [[ "$(ws)" == 1 ]] && ok "Mod+O, Left, Enter goes to workspace 1" || fail "overview by keys" "on $(ws)"
+fi
+
 # A screen plugged in comes up as its saved layout says, set by the
 # compositor at the moment it appears (monitors_arm_hotplug), not first as
 # sway's default and then moved: here a layout with a second screen below,

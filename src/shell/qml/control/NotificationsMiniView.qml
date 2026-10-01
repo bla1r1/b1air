@@ -83,9 +83,22 @@ MiniView {
                         color: Design.sunken
                         Layout.alignment: Qt.AlignTop
 
+                        // The icon the notification came with (an image URL,
+                        // Services/Notifications.qml), else the bell.
+                        Image {
+                            id: historyIcon
+                            anchors.centerIn: parent
+                            width: Design.s(18)
+                            height: width
+                            sourceSize: Qt.size(64, 64)
+                            source: String(notifItem.model.icon || "").indexOf("://") >= 0 ? notifItem.model.icon : ""
+                            visible: status === Image.Ready
+                            fillMode: Image.PreserveAspectFit
+                        }
                         Icon {
                             anchors.centerIn: parent
-                            text: notifItem.model.icon ? notifItem.model.icon : "\u{f009a}"
+                            visible: !historyIcon.visible
+                            text: "\u{f009a}"
                             role: "caption"
                             color: Design.sapphire
                         }

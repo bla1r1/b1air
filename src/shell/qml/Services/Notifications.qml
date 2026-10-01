@@ -23,6 +23,8 @@ Singleton {
         actionsSupported: true
         imageSupported: true
         persistenceSupported: true
+        // Hints outside the spec arrive only when named here.
+        extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value"]
 
         onNotification: notif => {
             root._handleIncoming(notif);
@@ -127,20 +129,42 @@ Singleton {
         return rules[key] === false;
     }
 
+    // What to draw for a notification: its image (a picture sent with it),
+    // else its app icon, which is a path, a URL or an icon theme name. The
+    // model used to read `notif.icon`, which a notification does not have,
+    // so no notification ever showed an icon or a screenshot's thumbnail.
+    function _iconSource(notif) {
+        const src = notif.image || notif.appIcon || "";
+        if (src === "") return "";
+        if (src.startsWith("/")) return "file://" + src;
+        if (src.indexOf("://") >= 0) return src;
+        return Quickshell.iconPath(src, true);
+    }
+
     function _handleIncoming(notif) {
+        // A status line (a mode switched, something copied) goes to the OSD
+        // and is not kept: Services/Osd.qml.
+        const hints = notif.hints || {};
+        if (hints["x-b1air-osd"] !== undefined || hints["x-canonical-private-synchronous"] !== undefined) {
+            const value = hints["value"];
+            Osd.show(notif.appIcon || notif.image || "", notif.summary || "", notif.body || "",
+                     value === undefined ? -1 : Number(value));
+            return;
+        }
+
         const item = {
             id: notif.id,
             appName: notif.appName || "System",
             summary: notif.summary || "",
             body: notif.body || "",
-            icon: notif.icon || "",
+            icon: root._iconSource(notif),
             urgency: notif.urgency,
             time: new Date().toLocaleTimeString(Qt.locale(), "hh:mm"),
             obj: notif
         };
 
         // Record app to trackedApps list
-        root._recordApp(item.appName, item.icon);
+        root._recordApp(item.appName, notif.appIcon || "");
 
         // Add to history
         root.history.insert(0, item);

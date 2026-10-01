@@ -343,6 +343,22 @@ static void notify_user(const std::string& app, const std::string& title,
     (void)util::notify(n);
 }
 
+// A status line on the OSD capsule (the shell's Services/Osd.qml): the answer
+// to something the user just did, seen once and not kept in the notification
+// history. `icon` picks the glyph there; `value` 0-100 draws a level bar.
+static void osd_status(const std::string& title, const std::string& detail = {},
+                       const std::string& icon = {}, int value = -1) {
+    util::Notification n;
+    n.app = "b1air";
+    n.title = title;
+    n.body = detail;
+    n.icon = icon;
+    n.urgency = "low";
+    n.hints.push_back("boolean:x-b1air-osd:true");
+    if (value >= 0) n.hints.push_back("int:value:" + std::to_string(value));
+    (void)util::notify(n);
+}
+
 static std::string run_argv_capture(const std::vector<std::string>& args, const std::string& input = "") {
     if (args.empty()) return "";
     int out_pipe[2];
@@ -468,7 +484,7 @@ bool SystemControl::enable_game_mode() {
 
     if (!write_private_file(runtime_path("game-mode.state"), "1\n")) return false;
 
-    notify_user("Game Mode", "Game Mode Enabled", "Compositor effects disabled • Performance active", "input-gaming");
+    osd_status("Game Mode on", "Effects off, performance profile", "input-gaming");
     return true;
 }
 
@@ -499,7 +515,7 @@ bool SystemControl::disable_game_mode() {
 
     unlink(runtime_path("game-mode.state").c_str());
 
-    notify_user("Game Mode", "Game Mode Disabled", "Standard desktop profile restored", "input-gaming");
+    osd_status("Game Mode off", "Desktop profile restored", "input-gaming");
     return true;
 }
 
@@ -839,11 +855,11 @@ bool SystemControl::caffeine_set(bool active) {
                         "The compositor refused the idle inhibitor.", "dialog-error");
             return false;
         }
-        notify_user("b1air DE", "Caffeine Mode Active", "Screen sleep and idle lock disabled", "caffeine");
+        osd_status("Caffeine on", "Screen stays awake", "caffeine");
     } else {
         unlink(runtime_path("caffeine.state").c_str());
         (void)SwayIPC::run("inhibit_idle none");
-        notify_user("b1air DE", "Caffeine Mode Disabled", "Normal screen sleep restored", "caffeine");
+        osd_status("Caffeine off", "Screen sleeps as usual", "caffeine");
     }
     return true;
 }
@@ -1270,7 +1286,7 @@ std::string SystemControl::pick_color() {
     const std::string hex = ppm_first_pixel(run_argv_capture({"grim", "-g", pos + " 1x1", "-t", "ppm", "-"}));
     if (hex.empty()) return "";
     (void)run_argv_with_stdin({"wl-copy"}, hex);
-    notify_user("b1air DE", "Color Picked", hex + " copied to clipboard", "color-picker");
+    osd_status(hex + " copied", "Picked colour", "color-picker");
     return hex;
 }
 
@@ -3275,9 +3291,10 @@ static bool kbd_step(int delta_pct) {
     return backlight::set_raw(kbd, value);
 }
 
-static void kbd_announce(const std::string& title) {
-    notify_user("b1air DE", title, {}, "input-keyboard",
-                "string:x-canonical-private-synchronous:sys-notify-kbd", "low");
+// On the OSD with a level bar, as the screen's brightness is.
+static void kbd_announce() {
+    osd_status("Keyboard backlight", {}, "input-keyboard",
+               std::max(0, backlight::percent(backlight::keyboard())));
 }
 
 bool SystemControl::kbd_backlight_available() {
@@ -3290,13 +3307,13 @@ int SystemControl::kbd_backlight_get() {
 
 bool SystemControl::kbd_backlight_inc(int step) {
     if (!kbd_step(step)) return false;
-    kbd_announce("Keyboard Backlight: " + std::to_string(kbd_backlight_get()) + "%");
+    kbd_announce();
     return true;
 }
 
 bool SystemControl::kbd_backlight_dec(int step) {
     if (!kbd_step(-step)) return false;
-    kbd_announce("Keyboard Backlight: " + std::to_string(kbd_backlight_get()) + "%");
+    kbd_announce();
     return true;
 }
 
@@ -3306,7 +3323,7 @@ bool SystemControl::kbd_backlight_set(int val) {
 
 bool SystemControl::kbd_backlight_off() {
     if (!backlight::set_raw(backlight::keyboard(), 0)) return false;
-    kbd_announce("Keyboard Backlight: OFF");
+    kbd_announce();
     return true;
 }
 
@@ -3587,14 +3604,14 @@ bool SystemControl::night_light_on(int temp, bool announce) {
     // for the login restore: a toast per notch, or one at every login, is
     // noise about something the user is looking at.
     if (announce)
-        notify_user("Night Light", "Night Light Enabled", "Warm color temperature active", "weather-clear-night");
+        osd_status("Night Light on", "Warm colours", "weather-clear-night");
     return true;
 }
 
 bool SystemControl::night_light_off(bool announce) {
     (void)proc::kill_all("wlsunset");
     if (announce)
-        notify_user("Night Light", "Night Light Disabled", "Standard display colors restored", "weather-clear");
+        osd_status("Night Light off", "Standard colours", "weather-clear");
     return true;
 }
 
@@ -4422,7 +4439,7 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
     if (!keep_file) {
         unlink(filepath.c_str());
         play_feedback_sound("soundScreenshotFeedback", "camera-shutter");
-        notify_user("Screenshot", "Copied to clipboard", "", "");
+        osd_status("Screenshot copied", "In the clipboard", "edit-copy");
         return true;
     }
 
@@ -4541,7 +4558,7 @@ bool SystemControl::record_toggle(const std::string& geom, double desk_vol, doub
     if (recorder_pid <= 0 || !write_private_file(pid_file, std::to_string(recorder_pid) + "\n") ||
         !write_private_file(cache_dir + "/final_file", vid_file + "\n")) return false;
 
-    notify_user("Screen Recorder", "⏺ Recording Started", "Recording in progress...");
+    osd_status("Recording the screen", "Run it again to stop", "media-record");
     return true;
 }
 
@@ -4923,7 +4940,7 @@ bool SystemControl::qr_generate(const std::string& text, const std::string& out_
 
     const std::string png = read_file_string(path);
     if (!png.empty()) (void)run_argv_with_raw_stdin({"wl-copy", "-t", "image/png"}, png);
-    notify_user("QR Code Generator", "QR Code Generated", "Image copied to clipboard", path);
+    osd_status("QR code copied", "In the clipboard as an image", "edit-copy");
     return true;
 }
 
@@ -4955,7 +4972,7 @@ bool SystemControl::ocr_screen(const std::string& geom) {
 
     std::string preview = text.substr(0, 70);
     for (char& c : preview) if (c == '\'' || c == '"') c = ' ';
-    notify_user("Screen OCR", "Text Copied to Clipboard", preview + "...");
+    osd_status("Text copied", preview + "...", "edit-copy");
     return true;
 }
 
@@ -4996,7 +5013,7 @@ bool SystemControl::pip_toggle() {
 
     if (in_pip) {
         ipc.send_command(0, "unmark pip, sticky disable, floating disable");
-        notify_user("Picture-in-Picture", "PiP Disabled", "Restored window to tiled layout");
+        osd_status("Picture-in-picture off", "Window back in the layout", "window");
         return true;
     }
 
@@ -5014,7 +5031,7 @@ bool SystemControl::pip_toggle() {
                            ", move position " + std::to_string(px) + " " + std::to_string(py) + 
                            ", mark pip";
     ipc.send_command(0, sway_cmd);
-    notify_user("Picture-in-Picture", "PiP Enabled", "Pinned window to bottom-right");
+    osd_status("Picture-in-picture on", "Pinned to the bottom right", "window");
     return true;
 }
 
@@ -5086,13 +5103,13 @@ bool SystemControl::force_quit() {
 
     // Fallback: kill focused window
     ipc.send_command(0, "kill");
-    notify_user("Force Quit", "Window Closed", "Sent kill signal to window");
+    osd_status("Window closed", {}, "window-close");
     return true;
 }
 
 bool SystemControl::cursor_locate() {
     if (!run_argv_status({"b1air-shell", "toggle", "ruler"}))
-        notify_user("b1air", "Cursor Located", "Look here!");
+        osd_status("Cursor here", {}, "cursor");
     return true;
 }
 
@@ -5209,7 +5226,7 @@ bool SystemControl::audio_switch_output() {
         friendly_name = "HDMI / DisplayPort Audio";
     }
 
-    notify_user("Audio Switcher", "Audio Output Switched", friendly_name, "audio-speakers");
+    osd_status("Sound output", friendly_name, "audio-speakers");
     return true;
 }
 
@@ -5228,13 +5245,13 @@ bool SystemControl::mic_rnnoise_set(bool enable) {
             if (child > 0) (void)::kill(child, SIGTERM);
             return false;
         }
-        notify_user("Microphone", "AI Noise Suppression: ON", "Deep-learning background filter active", "audio-input-microphone");
+        osd_status("Noise suppression on", "Background noise filtered", "audio-input-microphone");
     } else {
         unlink(runtime_path("rnnoise.active").c_str());
         const pid_t child = runtime_pid(runtime_path("rnnoise.pid"));
         if (child > 0) (void)::kill(child, SIGTERM);
         unlink(runtime_path("rnnoise.pid").c_str());
-        notify_user("Microphone", "AI Noise Suppression: OFF", "Standard microphone input restored", "audio-input-microphone");
+        osd_status("Noise suppression off", "Plain microphone input", "audio-input-microphone");
     }
     return true;
 }
@@ -5263,7 +5280,7 @@ bool SystemControl::record_gif(const std::string& geom) {
     std::string gif_path = out_dir + "/recording_" + std::string(ts) + ".gif";
     std::string tmp_mp4 = runtime_path(("gif-" + std::to_string(getpid()) + ".mp4").c_str());
 
-    notify_user("Screen-to-GIF", "⏺ Recording GIF", "Capturing 5-second region animation...");
+    osd_status("Recording a GIF", "5 seconds of the region", "media-record");
 
     // Capture short region clip (5s)
     const std::vector<std::string> wf_args = {"wf-recorder", "-g", g, "-d", "5", "-f", tmp_mp4};
@@ -5299,7 +5316,7 @@ bool SystemControl::voice_memo() {
         const pid_t pid = runtime_pid(pid_file);
         if (pid > 0) (void)::kill(pid, SIGINT);
         unlink(pid_file.c_str());
-        notify_user("Voice Memo", "⏹ Recording Stopped", "Saved audio memo to recordings folder");
+        osd_status("Voice memo saved", "In the recordings folder", "media-playback-stop");
         return true;
     }
 
@@ -5329,7 +5346,7 @@ bool SystemControl::voice_memo() {
         return false;
     }
 
-    notify_user("Voice Memo", "🎙️ Recording Started", "Press Super+Shift+V again to stop");
+    osd_status("Recording a voice memo", "Super+Shift+V again to stop", "audio-input-microphone");
     return true;
 }
 

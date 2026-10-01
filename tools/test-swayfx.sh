@@ -165,6 +165,22 @@ done
 cmd window_animation popin 150 && fail "popin takes 150%" || ok "popin refuses 150%"
 cmd window_animation wobble && fail "window_animation takes wobble" || ok "window_animation refuses wobble"
 
+# ── 0007 overview ───────────────────────────────────────────────────────────
+# Workspaces 1, 2 and 3 have windows. Clicks and keys need a seat with
+# devices, which this headless run has none of (tools/test-session.sh has
+# them), so only the commands and what they leave behind are checked.
+msg workspace 2 >/dev/null; sleep 0.3
+cmd overview show && ok "overview show" || fail "overview show"
+sleep 0.4
+alive && [[ "$(focused_ws)" == 2 ]] && ok "overview: up, still on 2" || fail "overview up" "$(focused_ws)"
+cmd workspace 1 >/dev/null; sleep 0.3
+[[ "$(focused_ws)" == 1 ]] && alive && ok "overview: a switch while up" || fail "overview switch" "$(focused_ws)"
+cmd overview toggle && sleep 0.4 && alive && ok "overview toggle: put away" || fail "overview toggle"
+cmd overview toggle && cmd overview hide && sleep 0.4 && alive && ok "overview: toggle up, hide" || fail "overview toggle/hide"
+open_window && sleep 0.3 && cmd kill && sleep 0.3 && alive \
+    && ok "overview: windows open and close after it" || fail "windows after overview"
+cmd overview sideways && fail "overview takes sideways" || ok "overview refuses sideways"
+
 # ── Every command sway has is still found ────────────────────────────────────
 # sway looks commands up by binary search; one patch adding its command out of
 # alphabetical order made the ones after it unknown (workspace_auto_back_and_forth).

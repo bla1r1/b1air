@@ -118,19 +118,20 @@ PanelWindow {
                             color: Design.surface
 
                             Image {
+                                id: toastIcon
                                 anchors.centerIn: parent
                                 width: Design.s(18)
                                 height: width
                                 // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                                 sourceSize: Qt.size(128, 128)
-                                source: toastCard.model.icon ? (toastCard.model.icon.startsWith("/") ? "file://" + toastCard.model.icon : toastCard.model.icon) : ""
-                                visible: source.toString() !== ""
+                                source: toastCard.model.icon || ""
+                                visible: status === Image.Ready
                                 fillMode: Image.PreserveAspectFit
                             }
 
                             Icon {
                                 anchors.centerIn: parent
-                                visible: !toastCard.model.icon || toastCard.model.icon === ""
+                                visible: !toastIcon.visible
                                 text: "\u{f009a}"
                                 color: Design.sapphire
                                 role: "caption"

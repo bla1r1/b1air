@@ -936,8 +936,7 @@ ColumnLayout {
                 name: mon.name, resW: mon.resW, resH: mon.resH,
                 rate: mon.rate, sysScale: mon.sysScale, x: 0, y: 0
             }]);
-            Sys.notify("Displays", "Display Update",
-                       "Applied: " + mon.resW + "x" + mon.resH + " @ " + mon.rate + "Hz");
+            Osd.show("display", "Display updated", mon.resW + "×" + mon.resH + " @ " + mon.rate + " Hz");
             section.dirty = false;
             return;
         }
@@ -987,7 +986,7 @@ ColumnLayout {
 
         Monitors.apply(layout);
         if (section.otherEdits)
-            Sys.notify("Displays", "Display Update", "Applied layout for: " + layout.map(r => r.name).join(" "));
+            Osd.show("display", "Displays updated", layout.map(r => r.name).join(", "));
         section.dirty = false;
         section.otherEdits = false;
     }

@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import B1air.Daemon
 import "../Ui"
+import "../Services"
 
 // =============================================================================
 // Screen Ruler & Pixel Inspector HUD (Super + Shift + M)
@@ -29,7 +30,7 @@ PopupShell {
 
     function copyDimensions() {
         Quickshell.execDetached(["wl-copy", measureW + "x" + measureH]);
-        Sys.notify("Screen Ruler", "Dimensions Copied", measureW + "x" + measureH + " px");
+        Osd.show("edit-copy", measureW + " × " + measureH + " px copied", "Screen ruler");
         root.close();
     }
 

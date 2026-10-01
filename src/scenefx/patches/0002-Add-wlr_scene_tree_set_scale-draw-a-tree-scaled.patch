@@ -1,0 +1,437 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 20:57:55 +0000
+Subject: [PATCH] Add wlr_scene_tree_set_scale: draw a tree scaled
+
+A tree can be drawn at a scale: its children's positions and sizes are
+multiplied by it (and by any ancestor's), around the tree's own position.
+It is a drawing transform only: clients keep their size and keep
+drawing, which is what a live workspace overview needs and what the
+scene could not do (a buffer has a destination size; a tree had nothing).
+
+Positions, sizes, visibility, the render list, hit testing
+(wlr_scene_node_at, in the node's own coordinates) and output
+enter/leave all follow the scale. A scaled node is drawn blended (its
+opaque region is in unscaled terms) and is never scanned out. While any
+tree is scaled, damage is not tracked by region: every change redraws
+whole outputs, which suits the short-lived effects this is for.
+---
+ include/scenefx/types/wlr_scene.h |  16 +++
+ types/scene/wlr_scene.c           | 161 +++++++++++++++++++++++++-----
+ 2 files changed, 153 insertions(+), 24 deletions(-)
+
+diff --git a/include/scenefx/types/wlr_scene.h b/include/scenefx/types/wlr_scene.h
+index ac1bc49..4ebc2b6 100644
+--- a/include/scenefx/types/wlr_scene.h
++++ b/include/scenefx/types/wlr_scene.h
+@@ -462,6 +462,22 @@ void wlr_scene_set_color_manager_v1(struct wlr_scene *scene, struct wlr_color_ma
+  */
+ struct wlr_scene_tree *wlr_scene_tree_create(struct wlr_scene_tree *parent);
+ 
++/**
++ * Draw a tree at a scale: everything in it is drawn that much smaller (or
++ * larger), around the tree's own position. This is a drawing transform only:
++ * clients are not told, keep their size, and keep drawing — a workspace
++ * overview shows live windows this way. Input is not transformed: a caller
++ * that scales a tree handles the pointer over it itself.
++ *
++ * While any tree is scaled, damage is not tracked per region: every change
++ * redraws whole outputs. Meant for short-lived effects, on a few trees.
++ *
++ * The scale is kept beside the scene, not in struct wlr_scene_tree: the
++ * scene's structs must keep wlroots' layout, since wlroots' own scene code
++ * can end up handed these objects.
++ */
++void wlr_scene_tree_set_scale(struct wlr_scene_tree *tree, float scale);
++
+ /**
+  * Add a node displaying a single surface to the scene-graph.
+  *
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index 91d39c4..d2d111f 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1,4 +1,5 @@
+ #include <assert.h>
++#include <math.h>
+ #include <pixman.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -80,6 +81,33 @@ struct wlr_scene_blur *wlr_scene_blur_from_node(struct wlr_scene_node *node) {
+ 	return blur;
+ }
+ 
++// Trees drawn at a scale other than 1 (wlr_scene_tree_set_scale), beside the
++// structs rather than in them: see the header. A handful at most.
++#define SCENE_SCALED_TREES_MAX 64
++static struct {
++	struct wlr_scene_tree *tree;
++	float scale;
++} scaled_trees[SCENE_SCALED_TREES_MAX];
++static int scaled_tree_count = 0;
++
++static float scene_tree_scale(const struct wlr_scene_tree *tree) {
++	for (int i = 0; i < scaled_tree_count; i++) {
++		if (scaled_trees[i].tree == tree) {
++			return scaled_trees[i].scale;
++		}
++	}
++	return 1.0f;
++}
++
++static void scene_tree_forget_scale(const struct wlr_scene_tree *tree) {
++	for (int i = 0; i < scaled_tree_count; i++) {
++		if (scaled_trees[i].tree == tree) {
++			scaled_trees[i] = scaled_trees[--scaled_tree_count];
++			return;
++		}
++	}
++}
++
+ struct wlr_scene *scene_node_get_root(struct wlr_scene_node *node) {
+ 	struct wlr_scene_tree *tree;
+ 	if (node->type == WLR_SCENE_NODE_TREE) {
+@@ -140,6 +168,9 @@ void wlr_scene_node_destroy(struct wlr_scene_node *node) {
+ 	wlr_scene_node_set_enabled(node, false);
+ 
+ 	struct wlr_scene *scene = scene_node_get_root(node);
++	if (node->type == WLR_SCENE_NODE_TREE) {
++		scene_tree_forget_scale(wlr_scene_tree_from_node(node));
++	}
+ 	if (node->type == WLR_SCENE_NODE_BUFFER) {
+ 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+ 
+@@ -238,6 +269,37 @@ struct wlr_scene *wlr_scene_create(void) {
+ 	return scene;
+ }
+ 
++static void scene_node_update(struct wlr_scene_node *node, pixman_region32_t *damage);
++
++void wlr_scene_tree_set_scale(struct wlr_scene_tree *tree, float scale) {
++	const float now = scene_tree_scale(tree);
++	if (scale <= 0.0f || now == scale) {
++		return;
++	}
++	if (now == 1.0f) {
++		if (scaled_tree_count == SCENE_SCALED_TREES_MAX) {
++			wlr_log(WLR_ERROR, "Too many scaled scene trees");
++			return;
++		}
++		scaled_trees[scaled_tree_count].tree = tree;
++		scaled_trees[scaled_tree_count].scale = scale;
++		scaled_tree_count++;
++	} else {
++		for (int i = 0; i < scaled_tree_count; i++) {
++			if (scaled_trees[i].tree == tree) {
++				scaled_trees[i].scale = scale;
++			}
++		}
++	}
++	// Everything is looked at again (scene_node_update, with a scaled tree
++	// about) and the outputs redrawn whole.
++	scene_node_update(&tree->node, NULL);
++	if (scale == 1.0f) {
++		scene_tree_forget_scale(tree);
++		scene_node_update(&tree->node, NULL);
++	}
++}
++
+ struct wlr_scene_tree *wlr_scene_tree_create(struct wlr_scene_tree *parent) {
+ 	assert(parent);
+ 
+@@ -250,11 +312,14 @@ struct wlr_scene_tree *wlr_scene_tree_create(struct wlr_scene_tree *parent) {
+ 	return tree;
+ }
+ 
++// `scale` is what the node is drawn at: the product of its ancestors' tree
++// scales (wlr_scene_tree_set_scale). A node's size is multiplied by it; its
++// position (sx, sy) already is.
+ typedef bool (*scene_node_box_iterator_func_t)(struct wlr_scene_node *node,
+-	int sx, int sy, void *data);
++	int sx, int sy, float scale, void *data);
+ 
+ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box,
+-		scene_node_box_iterator_func_t iterator, void *user_data, int lx, int ly) {
++		scene_node_box_iterator_func_t iterator, void *user_data, int lx, int ly, float scale) {
+ 	if (!node->enabled) {
+ 		return false;
+ 	}
+@@ -262,9 +327,11 @@ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box
+ 	switch (node->type) {
+ 	case WLR_SCENE_NODE_TREE:;
+ 		struct wlr_scene_tree *scene_tree = wlr_scene_tree_from_node(node);
++		const float inner = scale * scene_tree_scale(scene_tree);
+ 		struct wlr_scene_node *child;
+ 		wl_list_for_each_reverse(child, &scene_tree->children, link) {
+-			if (_scene_nodes_in_box(child, box, iterator, user_data, lx + child->x, ly + child->y)) {
++			if (_scene_nodes_in_box(child, box, iterator, user_data,
++					lx + (int)lroundf(child->x * inner), ly + (int)lroundf(child->y * inner), inner)) {
+ 				return true;
+ 			}
+ 		}
+@@ -276,9 +343,11 @@ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box
+ 	case WLR_SCENE_NODE_BLUR:;
+ 		struct wlr_box node_box = { .x = lx, .y = ly };
+ 		scene_node_get_size(node, &node_box.width, &node_box.height);
++		node_box.width = (int)lroundf(node_box.width * scale);
++		node_box.height = (int)lroundf(node_box.height * scale);
+ 
+ 		if (wlr_box_intersection(&node_box, &node_box, box) &&
+-				iterator(node, lx, ly, user_data)) {
++				iterator(node, lx, ly, scale, user_data)) {
+ 			return true;
+ 		}
+ 		break;
+@@ -287,12 +356,22 @@ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box
+ 	return false;
+ }
+ 
++// The scale `node` is drawn at, from its ancestors' trees (not its own).
++static float scene_node_parent_scale(struct wlr_scene_node *node) {
++	float scale = 1.0f;
++	for (struct wlr_scene_tree *t = node->parent; t; t = t->node.parent) {
++		scale *= scene_tree_scale(t);
++	}
++	return scale;
++}
++
+ static bool scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box,
+ 		scene_node_box_iterator_func_t iterator, void *user_data) {
+ 	int x, y;
+ 	wlr_scene_node_coords(node, &x, &y);
+ 
+-	return _scene_nodes_in_box(node, box, iterator, user_data, x, y);
++	return _scene_nodes_in_box(node, box, iterator, user_data, x, y,
++		scene_node_parent_scale(node));
+ }
+ 
+ static pixman_region32_t create_corner_location_region(struct fx_corner_radii corners, int x, int y, int width, int height) {
+@@ -475,7 +554,14 @@ static void scene_output_damage(struct wlr_scene_output *scene_output,
+ 
+ 	pixman_region32_t clipped;
+ 	pixman_region32_init(&clipped);
+-	pixman_region32_intersect_rect(&clipped, damage, 0, 0, output->width, output->height);
++	// With a scaled tree, damage is not tracked by region: positions and
++	// sizes below it are not where the damage was computed, so any change
++	// redraws the output (wlr_scene_tree_set_scale).
++	if (scaled_tree_count > 0 && !pixman_region32_empty(damage)) {
++		pixman_region32_init_rect(&clipped, 0, 0, output->width, output->height);
++	} else {
++		pixman_region32_intersect_rect(&clipped, damage, 0, 0, output->width, output->height);
++	}
+ 
+ 	if (!pixman_region32_empty(&clipped)) {
+ 		wlr_output_schedule_frame(scene_output->output);
+@@ -675,7 +761,7 @@ static void restack_xwayland_surface(struct wlr_scene_node *node,
+ #endif
+ 
+ static bool scene_node_update_iterator(struct wlr_scene_node *node,
+-		int lx, int ly, void *_data) {
++		int lx, int ly, float scale, void *_data) {
+ 	struct scene_update_data *data = _data;
+ 
+ 	if (node->type == WLR_SCENE_NODE_OPTIMIZED_BLUR) {
+@@ -691,13 +777,16 @@ static bool scene_node_update_iterator(struct wlr_scene_node *node,
+ 
+ 	struct wlr_box box = { .x = lx, .y = ly };
+ 	scene_node_get_size(node, &box.width, &box.height);
++	box.width = (int)lroundf(box.width * scale);
++	box.height = (int)lroundf(box.height * scale);
+ 
+ 	pixman_region32_subtract(&node->visible, &node->visible, data->update_region);
+ 	pixman_region32_union(&node->visible, &node->visible, data->visible);
+ 	pixman_region32_intersect_rect(&node->visible, &node->visible,
+ 		lx, ly, box.width, box.height);
+ 
+-	if (data->calculate_visibility) {
++	// A scaled node hides nothing: its opaque region is in unscaled terms.
++	if (data->calculate_visibility && scale == 1.0f) {
+ 		pixman_region32_t opaque;
+ 		pixman_region32_init(&opaque);
+ 		scene_node_opaque_region(node, lx, ly, &opaque);
+@@ -855,6 +944,11 @@ static void scene_node_update(struct wlr_scene_node *node,
+ 	pixman_region32_init(&update_region);
+ 	pixman_region32_copy(&update_region, damage);
+ 	scene_node_bounds(node, x, y, &update_region);
++	if (scaled_tree_count > 0) {
++		// Bounds are unscaled; with a scaled tree anywhere, look at everything.
++		pixman_region32_union_rect(&update_region, &update_region,
++			INT32_MIN / 2, INT32_MIN / 2, INT32_MAX, INT32_MAX);
++	}
+ 
+ 	scene_update_region(scene, &update_region);
+ 	pixman_region32_fini(&update_region);
+@@ -1830,7 +1924,9 @@ bool wlr_scene_node_coords(struct wlr_scene_node *node,
+ 		int *lx_ptr, int *ly_ptr) {
+ 	assert(node);
+ 
+-	int lx = 0, ly = 0;
++	// Bottom up: a position is in its parent's space, which its parent's
++	// tree scale (wlr_scene_tree_set_scale) shrinks about the parent's origin.
++	double lx = 0, ly = 0;
+ 	bool enabled = true;
+ 	while (true) {
+ 		lx += node->x;
+@@ -1840,11 +1936,14 @@ bool wlr_scene_node_coords(struct wlr_scene_node *node,
+ 			break;
+ 		}
+ 
++		const float s = scene_tree_scale(node->parent);
++		lx *= s;
++		ly *= s;
+ 		node = &node->parent->node;
+ 	}
+ 
+-	*lx_ptr = lx;
+-	*ly_ptr = ly;
++	*lx_ptr = (int)lround(lx);
++	*ly_ptr = (int)lround(ly);
+ 	return enabled;
+ }
+ 
+@@ -1882,11 +1981,11 @@ struct node_at_data {
+ };
+ 
+ static bool scene_node_at_iterator(struct wlr_scene_node *node,
+-		int lx, int ly, void *data) {
++		int lx, int ly, float scale, void *data) {
+ 	struct node_at_data *at_data = data;
+ 
+-	double rx = at_data->lx - lx;
+-	double ry = at_data->ly - ly;
++	double rx = (at_data->lx - lx) / scale;
++	double ry = (at_data->ly - ly) / scale;
+ 
+ 	if (node->type == WLR_SCENE_NODE_BUFFER) {
+ 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+@@ -1948,6 +2047,7 @@ struct render_list_entry {
+ 	struct wlr_scene_node *node;
+ 	bool highlight_transparent_region;
+ 	int x, y;
++	float scale;   // from its trees (wlr_scene_tree_set_scale); 1 almost always
+ };
+ 
+ static float get_luminance_multiplier(const struct wlr_color_luminances *src_lum,
+@@ -1982,11 +2082,18 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		.y = y,
+ 	};
+ 	scene_node_get_size(node, &dst_box.width, &dst_box.height);
++	// Drawn at its trees' scale (wlr_scene_tree_set_scale).
++	const float tree_scale = entry->scale;
++	dst_box.width = (int)lroundf(dst_box.width * tree_scale);
++	dst_box.height = (int)lroundf(dst_box.height * tree_scale);
+ 	transform_output_box(&dst_box, data);
+ 
+ 	pixman_region32_t opaque;
+ 	pixman_region32_init(&opaque);
+-	scene_node_opaque_region(node, x, y, &opaque);
++	// A scaled node is blended: its opaque region is in unscaled terms.
++	if (tree_scale == 1.0f) {
++		scene_node_opaque_region(node, x, y, &opaque);
++	}
+ 	logical_to_buffer_coords(&opaque, data, false);
+ 	pixman_region32_subtract(&opaque, &render_region, &opaque);
+ 
+@@ -2005,6 +2112,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		fx_corner_radii_transform(node_transform, &rect_corners);
+ 
+ 		struct wlr_box rect_clipped_region_box = scene_rect->clipped_region.area;
++		scale_box(&rect_clipped_region_box, tree_scale);
+ 		struct fx_corner_radii rect_clipped_corners = scene_rect->clipped_region.corners;
+ 
+ 		// Node relative -> Root relative
+@@ -2027,7 +2135,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 			},
+ 			.clipped_region = {
+ 				.area = rect_clipped_region_box,
+-				.corners = fx_corner_radii_scale(rect_clipped_corners, data->scale),
++				.corners = fx_corner_radii_scale(rect_clipped_corners, data->scale * tree_scale),
+ 			},
+ 		};
+ 
+@@ -2037,7 +2145,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		} else if (!fx_corner_radii_is_empty(&rect_corners)) {
+ 			struct fx_render_rounded_rect_options rounded_rect_options = {
+ 				.base = rect_options.base,
+-				.corners = fx_corner_radii_scale(rect_corners, data->scale),
++				.corners = fx_corner_radii_scale(rect_corners, data->scale * tree_scale),
+ 				.clipped_region = rect_options.clipped_region,
+ 			};
+ 			fx_render_pass_add_rounded_rect(fx_pass, &rounded_rect_options);
+@@ -2112,7 +2220,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 				.wait_point = scene_buffer->wait_point,
+ 			},
+ 			.clip_box = &dst_box,
+-			.corners = fx_corner_radii_scale(buffer_corners, data->scale),
++			.corners = fx_corner_radii_scale(buffer_corners, data->scale * tree_scale),
+ 			.clipped_region = {0},
+ 		};
+ 
+@@ -2146,6 +2254,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 		struct wlr_scene_shadow *scene_shadow = wlr_scene_shadow_from_node(node);
+ 
+ 		struct wlr_box shadow_clipped_region_box = scene_shadow->clipped_region.area;
++		scale_box(&shadow_clipped_region_box, tree_scale);
+ 		struct fx_corner_radii shadow_clipped_corners = scene_shadow->clipped_region.corners;
+ 
+ 		// Node relative -> Root relative
+@@ -2159,10 +2268,10 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 			.box = dst_box,
+ 			.clipped_region = {
+ 				.area = shadow_clipped_region_box,
+-				.corners = fx_corner_radii_scale(shadow_clipped_corners, data->scale),
++				.corners = fx_corner_radii_scale(shadow_clipped_corners, data->scale * tree_scale),
+ 			},
+ 			.blur_sigma = scene_shadow->blur_sigma,
+-			.corner_radius = scene_shadow->corner_radius * data->scale,
++			.corner_radius = scene_shadow->corner_radius * data->scale * tree_scale,
+ 			.color = {
+ 				.r = scene_shadow->color[0],
+ 				.g = scene_shadow->color[1],
+@@ -2239,7 +2348,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 					.blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED,
+ 				},
+ 				.clip_box = &dst_box,
+-				.corners = fx_corner_radii_scale(blur_corners, data->scale),
++				.corners = fx_corner_radii_scale(blur_corners, data->scale * tree_scale),
+ 				.discard_transparent = false,
+ 			},
+ 			.use_optimized_blur = blur->should_only_blur_bottom_layer,
+@@ -2621,7 +2730,7 @@ static bool scene_rect_is_black_opaque(struct wlr_scene_rect *scene_rect) {
+ }
+ 
+ static bool construct_render_list_iterator(struct wlr_scene_node *node,
+-		int lx, int ly, void *_data) {
++		int lx, int ly, float scale, void *_data) {
+ 	struct render_list_constructor_data *data = _data;
+ 
+ 	if (scene_node_invisible(node)) {
+@@ -2672,6 +2781,7 @@ static bool construct_render_list_iterator(struct wlr_scene_node *node,
+ 		.node = node,
+ 		.x = lx,
+ 		.y = ly,
++		.scale = scale,
+ 		.highlight_transparent_region = data->highlight_transparent_region,
+ 	};
+ 
+@@ -2757,7 +2867,8 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
+ 	struct wlr_scene_output *scene_output = data->output;
+ 	struct wlr_scene_node *node = entry->node;
+ 
+-	if (!scene_output->scene->direct_scanout) {
++	// A scaled tree (wlr_scene_tree_set_scale) is drawn by the renderer.
++	if (!scene_output->scene->direct_scanout || scaled_tree_count > 0) {
+ 		return SCANOUT_INELIGIBLE;
+ 	}
+ 
+@@ -3408,7 +3519,9 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
+ 			// rendering in that black rect region, consider the node's visibility.
+ 			pixman_region32_t opaque;
+ 			pixman_region32_init(&opaque);
+-			scene_node_opaque_region(entry->node, entry->x, entry->y, &opaque);
++			if (entry->scale == 1.0f) {
++				scene_node_opaque_region(entry->node, entry->x, entry->y, &opaque);
++			}
+ 			pixman_region32_intersect(&opaque, &opaque, &entry->node->visible);
+ 
+ 			pixman_region32_translate(&opaque, -scene_output->x, -scene_output->y);

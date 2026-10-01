@@ -5,6 +5,7 @@ import Quickshell
 import B1air.Daemon
 import Quickshell.Io
 import "../Ui"
+import "../Services"
 
 // =============================================================================
 // QuickLook Instant File Preview Overlay (Space / b1air-daemon quicklook)
@@ -154,7 +155,7 @@ PopupShell {
                 label: "Copy Path"
                 onActivated: {
                     Quickshell.execDetached(["wl-copy", "--", root.filePath]);
-                    Sys.notify("QuickLook", "Copied", root.filePath);
+                    Osd.show("edit-copy", "Path copied", root.filePath);
                 }
             }
 

@@ -1,0 +1,599 @@
+From 34ffcd9ca4029ad1b6a2b03f9db065aa67e6e5cd Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 3 Oct 2026 20:57:55 +0000
+Subject: [PATCH] Add overview: every workspace of an output side by side, live
+
+`overview toggle|show|hide` shows every workspace of the focused output
+in a grid, each its own tiling tree drawn scaled down (scenefx's
+wlr_scene_tree_set_scale), so windows keep drawing at their own size.
+The active workspace shrinks from the full screen into its place as the
+others come in on dark cards; leaving reverses it. A click on a
+workspace, or Enter on the one picked with the arrows, goes there;
+Escape, or a click beside them, leaves.
+
+Floating windows sit in one layer for all workspaces and are hidden
+while it is up; the special workspace is not shown. Workspaces still
+sliding or held by a swipe are put in place first, and a switch made
+from the overview does not slide.
+
+Needs scenefx with wlr_scene_tree_set_scale (src/scenefx patch 0002).
+---
+ include/sway/commands.h         |   1 +
+ include/sway/desktop/overview.h |  19 ++
+ sway/commands.c                 |   1 +
+ sway/commands/overview.c        |  37 ++++
+ sway/desktop/output.c           |   5 +-
+ sway/desktop/overview.c         | 324 ++++++++++++++++++++++++++++++++
+ sway/desktop/transaction.c      |  10 +-
+ sway/input/keyboard.c           |  12 ++
+ sway/input/seatop_default.c     |   7 +
+ sway/meson.build                |   2 +
+ 10 files changed, 415 insertions(+), 3 deletions(-)
+ create mode 100644 include/sway/desktop/overview.h
+ create mode 100644 sway/commands/overview.c
+ create mode 100644 sway/desktop/overview.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index 9e7d7f47..20ea61ef 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -112,6 +112,7 @@ sway_cmd cmd_allow_tearing;
+ sway_cmd cmd_animation_duration_ms;
+ sway_cmd cmd_autotile;
+ sway_cmd cmd_special_workspace;
++sway_cmd cmd_overview;
+ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_workspace_animation;
+ sway_cmd cmd_window_animation;
+diff --git a/include/sway/desktop/overview.h b/include/sway/desktop/overview.h
+new file mode 100644
+index 00000000..d78d565a
+--- /dev/null
++++ b/include/sway/desktop/overview.h
+@@ -0,0 +1,19 @@
++#ifndef _SWAY_DESKTOP_OVERVIEW_H
++#define _SWAY_DESKTOP_OVERVIEW_H
++
++#include <stdbool.h>
++#include <xkbcommon/xkbcommon.h>
++
++struct sway_output;
++
++// b1air: the workspace overview (overview toggle|show|hide).
++void overview_show(struct sway_output *output);
++void overview_hide(void);
++bool overview_active_on(struct sway_output *output);
++// After the output was arranged: puts the overview back over it.
++void overview_rearranged(struct sway_output *output);
++// Input while the overview is up; true when it took the event.
++bool overview_handle_button(double lx, double ly, bool pressed);
++bool overview_handle_key(xkb_keysym_t sym);
++
++#endif
+diff --git a/sway/commands.c b/sway/commands.c
+index a70f0f77..58273a47 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -156,6 +156,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "move", cmd_move },
+ 	{ "nop", cmd_nop },
+ 	{ "opacity", cmd_opacity },
++	{ "overview", cmd_overview },
+ 	{ "reload", cmd_reload },
+ 	{ "rename", cmd_rename },
+ 	{ "resize", cmd_resize },
+diff --git a/sway/commands/overview.c b/sway/commands/overview.c
+new file mode 100644
+index 00000000..30e960ac
+--- /dev/null
++++ b/sway/commands/overview.c
+@@ -0,0 +1,37 @@
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/desktop/overview.h"
++#include "sway/input/seat.h"
++#include "sway/output.h"
++#include "sway/tree/workspace.h"
++
++// overview toggle|show|hide
++//
++// Every workspace of the focused output side by side, live, to go to one
++// with a click or the arrows and Enter; Escape leaves (sway/desktop/overview.c).
++struct cmd_results *cmd_overview(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "overview", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	struct sway_seat *seat = config->handler_context.seat;
++	struct sway_workspace *ws = seat ? seat_get_focused_workspace(seat) : NULL;
++	struct sway_output *output = ws ? ws->output : NULL;
++	if (!output) {
++		return cmd_results_new(CMD_FAILURE, "No output to show an overview on");
++	}
++	if (strcasecmp(argv[0], "toggle") == 0) {
++		if (overview_active_on(output)) {
++			overview_hide();
++		} else {
++			overview_show(output);
++		}
++	} else if (strcasecmp(argv[0], "show") == 0) {
++		overview_show(output);
++	} else if (strcasecmp(argv[0], "hide") == 0) {
++		overview_hide();
++	} else {
++		return cmd_results_new(CMD_INVALID, "Expected 'overview toggle|show|hide'");
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/desktop/output.c b/sway/desktop/output.c
+index 2c29ecf3..08aedafc 100644
+--- a/sway/desktop/output.c
++++ b/sway/desktop/output.c
+@@ -36,6 +36,7 @@
+ #include "sway/tree/root.h"
+ #include "sway/tree/view.h"
+ #include "sway/tree/workspace.h"
++#include "sway/desktop/overview.h"
+ 
+ #if WLR_HAS_DRM_BACKEND
+ #include <wlr/backend/drm.h>
+@@ -285,8 +286,10 @@ void output_configure_scene(struct sway_output *output, struct wlr_scene_node *n
+ 			closest_con->current.workspace->animation_state.to_alpha,
+ 			&closest_con->current.workspace->animation_state.animation);
+ 	}
++	// b1air: the overview shows every workspace alike
+ 	if (closest_con && config->inactive_opacity < 1.0f
+-			&& !container_is_focused_or_in_focus(closest_con)) {
++			&& !container_is_focused_or_in_focus(closest_con)
++			&& !overview_active_on(output)) {
+ 		opacity *= config->inactive_opacity;
+ 	}
+ 	int corner_radius = closest_con && container_has_corner_radius(closest_con) ?
+diff --git a/sway/desktop/overview.c b/sway/desktop/overview.c
+new file mode 100644
+index 00000000..767f3982
+--- /dev/null
++++ b/sway/desktop/overview.c
+@@ -0,0 +1,324 @@
++#include <math.h>
++#include <stdlib.h>
++#include <xkbcommon/xkbcommon.h>
++#include <scenefx/types/wlr_scene.h>
++#include "sway/animation_manager.h"
++#include "sway/config.h"
++#include "sway/desktop/overview.h"
++#include "sway/input/seat.h"
++#include "sway/output.h"
++#include "sway/tree/arrange.h"
++#include "sway/tree/root.h"
++#include "sway/tree/workspace.h"
++#include "list.h"
++#include "log.h"
++
++// b1air: every workspace of one output side by side, live and scaled down,
++// to see what is where and go to it (overview toggle|show|hide). Each
++// workspace is its own tiling tree drawn at a scale (scenefx's
++// wlr_scene_tree_set_scale), so windows keep their size and keep drawing.
++// The active workspace shrinks from the full screen into its place, over
++// the others fading in in theirs. A click, or Enter on the one picked with the
++// arrows, goes there; Escape leaves.
++//
++// Floating windows live in one layer shared by all workspaces, not in a
++// workspace's tree, so they cannot be shown in place: they are hidden for
++// the overview. The special workspace is not shown either.
++
++#define OVERVIEW_GAP 24
++
++static struct {
++	struct sway_output *output;   // NULL when no overview
++	bool closing;
++	float t;                      // 0 the usual view, 1 the overview
++	struct animation anim;
++	bool anim_ready;
++	int selected;                 // index in the shown workspaces
++	struct wlr_scene_tree *decor; // the cards behind the workspaces
++} ov;
++
++static list_t *shown_workspaces(struct sway_output *output) {
++	list_t *list = create_list();
++	for (int i = 0; i < output->workspaces->length; i++) {
++		struct sway_workspace *ws = output->workspaces->items[i];
++		if (!workspace_is_special(ws)) {
++			list_add(list, ws);
++		}
++	}
++	return list;
++}
++
++// Where workspace i of n goes, in output coordinates, and at what scale.
++static void overview_cell(struct sway_output *output, int i, int n,
++		struct wlr_box *cell, float *scale) {
++	struct wlr_box *area = &output->usable_area;
++	int cols = n <= 3 ? n : (int)ceil(sqrt((double)n));
++	int rows = (n + cols - 1) / cols;
++	double margin = 0.06 * fmin(area->width, area->height);
++	double cw = (area->width - 2 * margin - (cols - 1) * OVERVIEW_GAP) / cols;
++	double ch = (area->height - 2 * margin - (rows - 1) * OVERVIEW_GAP) / rows;
++	double s = fmin(cw / area->width, ch / area->height);
++	double w = area->width * s, h = area->height * s;
++
++	int row = i / cols, col = i % cols;
++	int in_row = row == rows - 1 ? n - row * cols : cols;
++	double row_w = in_row * w + (in_row - 1) * OVERVIEW_GAP;
++	double all_h = rows * h + (rows - 1) * OVERVIEW_GAP;
++	cell->x = (int)lround(area->x + (area->width - row_w) / 2 + col * (w + OVERVIEW_GAP));
++	cell->y = (int)lround(area->y + (area->height - all_h) / 2 + row * (h + OVERVIEW_GAP));
++	cell->width = (int)lround(w);
++	cell->height = (int)lround(h);
++	*scale = (float)s;
++}
++
++static float lerp(float a, float b, float t) {
++	return a + (b - a) * t;
++}
++
++static void add_rect(struct wlr_scene_tree *parent, int x, int y, int w, int h,
++		const float color[4]) {
++	struct wlr_scene_rect *rect = wlr_scene_rect_create(parent, w, h, color);
++	if (rect) {
++		wlr_scene_node_set_position(&rect->node, x, y);
++	}
++}
++
++// Puts every shown workspace where `ov.t` says, and the cards under them.
++static void overview_place(void) {
++	struct sway_output *output = ov.output;
++	if (!output) {
++		return;
++	}
++	struct sway_workspace *active = output->current.active_workspace;
++	struct wlr_box *area = &output->usable_area;
++	list_t *list = shown_workspaces(output);
++	int n = list->length;
++	if (ov.selected >= n) {
++		ov.selected = n > 0 ? n - 1 : 0;
++	}
++
++	if (ov.decor) {
++		wlr_scene_node_destroy(&ov.decor->node);
++	}
++	ov.decor = wlr_scene_tree_create(output->layers.tiling);
++	wlr_scene_node_lower_to_bottom(&ov.decor->node);
++
++	for (int i = 0; i < n; i++) {
++		struct sway_workspace *ws = list->items[i];
++		struct wlr_box cell;
++		float s;
++		overview_cell(output, i, n, &cell, &s);
++
++		// The active one comes from the full screen; the others are only
++		// ever in their place, and come in with the cards.
++		float t = ws == active ? ov.t : 1.0f;
++		float scale = lerp(1.0f, s, t);
++		float x = lerp(area->x, cell.x, t), y = lerp(area->y, cell.y, t);
++		struct side_gaps *gaps = &ws->current_gaps;
++
++		bool show = ws == active || ov.t > 0.0f;
++		wlr_scene_node_set_enabled(&ws->layers.tiling->node, show);
++		wlr_scene_node_set_enabled(&ws->layers.fullscreen->node, false);
++		wlr_scene_tree_set_scale(ws->layers.tiling, scale);
++		wlr_scene_node_set_position(&ws->layers.tiling->node,
++			(int)lround(x + gaps->left * scale), (int)lround(y + gaps->top * scale));
++
++		// The others fade in with the cards, under the active one.
++		ws->animation_state.from_alpha = ws->animation_state.to_alpha =
++			ws == active ? 1.0f : ov.t;
++
++		const float card[4] = {0.0f, 0.0f, 0.0f, 0.35f * ov.t};
++		add_rect(ov.decor, cell.x, cell.y, cell.width, cell.height, card);
++		if (i == ov.selected) {
++			const float edge[4] = {0.55f * ov.t, 0.65f * ov.t, 1.0f * ov.t, ov.t};
++			const int b = 3;
++			add_rect(ov.decor, cell.x - b, cell.y - b, cell.width + 2 * b, b, edge);
++			add_rect(ov.decor, cell.x - b, cell.y + cell.height, cell.width + 2 * b, b, edge);
++			add_rect(ov.decor, cell.x - b, cell.y, b, cell.height, edge);
++			add_rect(ov.decor, cell.x + cell.width, cell.y, b, cell.height, edge);
++		}
++	}
++	list_free(list);
++	if (active) {
++		wlr_scene_node_raise_to_top(&active->layers.tiling->node);
++	}
++
++	wlr_scene_node_set_enabled(&root->layers.floating->node, ov.t <= 0.0f);
++}
++
++static void overview_finish_hide(void) {
++	struct sway_output *output = ov.output;
++	if (!output) {
++		return;
++	}
++	for (int i = 0; i < output->workspaces->length; i++) {
++		struct sway_workspace *ws = output->workspaces->items[i];
++		wlr_scene_tree_set_scale(ws->layers.tiling, 1.0f);
++		ws->animation_state.from_alpha = ws->animation_state.to_alpha = 1.0f;
++	}
++	if (ov.decor) {
++		wlr_scene_node_destroy(&ov.decor->node);
++		ov.decor = NULL;
++	}
++	wlr_scene_node_set_enabled(&root->layers.floating->node, true);
++	ov.output = NULL;
++	ov.closing = false;
++	ov.t = 0.0f;
++	// The usual arrangement puts back what is shown, and where.
++	arrange_output(output);
++}
++
++static void overview_update(void *data) {
++	ov.t = ov.closing ? 1.0f - ov.anim.multiplier : ov.anim.multiplier;
++	overview_place();
++}
++
++static void overview_complete(void *data) {
++	if (ov.closing) {
++		overview_finish_hide();
++	} else {
++		ov.t = 1.0f;
++		overview_place();
++	}
++}
++
++static void overview_animate(void) {
++	if (!ov.anim_ready) {
++		ov.anim = init_animation(NULL);
++		ov.anim_ready = true;
++	}
++	if (!config->animation_duration_ms) {
++		overview_complete(NULL);
++		return;
++	}
++	add_animation(&ov.anim, overview_update, overview_complete);
++	// Nothing else may be running to start the clock (a transaction does).
++	start_animations();
++}
++
++bool overview_active_on(struct sway_output *output) {
++	return output && ov.output == output;
++}
++
++void overview_show(struct sway_output *output) {
++	if (!output) {
++		return;
++	}
++	if (ov.output && ov.output != output) {
++		finish_animation(&ov.anim);
++		overview_finish_hide();
++	}
++	if (ov.output == output && !ov.closing) {
++		return;
++	}
++	// Workspaces still sliding or held by a swipe are put in place first.
++	for (int i = 0; i < output->workspaces->length; i++) {
++		struct sway_workspace *ws = output->workspaces->items[i];
++		finish_animation(&ws->animation_state.animation);
++		ws->animation_state.from_x = ws->animation_state.to_x = 0;
++		ws->swipe_offset = 0;
++		ws->swipe_peek = false;
++	}
++	ov.output = output;
++	ov.closing = false;
++	ov.selected = 0;
++	list_t *list = shown_workspaces(output);
++	for (int i = 0; i < list->length; i++) {
++		if (list->items[i] == output->current.active_workspace) {
++			ov.selected = i;
++		}
++	}
++	list_free(list);
++	overview_place();
++	overview_animate();
++	// Lays the other workspaces out too (they are only arranged while
++	// shown); overview_rearranged() places them once that lands.
++	arrange_output(output);
++}
++
++void overview_hide(void) {
++	if (!ov.output || ov.closing) {
++		return;
++	}
++	ov.closing = true;
++	overview_animate();
++}
++
++void overview_rearranged(struct sway_output *output) {
++	if (overview_active_on(output)) {
++		overview_place();
++	}
++}
++
++static void overview_go(struct sway_workspace *ws) {
++	if (ws && ws != ov.output->current.active_workspace) {
++		workspace_switch(ws);
++	}
++	overview_hide();
++}
++
++bool overview_handle_button(double lx, double ly, bool pressed) {
++	if (!ov.output || ov.closing) {
++		return false;
++	}
++	if (!pressed) {
++		return true;
++	}
++	struct sway_output *output = ov.output;
++	double ox = lx - output->lx, oy = ly - output->ly;
++	list_t *list = shown_workspaces(output);
++	struct sway_workspace *picked = NULL;
++	for (int i = 0; i < list->length; i++) {
++		struct wlr_box cell;
++		float s;
++		overview_cell(output, i, list->length, &cell, &s);
++		if (wlr_box_contains_point(&cell, ox, oy)) {
++			picked = list->items[i];
++		}
++	}
++	list_free(list);
++	// A click beside every workspace just leaves.
++	overview_go(picked);
++	return true;
++}
++
++bool overview_handle_key(xkb_keysym_t sym) {
++	if (!ov.output || ov.closing) {
++		return false;
++	}
++	list_t *list = shown_workspaces(ov.output);
++	int n = list->length;
++	int cols = n <= 3 ? n : (int)ceil(sqrt((double)n));
++	bool handled = true;
++	switch (sym) {
++	case XKB_KEY_Escape:
++		overview_hide();
++		break;
++	case XKB_KEY_Return:
++	case XKB_KEY_KP_Enter:
++	case XKB_KEY_space:
++		overview_go(n > 0 ? list->items[ov.selected] : NULL);
++		break;
++	case XKB_KEY_Left:
++		if (ov.selected > 0) ov.selected--;
++		overview_place();
++		break;
++	case XKB_KEY_Right:
++		if (ov.selected < n - 1) ov.selected++;
++		overview_place();
++		break;
++	case XKB_KEY_Up:
++		if (ov.selected - cols >= 0) ov.selected -= cols;
++		overview_place();
++		break;
++	case XKB_KEY_Down:
++		if (ov.selected + cols < n) ov.selected += cols;
++		overview_place();
++		break;
++	default:
++		handled = false;
++	}
++	list_free(list);
++	return handled;
++}
++
+diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
+index 34d7b26c..f5d3e35f 100644
+--- a/sway/desktop/transaction.c
++++ b/sway/desktop/transaction.c
+@@ -19,6 +19,7 @@
+ #include "sway/tree/node.h"
+ #include "sway/tree/view.h"
+ #include "sway/tree/workspace.h"
++#include "sway/desktop/overview.h"
+ #include "list.h"
+ #include "log.h"
+ 
+@@ -1069,7 +1070,9 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 			special_under = NULL;
+ 		}
+ 	}
+-	if (workspace_is_special(old_active) || workspace_is_special(new_active)) {
++	// b1air: in the overview, workspaces move by its own animation.
++	if (workspace_is_special(old_active) || workspace_is_special(new_active)
++			|| overview_active_on(output)) {
+ 		is_ws_switch = false;
+ 		if (old_active) {
+ 			finish_animation(&old_active->animation_state.animation);
+@@ -1117,7 +1120,9 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 		// windows (in the shared floating layer, above every workspace's
+ 		// tiling) would cover the special one's, so they stay hidden.
+ 		bool under_special = child == special_under;
+-		animating = animating || under_special;
++		// b1air: in the overview every workspace is shown, so every one is
++		// laid out and enabled; the overview then scales and places them.
++		animating = animating || under_special || overview_active_on(output);
+ 
+ 		wlr_scene_node_reparent(&child->layers.tiling->node, output->layers.tiling);
+ 		wlr_scene_node_reparent(&child->layers.fullscreen->node, output->layers.fullscreen);
+@@ -1203,6 +1208,7 @@ static void arrange_output(struct sway_output *output, int width, int height) {
+ 	}
+ 
+ 	output->prev_active_workspace = new_active;
++	overview_rearranged(output);
+ }
+ 
+ void arrange_popups(struct wlr_scene_tree *popups) {
+diff --git a/sway/input/keyboard.c b/sway/input/keyboard.c
+index d1823737..cdbb5de6 100644
+--- a/sway/input/keyboard.c
++++ b/sway/input/keyboard.c
+@@ -11,6 +11,7 @@
+ #include "sway/commands.h"
+ #include "sway/input/input-manager.h"
+ #include "sway/input/keyboard.h"
++#include "sway/desktop/overview.h"
+ #include "sway/input/seat.h"
+ #include "sway/input/cursor.h"
+ #include "sway/ipc-server.h"
+@@ -452,6 +453,17 @@ static void handle_key_event(struct sway_keyboard *keyboard,
+ 	struct key_info keyinfo;
+ 	update_keyboard_state(keyboard, event->keycode, event->state, &keyinfo);
+ 
++	// b1air: the overview takes Escape, Enter and the arrows for itself.
++	if (!locked && event->state == WL_KEYBOARD_KEY_STATE_PRESSED
++			&& keyinfo.raw_modifiers == 0) {
++		for (size_t i = 0; i < keyinfo.raw_keysyms_len; i++) {
++			if (overview_handle_key(keyinfo.raw_keysyms[i])) {
++				free(device_identifier);
++				return;
++			}
++		}
++	}
++
+ 	bool handled = false;
+ 	// Identify active release binding
+ 	struct sway_binding *binding_released = NULL;
+diff --git a/sway/input/seatop_default.c b/sway/input/seatop_default.c
+index da30a32f..b540f358 100644
+--- a/sway/input/seatop_default.c
++++ b/sway/input/seatop_default.c
+@@ -9,6 +9,7 @@
+ #include "sway/input/cursor.h"
+ #include "sway/input/seat.h"
+ #include "sway/desktop/workspace_swipe.h"
++#include "sway/desktop/overview.h"
+ #include "sway/input/tablet.h"
+ #include "sway/layers.h"
+ #include "sway/output.h"
+@@ -335,6 +336,12 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
+ 		enum wl_pointer_button_state state) {
+ 	struct sway_cursor *cursor = seat->cursor;
+ 
++	// b1air: a click in the overview picks a workspace (or leaves it).
++	if (overview_handle_button(cursor->cursor->x, cursor->cursor->y,
++			state == WL_POINTER_BUTTON_STATE_PRESSED)) {
++		return;
++	}
++
+ 	// Determine what's under the cursor
+ 	struct wlr_surface *surface = NULL;
+ 	double sx, sy;
+diff --git a/sway/meson.build b/sway/meson.build
+index 0dbc588c..9350bd20 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -47,11 +47,13 @@ sway_sources = files(
+ 	'commands/animation_duration_ms.c',
+ 	'commands/autotile.c',
+ 	'commands/special_workspace.c',
++	'commands/overview.c',
+ 	'commands/inactive_opacity.c',
+ 	'commands/workspace_animation.c',
+ 	'commands/window_animation.c',
+ 	'commands/workspace_swipe.c',
+ 	'desktop/workspace_swipe.c',
++	'desktop/overview.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+-- 
+2.43.0
+
