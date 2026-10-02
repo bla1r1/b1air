@@ -31,8 +31,8 @@ ColumnLayout {
 
     // ── 1. Master Switch ─────────────────────────────────────────────────────
     Card {
-        title: "Game Mode Performance"
-        subtitle: "Optimize system responsiveness, disable desktop overhead, and maximize FPS"
+        title: I18n.tr("Game Mode Performance")
+        subtitle: I18n.tr("Optimize system responsiveness, disable desktop overhead, and maximize FPS")
         icon: "\u{f11b}"
         accentColor: Design.danger
 
@@ -43,8 +43,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Enable Game Mode"; weight: Design.weight.semibold }
-                Label { text: section.gameModeEnabled ? "Active — CPU governor set to performance, compositor blur & shadows disabled" : "Performance governor, no blur or shadows, and the extras below while you play"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Enable Game Mode"); weight: Design.weight.semibold }
+                Label { text: section.gameModeEnabled ? I18n.tr("Active — CPU governor set to performance, compositor blur & shadows disabled") : I18n.tr("Performance governor, no blur or shadows, and the extras below while you play"); role: "caption"; dim: true }
             }
 
             Toggle {
@@ -56,8 +56,8 @@ ColumnLayout {
 
     // ── 2. Display & Desktop Options ─────────────────────────────────────────
     Card {
-        title: "Display & Desktop Overlays"
-        subtitle: "Configurable behaviors applied when Game Mode is active"
+        title: I18n.tr("Display & Desktop Overlays")
+        subtitle: I18n.tr("Configurable behaviors applied when Game Mode is active")
         icon: "\u{f108}"
         accentColor: Design.sapphire
 
@@ -70,8 +70,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: "Adaptive Sync (VRR)"; weight: Design.weight.medium }
-                    Label { text: "Enable Variable Refresh Rate on supported gaming monitors"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Adaptive Sync (VRR)"); weight: Design.weight.medium }
+                    Label { text: I18n.tr("Enable Variable Refresh Rate on supported gaming monitors"); role: "caption"; dim: true }
                 }
                 Toggle {
                     checked: section.gameModeAdaptiveSync
@@ -92,8 +92,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: "Hide Top Bar"; weight: Design.weight.medium }
-                    Label { text: "Automatically hide top status bar during gaming sessions"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Hide Top Bar"); weight: Design.weight.medium }
+                    Label { text: I18n.tr("Automatically hide top status bar during gaming sessions"); role: "caption"; dim: true }
                 }
                 Toggle {
                     checked: section.gameModeHideBar
@@ -114,8 +114,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: "Do Not Disturb (DND)"; weight: Design.weight.medium }
-                    Label { text: "Mute all popups and toast notifications while in game"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Do Not Disturb (DND)"); weight: Design.weight.medium }
+                    Label { text: I18n.tr("Mute all popups and toast notifications while in game"); role: "caption"; dim: true }
                 }
                 Toggle {
                     checked: section.gameModeDND

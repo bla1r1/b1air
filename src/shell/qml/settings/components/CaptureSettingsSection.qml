@@ -27,8 +27,8 @@ ColumnLayout {
 
     // ── 1. Storage & Output ──────────────────────────────────────────────────
     Card {
-        title: "Screenshot Destination & Format"
-        subtitle: "Configure where captured images are stored and their file formats"
+        title: I18n.tr("Screenshot Destination & Format")
+        subtitle: I18n.tr("Configure where captured images are stored and their file formats")
         icon: "\u{f016d}"
         accentColor: Design.pink
 
@@ -39,12 +39,12 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Save Folder"; weight: Design.weight.semibold }
+                Label { text: I18n.tr("Save Folder"); weight: Design.weight.semibold }
                 Label { text: section.screenshotDir; role: "caption"; dim: true }
             }
 
             Pill {
-                label: "Open Folder"
+                label: I18n.tr("Open Folder")
                 icon: "\u{f07b}"
                 onClicked: Quickshell.execDetached(["xdg-open", section.screenshotDir])
             }
@@ -57,8 +57,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Image Format"; weight: Design.weight.semibold }
-                Label { text: "File encoding type for saved captures"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Image Format"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("File encoding type for saved captures"); role: "caption"; dim: true }
             }
 
             RowLayout {
@@ -84,8 +84,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Save File to Disk"; weight: Design.weight.semibold }
-                Label { text: "Automatically write image file to the screenshots directory"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Save File to Disk"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("Automatically write image file to the screenshots directory"); role: "caption"; dim: true }
             }
 
             Toggle {
@@ -105,8 +105,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Copy to Clipboard"; weight: Design.weight.semibold }
-                Label { text: "Copy image directly into Wayland clipboard buffer"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Copy to Clipboard"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("Copy image directly into Wayland clipboard buffer"); role: "caption"; dim: true }
             }
 
             Toggle {
@@ -122,14 +122,14 @@ ColumnLayout {
 
     // ── 2. Quick Capture & Timing ────────────────────────────────────────────
     Card {
-        title: "Capture Actions & Delay"
-        subtitle: "Test capture triggers or adjust delay for dropdown menus"
+        title: I18n.tr("Capture Actions & Delay")
+        subtitle: I18n.tr("Test capture triggers or adjust delay for dropdown menus")
         icon: "\u{f002}"
         accentColor: Design.teal
 
         Stepper {
-            label: "Capture Delay"
-            valueText: section.screenshotDelay === 0 ? "Instant" : (section.screenshotDelay + " sec")
+            label: I18n.tr("Capture Delay")
+            valueText: section.screenshotDelay === 0 ? I18n.tr("Instant") : I18n.tr("%1 sec", section.screenshotDelay)
             onDecrement: {
                 const next = Math.max(0, section.screenshotDelay - 1);
                 section.screenshotDelay = next;
@@ -148,14 +148,14 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f0b2}"
-                label: "Capture Area"
+                label: I18n.tr("Capture Area")
                 tone: Design.pink
                 onActivated: section.takeScreenshot("area")
             }
 
             ActionButton {
                 icon: "\u{f065}"
-                label: "Capture Full Screen"
+                label: I18n.tr("Capture Full Screen")
                 tone: Design.teal
                 onActivated: section.takeScreenshot("full")
             }

@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "../Ui"
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
@@ -178,8 +179,8 @@ Singleton {
                 && root.capacity <= root.criticalThreshold && !root._warnedCritical) {
             root._warnedCritical = true;
             root._warnedLow = true;
-            Sys.notify("Power", "Battery critical — " + root.capacity + "%",
-                       "Suspending now to save the session.", "battery-caution", "critical");
+            Sys.notify("Power", I18n.tr("Battery critical — %1%", root.capacity),
+                       I18n.tr("Suspending now to save the session."), "battery-caution", "critical");
             // A moment for the notification to be drawn and for anything
             // mid-write to finish before the machine goes down.
             criticalDelay.start();
@@ -189,8 +190,8 @@ Singleton {
         if (Settings.batteryLowWarning !== false
                 && root.capacity <= root.lowThreshold && !root._warnedLow) {
             root._warnedLow = true;
-            Sys.notify("Power", "Battery low — " + root.capacity + "%",
-                       "Plug in, or the machine will suspend at " + root.criticalThreshold + "%.",
+            Sys.notify("Power", I18n.tr("Battery low — %1%", root.capacity),
+                       I18n.tr("Plug in, or the machine will suspend at %1%.", root.criticalThreshold),
                        "battery-low", "critical");
         }
     }

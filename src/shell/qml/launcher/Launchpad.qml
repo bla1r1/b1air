@@ -62,7 +62,7 @@ PopupShell {
     // only the mapping to this launcher's row shape is here.
     readonly property var systemAppsMapped: Services.Apps.list.map(app => ({
         name: app.name,
-        desc: app.comment || "Installed Application",
+        desc: app.comment || I18n.tr("Installed Application"),
         icon: app.iconPath || app.icon || "application-x-executable",
         app_id: app.icon || "application-x-executable",
         cmd: app.exec,
@@ -90,15 +90,15 @@ PopupShell {
     // They remain in SpotlightLauncher, which is a command palette rather than
     // an application grid, so searching "clipboard" there still finds it.
     readonly property var baseApps: [
-        { name: "Files", desc: "Native File Manager & Gallery", icon: "b1air-files", app_id: "system-file-manager", cmd: "b1air-files", cat: "Utilities" },
-        { name: "Terminal", desc: "Multi-tab Native Terminal", icon: "b1air-term", app_id: "utilities-terminal", cmd: "b1air-term", cat: "System" },
-        { name: "Notes", desc: "Markdown Notes with Obsidian & Notion Sync", icon: "b1air-notes", app_id: "accessories-text-editor", cmd: "b1air-notes", cat: "Office" },
-        { name: "Git", desc: "GitHub Desktop Style Git Client", icon: "b1air-git", app_id: "git", cmd: "b1air-git", cat: "Development" },
-        { name: "System Monitor", desc: "Process & Hardware Monitor", icon: "b1air-monitor", app_id: "utilities-system-monitor", cmd: "b1air-monitor", cat: "System" },
-        { name: "Image Viewer", desc: "Lightweight Image & Media Viewer", icon: "b1air-view", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
-        { name: "Text Editor", desc: "Minimal Text & Config Editor", icon: "b1air-text", app_id: "text-editor", cmd: "b1air-text", cat: "Utilities" },
-        { name: "System Settings", desc: "Desktop Preferences & Appearance", icon: "b1air-settings", app_id: "preferences-system", cmd: "b1air-settings", cat: "System" },
-        { name: "Camera", desc: "Photos and video from the built-in camera", icon: "b1air-camera", app_id: "b1air-camera", cmd: "b1air-camera", cat: "Multimedia" },
+        { name: "Files", desc: I18n.tr("Native File Manager & Gallery"), icon: "b1air-files", app_id: "system-file-manager", cmd: "b1air-files", cat: "Utilities" },
+        { name: "Terminal", desc: I18n.tr("Multi-tab Native Terminal"), icon: "b1air-term", app_id: "utilities-terminal", cmd: "b1air-term", cat: "System" },
+        { name: "Notes", desc: I18n.tr("Markdown Notes with Obsidian & Notion Sync"), icon: "b1air-notes", app_id: "accessories-text-editor", cmd: "b1air-notes", cat: "Office" },
+        { name: "Git", desc: I18n.tr("GitHub Desktop Style Git Client"), icon: "b1air-git", app_id: "git", cmd: "b1air-git", cat: "Development" },
+        { name: "System Monitor", desc: I18n.tr("Process & Hardware Monitor"), icon: "b1air-monitor", app_id: "utilities-system-monitor", cmd: "b1air-monitor", cat: "System" },
+        { name: "Image Viewer", desc: I18n.tr("Lightweight Image & Media Viewer"), icon: "b1air-view", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
+        { name: "Text Editor", desc: I18n.tr("Minimal Text & Config Editor"), icon: "b1air-text", app_id: "text-editor", cmd: "b1air-text", cat: "Utilities" },
+        { name: "System Settings", desc: I18n.tr("Desktop Preferences & Appearance"), icon: "b1air-settings", app_id: "preferences-system", cmd: "b1air-settings", cat: "System" },
+        { name: "Camera", desc: I18n.tr("Photos and video from the built-in camera"), icon: "b1air-camera", app_id: "b1air-camera", cmd: "b1air-camera", cat: "Multimedia" },
     ]
 
     function categoryName(raw) {
@@ -380,7 +380,7 @@ PopupShell {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Search applications"
+                        text: I18n.tr("Search applications")
                         color: Design.textDim
                         font: parent.font
                         visible: !launchSearchInput.text
@@ -415,7 +415,7 @@ PopupShell {
                     model: window.categories
                     delegate: Pill {
                         required property var modelData
-                        label: modelData.key + "  " + modelData.count
+                        label: I18n.tr(modelData.key) + "  " + modelData.count
                         active: window.activeCategory === modelData.key
                         onClicked: window.activeCategory = modelData.key
                     }
@@ -611,10 +611,10 @@ PopupShell {
                 width: parent.width
                 visible: window.filteredApps.length === 0
                 icon: "\u{f002}"
-                title: window.query.trim() ? "Nothing matches “" + window.query.trim() + "”"
-                                           : "No applications in " + window.activeCategory
-                hint: window.query.trim() ? "Try fewer letters, or clear the category filter."
-                                          : "Install something, or pick another category above."
+                title: window.query.trim() ? I18n.tr("Nothing matches “%1”", window.query.trim())
+                                           : I18n.tr("No applications in %1", I18n.tr(window.activeCategory))
+                hint: window.query.trim() ? I18n.tr("Try fewer letters, or clear the category filter.")
+                                          : I18n.tr("Install something, or pick another category above.")
             }
         }
 
@@ -638,7 +638,7 @@ PopupShell {
             }
 
             Label {
-                text: "↑↓←→ move    ↵ open    right-click pin"
+                text: I18n.tr("↑↓←→ move    ↵ open    right-click pin")
                 role: "caption"
                 color: Design.textFaint
             }

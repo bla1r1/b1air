@@ -47,7 +47,7 @@ PopupShell {
             }
 
             Label {
-                text: "FancyZones Snapping Grid"
+                text: I18n.tr("FancyZones Snapping Grid")
                 role: "subhead"
                 weight: Design.weight.bold
             }
@@ -55,7 +55,7 @@ PopupShell {
             Item { Layout.fillWidth: true }
 
             Badge {
-                text: "Press 1–9 or Click"
+                text: I18n.tr("Press 1–9 or Click")
                 tone: Design.accent
             }
         }
@@ -69,15 +69,15 @@ PopupShell {
             rowSpacing: Design.s(Design.space.sm)
 
             readonly property var zones: [
-                { id: 1, name: "Left 1/2", desc: "Half split", key: "1", icon: "\u{f038}" },
-                { id: 2, name: "Right 1/2", desc: "Half split", key: "2", icon: "\u{f037}" },
-                { id: 3, name: "Left 1/3", desc: "Ternary left", key: "3", icon: "\u{f038}" },
-                { id: 4, name: "Mid 1/3", desc: "Ternary center", key: "4", icon: "\u{f039}" },
-                { id: 5, name: "Right 1/3", desc: "Ternary right", key: "5", icon: "\u{f037}" },
-                { id: 6, name: "Left 2/3", desc: "Broad master", key: "6", icon: "\u{f038}" },
-                { id: 7, name: "Right 2/3", desc: "Broad master", key: "7", icon: "\u{f037}" },
-                { id: 8, name: "Top 1/2", desc: "Horizontal top", key: "8", icon: "\u{f077}" },
-                { id: 9, name: "Bottom 1/2", desc: "Horizontal bottom", key: "9", icon: "\u{f078}" }
+                { id: 1, name: "Left 1/2", desc: I18n.tr("Half split"), key: "1", icon: "\u{f038}" },
+                { id: 2, name: "Right 1/2", desc: I18n.tr("Half split"), key: "2", icon: "\u{f037}" },
+                { id: 3, name: "Left 1/3", desc: I18n.tr("Ternary left"), key: "3", icon: "\u{f038}" },
+                { id: 4, name: "Mid 1/3", desc: I18n.tr("Ternary center"), key: "4", icon: "\u{f039}" },
+                { id: 5, name: "Right 1/3", desc: I18n.tr("Ternary right"), key: "5", icon: "\u{f037}" },
+                { id: 6, name: "Left 2/3", desc: I18n.tr("Broad master"), key: "6", icon: "\u{f038}" },
+                { id: 7, name: "Right 2/3", desc: I18n.tr("Broad master"), key: "7", icon: "\u{f037}" },
+                { id: 8, name: "Top 1/2", desc: I18n.tr("Horizontal top"), key: "8", icon: "\u{f077}" },
+                { id: 9, name: "Bottom 1/2", desc: I18n.tr("Horizontal bottom"), key: "9", icon: "\u{f078}" }
             ]
 
             Repeater {

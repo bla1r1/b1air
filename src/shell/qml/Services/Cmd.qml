@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "../Ui"
 import Quickshell
 import B1air.Daemon
 import Quickshell.Io
@@ -38,9 +39,9 @@ Singleton {
     }
 
     function _report(exitCode, stderrText) {
-        const label = root._current ? root._current.label : "Command";
+        const label = root._current ? root._current.label : I18n.tr("Command");
         const detail = (stderrText || "").trim().split("\n").filter(l => l.trim() !== "").pop()
-                    || ("exited with code " + exitCode);
+                    || I18n.tr("exited with code %1", exitCode);
         Sys.notify("b1air", label + " failed", detail, "", "critical");
     }
 

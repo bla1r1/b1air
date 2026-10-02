@@ -16,10 +16,10 @@ import "../Services"
 MiniView {
     id: root
 
-    title: "Notifications"
+    title: I18n.tr("Notifications")
     icon: "\u{f009a}"
     tone: Design.lavender
-    footerLabel: "Notification Settings…"
+    footerLabel: I18n.tr("Notification Settings…")
 
     // While this list is on screen, a toast repeating one of its lines is
     // noise — and toasts used to be drawn on top of it, because both surfaces
@@ -30,7 +30,7 @@ MiniView {
     trailing: ActionButton {
         visible: Notifications.history.count > 0
         icon: "\u{f0156}"
-        label: "Clear"
+        label: I18n.tr("Clear")
         onActivated: Notifications.clearAllHistory()
     }
 
@@ -43,8 +43,8 @@ MiniView {
             Layout.fillWidth: true
 
             Toggle {
-                label: "Do Not Disturb"
-                subtitle: "Silence popups and store them in history"
+                label: I18n.tr("Do Not Disturb")
+                subtitle: I18n.tr("Silence popups and store them in history")
                 checked: Notifications.dnd
                 onToggled: Notifications.toggleDnd()
             }
@@ -156,7 +156,7 @@ MiniView {
             Label {
                 anchors.centerIn: parent
                 visible: Notifications.history.count === 0
-                text: "No notifications"
+                text: I18n.tr("No notifications")
                 role: "body"
                 dim: true
             }

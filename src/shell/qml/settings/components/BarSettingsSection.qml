@@ -29,27 +29,27 @@ ColumnLayout {
     // The bar has always read barClock24h and nothing on any page could set
     // it, so a 12-hour clock needed a hand edit of settings.json.
     Card {
-        title: "Clock"
-        subtitle: "How the time in the bar is written"
+        title: I18n.tr("Clock")
+        subtitle: I18n.tr("How the time in the bar is written")
         icon: "\u{f0954}"
         accentColor: Design.blue
 
         Toggle {
-            label: "24-hour time"
-            subtitle: Settings.barClock24h ? "14:30" : "2:30 PM"
+            label: I18n.tr("24-hour time")
+            subtitle: Settings.barClock24h ? "14:30" : I18n.tr("2:30 PM")
             checked: Settings.barClock24h
             onToggled: Settings.set("barClock24h", !Settings.barClock24h)
         }
     }
 
     Card {
-        title: "Workspaces"
-        subtitle: "How many workspace numbers the bar shows"
+        title: I18n.tr("Workspaces")
+        subtitle: I18n.tr("How many workspace numbers the bar shows")
         icon: "\u{f0b60}"
         accentColor: Design.blue
 
         Stepper {
-            label: "Workspace count"
+            label: I18n.tr("Workspace count")
             valueText: Settings.workspaceCount.toString()
             onDecrement: Settings.set("workspaceCount", Math.max(1, Settings.workspaceCount - 1))
             onIncrement: Settings.set("workspaceCount", Math.min(20, Settings.workspaceCount + 1))
@@ -62,8 +62,8 @@ ColumnLayout {
     // question about a situation that does not exist.
     Card {
         visible: Quickshell.screens && Quickshell.screens.length > 1
-        title: "Multiple Monitors"
-        subtitle: "Which screen carries the full bar, and what the others show"
+        title: I18n.tr("Multiple Monitors")
+        subtitle: I18n.tr("Which screen carries the full bar, and what the others show")
         icon: "\u{f0379}"
         accentColor: Design.blue
 
@@ -74,10 +74,10 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { Layout.fillWidth: true; text: "Shorter bars on other screens"; weight: Design.weight.semibold }
+                Label { Layout.fillWidth: true; text: I18n.tr("Shorter bars on other screens"); weight: Design.weight.semibold }
                 Label {
                     Layout.fillWidth: true
-                    text: "The weather, the media title, the tray and the CPU island stay on the main screen; the others keep their workspaces, the clock and the system controls"
+                    text: I18n.tr("The weather, the media title, the tray and the CPU island stay on the main screen; the others keep their workspaces, the clock and the system controls")
                     role: "caption"; dim: true; wrapMode: Text.WordWrap
                 }
             }
@@ -92,14 +92,14 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.xs)
 
-            Label { text: "Main screen"; weight: Design.weight.semibold }
+            Label { text: I18n.tr("Main screen"); weight: Design.weight.semibold }
 
             Flow {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.xs)
 
                 Pill {
-                    label: "Automatic"
+                    label: I18n.tr("Automatic")
                     active: Settings.barPrimaryOutput === ""
                     onClicked: Settings.set("barPrimaryOutput", "")
                 }
@@ -117,7 +117,7 @@ ColumnLayout {
 
             Label {
                 Layout.fillWidth: true
-                text: "The same choice as Main display in Displays: it also gets workspace 1 and the focus at login. Automatic uses the first screen the compositor reports; naming one keeps it across replugs."
+                text: I18n.tr("The same choice as Main display in Displays: it also gets workspace 1 and the focus at login. Automatic uses the first screen the compositor reports; naming one keeps it across replugs.")
                 role: "caption"; dim: true; wrapMode: Text.WordWrap
             }
         }

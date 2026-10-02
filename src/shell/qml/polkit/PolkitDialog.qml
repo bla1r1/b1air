@@ -31,7 +31,7 @@ PanelWindow {
     height: Screen.height
 
     property string actionId: Quickshell.env("POLKIT_ACTION") || "org.freedesktop.policykit.exec"
-    property string actionMessage: Quickshell.env("POLKIT_MESSAGE") || "Authentication is required to perform this action."
+    property string actionMessage: Quickshell.env("POLKIT_MESSAGE") || I18n.tr("Authentication is required to perform this action.")
     property string targetUser: Quickshell.env("POLKIT_USER") || Quickshell.env("USER") || "root"
     property string cookie: Quickshell.env("POLKIT_COOKIE") || ""
     property string responseFile: Quickshell.env("POLKIT_RESP_FILE") || ((Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/polkit-response")
@@ -116,7 +116,7 @@ PanelWindow {
                     spacing: Design.s(2)
 
                     Label {
-                        text: "Authentication Required"
+                        text: I18n.tr("Authentication Required")
                         weight: Design.weight.bold
                         role: "subhead"
                     }
@@ -187,7 +187,7 @@ PanelWindow {
                     }
 
                     Badge {
-                        text: "Admin"
+                        text: I18n.tr("Admin")
                         tone: Design.sapphire
                     }
                 }
@@ -257,13 +257,13 @@ PanelWindow {
                 spacing: Design.s(10)
 
                 ActionButton {
-                    label: "Cancel"
+                    label: I18n.tr("Cancel")
                     Layout.fillWidth: true
                     onActivated: polkitWin.cancelAuth()
                 }
 
                 ActionButton {
-                    label: polkitWin.isSubmitting ? "Authenticating..." : "Authenticate"
+                    label: polkitWin.isSubmitting ? I18n.tr("Authenticating...") : I18n.tr("Authenticate")
                     tone: Design.sapphire
                     Layout.fillWidth: true
                     enabled: pwdInput.text.length > 0 && !polkitWin.isSubmitting

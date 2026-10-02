@@ -42,7 +42,7 @@ PopupShell {
     readonly property color sapphire: Design.sapphire
     readonly property color blue: Design.blue
 
-    readonly property var monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    readonly property var monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => I18n.tr(m))
 
     // -------------------------------------------------------------------------
     // STATE & POLLING PATHS
@@ -314,7 +314,7 @@ PopupShell {
         let monthName = window.monthNames[d.getMonth()];
         let dateNum = d.getDate();
         let isToday = getIsoDate(d) === getIsoDate(new Date());
-        return isToday ? "Today" : `${monthName} ${dateNum}`;
+        return isToday ? I18n.tr("Today") : `${monthName} ${dateNum}`;
     }
 
     function changeDay(offsetDays) {
@@ -630,7 +630,7 @@ PopupShell {
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             font.weight: Design.weight.semibold
-                            text: window.isWeekView ? (window.weekRangeStr !== "" ? window.weekRangeStr : "Week Overview") : (window.selectedAppClass !== "" ? `${window.selectedAppName} - ${window.getFancyDate(window.activeDate)}` : window.getFancyDate(window.activeDate))
+                            text: window.isWeekView ? (window.weekRangeStr !== "" ? window.weekRangeStr : I18n.tr("Week Overview")) : (window.selectedAppClass !== "" ? `${window.selectedAppName} - ${window.getFancyDate(window.activeDate)}` : window.getFancyDate(window.activeDate))
                         }
 
                         Item { Layout.fillWidth: true } // Right Spacer
@@ -699,7 +699,7 @@ PopupShell {
                                         Layout.alignment: Qt.AlignHCenter
                                         font.weight: Design.weight.semibold
                                         dim: true
-                                        text: "Daily average"
+                                        text: I18n.tr("Daily average")
                                     }
                                     Label {
                                         role: "title"
@@ -750,8 +750,8 @@ PopupShell {
                                                ? window.peach : Design.textDim
                                         visible: window.selectedAppClass === "" && window.focusTimer.dailyGoalHours > 0
                                         text: window.totalSeconds >= window.focusTimer.dailyGoalHours * 3600
-                                              ? "over the " + window.focusTimer.dailyGoalHours + "h goal"
-                                              : "of a " + window.focusTimer.dailyGoalHours + "h goal"
+                                              ? I18n.tr("over the %1h goal", window.focusTimer.dailyGoalHours)
+                                              : I18n.tr("of a %1h goal", window.focusTimer.dailyGoalHours)
                                     }
                                 }
                             }
@@ -805,7 +805,7 @@ PopupShell {
                                         Layout.alignment: Qt.AlignHCenter
                                         font.weight: Design.weight.semibold
                                         color: Design.textFaint
-                                        text: (window.totalSeconds === 0 && window.yesterdaySeconds === 0) ? "No data" : "Same time"
+                                        text: (window.totalSeconds === 0 && window.yesterdaySeconds === 0) ? I18n.tr("No data") : I18n.tr("Same time")
                                         visible: (window.totalSeconds === 0 && window.yesterdaySeconds === 0) || window.totalSeconds === window.yesterdaySeconds
                                     }
                                 }
@@ -885,16 +885,16 @@ PopupShell {
                                         dim: !window.focusTimer.active
                                         text: window.focusTimer.active
                                               ? window.focusTimer.phaseLabel
-                                                + " · interval " + (window.focusTimer.completedWork + 1)
-                                              : "Focus timer"
+                                                + " · " + I18n.tr("interval %1", window.focusTimer.completedWork + 1)
+                                              : I18n.tr("Focus timer")
                                     }
                                     Label {
                                         role: "caption"
                                         dim: true
                                         text: window.focusTimer.active
-                                              ? (window.focusTimer.running ? "Running" : "Paused")
-                                              : window.focusTimer.workMinutes + " min focus · "
-                                                + window.focusTimer.shortBreakMinutes + " min break · long break every 4"
+                                              ? (window.focusTimer.running ? I18n.tr("Running") : I18n.tr("Paused"))
+                                              : I18n.tr("%1 min focus · %2 min break · long break every 4",
+                                                        window.focusTimer.workMinutes, window.focusTimer.shortBreakMinutes)
                                     }
                                 }
 
@@ -911,8 +911,8 @@ PopupShell {
                                     // banner with a caption.
                                     Layout.fillWidth: false
                                     icon: window.focusTimer.running ? "\u{f03e4}" : "\u{f040a}"
-                                    label: window.focusTimer.running ? "Pause"
-                                         : (window.focusTimer.active ? "Resume" : "Start")
+                                    label: window.focusTimer.running ? I18n.tr("Pause")
+                                         : (window.focusTimer.active ? I18n.tr("Resume") : I18n.tr("Start"))
                                     onActivated: window.focusTimer.toggle()
                                 }
 
@@ -920,7 +920,7 @@ PopupShell {
                                     Layout.fillWidth: false
                                     visible: window.focusTimer.active
                                     icon: "\u{f04ad}"
-                                    label: "Skip"
+                                    label: I18n.tr("Skip")
                                     onActivated: window.focusTimer.skip()
                                 }
 
@@ -928,7 +928,7 @@ PopupShell {
                                     Layout.fillWidth: false
                                     visible: window.focusTimer.active
                                     icon: "\u{f04db}"
-                                    label: "Stop"
+                                    label: I18n.tr("Stop")
                                     onActivated: window.focusTimer.stop()
                                 }
                             }
@@ -962,7 +962,7 @@ PopupShell {
                                     width: parent.width - Design.s(32)
                                     visible: weekListModel.count === 0
                                     icon: "\u{f0c7a}"
-                                    title: "No week to show yet"
+                                    title: I18n.tr("No week to show yet")
                                 }
 
                                 RowLayout {
@@ -1263,8 +1263,8 @@ PopupShell {
                                     width: parent.width
                                     visible: appListModel.count === 0 && window.appViewFocus < 0.5
                                     icon: "\u{f04fe}"
-                                    title: "No activity recorded"
-                                    hint: "Applications appear here once you have used them for a while."
+                                    title: I18n.tr("No activity recorded")
+                                    hint: I18n.tr("Applications appear here once you have used them for a while.")
                                 }
 
                                 // --- VIEW B: 24-Hour App Activity Chart (Now 48 chunks / 30 mins) ---
@@ -1282,7 +1282,7 @@ PopupShell {
                                     Label {
                                         Layout.alignment: Qt.AlignHCenter
                                         font.weight: Design.weight.semibold
-                                        text: "Daily usage"
+                                        text: I18n.tr("Daily usage")
                                     }
 
                                     RowLayout {
@@ -1395,7 +1395,7 @@ PopupShell {
 
                                                 Label {
                                                     role: "caption"
-                                                    text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][dayIndex]
+                                                    text: I18n.tr(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][dayIndex])
                                                     font.weight: Design.weight.regular
                                                     dim: true
                                                     Layout.preferredWidth: Design.s(75)
@@ -1485,7 +1485,7 @@ PopupShell {
                                                 Layout.alignment: Qt.AlignHCenter
                                                 font.weight: Design.weight.medium
                                                 dim: true
-                                                text: "Daily average"
+                                                text: I18n.tr("Daily average")
                                             }
                                             Label {
                                                 role: "subhead"
@@ -1511,7 +1511,7 @@ PopupShell {
                                                 Layout.alignment: Qt.AlignHCenter
                                                 font.weight: Design.weight.medium
                                                 dim: true
-                                                text: "Peak hours"
+                                                text: I18n.tr("Peak hours")
                                             }
                                             Label {
                                                 Layout.alignment: Qt.AlignHCenter

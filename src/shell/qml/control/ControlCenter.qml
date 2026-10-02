@@ -244,11 +244,11 @@ PopupShell {
             if (id === "wifi" && !Network.hasWifi) continue;
             if (id === "bluetooth" && !Network.hasBluetooth) continue;
             if (id === "powermode" && !(Power.hasBattery || Power.hasProfiles)) continue;
-            out.push({ id: id, kind: "tile", title: center.widgetTitles[id][0], icon: center.widgetTitles[id][1] });
+            out.push({ id: id, kind: "tile", title: I18n.tr(center.widgetTitles[id][0]), icon: center.widgetTitles[id][1] });
         }
         for (const id of center.cardIds)
             if (Settings.isWidgetHidden(Settings.ccHiddenCards, id))
-                out.push({ id: id, kind: "card", title: center.widgetTitles[id][0], icon: center.widgetTitles[id][1] });
+                out.push({ id: id, kind: "card", title: I18n.tr(center.widgetTitles[id][0]), icon: center.widgetTitles[id][1] });
         return out;
     }
 
@@ -496,7 +496,7 @@ PopupShell {
             }
 
             Label {
-                text: center.editing ? "Arrange" : "Control Center"
+                text: center.editing ? I18n.tr("Arrange") : I18n.tr("Control Center")
                 role: "subhead"
                 weight: Design.weight.bold
                 color: center.editing ? Design.accent : Design.text
@@ -509,7 +509,7 @@ PopupShell {
             // while you are rearranging tiles are two ways to lose the work.
             Label {
                 visible: center.editing
-                text: "drag to move · S M L to size · × to remove"
+                text: I18n.tr("drag to move · S M L to size · × to remove")
                 role: "caption"
                 color: Design.textDim
                 elide: Text.ElideRight
@@ -571,11 +571,11 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("wifi")
                 visible: center.tileShown("wifi")
                 glyph: "\u{f0928}"
-                title: "Wi-Fi"
+                title: I18n.tr("Wi-Fi")
                 on: Network.wifi.power === "on"
                 activeColor: Design.blue
                 detail: Network.wifi.connected ? Network.wifi.connected.ssid
-                                               : (on ? "Not connected" : "Off")
+                                               : (on ? I18n.tr("Not connected") : I18n.tr("Off"))
                 onToggled: Network.toggleWifi()
                 onActivated: center.currentView = "wifi"
             }
@@ -591,11 +591,11 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("bluetooth")
                 visible: center.tileShown("bluetooth")
                 glyph: "\u{f00af}"
-                title: "Bluetooth"
+                title: I18n.tr("Bluetooth")
                 on: Network.bluetooth.power === "on"
                 activeColor: Design.mauve
                 detail: Network.bluetooth.connected ? Network.bluetooth.connected.name
-                                                    : (on ? "No device" : "Off")
+                                                    : (on ? I18n.tr("No device") : I18n.tr("Off"))
                 onToggled: Network.toggleBluetooth()
                 onActivated: center.currentView = "bluetooth"
             }
@@ -617,10 +617,10 @@ PopupShell {
                 // says so too. And its detail line read "Active" when
                 // notifications were *not* silenced, which is the opposite of
                 // how the word reads next to a tile that is lit when on.
-                title: "Do Not Disturb"
+                title: I18n.tr("Do Not Disturb")
                 on: Notifications.dnd
                 activeColor: Design.peach
-                detail: Notifications.dnd ? "Silenced" : "Off"
+                detail: Notifications.dnd ? I18n.tr("Silenced") : I18n.tr("Off")
                 trailingGlyph: ""
                 onToggled: Notifications.toggleDnd()
                 onActivated: Notifications.toggleDnd()
@@ -637,11 +637,11 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("nightlight")
                 visible: center.tileShown("nightlight")
                 glyph: "\u{f0599}"
-                title: "Night Light"
+                title: I18n.tr("Night Light")
                 on: Settings.nightLightEnabled
                 activeColor: Design.yellow
                 glyphTone: on ? Design.yellow : Design.textDim
-                detail: on ? "Warm (" + Settings.nightLightTemp + "K)" : "Off"
+                detail: on ? I18n.tr("Warm (%1K)", Settings.nightLightTemp) : I18n.tr("Off")
                 // Through the daemon, like the Settings page. The command that
                 // was here passed wlsunset equal -t and -T, which it refuses,
                 // so this tile had never changed the screen.
@@ -667,12 +667,12 @@ PopupShell {
                 visible: center.tileShown("powermode")
                 glyph: Power.profile === "performance" ? "\u{f0e4}"
                      : (Power.profile === "power-saver" ? "\u{f0084}" : "\u{f0241}")
-                title: "Power Mode"
+                title: I18n.tr("Power Mode")
                 on: false
                 activeColor: powerTile.profileTone
                 glyphTone: powerTile.profileTone
-                detail: Power.profile === "performance" ? "Performance"
-                      : (Power.profile === "power-saver" ? "Power Saver" : "Balanced")
+                detail: Power.profile === "performance" ? I18n.tr("Performance")
+                      : (Power.profile === "power-saver" ? I18n.tr("Power Saver") : I18n.tr("Balanced"))
 
                 readonly property color profileTone: Power.profile === "performance" ? Design.red
                     : (Power.profile === "power-saver" ? Design.green : Design.sapphire)
@@ -693,11 +693,11 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("gamemode")
                 visible: center.tileShown("gamemode")
                 glyph: "\u{f11b}"
-                title: "Game Mode"
+                title: I18n.tr("Game Mode")
                 on: Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false
                 activeColor: Design.red
                 glyphTone: on ? Design.red : Design.textDim
-                detail: on ? "Performance" : "Off"
+                detail: on ? I18n.tr("Performance") : I18n.tr("Off")
                 trailingGlyph: ""
                 onToggled: {
                     const next = !(Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false);
@@ -720,15 +720,15 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("remote")
                 visible: center.tileShown("remote")
                 glyph: "\u{f0379}"
-                title: "Remote Desktop"
+                title: I18n.tr("Remote Desktop")
                 on: Remote.running
                 // Red while someone is actually watching: that is the state
                 // worth noticing, not the server merely listening.
                 activeColor: Remote.clients > 0 ? Design.red : Design.blue
                 glyphTone: on ? activeColor : Design.textDim
-                detail: !on ? "Off"
-                      : Remote.clients > 0 ? (Remote.clients === 1 ? "1 viewer connected" : Remote.clients + " viewers connected")
-                      : "Waiting on port " + Remote.port
+                detail: !on ? I18n.tr("Off")
+                      : Remote.clients > 0 ? I18n.trn("%1 viewer connected", "%1 viewers connected", Remote.clients)
+                      : I18n.tr("Waiting on port %1", Remote.port)
                 trailingGlyph: ""
                 onToggled: Remote.toggle()
                 onActivated: center.openFull("settings", "remote")
@@ -750,7 +750,7 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("caffeine")
                 visible: center.tileShown("caffeine")
                 glyph: "\u{f0f4}"
-                title: "Caffeine"
+                title: I18n.tr("Caffeine")
                 // Asked of the daemon, which holds the inhibitor. This was a
                 // property of the tile starting at false, so after the shell
                 // restarted — or anything else switched it — the tile said
@@ -759,7 +759,7 @@ PopupShell {
                 on: caffeineTile.active
                 activeColor: Design.teal
                 glyphTone: on ? Design.teal : Design.textDim
-                detail: on ? "Stay Awake" : "Sleep Normal"
+                detail: on ? I18n.tr("Stay Awake") : I18n.tr("Sleep Normal")
                 trailingGlyph: ""
                 function flip() {
                     caffeineTile.active = !caffeineTile.active;
@@ -795,12 +795,12 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("screenshot")
                 visible: center.tileShown("screenshot")
                 glyph: "\u{f016d}"
-                title: "Screenshot"
+                title: I18n.tr("Screenshot")
                 on: false
                 circleToggles: false
                 activeColor: Design.pink
                 glyphTone: Design.pink
-                detail: "Capture area"
+                detail: I18n.tr("Capture area")
                 trailingGlyph: ""
                 onActivated: {
                     center.close();
@@ -819,12 +819,12 @@ PopupShell {
                 Layout.preferredHeight: center.tileHeightFor("dropper")
                 visible: center.tileShown("dropper")
                 glyph: "\u{f0592}"
-                title: "Color Dropper"
+                title: I18n.tr("Color Dropper")
                 on: false
                 circleToggles: false
                 activeColor: Design.sapphire
                 glyphTone: Design.sapphire
-                detail: "Pick from screen"
+                detail: I18n.tr("Pick from screen")
                 trailingGlyph: ""
                 onActivated: {
                     center.close();
@@ -877,7 +877,7 @@ PopupShell {
                 value: Power.brightness
                 tone: Design.yellow
                 icon: "\u{f00df}"
-                label: "Brightness"
+                label: I18n.tr("Brightness")
                 onMoved: pct => Power.setBrightness(pct)
             }
 
@@ -895,7 +895,7 @@ PopupShell {
                     muted: Audio.muted
                     tone: Design.sapphire
                     icon: Audio.muted ? "\u{f075f}" : "\u{f057f}"
-                    label: "Volume"
+                    label: I18n.tr("Volume")
                     iconClickable: true
                     onIconClicked: Audio.toggleMasterMute()
                     onMoved: pct => Audio.setMasterVolume(pct)
@@ -981,7 +981,7 @@ PopupShell {
                 }
 
                 Badge {
-                    text: "Live"
+                    text: I18n.tr("Live")
                     tone: Design.ok
                 }
             }
@@ -1040,7 +1040,7 @@ PopupShell {
                         spacing: 2
 
                         Label {
-                            text: Media.track.title || (Media.hasPlayer ? "Nothing playing" : "No media player")
+                            text: Media.track.title || (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"))
                             weight: Design.weight.semibold
                             color: Media.hasPlayer ? Design.text : Design.textDim
                             Layout.fillWidth: true
@@ -1048,7 +1048,7 @@ PopupShell {
                         }
 
                         Label {
-                            text: Media.track.artist || (Media.hasPlayer ? "Press play to resume" : "Start one to control it here")
+                            text: Media.track.artist || (Media.hasPlayer ? I18n.tr("Press play to resume") : I18n.tr("Start one to control it here"))
                             role: "caption"
                             dim: true
                             Layout.fillWidth: true
@@ -1123,19 +1123,19 @@ PopupShell {
 
             ActionButton {
                 icon: "\u{f033e}"
-                label: "Lock"
+                label: I18n.tr("Lock")
                 onActivated: Daemon.lock()
             }
 
             ActionButton {
                 icon: "\u{f04b2}"
-                label: "Sleep"
+                label: I18n.tr("Sleep")
                 onActivated: Daemon.power("suspend")
             }
 
             ActionButton {
                 icon: "\u{f0709}"
-                label: "Reboot"
+                label: I18n.tr("Reboot")
                 iconTone: Design.peach
                 tone: Design.peach
                 destructive: true
@@ -1144,7 +1144,7 @@ PopupShell {
 
             ActionButton {
                 icon: "\u{f0425}"
-                label: "Off"
+                label: I18n.tr("Off")
                 iconTone: Design.danger
                 tone: Design.danger
                 destructive: true

@@ -30,7 +30,7 @@ PopupShell {
 
     function copyDimensions() {
         Quickshell.execDetached(["wl-copy", measureW + "x" + measureH]);
-        Osd.show("edit-copy", measureW + " × " + measureH + " px copied", "Screen ruler");
+        Osd.show("edit-copy", I18n.tr("%1 × %2 px copied", measureW, measureH), I18n.tr("Screen ruler"));
         root.close();
     }
 
@@ -55,7 +55,7 @@ PopupShell {
             }
 
             Label {
-                text: "Screen Ruler & Dimension Inspector"
+                text: I18n.tr("Screen Ruler & Dimension Inspector")
                 role: "subhead"
                 weight: Design.weight.bold
             }
@@ -63,7 +63,7 @@ PopupShell {
             Item { Layout.fillWidth: true }
 
             Badge {
-                text: "Drag anywhere below to measure"
+                text: I18n.tr("Drag anywhere below to measure")
                 tone: Design.accent
             }
         }
@@ -114,7 +114,7 @@ PopupShell {
 
                 Label {
                     anchors.centerIn: parent
-                    text: root.measureW + " × " + root.measureH + " px"
+                    text: I18n.tr("%1 × %2 px", root.measureW, root.measureH)
                     role: "body"
                     weight: Design.weight.bold
                     color: Design.accent
@@ -154,25 +154,25 @@ PopupShell {
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
-                Label { text: "Width:"; role: "caption"; dim: true }
-                Label { text: root.measureW + " px"; role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("Width:"); role: "caption"; dim: true }
+                Label { text: I18n.tr("%1 px", root.measureW); role: "body"; weight: Design.weight.bold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
-                Label { text: "Height:"; role: "caption"; dim: true }
-                Label { text: root.measureH + " px"; role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("Height:"); role: "caption"; dim: true }
+                Label { text: I18n.tr("%1 px", root.measureH); role: "body"; weight: Design.weight.bold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
-                Label { text: "Diagonal:"; role: "caption"; dim: true }
-                Label { text: root.diagonal + " px"; role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("Diagonal:"); role: "caption"; dim: true }
+                Label { text: I18n.tr("%1 px", root.diagonal); role: "body"; weight: Design.weight.bold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
-                Label { text: "Aspect:"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Aspect:"); role: "caption"; dim: true }
                 Label { text: root.aspect; role: "body"; weight: Design.weight.bold }
             }
 
@@ -180,7 +180,7 @@ PopupShell {
 
             ActionButton {
                 icon: "\u{f0c5}"
-                label: "Copy Dimensions"
+                label: I18n.tr("Copy Dimensions")
                 onActivated: root.copyDimensions()
             }
         }

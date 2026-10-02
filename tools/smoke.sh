@@ -433,6 +433,14 @@ check_daemon_cli() {
     fi
     if (( bad )); then fail "the daemon's read-only verbs"
     else pass "--version and stats answer, stats is valid JSON"; fi
+
+    # The Magic Mouse gestures, from touch scripts: no device needed.
+    if "$REPO/tools/test-magic-mouse.sh" "$bin" >/dev/null 2>&1; then
+        pass "Magic Mouse gestures are recognised from touch scripts"
+    else
+        "$REPO/tools/test-magic-mouse.sh" "$bin" | grep FAIL | sed 's/^/      /'
+        fail "Magic Mouse gestures"
+    fi
 }
 
 # ── shell-boot ───────────────────────────────────────────────────────────────
@@ -564,10 +572,14 @@ repo = sys.argv[1]
 sources = glob.glob(os.path.join(repo, "src/apps/*/*.qml")) + glob.glob(os.path.join(repo, "src/shell/qml/**/*.qml"), recursive=True)
 lit = r'"((?:[^"\\]|\\.)*)"'
 used = set()
+# The key is the string as the program has it: \" and \u201C read as JSON does.
+def key(s):
+    try: return json.loads('"' + s + '"')
+    except ValueError: return s
 for f in sources:
     text = open(f, encoding="utf-8").read()
-    for m in re.finditer(r'I18n\.tr\(\s*' + lit, text): used.add(m.group(1))
-    for m in re.finditer(r'I18n\.trn\(\s*' + lit + r'\s*,\s*' + lit, text): used.add(m.group(2))
+    for m in re.finditer(r'I18n\.tr\(\s*' + lit, text): used.add(key(m.group(1)))
+    for m in re.finditer(r'I18n\.trn\(\s*' + lit + r'\s*,\s*' + lit, text): used.add(key(m.group(2)))
 ph = lambda s: sorted(set(re.findall(r'%\d', s)))
 problems, missing = [], {}
 for path in sorted(glob.glob(os.path.join(repo, "src/shell/qml/Ui/i18n/*.json"))):

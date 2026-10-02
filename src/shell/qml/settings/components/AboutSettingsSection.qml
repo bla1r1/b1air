@@ -97,8 +97,8 @@ ColumnLayout {
 
     // ── 2. System Specifications Card ────────────────────────────────────────
     Card {
-        title: "System Specifications"
-        subtitle: section.osName + " on " + section.hostName
+        title: I18n.tr("System Specifications")
+        subtitle: I18n.tr("%1 on %2", section.osName, section.hostName)
         icon: "\u{f035b}"
         accentColor: Design.sapphire
 
@@ -108,45 +108,45 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Operating System"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("Operating System"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label { text: section.osName; weight: Design.weight.semibold; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Linux Kernel"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("Linux Kernel"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label { text: section.kernelVer; isMono: true; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Wayland Compositor"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("Wayland Compositor"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label { text: section.swayVer; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Shell Environment"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: "Quickshell (Wayland Native)"; weight: Design.weight.semibold; color: Design.accent; Layout.fillWidth: true }
+                Label { text: I18n.tr("Shell Environment"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("Quickshell (Wayland Native)"); weight: Design.weight.semibold; color: Design.accent; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "b1air Suite Version"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("b1air Suite Version"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label { text: section.suiteVersionText; isMono: true; weight: Design.weight.semibold; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Memory Usage"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("Memory Usage"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label { text: section.memInfo; isMono: true; Layout.fillWidth: true }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "System Uptime"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
+                Label { text: I18n.tr("System Uptime"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
                 Label {
-                    text: (Power.upHours > 0 ? Power.upHours + " hours, " : "") + Power.upMins + " minutes"
+                    text: (Power.upHours > 0 ? I18n.trn("%1 hour", "%1 hours", Power.upHours) + ", " : "") + I18n.trn("%1 minute", "%1 minutes", Power.upMins)
                     Layout.fillWidth: true
                 }
             }
@@ -155,8 +155,8 @@ ColumnLayout {
 
     // ── 3. Component Health & Diagnostics ────────────────────────────────────
     Card {
-        title: "Service Health & Subsystems"
-        subtitle: "Live status of background communication daemons"
+        title: I18n.tr("Service Health & Subsystems")
+        subtitle: I18n.tr("Live status of background communication daemons")
         icon: "\u{f02ce}"
         accentColor: Design.teal
 
@@ -172,9 +172,9 @@ ColumnLayout {
                     width: Design.s(10); height: width; radius: width/2
                     color: Audio.defaultSink !== null ? Design.green : Design.danger
                 }
-                Label { text: "PipeWire Audio Server"; weight: Design.weight.semibold; Layout.fillWidth: true }
+                Label { text: I18n.tr("PipeWire Audio Server"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
-                    text: Audio.defaultSink !== null ? "Connected" : "Inactive"
+                    text: Audio.defaultSink !== null ? I18n.tr("Connected") : I18n.tr("Inactive")
                     tone: Audio.defaultSink !== null ? Design.green : Design.danger
                 }
             }
@@ -187,9 +187,9 @@ ColumnLayout {
                     width: Design.s(10); height: width; radius: width/2
                     color: Design.green
                 }
-                Label { text: "NetworkManager & Connectivity"; weight: Design.weight.semibold; Layout.fillWidth: true }
+                Label { text: I18n.tr("NetworkManager & Connectivity"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
-                    text: Network.hasWifi || Network.hasBluetooth ? "Active" : "Ready"
+                    text: Network.hasWifi || Network.hasBluetooth ? I18n.tr("Active") : I18n.tr("Ready")
                     tone: Design.green
                 }
             }
@@ -202,9 +202,9 @@ ColumnLayout {
                     width: Design.s(10); height: width; radius: width/2
                     color: Power.hasBattery ? Design.green : Design.sapphire
                 }
-                Label { text: "UPower Power Management"; weight: Design.weight.semibold; Layout.fillWidth: true }
+                Label { text: I18n.tr("UPower Power Management"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
-                    text: Power.hasBattery ? "Battery Active" : "AC Connected"
+                    text: Power.hasBattery ? I18n.tr("Battery Active") : I18n.tr("AC Connected")
                     tone: Power.hasBattery ? Design.green : Design.sapphire
                 }
             }
@@ -217,9 +217,9 @@ ColumnLayout {
                     width: Design.s(10); height: width; radius: width/2
                     color: Design.green
                 }
-                Label { text: "Freedesktop Notification Daemon"; weight: Design.weight.semibold; Layout.fillWidth: true }
+                Label { text: I18n.tr("Freedesktop Notification Daemon"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
-                    text: Notifications.dnd ? "DND Active" : "Running (Native)"
+                    text: Notifications.dnd ? I18n.tr("DND Active") : I18n.tr("Running (Native)")
                     tone: Notifications.dnd ? Design.peach : Design.green
                 }
             }
@@ -228,8 +228,8 @@ ColumnLayout {
 
     // ── 4. Dotfiles Maintenance ──────────────────────────────────────────────
     Card {
-        title: "Dotfiles Maintenance & Actions"
-        subtitle: "Quick actions to manage your configuration and check for updates"
+        title: I18n.tr("Dotfiles Maintenance & Actions")
+        subtitle: I18n.tr("Quick actions to manage your configuration and check for updates")
         icon: "\u{f0493}"
         accentColor: Design.mauve
 
@@ -239,19 +239,19 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f030c}"
-                label: "Shortcuts Sheet"
+                label: I18n.tr("Shortcuts Sheet")
                 onActivated: section.navigate("shortcuts")
             }
 
             ActionButton {
                 icon: "\u{f0446}"
-                label: "Reload Sway & Quickshell"
+                label: I18n.tr("Reload Sway & Quickshell")
                 onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
             }
 
             ActionButton {
                 icon: "\u{f0450}"
-                label: "Reset Defaults"
+                label: I18n.tr("Reset Defaults")
                 destructive: true
                 onActivated: Settings.resetDefaults()
             }

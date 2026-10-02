@@ -50,10 +50,10 @@ ColumnLayout {
 
     // ── 1. Ethernet Card ─────────────────────────────────────────────────────
     Card {
-        title: "Ethernet (Wired)"
+        title: I18n.tr("Ethernet (Wired)")
         subtitle: Network.ethernet && Network.ethernet.connected
-            ? "Connected via " + Network.ethernet.ifname
-            : "No active wired connection detected"
+            ? I18n.tr("Connected via %1", Network.ethernet.ifname)
+            : I18n.tr("No active wired connection detected")
         icon: "\u{f0200}" // ethernet icon
         accentColor: Design.green
 
@@ -83,22 +83,22 @@ ColumnLayout {
 
                 Label {
                     text: (Network.ethernet && Network.ethernet.connected)
-                        ? "Wired Connection (" + Network.ethernet.ifname + ")"
-                        : "Disconnected"
+                        ? I18n.tr("Wired Connection (%1)", Network.ethernet.ifname)
+                        : I18n.tr("Disconnected")
                     weight: Design.weight.semibold
                 }
 
                 Label {
                     text: (Network.ethernet && Network.ethernet.connected)
                         ? ("IPv4: " + Network.ethernet.ip + (Network.ethernet.prefix ? "/" + Network.ethernet.prefix : ""))
-                        : "Plug in an Ethernet cable to connect"
+                        : I18n.tr("Plug in an Ethernet cable to connect")
                     role: "caption"
                     dim: true
                 }
             }
 
             Badge {
-                text: (Network.ethernet && Network.ethernet.connected) ? "Active" : "Offline"
+                text: (Network.ethernet && Network.ethernet.connected) ? I18n.tr("Active") : I18n.tr("Offline")
                 tone: (Network.ethernet && Network.ethernet.connected) ? Design.ok : Design.danger
             }
 
@@ -136,16 +136,16 @@ ColumnLayout {
             columnSpacing: Design.s(Design.space.md)
             rowSpacing: Design.s(Design.space.xs)
 
-            Label { text: "Interface:"; role: "caption"; dim: true }
+            Label { text: I18n.tr("Interface:"); role: "caption"; dim: true }
             Label { text: Network.ethernet ? Network.ethernet.ifname : ""; role: "caption"; isMono: true }
 
-            Label { text: "IPv4 Address:"; role: "caption"; dim: true }
+            Label { text: I18n.tr("IPv4 Address:"); role: "caption"; dim: true }
             Label { text: Network.ethernet ? Network.ethernet.ip : ""; role: "caption"; isMono: true }
 
-            Label { visible: Network.ethernet && Network.ethernet.ip6 !== ""; text: "IPv6 Address:"; role: "caption"; dim: true }
+            Label { visible: Network.ethernet && Network.ethernet.ip6 !== ""; text: I18n.tr("IPv6 Address:"); role: "caption"; dim: true }
             Label { visible: Network.ethernet && Network.ethernet.ip6 !== ""; text: Network.ethernet ? Network.ethernet.ip6 : ""; role: "caption"; isMono: true; elide: Text.ElideRight }
 
-            Label { visible: Network.ethernet && Network.ethernet.mac !== ""; text: "Hardware MAC:"; role: "caption"; dim: true }
+            Label { visible: Network.ethernet && Network.ethernet.mac !== ""; text: I18n.tr("Hardware MAC:"); role: "caption"; dim: true }
             Label { visible: Network.ethernet && Network.ethernet.mac !== ""; text: Network.ethernet ? Network.ethernet.mac : ""; role: "caption"; isMono: true }
         }
 
@@ -168,18 +168,18 @@ ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
-                        text: "IPv4 Configuration"
+                        text: I18n.tr("IPv4 Configuration")
                         weight: Design.weight.bold
                         color: Design.green
                     }
                     Item { Layout.fillWidth: true }
                     Pill {
-                        label: "Automatic (DHCP)"
+                        label: I18n.tr("Automatic (DHCP)")
                         active: section.ethMethod === "auto"
                         onClicked: section.ethMethod = "auto"
                     }
                     Pill {
-                        label: "Manual (Static IP)"
+                        label: I18n.tr("Manual (Static IP)")
                         active: section.ethMethod === "manual"
                         onClicked: section.ethMethod = "manual"
                     }
@@ -193,7 +193,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "IP Address"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("IP Address"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -205,7 +205,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Subnet Prefix"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("Subnet Prefix"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -217,7 +217,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "Gateway"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("Gateway"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -229,7 +229,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "DNS Servers"; role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("DNS Servers"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -246,12 +246,12 @@ ColumnLayout {
                     Item { Layout.fillWidth: true }
 
                     Pill {
-                        label: "Cancel"
+                        label: I18n.tr("Cancel")
                         onClicked: section.showEthConfig = false
                     }
 
                     Pill {
-                        label: "Apply Changes"
+                        label: I18n.tr("Apply Changes")
                         icon: "\u{f012c}"
                         active: true
                         onClicked: {
@@ -276,10 +276,10 @@ ColumnLayout {
     // ── 2. Wi-Fi Card ────────────────────────────────────────────────────────
     Card {
         visible: Network.hasWifi
-        title: "Wi-Fi"
+        title: I18n.tr("Wi-Fi")
         subtitle: Network.wifi.power === "on"
-            ? (section.connectedWifi ? "Connected to " + section.connectedWifi.ssid : "Wi-Fi is on, not connected")
-            : "Wi-Fi adapter is turned off"
+            ? (section.connectedWifi ? I18n.tr("Connected to %1", section.connectedWifi.ssid) : I18n.tr("Wi-Fi is on, not connected"))
+            : I18n.tr("Wi-Fi adapter is turned off")
         icon: "\u{f0928}"
         accentColor: Design.blue
 
@@ -289,8 +289,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.md)
 
             Toggle {
-                label: "Wi-Fi"
-                subtitle: "Scan for and join wireless networks"
+                label: I18n.tr("Wi-Fi")
+                subtitle: I18n.tr("Scan for and join wireless networks")
                 checked: Network.wifi.power === "on"
                 onToggled: Network.toggleWifi()
             }
@@ -342,7 +342,7 @@ ColumnLayout {
 
                         Label {
                             text: section.connectedWifi
-                                ? ("Signal " + section.connectedWifi.signal + "% • " + (section.connectedWifi.security || "Open"))
+                                ? I18n.tr("Signal %1% • %2", section.connectedWifi.signal, (section.connectedWifi.security || I18n.tr("Open")))
                                 : ""
                             role: "caption"
                             dim: true
@@ -352,7 +352,7 @@ ColumnLayout {
                     }
 
                     Pill {
-                        label: "Disconnect"
+                        label: I18n.tr("Disconnect")
                         onClicked: Network.disconnectWifi()
                     }
                 }
@@ -361,7 +361,7 @@ ColumnLayout {
 
         SectionLabel {
             visible: Network.wifi.power === "on" && Network.savedWifi.length > 0
-            text: "Available networks"
+            text: I18n.tr("Available networks")
         }
 
         Repeater {
@@ -393,7 +393,7 @@ ColumnLayout {
                         spacing: 0
 
                         Label {
-                            text: netEntry.modelData.ssid || "Hidden network"
+                            text: netEntry.modelData.ssid || I18n.tr("Hidden network")
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -401,9 +401,9 @@ ColumnLayout {
                         Label {
                             // Says why one row joins on a click and another asks
                             // for a passphrase, the way the mini view does.
-                            text: Network.isBusy(netEntry.modelData.ssid) ? "Connecting…"
-                                : (netEntry.modelData.known ? "Saved"
-                                : (netEntry.secured ? "Password required" : "Open network"))
+                            text: Network.isBusy(netEntry.modelData.ssid) ? I18n.tr("Connecting…")
+                                : (netEntry.modelData.known ? I18n.tr("Saved")
+                                : (netEntry.secured ? I18n.tr("Password required") : I18n.tr("Open network")))
                             role: "caption"
                             dim: true
                             Layout.fillWidth: true
@@ -419,7 +419,7 @@ ColumnLayout {
                     }
 
                     Pill {
-                        label: netEntry.asking ? "Cancel" : "Connect"
+                        label: netEntry.asking ? I18n.tr("Cancel") : I18n.tr("Connect")
                         icon: "\u{f0928}"
                         onClicked: {
                             if (netEntry.asking) {
@@ -438,7 +438,7 @@ ColumnLayout {
                 Field {
                     visible: netEntry.asking
                     Layout.fillWidth: true
-                    placeholder: "Passphrase for " + (netEntry.modelData.ssid || "")
+                    placeholder: I18n.tr("Passphrase for %1", (netEntry.modelData.ssid || ""))
                     echoMode: TextInput.Password
                     onAccepted: psk => {
                         Network.connectWifi(netEntry.modelData.ssid, psk);
@@ -452,12 +452,12 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Network.wifi.power === "on" && section.inRange.length === 0
             icon: "\u{f092e}"
-            title: "No networks in range"
-            hint: "Nothing is broadcasting nearby, or the scan has not finished yet."
+            title: I18n.tr("No networks in range")
+            hint: I18n.tr("Nothing is broadcasting nearby, or the scan has not finished yet.")
         }
 
         SectionLabel {
-            text: "Saved networks"
+            text: I18n.tr("Saved networks")
         }
 
         Repeater {
@@ -485,8 +485,8 @@ ColumnLayout {
                     }
 
                     Label {
-                        text: (section._isNear(modelData.name) ? "In range" : "Not in range")
-                            + (modelData.autoconnect ? " • joins automatically" : " • manual")
+                        text: (section._isNear(modelData.name) ? I18n.tr("In range") : I18n.tr("Not in range"))
+                            + " • " + (modelData.autoconnect ? I18n.tr("joins automatically") : I18n.tr("manual"))
                         role: "caption"
                         dim: true
                         Layout.fillWidth: true
@@ -495,7 +495,7 @@ ColumnLayout {
                 }
 
                 Pill {
-                    label: "Forget"
+                    label: I18n.tr("Forget")
                     icon: "\u{f01b4}"
                     onClicked: Network.forgetWifi(modelData.name)
                 }
@@ -506,8 +506,8 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Network.wifi.power === "on" && Network.savedWifi.length === 0
             icon: "\u{f092e}"
-            title: "No saved networks"
-            hint: "Join a network and it will be remembered here."
+            title: I18n.tr("No saved networks")
+            hint: I18n.tr("Join a network and it will be remembered here.")
         }
     }
 }

@@ -35,7 +35,7 @@ Rectangle {
         spacing: Design.s(Design.space.xs)
 
         Label {
-            text: tray.items.length > 0 ? "Add a widget" : "Every widget is on the panel"
+            text: tray.items.length > 0 ? I18n.tr("Add a widget") : I18n.tr("Every widget is on the panel")
             role: "caption"
             weight: Design.weight.bold
             color: tray.items.length > 0 ? Design.accent : Design.textDim

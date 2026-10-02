@@ -54,9 +54,9 @@ PopupShell {
     readonly property var monthNames: [
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
-    ]
+    ].map(m => I18n.tr(m))
 
-    readonly property var weekDayNames: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    readonly property var weekDayNames: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => I18n.tr(d))
 
     function prevMonth() {
         if (viewMonth === 0) {
@@ -222,7 +222,7 @@ PopupShell {
         "metrics": ["Weather Details", "\u{f059d}"], "forecast": ["Forecast", "\u{f0595}"]
     })
     readonly property var trayItems: window.calIds.filter(id => !window.calShown(id))
-        .map(id => ({ id: id, title: window.partTitles[id][0], icon: window.partTitles[id][1] }))
+        .map(id => ({ id: id, title: I18n.tr(window.partTitles[id][0]), icon: window.partTitles[id][1] }))
 
     readonly property real monthWidth: Design.s(window.calSize("calendar") === "small" ? 260
                                       : (window.calSize("calendar") === "large" ? 390 : 310))
@@ -401,7 +401,7 @@ PopupShell {
                     spacing: Design.s(4)
 
                     Label {
-                        text: window.editing ? "Arrange" : (window.monthNames[window.viewMonth] + " " + window.viewYear)
+                        text: window.editing ? I18n.tr("Arrange") : (window.monthNames[window.viewMonth] + " " + window.viewYear)
                         weight: Design.weight.bold
                         role: "body"
                         color: window.editing ? Design.accent : Design.text
@@ -570,7 +570,7 @@ PopupShell {
                         }
 
                         Label {
-                            text: Qt.formatDateTime(window.currentTime, "dddd, MMMM d, yyyy")
+                            text: I18n.date(window.currentTime, "dddd, MMMM d, yyyy")
                             role: "caption"
                             weight: Design.weight.medium
                             color: Design.textDim
@@ -649,7 +649,7 @@ PopupShell {
                             color: Design.text
                         }
                         Label {
-                            text: Qt.formatDateTime(window.currentTime, "dddd • d MMMM")
+                            text: I18n.date(window.currentTime, "dddd • d MMMM")
                             role: "caption"
                             weight: Design.weight.semibold
                             color: Design.accent
@@ -711,13 +711,13 @@ PopupShell {
                                         color: Design.text
                                     }
                                     Label {
-                                        text: window.todayForecast ? ("Feels " + window.todayForecast.feels_like + "°") : ""
+                                        text: window.todayForecast ? I18n.tr("Feels %1°", window.todayForecast.feels_like) : ""
                                         role: "caption"
                                         color: Design.textDim
                                     }
                                 }
                                 Label {
-                                    text: window.todayForecast ? window.todayForecast.desc : "Fetching weather..."
+                                    text: window.todayForecast ? I18n.tr(window.todayForecast.desc) : I18n.tr("Fetching weather...")
                                     role: "caption"
                                     weight: Design.weight.semibold
                                     color: Design.text
@@ -775,8 +775,8 @@ PopupShell {
                             Icon { text: "\u{f0590}"; role: "caption"; color: Design.teal }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: "Wind"; role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " mph" : " km/h")) : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: I18n.tr("Wind"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " " + I18n.tr("mph") : " " + I18n.tr("km/h"))) : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
                             }
                         }
                     }
@@ -795,7 +795,7 @@ PopupShell {
                             Icon { text: "\u{f043}"; role: "caption"; color: Design.sapphire }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: "Humidity"; role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Humidity"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
                                 Label { text: window.todayForecast ? (window.todayForecast.humidity + "%") : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
                             }
                         }
@@ -816,7 +816,7 @@ PopupShell {
                             Icon { text: "\u{f0597}"; role: "caption"; color: Design.blue }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: "Rain"; role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Rain"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
                                 Label { text: (window.todayForecast && window.todayForecast.rain_chance !== undefined) ? (window.todayForecast.rain_chance + "%") : "0%"; role: "caption"; weight: Design.weight.bold; color: Design.text }
                             }
                         }
@@ -837,7 +837,7 @@ PopupShell {
                             Icon { text: "\u{f2c9}"; role: "caption"; color: Design.peach }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: "Range"; role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Range"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
                                 Label { text: window.todayForecast ? (window.todayForecast.min + "° - " + window.todayForecast.max + "°") : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
                             }
                         }
@@ -887,7 +887,7 @@ PopupShell {
 
                                 Label {
                                     Layout.alignment: Qt.AlignHCenter
-                                    text: modelData.day || ""
+                                    text: I18n.tr(modelData.day || "")
                                     role: "caption"
                                     weight: Design.weight.bold
                                     color: (index === 0) ? Design.accent : Design.text

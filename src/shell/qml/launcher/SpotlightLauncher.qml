@@ -29,7 +29,7 @@ PopupShell {
     // to this launcher's row shape is here.
     readonly property var systemAppsMapped: Services.Apps.list.map(app => ({
         name: app.name,
-        desc: app.comment || "Installed Application",
+        desc: app.comment || I18n.tr("Installed Application"),
         icon: app.icon || "\u{f108}",
         app_id: app.icon || "",
         cmd: app.exec,
@@ -40,18 +40,18 @@ PopupShell {
 
     // ── Core System Actions ──────────────────────────────────────────────────
     readonly property var baseApps: [
-        { name: "Terminal", desc: "Native b1air terminal emulator", icon: "\u{f120}", cmd: "b1air-term", cat: "System" },
-        { name: "Launchpad", desc: "Full application launcher", icon: "\u{f009}", cmd: "b1air-shell toggle launchpad", cat: "System" },
-        { name: "File Manager", desc: "Native b1air file manager", icon: "\u{f07b}", cmd: "b1air-files", cat: "System" },
-        { name: "Settings", desc: "System & Desktop Settings", icon: "\u{f013}", cmd: "b1air-shell toggle settings", cat: "System" },
-        { name: "Control Center", desc: "Quick toggles & notifications", icon: "\u{f0f3}", cmd: "b1air-shell toggle control", cat: "System" },
-        { name: "Clipboard History", desc: "Search clipboard history & snippets", icon: "\u{f0ea}", cmd: "b1air-shell toggle clipboard", cat: "Utilities" },
-        { name: "Calendar & Weather", desc: "View date, calendar and forecasts", icon: "\u{f073}", cmd: "b1air-shell toggle calendar", cat: "Utilities" },
-        { name: "Color Dropper", desc: "Pick screen color to clipboard", icon: "\u{f1fb}", cmd: "b1air-daemon color-picker", cat: "Utilities" },
-        { name: "Lock Screen", desc: "Lock current user session", icon: "\u{f023}", cmd: "b1air-daemon power lock", cat: "Session" },
-        { name: "Power Menu", desc: "Shutdown, reboot, sleep options", icon: "\u{f011}", cmd: "b1air-shell toggle session", cat: "Session" },
-        { name: "Screenshot", desc: "Capture selected region", icon: "\u{f030}", cmd: "b1air-daemon screenshot area", cat: "Utilities" },
-        { name: "Task Manager", desc: "Native b1air system monitor", icon: "\u{f080}", cmd: "b1air-monitor", cat: "System" }
+        { name: "Terminal", desc: I18n.tr("Native b1air terminal emulator"), icon: "\u{f120}", cmd: "b1air-term", cat: "System" },
+        { name: "Launchpad", desc: I18n.tr("Full application launcher"), icon: "\u{f009}", cmd: "b1air-shell toggle launchpad", cat: "System" },
+        { name: "File Manager", desc: I18n.tr("Native b1air file manager"), icon: "\u{f07b}", cmd: "b1air-files", cat: "System" },
+        { name: "Settings", desc: I18n.tr("System & Desktop Settings"), icon: "\u{f013}", cmd: "b1air-shell toggle settings", cat: "System" },
+        { name: "Control Center", desc: I18n.tr("Quick toggles & notifications"), icon: "\u{f0f3}", cmd: "b1air-shell toggle control", cat: "System" },
+        { name: "Clipboard History", desc: I18n.tr("Search clipboard history & snippets"), icon: "\u{f0ea}", cmd: "b1air-shell toggle clipboard", cat: "Utilities" },
+        { name: "Calendar & Weather", desc: I18n.tr("View date, calendar and forecasts"), icon: "\u{f073}", cmd: "b1air-shell toggle calendar", cat: "Utilities" },
+        { name: "Color Dropper", desc: I18n.tr("Pick screen color to clipboard"), icon: "\u{f1fb}", cmd: "b1air-daemon color-picker", cat: "Utilities" },
+        { name: "Lock Screen", desc: I18n.tr("Lock current user session"), icon: "\u{f023}", cmd: "b1air-daemon power lock", cat: "Session" },
+        { name: "Power Menu", desc: I18n.tr("Shutdown, reboot, sleep options"), icon: "\u{f011}", cmd: "b1air-shell toggle session", cat: "Session" },
+        { name: "Screenshot", desc: I18n.tr("Capture selected region"), icon: "\u{f030}", cmd: "b1air-daemon screenshot area", cat: "Utilities" },
+        { name: "Task Manager", desc: I18n.tr("Native b1air system monitor"), icon: "\u{f080}", cmd: "b1air-monitor", cat: "System" }
     ]
 
     function evaluateMath(expr) {
@@ -256,7 +256,7 @@ PopupShell {
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Search apps, commands, or calculate (e.g. 24 * 7)..."
+                            text: I18n.tr("Search apps, commands, or calculate (e.g. 24 * 7)...")
                             color: Design.textDim
                             font: parent.font
                             visible: !searchInput.text
@@ -332,14 +332,14 @@ PopupShell {
                                     role: "subhead"
                                 }
                                 Label {
-                                    text: "Calculation • Press Enter to copy"
+                                    text: I18n.tr("Calculation • Press Enter to copy")
                                     role: "caption"
                                     dim: true
                                 }
                             }
 
                             Badge {
-                                text: "↵ Copy"
+                                text: I18n.tr("↵ Copy")
                                 tone: Design.accent
                             }
                         }
@@ -417,7 +417,7 @@ PopupShell {
                                 }
 
                                 Badge {
-                                    text: modelData.cat || "App"
+                                    text: I18n.tr(modelData.cat || "App")
                                     tone: isSelected ? Design.accent : Design.textDim
                                 }
                             }
@@ -448,12 +448,12 @@ PopupShell {
                             }
                             Label {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "No matching apps or commands"
+                                text: I18n.tr("No matching apps or commands")
                                 weight: Design.weight.semibold
                             }
                             Label {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "Press Enter to run \"" + window.query + "\" as a terminal command"
+                                text: I18n.tr("Press Enter to run \"%1\" as a terminal command", window.query)
                                 role: "caption"
                                 dim: true
                             }

@@ -3,6 +3,7 @@
 #include "user_manager.hpp"
 #include "system_control.hpp"
 #include "settings_manager.hpp"
+#include "magic_mouse.hpp"
 #include "session_manager.hpp"
 #include "daemon_dbus.hpp"
 #include "runtime.hpp"
@@ -827,6 +828,12 @@ int main(int argc, char* argv[]) {
         }
         std::cerr << "Unknown battery command: " << sub << "\n";
         return 1;
+    } else if (cmd == "magic-mouse") {
+        // status: the Magic Mice found; replay: the gesture recogniser fed
+        // from stdin, for tests without the hardware.
+        const std::string sub = (argc >= 3) ? argv[2] : "status";
+        if (sub == "replay") return b1air::magic_mouse::replay();
+        return b1air::magic_mouse::print_status();
     } else if (cmd == "caffeine" || cmd == "idle-inhibit") {
         std::string sub = (argc >= 3) ? argv[2] : "toggle";
         if (sub == "status" || sub == "get") {

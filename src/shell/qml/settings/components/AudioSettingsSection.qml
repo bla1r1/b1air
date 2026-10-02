@@ -71,20 +71,20 @@ ColumnLayout {
 
             Pill {
                 visible: line.isDevice && line.type === "sink" && line.row && !line.row.disabled
-                label: "Test"
+                label: I18n.tr("Test")
                 icon: "\u{f0025}"
                 onClicked: Audio.testAudio(line.row.id)
             }
 
             Pill {
                 visible: line.selectable && line.row && !line.row.is_default && !line.row.disabled
-                label: "Use this"
+                label: I18n.tr("Use this")
                 onClicked: Audio.setDefault(line.type, line.row.name)
             }
 
             Pill {
                 visible: line.isDevice && line.row
-                label: line.row && line.row.disabled ? "Enable" : "Disable"
+                label: line.row && line.row.disabled ? I18n.tr("Enable") : I18n.tr("Disable")
                 active: line.row && line.row.disabled
                 activeColor: Design.danger
                 onClicked: if (line.row) Audio.toggleDeviceDisabled(line.row.name)
@@ -106,8 +106,8 @@ ColumnLayout {
     }
 
     Card {
-        title: "Application volume"
-        subtitle: "Each stream keeps its own level. Turning one down here does not touch the master."
+        title: I18n.tr("Application volume")
+        subtitle: I18n.tr("Each stream keeps its own level. Turning one down here does not touch the master.")
         icon: "\u{f075a}"
         accentColor: Design.mauve
 
@@ -126,14 +126,14 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Audio.apps.count === 0
             icon: "\u{f075a}"
-            title: "Nothing is playing"
-            hint: "Applications appear here while they hold an audio stream."
+            title: I18n.tr("Nothing is playing")
+            hint: I18n.tr("Applications appear here while they hold an audio stream.")
         }
     }
 
     Card {
-        title: "Sound"
-        subtitle: "The master switch for everything this computer plays"
+        title: I18n.tr("Sound")
+        subtitle: I18n.tr("The master switch for everything this computer plays")
         icon: Audio.masterMute ? "\u{f075f}" : "\u{f057e}"
         accentColor: Design.teal
 
@@ -141,16 +141,16 @@ ColumnLayout {
         // around a bare Toggle, with "Enabled" under the label repeating what
         // the switch already shows.
         Toggle {
-            label: "Sound output"
-            subtitle: Audio.masterMute ? "Muted — the volume levels below are kept" : "Off mutes everything; volume levels are kept"
+            label: I18n.tr("Sound output")
+            subtitle: Audio.masterMute ? I18n.tr("Muted — the volume levels below are kept") : I18n.tr("Off mutes everything; volume levels are kept")
             checked: !Audio.masterMute
             onToggled: Audio.toggleMasterMute()
         }
     }
 
     Card {
-        title: "Output devices"
-        subtitle: "Per-device level, independent of the master slider"
+        title: I18n.tr("Output devices")
+        subtitle: I18n.tr("Per-device level, independent of the master slider")
         icon: "\u{f057e}"
         accentColor: Design.sapphire
 
@@ -170,14 +170,14 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Audio.outputs.count === 0
             icon: "\u{f075f}"
-            title: "No output devices"
-            hint: "Nothing is registered with PipeWire right now."
+            title: I18n.tr("No output devices")
+            hint: I18n.tr("Nothing is registered with PipeWire right now.")
         }
     }
 
     Card {
-        title: "Input devices"
-        subtitle: "Microphones and capture sources"
+        title: I18n.tr("Input devices")
+        subtitle: I18n.tr("Microphones and capture sources")
         icon: "\u{f036c}"
         accentColor: Design.teal
 
@@ -215,14 +215,14 @@ ColumnLayout {
                 spacing: 0
 
                 Label {
-                    text: "AI noise suppression (RNNoise)"
+                    text: I18n.tr("AI noise suppression (RNNoise)")
                     weight: Design.weight.semibold
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
 
                 Label {
-                    text: "Filters keyboard clatter and room noise out of the microphone"
+                    text: I18n.tr("Filters keyboard clatter and room noise out of the microphone")
                     role: "caption"
                     dim: true
                     Layout.fillWidth: true
@@ -232,7 +232,7 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f021}"
-                label: "Toggle Filter"
+                label: I18n.tr("Toggle Filter")
                 onActivated: Daemon.micRnnoiseToggle()
             }
         }
@@ -241,14 +241,14 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Audio.inputs.count === 0
             icon: "\u{f036d}"
-            title: "No inputs"
-            hint: "No microphone or capture device is registered."
+            title: I18n.tr("No inputs")
+            hint: I18n.tr("No microphone or capture device is registered.")
         }
     }
 
     Card {
-        title: "Audio Feedback & Sound Effects"
-        subtitle: "Acoustic feedback for volume changes, screenshot capture, and peripheral plug events"
+        title: I18n.tr("Audio Feedback & Sound Effects")
+        subtitle: I18n.tr("Acoustic feedback for volume changes, screenshot capture, and peripheral plug events")
         icon: "\u{f0028}"
         accentColor: Design.cyan
 
@@ -263,8 +263,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Volume Step Feedback Click"; weight: Design.weight.semibold }
-                    Label { text: "Play a subtle audio tick when adjusting volume level with keys"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Volume Step Feedback Click"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Play a subtle audio tick when adjusting volume level with keys"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -282,8 +282,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Screenshot Shutter Sound"; weight: Design.weight.semibold }
-                    Label { text: "Play a camera shutter sound when saving or copying a screenshot"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Screenshot Shutter Sound"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Play a camera shutter sound when saving or copying a screenshot"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -301,8 +301,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Peripheral & Device Connect Chime"; weight: Design.weight.semibold }
-                    Label { text: "Play a chime when a headset, USB audio interface, dock or Bluetooth audio device connects"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Peripheral & Device Connect Chime"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Play a chime when a headset, USB audio interface, dock or Bluetooth audio device connects"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -314,21 +314,21 @@ ColumnLayout {
     }
 
     Card {
-        title: "Audio preferences"
-        subtitle: "Key step size and volume change feedback"
+        title: I18n.tr("Audio preferences")
+        subtitle: I18n.tr("Key step size and volume change feedback")
         icon: "\u{f04c3}"
         accentColor: Design.peach
 
         Stepper {
-            label: "Volume step"
+            label: I18n.tr("Volume step")
             valueText: Settings.audioStep + "%"
             onDecrement: Settings.set("audioStep", Math.max(1, Settings.audioStep - 1))
             onIncrement: Settings.set("audioStep", Math.min(25, Settings.audioStep + 1))
         }
 
         Toggle {
-            label: "Volume notifications"
-            subtitle: "Show the volume popup when media keys are pressed"
+            label: I18n.tr("Volume notifications")
+            subtitle: I18n.tr("Show the volume popup when media keys are pressed")
             checked: Settings.audioNotifications
             onToggled: Settings.set("audioNotifications", !Settings.audioNotifications)
         }

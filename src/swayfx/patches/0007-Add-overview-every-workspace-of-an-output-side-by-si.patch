@@ -1,4 +1,4 @@
-From 34ffcd9ca4029ad1b6a2b03f9db065aa67e6e5cd Mon Sep 17 00:00:00 2001
+From 47e78cb69431de08cfa525415154d1b12fba271f Mon Sep 17 00:00:00 2001
 From: b1air <dimazzzzz342@gmail.com>
 Date: Sat, 3 Oct 2026 20:57:55 +0000
 Subject: [PATCH] Add overview: every workspace of an output side by side, live
@@ -11,6 +11,11 @@ others come in on dark cards; leaving reverses it. A click on a
 workspace, or Enter on the one picked with the arrows, goes there;
 Escape, or a click beside them, leaves.
 
+`overview_swipe <fingers>` brings it in with a swipe up and takes it away
+with a swipe down, following the fingers; letting go finishes it, or puts
+it back when the fingers did not go far or fast enough. Sideways swipes
+with those fingers still go to the gesture bindings.
+
 Floating windows sit in one layer for all workspaces and are hidden
 while it is up; the special workspace is not shown. Workspaces still
 sliding or held by a swipe are put in place first, and a switch made
@@ -18,26 +23,30 @@ from the overview does not slide.
 
 Needs scenefx with wlr_scene_tree_set_scale (src/scenefx patch 0002).
 ---
- include/sway/commands.h         |   1 +
- include/sway/desktop/overview.h |  19 ++
- sway/commands.c                 |   1 +
- sway/commands/overview.c        |  37 ++++
+ include/sway/commands.h         |   3 +
+ include/sway/config.h           |   1 +
+ include/sway/desktop/overview.h |  34 +++
+ sway/commands.c                 |   3 +
+ sway/commands/overview.c        |  37 +++
+ sway/commands/overview_swipe.c  |  27 ++
+ sway/config.c                   |   1 +
  sway/desktop/output.c           |   5 +-
- sway/desktop/overview.c         | 324 ++++++++++++++++++++++++++++++++
+ sway/desktop/overview.c         | 506 ++++++++++++++++++++++++++++++++
  sway/desktop/transaction.c      |  10 +-
- sway/input/keyboard.c           |  12 ++
- sway/input/seatop_default.c     |   7 +
- sway/meson.build                |   2 +
- 10 files changed, 415 insertions(+), 3 deletions(-)
+ sway/input/keyboard.c           |  12 +
+ sway/input/seatop_default.c     |  29 +-
+ sway/meson.build                |   3 +
+ 13 files changed, 667 insertions(+), 4 deletions(-)
  create mode 100644 include/sway/desktop/overview.h
  create mode 100644 sway/commands/overview.c
+ create mode 100644 sway/commands/overview_swipe.c
  create mode 100644 sway/desktop/overview.c
 
 diff --git a/include/sway/commands.h b/include/sway/commands.h
-index 9e7d7f47..20ea61ef 100644
+index 9e7d7f47..3758fa8d 100644
 --- a/include/sway/commands.h
 +++ b/include/sway/commands.h
-@@ -112,6 +112,7 @@ sway_cmd cmd_allow_tearing;
+@@ -112,11 +112,14 @@ sway_cmd cmd_allow_tearing;
  sway_cmd cmd_animation_duration_ms;
  sway_cmd cmd_autotile;
  sway_cmd cmd_special_workspace;
@@ -45,16 +54,36 @@ index 9e7d7f47..20ea61ef 100644
  sway_cmd cmd_inactive_opacity;
  sway_cmd cmd_workspace_animation;
  sway_cmd cmd_window_animation;
+ sway_cmd cmd_workspace_swipe;
+ sway_cmd cmd_debug_workspace_swipe;
++sway_cmd cmd_overview_swipe;
++sway_cmd cmd_debug_overview_swipe;
+ sway_cmd cmd_assign;
+ sway_cmd cmd_bar;
+ sway_cmd cmd_bindcode;
+diff --git a/include/sway/config.h b/include/sway/config.h
+index e6c2c63b..5760df20 100644
+--- a/include/sway/config.h
++++ b/include/sway/config.h
+@@ -505,6 +505,7 @@ struct sway_config {
+ 	// b1air: touchpad swipe that moves workspaces with the fingers (0: off)
+ 	uint32_t workspace_swipe_fingers;
+ 	bool workspace_swipe_invert;
++	uint32_t overview_swipe_fingers;   // b1air: 0 off
+ 	int corner_radius;
+ 	bool smart_corner_radius;
+ 
 diff --git a/include/sway/desktop/overview.h b/include/sway/desktop/overview.h
 new file mode 100644
-index 00000000..d78d565a
+index 00000000..5efaca46
 --- /dev/null
 +++ b/include/sway/desktop/overview.h
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,34 @@
 +#ifndef _SWAY_DESKTOP_OVERVIEW_H
 +#define _SWAY_DESKTOP_OVERVIEW_H
 +
 +#include <stdbool.h>
++#include <stdint.h>
 +#include <xkbcommon/xkbcommon.h>
 +
 +struct sway_output;
@@ -69,12 +98,42 @@ index 00000000..d78d565a
 +bool overview_handle_button(double lx, double ly, bool pressed);
 +bool overview_handle_key(xkb_keysym_t sym);
 +
++// overview_swipe <fingers>: up brings it in with the fingers, down takes
++// it away; sideways is handed back to the usual gesture bindings.
++struct sway_seat;
++enum overview_swipe_result {
++	OVERVIEW_SWIPE_NOT_OURS,
++	OVERVIEW_SWIPE_CONSUMED,
++	OVERVIEW_SWIPE_HANDOVER,    // not ours after all: begin the usual handling
++};
++bool overview_swipe_begin(struct sway_seat *seat, uint32_t fingers);
++enum overview_swipe_result overview_swipe_update(struct sway_seat *seat,
++	double dx, double dy, uint32_t time_msec,
++	uint32_t *fingers, double *acc_dx, double *acc_dy);
++bool overview_swipe_end(struct sway_seat *seat, bool cancelled);
++
 +#endif
 diff --git a/sway/commands.c b/sway/commands.c
-index a70f0f77..58273a47 100644
+index a70f0f77..3a31a75e 100644
 --- a/sway/commands.c
 +++ b/sway/commands.c
-@@ -156,6 +156,7 @@ static const struct cmd_handler command_handlers[] = {
+@@ -97,6 +97,7 @@ static const struct cmd_handler handlers[] = {
+ 	{ "new_window", cmd_new_window },
+ 	{ "no_focus", cmd_no_focus },
+ 	{ "output", cmd_output },
++	{ "overview_swipe", cmd_overview_swipe },
+ 	{ "popup_during_fullscreen", cmd_popup_during_fullscreen },
+ 	{ "seat", cmd_seat },
+ 	{ "set", cmd_set },
+@@ -144,6 +145,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "allow_tearing", cmd_allow_tearing },
+ 	{ "border", cmd_border },
+ 	{ "create_output", cmd_create_output },
++	{ "debug_overview_swipe", cmd_debug_overview_swipe },
+ 	{ "debug_workspace_swipe", cmd_debug_workspace_swipe },
+ 	{ "exit", cmd_exit },
+ 	{ "floating", cmd_floating },
+@@ -156,6 +158,7 @@ static const struct cmd_handler command_handlers[] = {
  	{ "move", cmd_move },
  	{ "nop", cmd_nop },
  	{ "opacity", cmd_opacity },
@@ -125,6 +184,51 @@ index 00000000..30e960ac
 +	}
 +	return cmd_results_new(CMD_SUCCESS, NULL);
 +}
+diff --git a/sway/commands/overview_swipe.c b/sway/commands/overview_swipe.c
+new file mode 100644
+index 00000000..910d88c4
+--- /dev/null
++++ b/sway/commands/overview_swipe.c
+@@ -0,0 +1,27 @@
++#include <stdlib.h>
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/config.h"
++
++// overview_swipe off|<fingers>
++//
++// A swipe up with that many fingers brings the workspace overview in with
++// the fingers, a swipe down takes it away (sway/desktop/overview.c).
++// Sideways swipes with them still go to the gesture bindings.
++struct cmd_results *cmd_overview_swipe(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "overview_swipe", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	if (strcasecmp(argv[0], "off") == 0 || strcasecmp(argv[0], "disable") == 0) {
++		config->overview_swipe_fingers = 0;
++		return cmd_results_new(CMD_SUCCESS, NULL);
++	}
++	char *end;
++	long fingers = strtol(argv[0], &end, 10);
++	if (*end || fingers < 3 || fingers > 5) {
++		return cmd_results_new(CMD_INVALID, "Expected 'overview_swipe off|<3-5 fingers>'");
++	}
++	config->overview_swipe_fingers = (uint32_t)fingers;
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/config.c b/sway/config.c
+index cede5a9a..fdf4ebff 100644
+--- a/sway/config.c
++++ b/sway/config.c
+@@ -359,6 +359,7 @@ static void config_defaults(struct sway_config *config) {
+ 	config->window_popin_factor = 0.8f;
+ 	config->workspace_swipe_fingers = 0;
+ 	config->workspace_swipe_invert = false;
++	config->overview_swipe_fingers = 0;
+ 
+ 	config->corner_radius = 0;
+ 	config->smart_corner_radius = false;
 diff --git a/sway/desktop/output.c b/sway/desktop/output.c
 index 2c29ecf3..08aedafc 100644
 --- a/sway/desktop/output.c
@@ -151,15 +255,18 @@ index 2c29ecf3..08aedafc 100644
  	int corner_radius = closest_con && container_has_corner_radius(closest_con) ?
 diff --git a/sway/desktop/overview.c b/sway/desktop/overview.c
 new file mode 100644
-index 00000000..767f3982
+index 00000000..21b9268a
 --- /dev/null
 +++ b/sway/desktop/overview.c
-@@ -0,0 +1,324 @@
+@@ -0,0 +1,506 @@
 +#include <math.h>
 +#include <stdlib.h>
++#include <string.h>
 +#include <xkbcommon/xkbcommon.h>
 +#include <scenefx/types/wlr_scene.h>
 +#include "sway/animation_manager.h"
++#include "sway/commands.h"
++#include "sway/input/input-manager.h"
 +#include "sway/config.h"
 +#include "sway/desktop/overview.h"
 +#include "sway/input/seat.h"
@@ -188,6 +295,7 @@ index 00000000..767f3982
 +	struct sway_output *output;   // NULL when no overview
 +	bool closing;
 +	float t;                      // 0 the usual view, 1 the overview
++	float from_t, to_t;           // what the animation runs between
 +	struct animation anim;
 +	bool anim_ready;
 +	int selected;                 // index in the shown workspaces
@@ -326,7 +434,7 @@ index 00000000..767f3982
 +}
 +
 +static void overview_update(void *data) {
-+	ov.t = ov.closing ? 1.0f - ov.anim.multiplier : ov.anim.multiplier;
++	ov.t = lerp(ov.from_t, ov.to_t, ov.anim.multiplier);
 +	overview_place();
 +}
 +
@@ -339,7 +447,10 @@ index 00000000..767f3982
 +	}
 +}
 +
++// From where it is now to the overview (1) or away from it (0).
 +static void overview_animate(void) {
++	ov.from_t = ov.t;
++	ov.to_t = ov.closing ? 0.0f : 1.0f;
 +	if (!ov.anim_ready) {
 +		ov.anim = init_animation(NULL);
 +		ov.anim_ready = true;
@@ -357,6 +468,8 @@ index 00000000..767f3982
 +	return output && ov.output == output;
 +}
 +
++static void overview_begin(struct sway_output *output);
++
 +void overview_show(struct sway_output *output) {
 +	if (!output) {
 +		return;
@@ -368,6 +481,18 @@ index 00000000..767f3982
 +	if (ov.output == output && !ov.closing) {
 +		return;
 +	}
++	if (ov.output == output) {
++		// Was leaving: turns round from where it is.
++		ov.closing = false;
++		overview_animate();
++		return;
++	}
++	overview_begin(output);
++	overview_animate();
++}
++
++// Takes the output over for the overview, still at t = 0.
++static void overview_begin(struct sway_output *output) {
 +	// Workspaces still sliding or held by a swipe are put in place first.
 +	for (int i = 0; i < output->workspaces->length; i++) {
 +		struct sway_workspace *ws = output->workspaces->items[i];
@@ -386,8 +511,8 @@ index 00000000..767f3982
 +		}
 +	}
 +	list_free(list);
++	ov.t = 0.0f;
 +	overview_place();
-+	overview_animate();
 +	// Lays the other workspaces out too (they are only arranged while
 +	// shown); overview_rearranged() places them once that lands.
 +	arrange_output(output);
@@ -479,6 +604,167 @@ index 00000000..767f3982
 +	return handled;
 +}
 +
++// ── The touchpad swipe ─────────────────────────────────────────────────────
++//
++// overview_swipe <fingers>: a swipe up with that many fingers brings the
++// overview in with the fingers, a swipe down takes it away the same way;
++// letting go finishes it, or puts it back if the fingers did not go far
++// (or fast) enough. A sideways swipe is handed back to the usual gesture
++// bindings.
++
++// Touchpad units before the swipe counts as up/down or sideways.
++#define SWIPE_DECIDE 12.0
++// Travel that takes the overview all the way in.
++#define SWIPE_DISTANCE 260.0
++// Past this much of the way, letting go finishes it.
++#define SWIPE_COMMIT 0.35
++// Or moving this fast (units per ms) the way it was going.
++#define SWIPE_FLICK 0.5
++
++static struct {
++	enum { OSWIPE_IDLE, OSWIPE_DECIDING, OSWIPE_ACTIVE, OSWIPE_IGNORED } state;
++	uint32_t fingers;
++	double dx, dy, velocity;
++	uint32_t last_time;
++	bool opening;
++} osw;
++
++static double swipe_progress(void) {
++	double p = (osw.opening ? -osw.dy : osw.dy) / SWIPE_DISTANCE;
++	return p < 0.0 ? 0.0 : (p > 1.0 ? 1.0 : p);
++}
++
++static void swipe_apply(void) {
++	double p = swipe_progress();
++	ov.t = (float)(osw.opening ? p : 1.0 - p);
++	overview_place();
++}
++
++bool overview_swipe_begin(struct sway_seat *seat, uint32_t fingers) {
++	if (!config->overview_swipe_fingers || fingers != config->overview_swipe_fingers) {
++		return false;
++	}
++	osw.state = OSWIPE_DECIDING;
++	osw.fingers = fingers;
++	osw.dx = osw.dy = osw.velocity = 0.0;
++	osw.last_time = 0;
++	return true;
++}
++
++enum overview_swipe_result overview_swipe_update(struct sway_seat *seat,
++		double dx, double dy, uint32_t time_msec,
++		uint32_t *fingers, double *acc_dx, double *acc_dy) {
++	switch (osw.state) {
++	case OSWIPE_IDLE:
++		return OVERVIEW_SWIPE_NOT_OURS;
++	case OSWIPE_IGNORED:
++		return OVERVIEW_SWIPE_CONSUMED;
++	case OSWIPE_DECIDING: {
++		osw.dx += dx;
++		osw.dy += dy;
++		if (hypot(osw.dx, osw.dy) < SWIPE_DECIDE) {
++			return OVERVIEW_SWIPE_CONSUMED;
++		}
++		struct sway_workspace *ws = seat_get_focused_workspace(seat);
++		struct sway_output *output = ws ? ws->output : NULL;
++		bool open = overview_active_on(output) && !ov.closing;
++		bool up = osw.dy < 0;
++		// Sideways, or a way that does nothing here (down with no
++		// overview): the usual bindings have it, from what moved so far.
++		if (!output || fabs(osw.dx) > fabs(osw.dy) || up == open
++				|| (ov.output && ov.output != output)) {
++			*fingers = osw.fingers;
++			*acc_dx = osw.dx;
++			*acc_dy = osw.dy;
++			osw.state = OSWIPE_IDLE;
++			return OVERVIEW_SWIPE_HANDOVER;
++		}
++		osw.opening = up;
++		finish_animation(&ov.anim);
++		if (osw.opening && !overview_active_on(output)) {
++			overview_begin(output);
++		}
++		ov.closing = false;
++		// The fingers start from where it is now, should it have been
++		// on its way somewhere.
++		osw.dy = osw.opening ? -ov.t * SWIPE_DISTANCE : (1.0 - ov.t) * SWIPE_DISTANCE;
++		osw.state = OSWIPE_ACTIVE;
++		osw.last_time = time_msec;
++		swipe_apply();
++		return OVERVIEW_SWIPE_CONSUMED;
++	}
++	case OSWIPE_ACTIVE:
++		if (!ov.output) {
++			osw.state = OSWIPE_IGNORED;
++			return OVERVIEW_SWIPE_CONSUMED;
++		}
++		osw.dy += dy;
++		if (time_msec > osw.last_time) {
++			double instant = dy / (double)(time_msec - osw.last_time);
++			osw.velocity = 0.6 * osw.velocity + 0.4 * instant;
++		}
++		osw.last_time = time_msec;
++		swipe_apply();
++		return OVERVIEW_SWIPE_CONSUMED;
++	}
++	return OVERVIEW_SWIPE_NOT_OURS;
++}
++
++bool overview_swipe_end(struct sway_seat *seat, bool cancelled) {
++	switch (osw.state) {
++	case OSWIPE_IDLE:
++		return false;
++	case OSWIPE_DECIDING:
++	case OSWIPE_IGNORED:
++		osw.state = OSWIPE_IDLE;
++		return true;
++	case OSWIPE_ACTIVE:
++		break;
++	}
++	osw.state = OSWIPE_IDLE;
++	if (!ov.output) {
++		return true;
++	}
++	double speed = osw.opening ? -osw.velocity : osw.velocity;
++	bool done = !cancelled && (swipe_progress() > SWIPE_COMMIT || speed > SWIPE_FLICK);
++	// Opening and done, or closing and not: the overview stays.
++	ov.closing = osw.opening != done;
++	overview_animate();
++	return true;
++}
++
++// debug_overview_swipe begin <fingers> | update <dy> [<dx>] | end | cancel
++//
++// Drives the swipe above as a touchpad would, for tests without one.
++struct cmd_results *cmd_debug_overview_swipe(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "debug_overview_swipe", EXPECTED_AT_LEAST, 1))) {
++		return error;
++	}
++	struct sway_seat *seat = input_manager_current_seat();
++	static uint32_t clock_ms = 0;
++	clock_ms += 16;
++	if (strcmp(argv[0], "begin") == 0 && argc >= 2) {
++		if (!overview_swipe_begin(seat, (uint32_t)atoi(argv[1]))) {
++			return cmd_results_new(CMD_FAILURE, "overview_swipe is off or uses other fingers");
++		}
++	} else if (strcmp(argv[0], "update") == 0 && argc >= 2) {
++		uint32_t fingers;
++		double ax, ay;
++		if (overview_swipe_update(seat, argc >= 3 ? atof(argv[2]) : 0.0, atof(argv[1]),
++				clock_ms, &fingers, &ax, &ay) == OVERVIEW_SWIPE_HANDOVER) {
++			return cmd_results_new(CMD_FAILURE, "handed over: not an overview swipe");
++		}
++	} else if (strcmp(argv[0], "end") == 0) {
++		overview_swipe_end(seat, false);
++	} else if (strcmp(argv[0], "cancel") == 0) {
++		overview_swipe_end(seat, true);
++	} else {
++		return cmd_results_new(CMD_INVALID,
++			"Expected 'debug_overview_swipe begin <fingers>|update <dy> [<dx>]|end|cancel'");
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
 diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
 index 34d7b26c..f5d3e35f 100644
 --- a/sway/desktop/transaction.c
@@ -552,7 +838,7 @@ index d1823737..cdbb5de6 100644
  	// Identify active release binding
  	struct sway_binding *binding_released = NULL;
 diff --git a/sway/input/seatop_default.c b/sway/input/seatop_default.c
-index da30a32f..b540f358 100644
+index da30a32f..85f88acb 100644
 --- a/sway/input/seatop_default.c
 +++ b/sway/input/seatop_default.c
 @@ -9,6 +9,7 @@
@@ -576,15 +862,66 @@ index da30a32f..b540f358 100644
  	// Determine what's under the cursor
  	struct wlr_surface *surface = NULL;
  	double sx, sy;
+@@ -1057,7 +1064,11 @@ static void begin_regular_swipe(struct sway_seat *seat, struct wlr_pointer *poin
+ 
+ static void handle_swipe_begin(struct sway_seat *seat,
+ 		struct wlr_pointer_swipe_begin_event *event) {
+-	// b1air: workspaces that follow the fingers take their swipes first.
++	// b1air: the overview and workspaces that follow the fingers take
++	// their swipes first.
++	if (overview_swipe_begin(seat, event->fingers)) {
++		return;
++	}
+ 	if (workspace_swipe_begin(seat, event->fingers)) {
+ 		return;
+ 	}
+@@ -1070,6 +1081,18 @@ static void handle_swipe_update(struct sway_seat *seat,
+ 	// on as a usual swipe from what has moved so far.
+ 	uint32_t fingers;
+ 	double acc_dx, acc_dy;
++	switch (overview_swipe_update(seat, event->dx, event->dy, event->time_msec,
++			&fingers, &acc_dx, &acc_dy)) {
++	case OVERVIEW_SWIPE_CONSUMED:
++		return;
++	case OVERVIEW_SWIPE_HANDOVER:
++		begin_regular_swipe(seat, event->pointer, event->time_msec, fingers);
++		event->dx = acc_dx;
++		event->dy = acc_dy;
++		goto regular;
++	case OVERVIEW_SWIPE_NOT_OURS:
++		break;
++	}
+ 	switch (workspace_swipe_update(seat, event->dx, event->dy, event->time_msec,
+ 			&fingers, &acc_dx, &acc_dy)) {
+ 	case WORKSPACE_SWIPE_CONSUMED:
+@@ -1083,6 +1106,7 @@ static void handle_swipe_update(struct sway_seat *seat,
+ 		break;
+ 	}
+ 
++regular:
+ 	// Update any ongoing tracking ...
+ 	struct seatop_default_event *seatop = seat->seatop_data;
+ 	if (gesture_tracker_check(&seatop->gestures, GESTURE_TYPE_SWIPE)) {
+@@ -1099,6 +1123,9 @@ static void handle_swipe_update(struct sway_seat *seat,
+ 
+ static void handle_swipe_end(struct sway_seat *seat,
+ 		struct wlr_pointer_swipe_end_event *event) {
++	if (overview_swipe_end(seat, event->cancelled)) {
++		return;
++	}
+ 	if (workspace_swipe_end(seat, event->cancelled)) {
+ 		return;
+ 	}
 diff --git a/sway/meson.build b/sway/meson.build
-index 0dbc588c..9350bd20 100644
+index 0dbc588c..a902c9ca 100644
 --- a/sway/meson.build
 +++ b/sway/meson.build
-@@ -47,11 +47,13 @@ sway_sources = files(
+@@ -47,11 +47,14 @@ sway_sources = files(
  	'commands/animation_duration_ms.c',
  	'commands/autotile.c',
  	'commands/special_workspace.c',
 +	'commands/overview.c',
++	'commands/overview_swipe.c',
  	'commands/inactive_opacity.c',
  	'commands/workspace_animation.c',
  	'commands/window_animation.c',

@@ -16,10 +16,10 @@ import "."
 MiniView {
     id: root
 
-    title: "Bluetooth"
+    title: I18n.tr("Bluetooth")
     icon: "\u{f00af}"
     tone: Design.mauve
-    footerLabel: "Bluetooth Settings…"
+    footerLabel: I18n.tr("Bluetooth Settings…")
 
     readonly property bool isOn: Network.bluetooth.power === "on"
     readonly property var connectedDev: Network.bluetooth.connected || null
@@ -48,8 +48,8 @@ MiniView {
         width: parent.width
         visible: !root.isOn
         icon: "\u{f00b0}"
-        title: "Bluetooth is off"
-        hint: "Turn it on to connect headphones, a keyboard or a mouse."
+        title: I18n.tr("Bluetooth is off")
+        hint: I18n.tr("Turn it on to connect headphones, a keyboard or a mouse.")
     }
 
     EmptyState {
@@ -57,8 +57,8 @@ MiniView {
         width: parent.width
         visible: root.isOn && !root.connectedDev && root.devices.length === 0
         icon: "\u{f00af}"
-        title: "No devices yet"
-        hint: "Put a device in pairing mode and it will show up here."
+        title: I18n.tr("No devices yet")
+        hint: I18n.tr("Put a device in pairing mode and it will show up here.")
     }
 
     ListView {
@@ -74,7 +74,7 @@ MiniView {
             spacing: Design.s(Design.space.xs)
 
             SectionLabel {
-                text: "Connected"
+                text: I18n.tr("Connected")
                 visible: root.connectedDev !== null
             }
 
@@ -118,7 +118,7 @@ MiniView {
                     }
 
                     Label {
-                        text: connMa.containsMouse ? "Disconnect" : ""
+                        text: connMa.containsMouse ? I18n.tr("Disconnect") : ""
                         role: "caption"
                         color: Design.mauve
                     }
@@ -143,7 +143,7 @@ MiniView {
             }
 
             SectionLabel {
-                text: "Other devices"
+                text: I18n.tr("Other devices")
                 visible: root.devices.length > 0
             }
         }
@@ -187,8 +187,8 @@ MiniView {
                 }
 
                 Label {
-                    text: Network.isBusy(devRow.modelData.mac) ? "Connecting…"
-                        : (devRow.modelData.paired ? "Paired" : "Pair")
+                    text: Network.isBusy(devRow.modelData.mac) ? I18n.tr("Connecting…")
+                        : (devRow.modelData.paired ? I18n.tr("Paired") : I18n.tr("Pair"))
                     role: "caption"
                     dim: !rowMa.containsMouse
                     color: rowMa.containsMouse ? Design.mauve : Design.textDim

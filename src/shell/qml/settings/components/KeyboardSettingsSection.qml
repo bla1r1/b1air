@@ -142,14 +142,14 @@ ColumnLayout {
     // would have replaced the whole string.
 
     readonly property var switchOptions: [
-        { val: "grp:alt_shift_toggle",  label: "Alt + Shift" },
-        { val: "grp:ctrl_shift_toggle", label: "Ctrl + Shift" },
-        { val: "grp:alt_space_toggle",  label: "Alt + Space" },
-        { val: "grp:caps_toggle",       label: "Caps Lock" },
-        { val: "grp:toggle",            label: "Right Alt" },
-        { val: "grp:rctrl_toggle",      label: "Right Ctrl" },
-        { val: "grp:menu_toggle",       label: "Menu key" },
-        { val: "",                      label: "None" }
+        { val: "grp:alt_shift_toggle",  label: I18n.tr("Alt + Shift") },
+        { val: "grp:ctrl_shift_toggle", label: I18n.tr("Ctrl + Shift") },
+        { val: "grp:alt_space_toggle",  label: I18n.tr("Alt + Space") },
+        { val: "grp:caps_toggle",       label: I18n.tr("Caps Lock") },
+        { val: "grp:toggle",            label: I18n.tr("Right Alt") },
+        { val: "grp:rctrl_toggle",      label: I18n.tr("Right Ctrl") },
+        { val: "grp:menu_toggle",       label: I18n.tr("Menu key") },
+        { val: "",                      label: I18n.tr("None") }
     ]
     // Not offered: Super + Space. sway gives that key to the launcher first.
 
@@ -167,9 +167,47 @@ ColumnLayout {
     }
 
     // ── Layouts ──────────────────────────────────────────────────────────────
+    // The language of the desktop and its apps (Ui/I18n.qml). Read when a
+    // program starts, so the shell restarts to show it.
     Card {
-        title: "Input layouts"
-        subtitle: "The first one is what every login starts in"
+        title: I18n.tr("Interface language")
+        subtitle: I18n.tr("Menus, settings and apps; the shell restarts to switch")
+        icon: "\u{f05ca}"
+        accentColor: Design.blue
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: [
+                    { id: "auto", label: I18n.tr("Like the system") },
+                    { id: "en",   label: "English" },
+                    { id: "uk",   label: "Українська" },
+                    { id: "ru",   label: "Русский" }
+                ]
+                delegate: Pill {
+                    required property var modelData
+                    label: modelData.label
+                    active: (Settings.uiLanguage || "auto") === modelData.id
+                    onClicked: {
+                        if ((Settings.uiLanguage || "auto") === modelData.id) return;
+                        Settings.set("uiLanguage", modelData.id);
+                        restartSoon.restart();
+                    }
+                }
+            }
+        }
+        Timer {
+            id: restartSoon
+            // After settings.json is written.
+            interval: 600
+            onTriggered: Quickshell.execDetached(["b1air-shell", "forceReload"])
+        }
+    }
+
+    Card {
+        title: I18n.tr("Input layouts")
+        subtitle: I18n.tr("The first one is what every login starts in")
         icon: "\u{f030c}"
         accentColor: Design.peach
 
@@ -244,13 +282,13 @@ ColumnLayout {
             dim: true
             text: section.layouts.length > 1
                 ? "\u{f005d} makes a layout the default, \u{f0156} removes it. Changes apply immediately."
-                : "Add a second layout below to switch between them."
+                : I18n.tr("Add a second layout below to switch between them.")
         }
 
         Field {
             id: layoutField
             Layout.fillWidth: true
-            placeholder: "Add a layout — type a language or a code (de, pl, jp…)"
+            placeholder: I18n.tr("Add a layout — type a language or a code (de, pl, jp…)")
             onEdited: v => section.layoutQuery = v
             // Enter takes the first match, so typing "pol" + Enter is enough.
             onAccepted: v => {
@@ -305,7 +343,7 @@ ColumnLayout {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: modelData.name
+                            text: I18n.tr(modelData.name)
                             dim: true
                             elide: Text.ElideRight
                         }
@@ -329,10 +367,10 @@ ColumnLayout {
     }
 
     Card {
-        title: "Switching layouts"
+        title: I18n.tr("Switching layouts")
         subtitle: section.layouts.length > 1
-            ? "The key that cycles through the layouts above"
-            : "Only matters once there is more than one layout"
+            ? I18n.tr("The key that cycles through the layouts above")
+            : I18n.tr("Only matters once there is more than one layout")
         icon: "\u{f04e1}"
         accentColor: Design.peach
 
@@ -356,7 +394,7 @@ ColumnLayout {
             wrapMode: Text.WordWrap
             role: "caption"
             dim: true
-            text: "The layout indicator in the bar switches too, with a click."
+            text: I18n.tr("The layout indicator in the bar switches too, with a click.")
         }
     }
 
@@ -377,8 +415,8 @@ ColumnLayout {
 
     Card {
         id: bindCard
-        title: "Desktop shortcuts"
-        subtitle: "Change the key for any of these. The full list is on the Shortcuts page."
+        title: I18n.tr("Desktop shortcuts")
+        subtitle: I18n.tr("Change the key for any of these. The full list is on the Shortcuts page.")
         icon: "\u{f11c}"
         accentColor: Design.sapphire
 
@@ -400,28 +438,28 @@ ColumnLayout {
         // keys: exactly as keybinds.conf binds it (with --to-code), because
         // that is what unbindsym has to name. KEEP IN SYNC with keybinds.conf.
         readonly property var bindings: [
-            { id: "terminal",   cat: "Apps",    keys: "$mod+t",          desc: "Terminal",                cmd: "exec $terminal" },
-            { id: "files",      cat: "Apps",    keys: "$mod+e",          desc: "File manager",            cmd: "exec $fileManager" },
-            { id: "browser",    cat: "Apps",    keys: "$mod+f",          desc: "Web browser",             cmd: "exec $browser" },
-            { id: "menu",       cat: "Apps",    keys: "$mod+space",      desc: "Launchpad",               cmd: "exec $menu" },
-            { id: "spotlight",  cat: "Apps",    keys: "$mod+k",          desc: "Spotlight search",        cmd: "exec $spotlight" },
-            { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: "Git",                     cmd: "exec b1air-git" },
-            { id: "dropdown",   cat: "Apps",    keys: "$mod+grave",      desc: "Drop-down terminal",      cmd: "exec swaymsg '[app_id=\"b1air-dropdown\"] scratchpad show' || b1air-term --dropdown" },
-            { id: "settings",   cat: "System",  keys: "$mod+shift+s",    desc: "Settings",                cmd: "exec b1air-shell toggle settings" },
-            { id: "control",    cat: "System",  keys: "$mod+c",          desc: "Control Center",          cmd: "exec b1air-shell toggle control" },
-            { id: "clipboard",  cat: "System",  keys: "$mod+ctrl+v",          desc: "Clipboard history",       cmd: "exec b1air-shell toggle clipboard" },
-            { id: "emoji",      cat: "System",  keys: "$mod+period",     desc: "Emoji picker",            cmd: "exec b1air-shell toggle emoji" },
-            { id: "keyboard",   cat: "System",  keys: "$mod+shift+k",    desc: "Keyboard popup",          cmd: "exec b1air-shell toggle keyboard" },
-            { id: "session",    cat: "System",  keys: "$mod+shift+e",    desc: "Session menu",            cmd: "exec b1air-shell toggle session" },
-            { id: "guide",      cat: "System",  keys: "$mod+h",          desc: "Shortcut list",           cmd: "exec b1air-shell toggle guide" },
-            { id: "wallpaper",  cat: "System",  keys: "$mod+w",          desc: "Wallpaper settings",      cmd: "exec b1air-shell open settings wallpaper" },
-            { id: "battery",    cat: "System",  keys: "$mod+b",          desc: "Battery popup",           cmd: "exec b1air-shell toggle battery" },
-            { id: "network",    cat: "System",  keys: "$mod+n",          desc: "Network popup",           cmd: "exec b1air-shell toggle network" },
-            { id: "monitors",   cat: "System",  keys: "$mod+m",          desc: "Displays popup",          cmd: "exec b1air-shell toggle monitors" },
-            { id: "focustime",  cat: "System",  keys: "$mod+shift+t",    desc: "Screen time",             cmd: "exec b1air-shell toggle focustime" },
-            { id: "close",      cat: "Windows", keys: "$mod+q",          desc: "Close window",            cmd: "kill" },
-            { id: "floating",   cat: "Windows", keys: "$mod+ctrl+space", desc: "Toggle floating",         cmd: "floating toggle" },
-            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f",    desc: "Fullscreen",              cmd: "exec $b1airBin/b1air-daemon fullscreen-toggle" }
+            { id: "terminal",   cat: "Apps",    keys: "$mod+t",          desc: I18n.tr("Terminal"),                cmd: "exec $terminal" },
+            { id: "files",      cat: "Apps",    keys: "$mod+e",          desc: I18n.tr("File manager"),            cmd: "exec $fileManager" },
+            { id: "browser",    cat: "Apps",    keys: "$mod+f",          desc: I18n.tr("Web browser"),             cmd: "exec $browser" },
+            { id: "menu",       cat: "Apps",    keys: "$mod+space",      desc: I18n.tr("Launchpad"),               cmd: "exec $menu" },
+            { id: "spotlight",  cat: "Apps",    keys: "$mod+k",          desc: I18n.tr("Spotlight search"),        cmd: "exec $spotlight" },
+            { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: I18n.tr("Git"),                     cmd: "exec b1air-git" },
+            { id: "dropdown",   cat: "Apps",    keys: "$mod+grave",      desc: I18n.tr("Drop-down terminal"),      cmd: "exec swaymsg '[app_id=\"b1air-dropdown\"] scratchpad show' || b1air-term --dropdown" },
+            { id: "settings",   cat: "System",  keys: "$mod+shift+s",    desc: I18n.tr("Settings"),                cmd: "exec b1air-shell toggle settings" },
+            { id: "control",    cat: "System",  keys: "$mod+c",          desc: I18n.tr("Control Center"),          cmd: "exec b1air-shell toggle control" },
+            { id: "clipboard",  cat: "System",  keys: "$mod+ctrl+v",          desc: I18n.tr("Clipboard history"),       cmd: "exec b1air-shell toggle clipboard" },
+            { id: "emoji",      cat: "System",  keys: "$mod+period",     desc: I18n.tr("Emoji picker"),            cmd: "exec b1air-shell toggle emoji" },
+            { id: "keyboard",   cat: "System",  keys: "$mod+shift+k",    desc: I18n.tr("Keyboard popup"),          cmd: "exec b1air-shell toggle keyboard" },
+            { id: "session",    cat: "System",  keys: "$mod+shift+e",    desc: I18n.tr("Session menu"),            cmd: "exec b1air-shell toggle session" },
+            { id: "guide",      cat: "System",  keys: "$mod+h",          desc: I18n.tr("Shortcut list"),           cmd: "exec b1air-shell toggle guide" },
+            { id: "wallpaper",  cat: "System",  keys: "$mod+w",          desc: I18n.tr("Wallpaper settings"),      cmd: "exec b1air-shell open settings wallpaper" },
+            { id: "battery",    cat: "System",  keys: "$mod+b",          desc: I18n.tr("Battery popup"),           cmd: "exec b1air-shell toggle battery" },
+            { id: "network",    cat: "System",  keys: "$mod+n",          desc: I18n.tr("Network popup"),           cmd: "exec b1air-shell toggle network" },
+            { id: "monitors",   cat: "System",  keys: "$mod+m",          desc: I18n.tr("Displays popup"),          cmd: "exec b1air-shell toggle monitors" },
+            { id: "focustime",  cat: "System",  keys: "$mod+shift+t",    desc: I18n.tr("Screen time"),             cmd: "exec b1air-shell toggle focustime" },
+            { id: "close",      cat: "Windows", keys: "$mod+q",          desc: I18n.tr("Close window"),            cmd: "kill" },
+            { id: "floating",   cat: "Windows", keys: "$mod+ctrl+space", desc: I18n.tr("Toggle floating"),         cmd: "floating toggle" },
+            { id: "fullscreen", cat: "Windows", keys: "$mod+shift+f",    desc: I18n.tr("Fullscreen"),              cmd: "exec $b1airBin/b1air-daemon fullscreen-toggle" }
         ]
 
         function keysOf(b) { return bindCard.overrides[b.id] || b.keys; }
@@ -471,13 +509,13 @@ ColumnLayout {
         function save(b, typed) {
             const keys = bindCard.normalize(typed);
             if (keys === "") {
-                bindCard.say("Write it as keys joined by +, for example Super+Shift+T.", true);
+                bindCard.say(I18n.tr("Write it as keys joined by +, for example Super+Shift+T."), true);
                 return;
             }
             const clash = bindCard.bindings.find(o => o.id !== b.id
                 && bindCard.keysOf(o).toLowerCase() === keys.toLowerCase());
             if (clash) {
-                bindCard.say(bindCard.pretty(keys) + " is already " + clash.desc + ".", true);
+                bindCard.say(I18n.tr("%1 is already %2.", bindCard.pretty(keys), clash.desc), true);
                 return;
             }
             const o = Object.assign({}, bindCard.overrides);
@@ -487,14 +525,14 @@ ColumnLayout {
                 o[b.id] = keys;
             bindCard.write(o);
             bindCard.editingId = "";
-            bindCard.say(b.desc + " is now " + bindCard.pretty(keys) + ".", false);
+            bindCard.say(I18n.tr("%1 is now %2.", b.desc, bindCard.pretty(keys)), false);
         }
 
         function reset(b) {
             const o = Object.assign({}, bindCard.overrides);
             delete o[b.id];
             bindCard.write(o);
-            bindCard.say(b.desc + " is back on " + bindCard.pretty(b.keys) + ".", false);
+            bindCard.say(I18n.tr("%1 is back on %2.", b.desc, bindCard.pretty(b.keys)), false);
         }
 
         function write(o) {
@@ -521,7 +559,7 @@ ColumnLayout {
 
         Field {
             Layout.fillWidth: true
-            placeholder: "Filter — terminal, settings, window…"
+            placeholder: I18n.tr("Filter — terminal, settings, window…")
             onEdited: v => bindCard.filter = v.toLowerCase()
         }
 
@@ -610,14 +648,14 @@ ColumnLayout {
                             mono: true
                             id: keyField
                             Layout.fillWidth: true
-                            placeholder: "e.g. Super+Shift+T or Ctrl+Alt+Return"
+                            placeholder: I18n.tr("e.g. Super+Shift+T or Ctrl+Alt+Return")
                             onAccepted: v => bindCard.save(bindRow.modelData, v)
                         }
 
                         ActionButton {
                             Layout.fillWidth: false
                             icon: "\u{f012c}"
-                            label: "Save"
+                            label: I18n.tr("Save")
                             tone: Design.sapphire
                             onActivated: bindCard.save(bindRow.modelData, keyField.text)
                         }
@@ -626,7 +664,7 @@ ColumnLayout {
                             Layout.fillWidth: false
                             visible: bindRow.changed
                             icon: "\u{f0450}"
-                            label: "Reset"
+                            label: I18n.tr("Reset")
                             onActivated: {
                                 bindCard.reset(bindRow.modelData);
                                 bindCard.editingId = "";

@@ -65,36 +65,36 @@ ColumnLayout {
 
     // ── Top bar ──────────────────────────────────────────────────────────────
     Card {
-        title: "Top Bar Modules"
-        subtitle: "Which islands the bar draws"
+        title: I18n.tr("Top Bar Modules")
+        subtitle: I18n.tr("Which islands the bar draws")
 
         WidgetRow {
             boolKey: "barShowApps"; boolValue: Settings.barShowApps
-            title: "Apps Button"; subtitle: "Opens the launcher; right-click opens Spotlight"
+            title: I18n.tr("Apps Button"); subtitle: I18n.tr("Opens the launcher; right-click opens Spotlight")
         }
         WidgetRow {
             boolKey: "barShowPinned"; boolValue: Settings.barShowPinned
-            title: "Pinned Apps"; subtitle: "The apps pinned from the launcher"
+            title: I18n.tr("Pinned Apps"); subtitle: I18n.tr("The apps pinned from the launcher")
         }
         WidgetRow {
             boolKey: "barShowWorkspaces"; boolValue: Settings.barShowWorkspaces
-            title: "Workspaces"; subtitle: "The numbered workspace strip"
+            title: I18n.tr("Workspaces"); subtitle: I18n.tr("The numbered workspace strip")
         }
         WidgetRow {
             boolKey: "barShowMedia"; boolValue: Settings.barShowMedia
-            title: "Now Playing"; subtitle: "Track title from the active media player"
+            title: I18n.tr("Now Playing"); subtitle: I18n.tr("Track title from the active media player")
         }
         WidgetRow {
             boolKey: "barShowWeather"; boolValue: Settings.barShowWeather
-            title: "Weather"; subtitle: "Temperature and condition badge"
+            title: I18n.tr("Weather"); subtitle: I18n.tr("Temperature and condition badge")
         }
         WidgetRow {
             boolKey: "barShowStats"; boolValue: Settings.barShowStats
-            title: "CPU & Memory"; subtitle: "Processor load and memory in use"
+            title: I18n.tr("CPU & Memory"); subtitle: I18n.tr("Processor load and memory in use")
         }
         WidgetRow {
             boolKey: "barShowTray"; boolValue: Settings.barShowTray
-            title: "System Tray"; subtitle: "Icons from applications running in the background"
+            title: I18n.tr("System Tray"); subtitle: I18n.tr("Icons from applications running in the background")
         }
     }
 }

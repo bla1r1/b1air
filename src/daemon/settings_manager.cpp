@@ -366,10 +366,15 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
     // 0007); a click or Enter goes to one, Escape leaves. Asked the same way.
     const bool has_overview =
         ipc.send_command(0, "overview").find("Unknown/invalid command") == std::string::npos;
+    // Four fingers up bring it in with the fingers (overview_swipe), when
+    // the four-finger gestures are on in Mouse & Touchpad.
     if (has_overview && get_json_bool("workspaceOverview", true)) {
         (void)ipc.send_command(0, "bindsym --to-code $mod+o overview toggle");
+        (void)ipc.send_command(0, get_json_bool("touchpadFourFinger", true)
+            ? "overview_swipe 4" : "overview_swipe off");
     } else if (has_overview) {
         (void)ipc.send_command(0, "overview hide");
+        (void)ipc.send_command(0, "overview_swipe off");
         (void)ipc.send_command(0, "unbindsym --to-code $mod+o");
     }
     return command_ok(ipc.send_command(0, std::string("autotile ")

@@ -42,6 +42,8 @@ PanelWindow {
 
     property real osdOpacity: 0.0
     property string osdIcon: "\u{f057e}"
+    // English, as the code names it; translated where it is drawn, so the
+    // daemon's status lines (sent in English) are translated too.
     property string osdTitle: "Volume"
     property int osdValue: 0
     property bool osdMuted: false
@@ -210,7 +212,7 @@ PanelWindow {
                     spacing: 0
                     Label {
                         Layout.fillWidth: true
-                        text: osdWindow.osdTitle
+                        text: I18n.tr(osdWindow.osdTitle)
                         weight: Design.weight.semibold
                         role: "caption"
                         elide: Text.ElideRight
@@ -218,7 +220,7 @@ PanelWindow {
                     Label {
                         Layout.fillWidth: true
                         visible: osdWindow.osdDetail !== ""
-                        text: osdWindow.osdDetail
+                        text: I18n.tr(osdWindow.osdDetail)
                         role: "caption"; dim: true
                         elide: Text.ElideMiddle
                     }
@@ -228,13 +230,13 @@ PanelWindow {
                     visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
                     Label {
-                        text: osdWindow.osdTitle
+                        text: I18n.tr(osdWindow.osdTitle)
                         weight: Design.weight.semibold
                         role: "caption"
                         Layout.fillWidth: true
                     }
                     Label {
-                        text: osdWindow.osdMuted ? "MUTED" : (osdWindow.osdValue + "%")
+                        text: osdWindow.osdMuted ? I18n.tr("MUTED") : (osdWindow.osdValue + "%")
                         weight: Design.weight.bold
                         role: "caption"
                         color: osdWindow.osdMuted ? Design.red : Design.text

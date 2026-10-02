@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "../Ui"
 import Quickshell
 import B1air.Daemon
 import Quickshell.Io
@@ -53,9 +54,9 @@ Singleton {
 
     readonly property string phaseLabel: {
         switch (root.phase) {
-        case "work":       return "Focus";
-        case "shortBreak": return "Short break";
-        case "longBreak":  return "Long break";
+        case "work":       return I18n.tr("Focus");
+        case "shortBreak": return I18n.tr("Short break");
+        case "longBreak":  return I18n.tr("Long break");
         default:           return "";
         }
     }
@@ -136,14 +137,14 @@ Singleton {
             const long_ = (root.completedWork % root.intervalsPerLongBreak) === 0;
             root._enter(long_ ? "longBreak" : "shortBreak");
             if (byTimeout)
-                root._announce("Time for a break",
-                               long_ ? "Long break — " + root.longBreakMinutes + " minutes."
-                                     : "Short break — " + root.shortBreakMinutes + " minutes.");
+                root._announce(I18n.tr("Time for a break"),
+                               long_ ? I18n.tr("Long break — %1 minutes.", root.longBreakMinutes)
+                                     : I18n.tr("Short break — %1 minutes.", root.shortBreakMinutes));
         } else {
             root._enter("work");
             if (byTimeout)
-                root._announce("Back to it",
-                               root.workMinutes + " minutes of focus.");
+                root._announce(I18n.tr("Back to it"),
+                               I18n.tr("%1 minutes of focus.", root.workMinutes));
         }
         root.running = true;
     }

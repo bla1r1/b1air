@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import B1air.Daemon
+import Quickshell.Io
 import "../../Ui"
 import "../../Services"
 
@@ -139,8 +140,8 @@ ColumnLayout {
 
     // ── 1. Touchpad Card ─────────────────────────────────────────────────────
     Card {
-        title: "Touchpad Basics"
-        subtitle: "Scrolling direction and tapping behavior"
+        title: I18n.tr("Touchpad Basics")
+        subtitle: I18n.tr("Scrolling direction and tapping behavior")
         icon: "\u{f0523}"
         accentColor: Design.peach
 
@@ -156,8 +157,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Natural Scrolling"; weight: Design.weight.semibold }
-                    Label { text: "Content moves in direction of fingers (macOS style)"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Natural Scrolling"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Content moves in direction of fingers (macOS style)"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -176,8 +177,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Tap to Click"; weight: Design.weight.semibold }
-                    Label { text: "Tap touchpad with 1 finger for primary click, 2 for right click"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Tap to Click"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Tap touchpad with 1 finger for primary click, 2 for right click"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -195,9 +196,9 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Two-Finger Click for Right Click"; weight: Design.weight.semibold }
-                    Label { text: section.clickfinger ? "Press with two fingers anywhere for a right click, three for middle"
-                                                      : "Right click is the bottom-right corner of the pad"
+                    Label { text: I18n.tr("Two-Finger Click for Right Click"); weight: Design.weight.semibold }
+                    Label { text: section.clickfinger ? I18n.tr("Press with two fingers anywhere for a right click, three for middle")
+                                                      : I18n.tr("Right click is the bottom-right corner of the pad")
                             role: "caption"; dim: true }
                 }
 
@@ -217,8 +218,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Disable While Typing (DWT)"; weight: Design.weight.semibold }
-                    Label { text: "Avoid accidental cursor moves while typing on keyboard"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Disable While Typing (DWT)"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Avoid accidental cursor moves while typing on keyboard"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -231,8 +232,8 @@ ColumnLayout {
 
     // ── 2. Multi-Touch Gestures ──────────────────────────────────────────────
     Card {
-        title: "Multi-Touch Gestures"
-        subtitle: "Three- and four-finger swipes"
+        title: I18n.tr("Multi-Touch Gestures")
+        subtitle: I18n.tr("Three- and four-finger swipes")
         icon: "\u{f0048}"
         accentColor: Design.teal
 
@@ -247,8 +248,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "3-Finger Workspace Swipe"; weight: Design.weight.semibold }
-                    Label { text: "Swipe 3 fingers horizontally to smoothly transition between workspaces"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("3-Finger Workspace Swipe"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Swipe 3 fingers horizontally to smoothly transition between workspaces"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -266,8 +267,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Natural Gesture Direction"; weight: Design.weight.semibold }
-                    Label { text: "Invert swipe motion to match direct touch manipulation"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Natural Gesture Direction"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Invert swipe motion to match direct touch manipulation"); role: "caption"; dim: true }
                 }
 
                 Toggle {
@@ -286,11 +287,13 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "4-Finger Gestures"; weight: Design.weight.semibold }
+                    Label { text: I18n.tr("4-Finger Gestures"); weight: Design.weight.semibold }
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: "Up opens the Launchpad, down closes it; left and right carry the window to the next workspace"
+                        text: Sway.swayfx && Settings.workspaceOverview
+                              ? I18n.tr("Up brings in the workspace overview with your fingers, down takes it away; pinch for the Launchpad; left and right carry the window to the next workspace")
+                              : I18n.tr("Up opens the Launchpad, down closes it; left and right carry the window to the next workspace")
                         role: "caption"
                         dim: true
                     }
@@ -313,8 +316,8 @@ ColumnLayout {
 
     // ── 3. Mouse & Pointer Card ──────────────────────────────────────────────
     Card {
-        title: "Mouse & Pointer"
-        subtitle: "Tracking speed, acceleration profiles, and primary button"
+        title: I18n.tr("Mouse & Pointer")
+        subtitle: I18n.tr("Tracking speed, acceleration profiles, and primary button")
         icon: "\u{f037d}"
         accentColor: Design.sapphire
 
@@ -333,7 +336,7 @@ ColumnLayout {
                 value: Math.round((section.pointerAccel + 1.0) * 50)
                 tone: Design.sapphire
                 icon: "\u{f037d}"
-                label: "Pointer Speed / Sensitivity"
+                label: I18n.tr("Pointer Speed / Sensitivity")
                 onMoved: pct => {
                     const val = ((pct / 50) - 1.0).toFixed(2);
                     section.setPointerAccel(parseFloat(val));
@@ -350,21 +353,21 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Acceleration Profile"; weight: Design.weight.semibold }
-                    Label { text: section.accelProfile === "flat" ? "Flat: 1:1 linear tracking" : "Adaptive: faster flicks travel further"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Acceleration Profile"); weight: Design.weight.semibold }
+                    Label { text: section.accelProfile === "flat" ? I18n.tr("Flat: 1:1 linear tracking") : I18n.tr("Adaptive: faster flicks travel further"); role: "caption"; dim: true }
                 }
 
                 RowLayout {
                     spacing: Design.s(Design.space.xs)
 
                     Pill {
-                        label: "Flat (Linear)"
+                        label: I18n.tr("Flat (Linear)")
                         active: section.accelProfile === "flat"
                         onClicked: section.setAccelProfile("flat")
                     }
 
                     Pill {
-                        label: "Adaptive"
+                        label: I18n.tr("Adaptive")
                         active: section.accelProfile === "adaptive"
                         onClicked: section.setAccelProfile("adaptive")
                     }
@@ -381,14 +384,50 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: "Left-Handed Mouse Mode"; weight: Design.weight.semibold }
-                    Label { text: "Swap left and right mouse buttons"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Left-Handed Mouse Mode"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Swap left and right mouse buttons"); role: "caption"; dim: true }
                 }
 
                 Toggle {
                     checked: section.leftHanded
                     onToggled: section.setLeftHanded(!section.leftHanded)
                 }
+            }
+        }
+    }
+
+    // Two fingers on a Magic Mouse's surface, as on a Mac: read by the
+    // session daemon straight from the device (src/daemon/magic_mouse.cpp),
+    // since no compositor sees them. The status line asks it what it finds.
+    Card {
+        title: I18n.tr("Magic Mouse")
+        subtitle: section.magicMouseStatus
+        icon: "\u{f037d}"
+        accentColor: Design.teal
+
+        Toggle {
+            label: I18n.tr("Gestures on the mouse's surface")
+            subtitle: I18n.tr("Swipe two fingers sideways for the next workspace; tap twice with two fingers for the workspace overview")
+            checked: Settings.magicMouseGestures !== false
+            onToggled: Settings.set("magicMouseGestures", Settings.magicMouseGestures === false)
+        }
+    }
+
+    property string magicMouseStatus: I18n.tr("Looking for one…")
+    Process {
+        id: magicMouseProbe
+        command: ["b1air-daemon", "magic-mouse", "status"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = this.text.trim().split("\n");
+                const found = lines.filter(l => l.indexOf("/dev/input/") === 0);
+                if (found.length > 0)
+                    section.magicMouseStatus = I18n.tr("Connected: %1", found[0].split("\t")[1] || "Magic Mouse");
+                else if (lines.some(l => l.indexOf("input group") >= 0))
+                    section.magicMouseStatus = I18n.tr("None found — and input devices are not readable: log in again after install.sh adds you to the input group");
+                else
+                    section.magicMouseStatus = I18n.tr("None connected; pair one in Bluetooth and it is picked up at once");
             }
         }
     }

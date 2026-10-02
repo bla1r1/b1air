@@ -67,36 +67,36 @@ ColumnLayout {
     // The daemon reads this on every focus change, so it takes effect from the
     // next window opened — nothing to reload.
     Card {
-        title: "Tiling"
-        subtitle: "How a new window finds its place"
+        title: I18n.tr("Tiling")
+        subtitle: I18n.tr("How a new window finds its place")
         icon: "\u{f0e5e}"
         accentColor: Design.sapphire
 
         Toggle {
-            label: "Automatic split (like Hyprland)"
+            label: I18n.tr("Automatic split (like Hyprland)")
             subtitle: section.autotiling
-                ? "Each new window halves the focused one along its longer side, in a spiral"
-                : "New windows line up in one row; Mod+J and Mod+Shift+I change the direction"
+                ? I18n.tr("Each new window halves the focused one along its longer side, in a spiral")
+                : I18n.tr("New windows line up in one row; Mod+J and Mod+Shift+I change the direction")
             checked: section.autotiling
             onToggled: Settings.set("autotiling", !section.autotiling)
         }
     }
 
     Card {
-        title: "Window Spacing (Gaps)"
-        subtitle: "Adjust the inner and outer spacing between tiled windows"
+        title: I18n.tr("Window Spacing (Gaps)")
+        subtitle: I18n.tr("Adjust the inner and outer spacing between tiled windows")
         icon: "\u{f0379}"
         accentColor: Design.sapphire
 
         Stepper {
-            label: "Inner Gaps (between windows)"
+            label: I18n.tr("Inner Gaps (between windows)")
             valueText: section.gapsInner + " px"
             onDecrement: section.setGapsInner(Math.max(0, section.gapsInner - 2))
             onIncrement: section.setGapsInner(Math.min(40, section.gapsInner + 2))
         }
 
         Stepper {
-            label: "Outer Gaps (screen edges)"
+            label: I18n.tr("Outer Gaps (screen edges)")
             valueText: section.gapsOuter + " px"
             onDecrement: section.setGapsOuter(Math.max(0, section.gapsOuter - 2))
             onIncrement: section.setGapsOuter(Math.min(40, section.gapsOuter + 2))
@@ -105,13 +105,13 @@ ColumnLayout {
 
     // ── 2. Borders & Smart Behavior ──────────────────────────────────────────
     Card {
-        title: "Borders & Layout Rules"
-        subtitle: "Window border styling and smart fullscreen/single window behaviors"
+        title: I18n.tr("Borders & Layout Rules")
+        subtitle: I18n.tr("Window border styling and smart fullscreen/single window behaviors")
         icon: "\u{f016d}"
         accentColor: Design.mauve
 
         Stepper {
-            label: "Border Width"
+            label: I18n.tr("Border Width")
             valueText: section.borderWidth + " px"
             onDecrement: section.setBorderWidth(Math.max(0, section.borderWidth - 1))
             onIncrement: section.setBorderWidth(Math.min(8, section.borderWidth + 1))
@@ -124,8 +124,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Smart Borders"; weight: Design.weight.semibold }
-                Label { text: "Automatically hide window borders when only one window is open"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Smart Borders"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("Automatically hide window borders when only one window is open"); role: "caption"; dim: true }
             }
 
             Toggle {
@@ -141,8 +141,8 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Smart Gaps"; weight: Design.weight.semibold }
-                Label { text: "Remove outer gaps when a workspace has only one window"; role: "caption"; dim: true }
+                Label { text: I18n.tr("Smart Gaps"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("Remove outer gaps when a workspace has only one window"); role: "caption"; dim: true }
             }
 
             Toggle {

@@ -14,10 +14,10 @@ import "."
 MiniView {
     id: root
 
-    title: "Battery & Power"
+    title: I18n.tr("Battery & Power")
     icon: "\u{f0079}"
     tone: Design.green
-    footerLabel: "Power Settings…"
+    footerLabel: I18n.tr("Power Settings…")
 
     trailing: BatteryPill { clickable: false }
 
@@ -37,22 +37,22 @@ MiniView {
         {
             id: "performance",
             glyph: "\u{f0e4}",
-            title: "Performance",
-            hint: "Maximum speed, shortest battery life",
+            title: I18n.tr("Performance"),
+            hint: I18n.tr("Maximum speed, shortest battery life"),
             tone: Design.red
         },
         {
             id: "balanced",
             glyph: "\u{f0241}",
-            title: "Balanced",
-            hint: "Automatic — speed when you need it, quiet when you do not",
+            title: I18n.tr("Balanced"),
+            hint: I18n.tr("Automatic — speed when you need it, quiet when you do not"),
             tone: Design.sapphire
         },
         {
             id: "power-saver",
             glyph: "\u{f0084}",
-            title: "Low Power",
-            hint: "Caps performance to stretch the charge",
+            title: I18n.tr("Low Power"),
+            hint: I18n.tr("Caps performance to stretch the charge"),
             tone: Design.green
         }
     ]
@@ -87,7 +87,7 @@ MiniView {
                     spacing: 0
 
                     Label {
-                        text: Power.charging ? "Running on power adapter" : "Running on battery"
+                        text: Power.charging ? I18n.tr("Running on power adapter") : I18n.tr("Running on battery")
                         role: "body"
                         weight: Design.weight.semibold
                         Layout.fillWidth: true
@@ -95,8 +95,8 @@ MiniView {
                     }
 
                     Label {
-                        text: Power.status + (Power.timeRemainingText !== ""
-                            ? " • " + (Power.charging ? "until full " : "left ") + Power.timeRemainingText : "")
+                        text: I18n.tr(Power.status) + (Power.timeRemainingText !== ""
+                            ? " • " + (Power.charging ? I18n.tr("until full %1", Power.timeRemainingText) : I18n.tr("%1 left", Power.timeRemainingText)) : "")
                         role: "caption"
                         dim: true
                         Layout.fillWidth: true
@@ -114,7 +114,7 @@ MiniView {
         // actually open did not, so it is the same rows here.
         SectionLabel {
             visible: Power.hasMultipleBatteries
-            text: "Installed packs"
+            text: I18n.tr("Installed packs")
             Layout.topMargin: Design.s(Design.space.xs)
         }
 
@@ -126,9 +126,9 @@ MiniView {
 
                 Layout.fillWidth: true
                 title: Power.labelOf(modelData) + (modelData.model ? " · " + modelData.model : "")
-                subtitle: Power.stateTextOf(modelData)
+                subtitle: I18n.tr(Power.stateTextOf(modelData))
                     + (Power.healthOf(modelData) > 0
-                        ? " • health " + Power.healthOf(modelData) + "%"
+                        ? " • " + I18n.tr("health %1%", Power.healthOf(modelData))
                         : "")
                 value: Power.percentOf(modelData) + "%"
                 valueTone: Power.percentOf(modelData) <= 20 ? Design.danger
@@ -138,7 +138,7 @@ MiniView {
 
         // ── Screen brightness ────────────────────────────────────────────────
         SectionLabel {
-            text: "Display"
+            text: I18n.tr("Display")
             visible: Power.hasBacklight || Monitors.hasBrightness
             Layout.topMargin: Design.s(Design.space.xs)
         }
@@ -150,7 +150,7 @@ MiniView {
             value: Power.brightness
             tone: Design.yellow
             icon: "\u{f00df}"
-            label: "Brightness"
+            label: I18n.tr("Brightness")
             onMoved: pct => Power.setBrightness(pct)
         }
 
@@ -171,7 +171,7 @@ MiniView {
 
         // ── Energy modes ─────────────────────────────────────────────────────
         SectionLabel {
-            text: "Energy mode"
+            text: I18n.tr("Energy mode")
             Layout.topMargin: Design.s(Design.space.xs)
         }
 
@@ -184,8 +184,8 @@ MiniView {
                 width: parent.width
                 visible: !Power.hasProfiles
                 icon: "\u{f0241}"
-                title: "No energy modes"
-                hint: "power-profiles-daemon is not running, so there is nothing to switch between."
+                title: I18n.tr("No energy modes")
+                hint: I18n.tr("power-profiles-daemon is not running, so there is nothing to switch between.")
             }
 
             ColumnLayout {

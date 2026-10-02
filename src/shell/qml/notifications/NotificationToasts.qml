@@ -195,7 +195,7 @@ PanelWindow {
 
                             delegate: ActionButton {
                                 required property var modelData
-                                label: modelData.text || modelData.id || "Action"
+                                label: modelData.text || modelData.id || I18n.tr("Action")
                                 onActivated: {
                                     if (typeof modelData.invoke === "function") {
                                         modelData.invoke();

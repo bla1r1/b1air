@@ -316,7 +316,7 @@ PanelWindow {
             // it: the bar formatted "hh:mm" unconditionally, so the switch
             // stored a value and the clock never changed.
             topBar.clockTime = Qt.formatTime(now, Settings.barClock24h ? "hh:mm" : "h:mm AP");
-            topBar.clockDate = Qt.formatDate(now, "dddd, d MMMM yyyy");
+            topBar.clockDate = I18n.date(now, "dddd, d MMMM yyyy");
         }
     }
 
@@ -511,7 +511,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
-                        text: "APPS"
+                        text: I18n.tr("APPS")
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(12)
                         font.bold: true
@@ -1142,7 +1142,7 @@ PanelWindow {
                         Text {
                             id: capsText
                             anchors.centerIn: parent
-                            text: "CAPS"
+                            text: I18n.tr("CAPS")
                             font.family: topBar.fontMain
                             font.pixelSize: Design.s(10)
                             font.bold: true

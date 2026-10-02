@@ -16,7 +16,7 @@ Item {
     property string title: ""
     property string icon: ""
     property color tone: Design.accent
-    property string footerLabel: "Settings…"
+    property string footerLabel: I18n.tr("Settings…")
 
     // A switch or a badge that belongs beside the title.
     property alias trailing: trailingSlot.data

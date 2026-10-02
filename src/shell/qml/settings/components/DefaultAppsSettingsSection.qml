@@ -46,35 +46,35 @@ ColumnLayout {
     // The binary-name lists are what decides which installed apps are offered
     // in a row; matching the whole Exec line offered qrencode as a code editor.
     readonly property var rows: [
-        { kind: "browser", title: "Web Browser", subtitle: "Links, web pages and Mod+F",
+        { kind: "browser", title: I18n.tr("Web Browser"), subtitle: I18n.tr("Links, web pages and Mod+F"),
           icon: "\u{f0ac}", tone: Design.sapphire,
           mimes: ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"],
           names: ["firefox", "chrome", "google-chrome", "google-chrome-stable", "chromium", "brave",
                   "brave-browser", "zen", "zen-browser", "vivaldi", "librewolf", "floorp",
                   "qutebrowser", "epiphany"],
-          missing: "No web browser found. Install one (e.g. Firefox) with your package manager." },
-        { kind: "terminal", title: "Terminal", subtitle: "What Mod+T opens",
+          missing: I18n.tr("No web browser found. Install one (e.g. Firefox) with your package manager.") },
+        { kind: "terminal", title: I18n.tr("Terminal"), subtitle: I18n.tr("What Mod+T opens"),
           icon: "\u{f120}", tone: Design.green,
           mimes: ["x-scheme-handler/terminal"],
           names: ["b1air-term", "foot", "alacritty", "ghostty", "wezterm", "konsole", "xterm",
                   "kitty", "gnome-terminal"],
-          missing: "No terminal found. b1air-term is built with the rest of the desktop." },
-        { kind: "files", title: "File Manager", subtitle: "Folders, and what Mod+E opens",
+          missing: I18n.tr("No terminal found. b1air-term is built with the rest of the desktop.") },
+        { kind: "files", title: I18n.tr("File Manager"), subtitle: I18n.tr("Folders, and what Mod+E opens"),
           icon: "\u{f07c}", tone: Design.peach,
           mimes: ["inode/directory"],
           names: ["b1air-files", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm", "pcmanfm-qt"],
-          missing: "No file manager found. b1air-files is built with the rest of the desktop." },
-        { kind: "editor", title: "Text Editor", subtitle: "Plain text, Markdown and JSON files",
+          missing: I18n.tr("No file manager found. b1air-files is built with the rest of the desktop.") },
+        { kind: "editor", title: I18n.tr("Text Editor"), subtitle: I18n.tr("Plain text, Markdown and JSON files"),
           icon: "\u{f121}", tone: Design.mauve,
           mimes: ["text/plain", "text/markdown", "application/json"],
           names: ["b1air-text", "code", "codium", "vscodium", "cursor", "gvim", "zed", "kate",
                   "gedit", "gnome-text-editor", "subl", "sublime_text"],
-          missing: "No graphical text editor found." },
-        { kind: "player", title: "Media Player", subtitle: "Video and audio files",
+          missing: I18n.tr("No graphical text editor found.") },
+        { kind: "player", title: I18n.tr("Media Player"), subtitle: I18n.tr("Video and audio files"),
           icon: "\u{f008}", tone: Design.teal,
           mimes: ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac"],
           names: ["mpv", "vlc", "celluloid", "audacious", "totem", "haruna"],
-          missing: "No media player found. Install one (e.g. mpv) with your package manager." }
+          missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") }
     ]
 
     /** The command's binary name: "/usr/bin/foo --bar %U" -> "foo". */
@@ -116,12 +116,11 @@ ColumnLayout {
             section.execBinary(a.exec) === want
             || String(a.desktopFile).toLowerCase().replace(/\.desktop$/, "") === want);
         if (!app) {
-            section.note(row.kind, "Nothing installed goes by “" + text.trim()
-                + "”. It needs a desktop entry to be a default.");
+            section.note(row.kind, I18n.tr("Nothing installed goes by “%1”. It needs a desktop entry to be a default.", text.trim()));
             return false;
         }
         section.choose(row, app.desktopFile);
-        section.note(row.kind, "Set to " + app.name + ".");
+        section.note(row.kind, I18n.tr("Set to %1.", app.name));
         return true;
     }
 
@@ -204,14 +203,14 @@ ColumnLayout {
                 Field {
                     id: customField
                     Layout.fillWidth: true
-                    placeholder: "Something else — type its command or desktop id"
+                    placeholder: I18n.tr("Something else — type its command or desktop id")
                     onAccepted: v => { if (section.chooseTyped(rowCard.modelData, v)) customField.text = ""; }
                 }
 
                 ActionButton {
                     Layout.fillWidth: false
                     icon: "\u{f012c}"
-                    label: "Set"
+                    label: I18n.tr("Set")
                     tone: rowCard.modelData.tone
                     onActivated: if (section.chooseTyped(rowCard.modelData, customField.text)) customField.text = ""
                 }

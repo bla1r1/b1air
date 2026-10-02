@@ -15,11 +15,11 @@ PopupShell {
     property int selectedIndex: 0
 
     readonly property var actions: [
-        { id: "lock",     icon: "\u{f023}", label: "Lock",     key: "1", color: Design.sapphire, cmd: ["b1air-daemon", "power", "lock"] },
-        { id: "suspend",  icon: "\u{f186}", label: "Sleep",    key: "2", color: Design.teal,     cmd: ["b1air-daemon", "power", "suspend"] },
-        { id: "reboot",   icon: "\u{f021}", label: "Restart",  key: "3", color: Design.yellow,   cmd: ["b1air-daemon", "power", "reboot"] },
-        { id: "poweroff", icon: "\u{f011}", label: "Shut Down",key: "4", color: Design.red,      cmd: ["b1air-daemon", "power", "shutdown"] },
-        { id: "logout",   icon: "\u{f08b}", label: "Log Out",  key: "5", color: Design.mauve,    cmd: ["b1air-daemon", "power", "logout"] }
+        { id: "lock",     icon: "\u{f023}", label: I18n.tr("Lock"),     key: "1", color: Design.sapphire, cmd: ["b1air-daemon", "power", "lock"] },
+        { id: "suspend",  icon: "\u{f186}", label: I18n.tr("Sleep"),    key: "2", color: Design.teal,     cmd: ["b1air-daemon", "power", "suspend"] },
+        { id: "reboot",   icon: "\u{f021}", label: I18n.tr("Restart"),  key: "3", color: Design.yellow,   cmd: ["b1air-daemon", "power", "reboot"] },
+        { id: "poweroff", icon: "\u{f011}", label: I18n.tr("Shut Down"),key: "4", color: Design.red,      cmd: ["b1air-daemon", "power", "shutdown"] },
+        { id: "logout",   icon: "\u{f08b}", label: I18n.tr("Log Out"),  key: "5", color: Design.mauve,    cmd: ["b1air-daemon", "power", "logout"] }
     ]
 
     function executeAction(idx) {
@@ -52,14 +52,14 @@ PopupShell {
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Power & Session"
+                text: I18n.tr("Power & Session")
                 role: "title"
                 weight: Design.weight.bold
             }
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Choose a power action or press 1–5"
+                text: I18n.tr("Choose a power action or press 1–5")
                 role: "caption"
                 dim: true
             }
@@ -143,7 +143,7 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Pill {
-                label: "Cancel (Esc)"
+                label: I18n.tr("Cancel (Esc)")
                 icon: "\u{f00d}"
                 onClicked: window.close()
             }

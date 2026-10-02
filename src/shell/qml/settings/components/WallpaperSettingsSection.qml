@@ -121,15 +121,15 @@ ColumnLayout {
 
     function setRandom() {
         Cmd.run(["b1air-daemon", "wallpaper", "random", section.wallpaperDir.replace(/^~/, Quickshell.env("HOME"))],
-                "Shuffle wallpaper");
+                I18n.tr("Shuffle wallpaper"));
     }
 
     // ── 1. Wallpaper Gallery Card ────────────────────────────────────────────
     Card {
-        title: "Wallpapers"
+        title: I18n.tr("Wallpapers")
         subtitle: section.wallpaperList.length > 0
-            ? section.wallpaperList.length + " wallpapers found. Click any thumbnail to apply."
-            : "Choose and preview wallpapers from your collection"
+            ? I18n.trn("%1 wallpaper found. Click any thumbnail to apply.", "%1 wallpapers found. Click any thumbnail to apply.", section.wallpaperList.length)
+            : I18n.tr("Choose and preview wallpapers from your collection")
         icon: "\u{f02ca}"
         accentColor: Design.pink
 
@@ -139,13 +139,13 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Pill {
-                label: "Random Wallpaper"
+                label: I18n.tr("Random Wallpaper")
                 icon: "\u{f049d}"
                 onClicked: section.setRandom()
             }
 
             Pill {
-                label: "Refresh Gallery"
+                label: I18n.tr("Refresh Gallery")
                 icon: "\u{f0450}"
                 onClicked: section.scan()
             }
@@ -161,7 +161,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.xs)
             Pill {
-                label: section.screens.length > 1 ? "All screens" : "Everywhere"
+                label: section.screens.length > 1 ? I18n.tr("All screens") : I18n.tr("Everywhere")
                 icon: "\u{f0379}"
                 active: section.target === ""
                 onClicked: section.target = ""
@@ -170,22 +170,22 @@ ColumnLayout {
                 model: section.screens.length > 1 ? section.screens : []
                 delegate: Pill {
                     required property var modelData
-                    label: modelData.name + (modelData.wallpaper !== "" ? " · own picture" : "")
+                    label: modelData.name + (modelData.wallpaper !== "" ? " · " + I18n.tr("own picture") : "")
                     active: section.target === modelData.name
                     onClicked: section.target = modelData.name
                 }
             }
             Pill {
                 visible: section.workspace !== ""
-                label: "Workspace " + section.workspace
-                       + ((section.workspaceWallpapers[section.workspace] || "") !== "" ? " · own picture" : "")
+                label: I18n.tr("Workspace %1", section.workspace)
+                       + ((section.workspaceWallpapers[section.workspace] || "") !== "" ? " · " + I18n.tr("own picture") : "")
                 icon: "\u{f0570}"
                 active: section.target === "ws:" + section.workspace
                 onClicked: section.target = "ws:" + section.workspace
             }
             Pill {
                 visible: section.targetHasOwn
-                label: "Use shared picture"
+                label: I18n.tr("Use shared picture")
                 icon: "\u{f0450}"
                 onClicked: section.unsetTarget()
             }
@@ -287,15 +287,15 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: section.wallpaperList.length === 0
             icon: "\u{f02ca}"
-            title: "No wallpapers found"
-            hint: "Check that the source folder below contains .jpg or .png images."
+            title: I18n.tr("No wallpapers found")
+            hint: I18n.tr("Check that the source folder below contains .jpg or .png images.")
         }
     }
 
     // ── 2. Source Folder Configuration ───────────────────────────────────────
     Card {
-        title: "Source folder"
-        subtitle: "The directory where wallpapers are scanned and saved"
+        title: I18n.tr("Source folder")
+        subtitle: I18n.tr("The directory where wallpapers are scanned and saved")
         icon: "\u{f024b}"
         accentColor: Design.pink
 
@@ -303,13 +303,13 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.xs)
 
-            Label { text: "Folder Path"; role: "caption"; dim: true }
+            Label { text: I18n.tr("Folder Path"); role: "caption"; dim: true }
 
             Field {
                 mono: true
                 Layout.fillWidth: true
                 text: section.wallpaperDir
-                placeholder: "/home/you/Pictures/Wallpapers"
+                placeholder: I18n.tr("/home/you/Pictures/Wallpapers")
                 onCommitted: v => {
                     section.wallpaperDir = v;
                     section.wallpaperDirChangedByUser(v);
@@ -320,7 +320,7 @@ ColumnLayout {
             }
 
             Label {
-                text: "Full path to your wallpapers directory. Press Enter to save and refresh."
+                text: I18n.tr("Full path to your wallpapers directory. Press Enter to save and refresh.")
                 role: "caption"
                 color: Design.textFaint
                 Layout.fillWidth: true

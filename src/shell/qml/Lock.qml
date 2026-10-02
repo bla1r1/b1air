@@ -61,7 +61,7 @@ ShellRoot {
         property bool authenticating: false
         // The eye button: show what has been typed.
         property bool peek: false
-        property string statusText: "Locked"
+        property string statusText: I18n.tr("Locked")
     }
 
     // System Authentication hook
@@ -74,7 +74,7 @@ ShellRoot {
         Component.onCompleted: {
             if (!pam.start()) {
                 lockUI.failed = true;
-                lockUI.statusText = "Authentication unavailable";
+                lockUI.statusText = I18n.tr("Authentication unavailable");
             }
         }
 
@@ -85,9 +85,9 @@ ShellRoot {
                 Qt.quit();
             } else {
                 lockUI.failed = true;
-                lockUI.statusText = "Access Denied";
+                lockUI.statusText = I18n.tr("Access Denied");
                 if (!pam.start()) {
-                    lockUI.statusText = "Authentication unavailable";
+                    lockUI.statusText = I18n.tr("Authentication unavailable");
                 }
             }
         }
@@ -102,7 +102,7 @@ ShellRoot {
         onError: (err) => {
             lockUI.authenticating = false;
             lockUI.failed = true;
-            lockUI.statusText = "Authentication unavailable";
+            lockUI.statusText = I18n.tr("Authentication unavailable");
             console.warn("[b1air-lock] PAM error:", err, pam.message);
         }
     }
@@ -392,7 +392,7 @@ ShellRoot {
                                 let d = new Date();
                                 clockHours.text = Qt.formatDateTime(d, "hh");
                                 clockMinutes.text = Qt.formatDateTime(d, "mm");
-                                dateText.text = Qt.formatDateTime(d, "dddd, MMMM dd");
+                                dateText.text = I18n.date(d, "dddd, MMMM dd");
                             }
                         }
                     }
@@ -652,9 +652,9 @@ ShellRoot {
 
                                         if (text.length > 0) {
                                             lockUI.failed = false;
-                                            lockUI.statusText = "Enter PIN";
+                                            lockUI.statusText = I18n.tr("Enter PIN");
                                         } else {
-                                            if (!lockUI.failed) lockUI.statusText = "Locked";
+                                            if (!lockUI.failed) lockUI.statusText = I18n.tr("Locked");
                                         }
                                     }
                                 }
@@ -893,7 +893,7 @@ ShellRoot {
 
                         // --- SETTINGS SECTION ---
                         Text { 
-                            text: "SETTINGS"
+                            text: I18n.tr("SETTINGS")
                             font.family: Design.font.mono
                             font.weight: Design.weight.bold
                             font.pixelSize: 12 * screenRoot.sc
@@ -906,7 +906,7 @@ ShellRoot {
                         RowLayout {
                             Layout.fillWidth: true; Layout.leftMargin: 18 * screenRoot.sc; Layout.rightMargin: 18 * screenRoot.sc; Layout.topMargin: 4 * screenRoot.sc
                             Text {
-                                text: "Hide password"
+                                text: I18n.tr("Hide password")
                                 font.family: Design.font.mono
                                 font.pixelSize: 14 * screenRoot.sc
                                 font.weight: Design.weight.medium
@@ -947,7 +947,7 @@ ShellRoot {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Text {
-                                    text: "Reveal delay"
+                                    text: I18n.tr("Reveal delay")
                                     font.family: Design.font.mono
                                     font.pixelSize: 14 * screenRoot.sc
                                     font.weight: Design.weight.medium
@@ -955,7 +955,7 @@ ShellRoot {
                                     Layout.fillWidth: true
                                 }
                                 Text { 
-                                    text: lockSettings.revealDuration >= 1000 ? (lockSettings.revealDuration / 1000).toFixed(1) + " s" : lockSettings.revealDuration + " ms"
+                                    text: lockSettings.revealDuration >= 1000 ? (lockSettings.revealDuration / 1000).toFixed(1) + " s" : I18n.tr("%1 ms", lockSettings.revealDuration)
                                     font.family: Design.font.mono
                                     font.pixelSize: 13 * screenRoot.sc
                                     font.weight: Design.weight.semibold
@@ -1029,7 +1029,7 @@ ShellRoot {
 
                         // --- SYSTEM ACTIONS SECTION ---
                         Text {
-                            text: "SYSTEM"
+                            text: I18n.tr("SYSTEM")
                             font.family: Design.font.mono
                             font.weight: Design.weight.bold
                             font.pixelSize: 12 * screenRoot.sc
@@ -1049,7 +1049,7 @@ ShellRoot {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
                                 Text { text: "󰜉"; font.family: Design.font.icon; font.pixelSize: 18 * screenRoot.sc; color: ma1.containsMouse ? Design.accent : Qt.rgba(Design.accent.r, Design.accent.g, Design.accent.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Reboot"; font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma1.containsMouse ? Design.accent : Qt.rgba(Design.accent.r, Design.accent.g, Design.accent.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
+                                Text { text: I18n.tr("Reboot"); font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma1.containsMouse ? Design.accent : Qt.rgba(Design.accent.r, Design.accent.g, Design.accent.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                             }
                             Clickable {
                                 id: ma1
@@ -1071,7 +1071,7 @@ ShellRoot {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
                                 Text { text: "󰒲"; font.family: Design.font.icon; font.pixelSize: 18 * screenRoot.sc; color: ma2.containsMouse ? Design.accentAlt : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Suspend"; font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma2.containsMouse ? Design.accentAlt : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
+                                Text { text: I18n.tr("Suspend"); font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma2.containsMouse ? Design.accentAlt : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                             }
                             Clickable {
                                 id: ma2
@@ -1093,7 +1093,7 @@ ShellRoot {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
                                 Text { text: "󰐥"; font.family: Design.font.icon; font.pixelSize: 18 * screenRoot.sc; color: ma3.containsMouse ? Design.danger : Qt.rgba(Design.danger.r, Design.danger.g, Design.danger.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Power Off"; font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma3.containsMouse ? Design.danger : Qt.rgba(Design.danger.r, Design.danger.g, Design.danger.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
+                                Text { text: I18n.tr("Power Off"); font.family: Design.font.mono; font.pixelSize: 15 * screenRoot.sc; font.weight: Design.weight.medium; color: ma3.containsMouse ? Design.danger : Qt.rgba(Design.danger.r, Design.danger.g, Design.danger.b, 0.6); Behavior on color { ColorAnimation { duration: Design.duration.base } } }
                             }
                             Clickable {
                                 id: ma3

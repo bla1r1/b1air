@@ -25,14 +25,14 @@ ColumnLayout {
     readonly property bool off: Settings.animationDuration === 0
 
     Card {
-        title: "Motion"
-        subtitle: section.off ? "Animations are off" : "How long every animation takes"
+        title: I18n.tr("Motion")
+        subtitle: section.off ? I18n.tr("Animations are off") : I18n.tr("How long every animation takes")
         icon: "\u{f0e1e}"
         accentColor: Design.mauve
 
         Toggle {
-            label: "Animations"
-            subtitle: "Off makes every change instant: windows, workspaces, the swipe"
+            label: I18n.tr("Animations")
+            subtitle: I18n.tr("Off makes every change instant: windows, workspaces, the swipe")
             checked: !section.off
             onToggled: Settings.set("animationDuration", section.off ? 200 : 0)
         }
@@ -40,7 +40,7 @@ ColumnLayout {
         Slider {
             Layout.fillWidth: true
             visible: !section.off
-            label: "Duration"
+            label: I18n.tr("Duration")
             showPercent: false
             minimum: 80
             maximum: 600
@@ -50,14 +50,14 @@ ColumnLayout {
         }
         Label {
             visible: !section.off
-            text: Settings.animationDuration + " ms"
+            text: I18n.tr("%1 ms", Settings.animationDuration)
             role: "caption"; dim: true
         }
     }
 
     Card {
-        title: "Workspaces"
-        subtitle: "Switching from one workspace to another"
+        title: I18n.tr("Workspaces")
+        subtitle: I18n.tr("Switching from one workspace to another")
         icon: "\u{f0570}"
         accentColor: Design.sapphire
 
@@ -66,8 +66,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Repeater {
                 model: [
-                    { id: "slide", label: "Slide" },
-                    { id: "fade",  label: "Fade" }
+                    { id: "slide", label: I18n.tr("Slide") },
+                    { id: "fade",  label: I18n.tr("Fade") }
                 ]
                 delegate: Pill {
                     required property var modelData
@@ -80,15 +80,15 @@ ColumnLayout {
         Label {
             Layout.fillWidth: true
             text: Settings.workspaceAnimation === "fade"
-                ? "The old workspace fades into the new one"
-                : "Both slide sideways, the new one in from the side it lies on; the touchpad swipe moves them with your fingers"
+                ? I18n.tr("The old workspace fades into the new one")
+                : I18n.tr("Both slide sideways, the new one in from the side it lies on; the touchpad swipe moves them with your fingers")
             role: "caption"; dim: true; wrapMode: Text.WordWrap
         }
     }
 
     Card {
-        title: "Windows"
-        subtitle: "Opening and closing a window"
+        title: I18n.tr("Windows")
+        subtitle: I18n.tr("Opening and closing a window")
         icon: "\u{f05b6}"
         accentColor: Design.teal
 
@@ -97,10 +97,10 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Repeater {
                 model: [
-                    { id: "popin", label: "Pop in" },
-                    { id: "fade",  label: "Fade" },
-                    { id: "slide", label: "Slide" },
-                    { id: "none",  label: "None" }
+                    { id: "popin", label: I18n.tr("Pop in") },
+                    { id: "fade",  label: I18n.tr("Fade") },
+                    { id: "slide", label: I18n.tr("Slide") },
+                    { id: "none",  label: I18n.tr("No animation") }
                 ]
                 delegate: Pill {
                     required property var modelData
@@ -113,10 +113,10 @@ ColumnLayout {
         Label {
             Layout.fillWidth: true
             text: ({
-                popin: "Grows from the middle while fading in, and shrinks away",
-                fade: "Fades in and out where it stands",
-                slide: "Comes in from the nearest edge of the workspace, and leaves by it",
-                none: "Appears and vanishes at once; moving and resizing still animate"
+                popin: I18n.tr("Grows from the middle while fading in, and shrinks away"),
+                fade: I18n.tr("Fades in and out where it stands"),
+                slide: I18n.tr("Comes in from the nearest edge of the workspace, and leaves by it"),
+                none: I18n.tr("Appears and vanishes at once; moving and resizing still animate")
             })[Settings.windowAnimation] || ""
             role: "caption"; dim: true; wrapMode: Text.WordWrap
         }
@@ -124,7 +124,7 @@ ColumnLayout {
         Slider {
             Layout.fillWidth: true
             visible: Settings.windowAnimation === "popin"
-            label: "Grows from"
+            label: I18n.tr("Grows from")
             minimum: 40
             maximum: 95
             value: Settings.popinPercent
@@ -134,22 +134,22 @@ ColumnLayout {
     }
 
     Card {
-        title: "Unfocused windows"
+        title: I18n.tr("Unfocused windows")
         subtitle: Settings.inactiveOpacityPercent >= 100
-            ? "Drawn like the focused one"
-            : "Drawn at " + Settings.inactiveOpacityPercent + "% opacity, so the focused one stands out"
+            ? I18n.tr("Drawn like the focused one")
+            : I18n.tr("Drawn at %1% opacity, so the focused one stands out", Settings.inactiveOpacityPercent)
         icon: "\u{f0208}"
         accentColor: Design.blue
 
         Toggle {
-            label: "Fade unfocused windows"
+            label: I18n.tr("Fade unfocused windows")
             checked: Settings.inactiveOpacityPercent < 100
             onToggled: Settings.set("inactiveOpacityPercent", Settings.inactiveOpacityPercent < 100 ? 100 : 50)
         }
         Slider {
             Layout.fillWidth: true
             visible: Settings.inactiveOpacityPercent < 100
-            label: "Opacity"
+            label: I18n.tr("Opacity")
             minimum: 20
             maximum: 95
             value: Settings.inactiveOpacityPercent
@@ -159,30 +159,30 @@ ColumnLayout {
     }
 
     Card {
-        title: "Special workspace"
-        subtitle: "A workspace of its own, called up over the one in front of you"
+        title: I18n.tr("Special workspace")
+        subtitle: I18n.tr("A workspace of its own, called up over the one in front of you")
         icon: "\u{f0bc8}"
         accentColor: Design.peach
 
         Toggle {
-            label: "Mod+S calls up the special workspace"
+            label: I18n.tr("Mod+S calls up the special workspace")
             subtitle: Settings.specialWorkspace
-                ? "Mod+S shows and hides it; Mod+Ctrl+Shift+S sends the focused window there"
-                : "Mod+S shows the scratchpad instead"
+                ? I18n.tr("Mod+S shows and hides it; Mod+Ctrl+Shift+S sends the focused window there")
+                : I18n.tr("Mod+S shows the scratchpad instead")
             checked: Settings.specialWorkspace
             onToggled: Settings.set("specialWorkspace", !Settings.specialWorkspace)
         }
     }
 
     Card {
-        title: "Workspace overview"
-        subtitle: "Every workspace of the screen side by side, live"
+        title: I18n.tr("Workspace overview")
+        subtitle: I18n.tr("Every workspace of the screen side by side, live")
         icon: "\u{f0570}"
         accentColor: Design.green
 
         Toggle {
-            label: "Mod+O shows the overview"
-            subtitle: "Click a workspace, or pick one with the arrows and Enter, to go there; Escape leaves"
+            label: I18n.tr("Mod+O shows the overview")
+            subtitle: I18n.tr("Click a workspace, or pick one with the arrows and Enter, to go there; Escape leaves. Four fingers up on the touchpad bring it in too")
             checked: Settings.workspaceOverview
             onToggled: Settings.set("workspaceOverview", !Settings.workspaceOverview)
         }
@@ -191,7 +191,7 @@ ColumnLayout {
     Label {
         Layout.fillWidth: true
         visible: !Sway.swayfx
-        text: "The compositor running now is plain sway: these settings take effect with b1air's own swayFX."
+        text: I18n.tr("The compositor running now is plain sway: these settings take effect with b1air's own swayFX.")
         role: "caption"; color: Design.peach; wrapMode: Text.WordWrap
     }
 }

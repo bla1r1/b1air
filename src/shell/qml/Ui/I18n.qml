@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import QtCore
 
 // Translations, for the apps and the shell alike.
 //
@@ -16,13 +17,17 @@ import QtQuick
 // The English string is the key. A string with no translation, or a language
 // with no file, shows the English — never an empty label.
 //
-// The language is the system's: LANGUAGE / LC_MESSAGES / LANG, which Qt
-// reports as Qt.uiLanguage. `LANG=ru_RU.UTF-8 b1air-files` tries one out.
+// The language is the one picked in Settings → Keyboard → Interface language
+// (uiLanguage in settings.json), else the system's: LANGUAGE / LC_MESSAGES /
+// LANG, which Qt reports as Qt.uiLanguage. `LANG=uk_UA.UTF-8 b1air-files`
+// tries one out. A change applies to what starts afterwards: the shell
+// restarts for it, and an app when it is opened again.
 QtObject {
     id: root
 
-    readonly property string language:
+    readonly property string systemLanguage:
         String(Qt.uiLanguage || Qt.locale().name || "en").split(/[_.@-]/)[0].toLowerCase()
+    property string language: root.systemLanguage
 
     // Filled once at startup; bindings that call tr() re-run when it lands.
     property var dict: ({})
@@ -46,6 +51,13 @@ QtObject {
         return root._fill(s, [n].concat(args));
     }
 
+    // A date in the interface's language, whatever the system's is:
+    // I18n.date(d, "dddd, MMMM d, yyyy"). The pattern is a key too, so a
+    // language can put the day before the month.
+    function date(d, pattern) {
+        return Qt.locale(root.language).toString(d, root.tr(pattern));
+    }
+
     // CLDR's rule for Russian, Ukrainian and Belarusian; anything else with
     // forms gets one/other.
     function _pluralIndex(n) {
@@ -64,7 +76,25 @@ QtObject {
         return s;
     }
 
+    // uiLanguage from settings.json, "" when unset or "auto".
+    function _chosen() {
+        const xhr = new XMLHttpRequest();
+        try {
+            const dir = String(StandardPaths.writableLocation(StandardPaths.ConfigLocation));
+            xhr.open("GET", dir + "/sway/settings.json", false);
+            xhr.send();
+            if ((xhr.status === 0 || xhr.status === 200) && xhr.responseText) {
+                const v = String(JSON.parse(xhr.responseText).uiLanguage || "");
+                return v === "auto" ? "" : v;
+            }
+        } catch (e) {
+            // No settings yet, or file reads are not allowed here: the system's.
+        }
+        return "";
+    }
+
     function load() {
+        root.language = root._chosen() || root.systemLanguage;
         if (root.language === "en" || root.language === "c" || root.language === "posix") return;
         const xhr = new XMLHttpRequest();
         try {

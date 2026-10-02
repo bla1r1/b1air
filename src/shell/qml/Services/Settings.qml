@@ -91,6 +91,8 @@ Singleton {
     readonly property alias inactiveOpacityPercent: data.inactiveOpacityPercent
     readonly property alias specialWorkspace: data.specialWorkspace
     readonly property alias workspaceOverview: data.workspaceOverview
+    readonly property alias uiLanguage: data.uiLanguage
+    readonly property alias magicMouseGestures: data.magicMouseGestures
     readonly property alias notificationsOnMain: data.notificationsOnMain
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
@@ -480,6 +482,8 @@ Singleton {
         inactiveOpacityPercent: 50,
         specialWorkspace: true,
         workspaceOverview: true,
+        uiLanguage: "auto",
+        magicMouseGestures: true,
         notificationsOnMain: false,
         themeName: "catppuccin-mocha",
         appColorScheme: "auto",
@@ -610,6 +614,8 @@ Singleton {
             property int inactiveOpacityPercent: 50
             property bool specialWorkspace: true
             property bool workspaceOverview: true
+            property string uiLanguage: "auto"
+            property bool magicMouseGestures: true
             property bool notificationsOnMain: false
             property string themeName: "catppuccin-mocha"
             property string appColorScheme: "auto"

@@ -225,7 +225,7 @@ PopupShell {
 
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Search emojis (e.g. fire, rocket, love, tech)..."
+                        text: I18n.tr("Search emojis (e.g. fire, rocket, love, tech)...")
                         color: Design.textDim
                         role: "caption"
                         visible: !searchInput.text && !searchInput.activeFocus
@@ -292,14 +292,14 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Label {
-                text: window.filteredList.length + " Emojis"
+                text: I18n.trn("%1 emoji", "%1 emojis", window.filteredList.length)
                 role: "caption"
                 dim: true
                 Layout.fillWidth: true
             }
 
             Label {
-                text: "Click or Enter to copy"
+                text: I18n.tr("Click or Enter to copy")
                 role: "caption"
                 dim: true
             }

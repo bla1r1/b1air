@@ -24,8 +24,8 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     Card {
-        title: "Theme"
-        subtitle: "The whole palette — surfaces, text and accents — in one file"
+        title: I18n.tr("Theme")
+        subtitle: I18n.tr("The whole palette — surfaces, text and accents — in one file")
         icon: "\u{f0765}"
         accentColor: Design.mauve
 
@@ -43,26 +43,26 @@ ColumnLayout {
                 spacing: Design.s(2)
                 Label {
                     Layout.fillWidth: true
-                    text: "From the wallpaper"
+                    text: I18n.tr("From the wallpaper")
                     weight: Design.weight.semibold
                     color: Settings.themeName === "wallpaper" ? Design.accent : Design.text
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: "Takes the picture's dominant colour and builds the palette around it. Warnings and errors keep their own colours."
+                    text: I18n.tr("Takes the picture's dominant colour and builds the palette around it. Warnings and errors keep their own colours.")
                     role: "caption"; dim: true; wrapMode: Text.WordWrap
                 }
             }
 
             ActionButton {
-                label: Settings.themeName === "wallpaper" ? "Regenerate" : "Apply"
+                label: Settings.themeName === "wallpaper" ? I18n.tr("Regenerate") : I18n.tr("Apply")
                 icon: "\u{f0765}"
                 onActivated: Services.Theme.applyFromWallpaper()
             }
 
             // Keeps this palette as a theme, so the next wallpaper doesn't replace it.
             ActionButton {
-                label: "Save as theme"
+                label: I18n.tr("Save as theme")
                 icon: "\u{f0193}"
                 onActivated: {
                     if (Services.Theme.saveWallpaperAs(newThemeName.text) !== "")
@@ -114,7 +114,7 @@ ColumnLayout {
 
                         Label {
                             text: themeRow.modelData.builtin
-                                ? "Built in"
+                                ? I18n.tr("Built in")
                                 : themeRow.modelData.path
                             role: "caption"
                             dim: true
@@ -139,7 +139,7 @@ ColumnLayout {
                     ActionButton {
                         visible: !themeRow.modelData.builtin
                         Layout.fillWidth: false
-                        label: "Delete"
+                        label: I18n.tr("Delete")
                         icon: "\u{f01b4}"
                         destructive: true
                         onActivated: Services.Theme.deleteTheme(themeRow.modelData.id)
@@ -165,25 +165,25 @@ ColumnLayout {
             property string selected: ""
 
             readonly property var groups: [
-                { title: "Surfaces", roles: [["ground", "Background"], ["lowest", "Deepest"], ["low", "Panels"],
+                { title: I18n.tr("Surfaces"), roles: [["ground", "Background"], ["lowest", "Deepest"], ["low", "Panels"],
                                              ["mid", "Cards"], ["high", "Hover"], ["highest", "Selected"]] },
-                { title: "Text", roles: [["text", "Text"], ["textDim", "Secondary text"],
+                { title: I18n.tr("Text"), roles: [["text", "Text"], ["textDim", "Secondary text"],
                                          ["outline", "Outline"], ["outlineVariant", "Divider"]] },
-                { title: "Accent", roles: [["primary", "Accent"], ["primaryText", "Text on accent"],
+                { title: I18n.tr("Accent"), roles: [["primary", "Accent"], ["primaryText", "Text on accent"],
                                            ["primaryBox", "Accent surface"], ["tertiary", "Second accent"],
                                            ["error", "Error"], ["errorText", "Text on error"]] },
-                { title: "Colours", roles: [["blue", "Blue"], ["sapphire", "Sapphire"], ["mauve", "Mauve"],
+                { title: I18n.tr("Colours"), roles: [["blue", "Blue"], ["sapphire", "Sapphire"], ["mauve", "Mauve"],
                                             ["pink", "Pink"], ["peach", "Peach"], ["yellow", "Yellow"],
                                             ["green", "Green"], ["teal", "Teal"], ["red", "Red"],
                                             ["maroon", "Maroon"], ["lavender", "Lavender"]] }
             ]
 
             SectionLabel {
-                text: "Editing " + Services.Theme.editingId.replace(/[-_]/g, " ")
+                text: I18n.tr("Editing %1", Services.Theme.editingId.replace(/[-_]/g, " "))
             }
 
             Label {
-                text: "Changes show and save as you make them. Click a swatch for sliders, or type a hex value."
+                text: I18n.tr("Changes show and save as you make them. Click a swatch for sliders, or type a hex value.")
                 role: "caption"; dim: true; wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
@@ -249,7 +249,7 @@ ColumnLayout {
                                     }
 
                                     Label {
-                                        text: roleRow.modelData[1]
+                                        text: I18n.tr(roleRow.modelData[1])
                                         role: "caption"
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
@@ -292,7 +292,7 @@ ColumnLayout {
 
                         Slider {
                             Layout.fillWidth: true
-                            label: "Hue"
+                            label: I18n.tr("Hue")
                             showPercent: false
                             minimum: 0; maximum: 359
                             value: Math.max(0, Math.round(picker.current.hslHue * 359))
@@ -301,14 +301,14 @@ ColumnLayout {
                         }
                         Slider {
                             Layout.fillWidth: true
-                            label: "Saturation"
+                            label: I18n.tr("Saturation")
                             value: Math.round(picker.current.hslSaturation * 100)
                             tone: picker.current
                             onMoved: pct => picker.setHsl(Math.max(0, picker.current.hslHue), pct / 100, picker.current.hslLightness)
                         }
                         Slider {
                             Layout.fillWidth: true
-                            label: "Lightness"
+                            label: I18n.tr("Lightness")
                             value: Math.round(picker.current.hslLightness * 100)
                             tone: Design.text
                             onMoved: pct => picker.setHsl(Math.max(0, picker.current.hslHue), picker.current.hslSaturation, pct / 100)
@@ -322,17 +322,17 @@ ColumnLayout {
                 spacing: Design.s(Design.space.sm)
                 Item { Layout.fillWidth: true }
                 Pill {
-                    label: "Open JSON"
+                    label: I18n.tr("Open JSON")
                     icon: "\u{f0219}"
                     onClicked: Quickshell.execDetached(["b1air-text", Services.Theme.themesDir + "/" + Services.Theme.editingId + ".json"])
                 }
                 Pill {
-                    label: "Revert"
+                    label: I18n.tr("Revert")
                     icon: "\u{f0156}"
                     onClicked: Services.Theme.revertEdit()
                 }
                 Pill {
-                    label: "Done"
+                    label: I18n.tr("Done")
                     icon: "\u{f012c}"
                     active: true
                     onClicked: { editor.selected = ""; Services.Theme.finishEdit(); }
@@ -341,14 +341,12 @@ ColumnLayout {
         }
 
         SectionLabel {
-            text: "Create your own"
+            text: I18n.tr("Create your own")
             Layout.topMargin: Design.s(Design.space.sm)
         }
 
         Label {
-            text: "A new theme starts as a copy of the palette on screen, so it "
-                  + "renders correctly from the first save and you only change what "
-                  + "you want to change."
+            text: I18n.tr("A new theme starts as a copy of the palette on screen, so it renders correctly from the first save and you only change what you want to change.")
             role: "caption"
             dim: true
             wrapMode: Text.WordWrap
@@ -362,7 +360,7 @@ ColumnLayout {
             Field {
                 id: newThemeName
                 Layout.fillWidth: true
-                placeholder: "Name for the new theme"
+                placeholder: I18n.tr("Name for the new theme")
                 onAccepted: value => {
                     if (Services.Theme.createFrom(value) !== "")
                         newThemeName.text = "";
@@ -370,7 +368,7 @@ ColumnLayout {
             }
 
             Pill {
-                label: "Create"
+                label: I18n.tr("Create")
                 icon: "\u{f0415}"
                 onClicked: {
                     if (Services.Theme.createFrom(newThemeName.text) !== "")
@@ -379,7 +377,7 @@ ColumnLayout {
             }
 
             Pill {
-                label: "Edit"
+                label: I18n.tr("Edit")
                 icon: "\u{f03eb}"
                 // Ui/Pill has no disabled state of its own; `enabled` blocks the
                 // clicks and the opacity says so.
@@ -391,8 +389,8 @@ ColumnLayout {
 
         Label {
             text: Services.Theme.currentFile !== ""
-                ? "Edit opens the current theme in the editor above."
-                : "Built-in themes can't be edited — create a copy first."
+                ? I18n.tr("Edit opens the current theme in the editor above.")
+                : I18n.tr("Built-in themes can't be edited — create a copy first.")
             role: "caption"
             dim: true
             wrapMode: Text.WordWrap
@@ -400,14 +398,12 @@ ColumnLayout {
         }
 
         SectionLabel {
-            text: "Import & export"
+            text: I18n.tr("Import & export")
             Layout.topMargin: Design.s(Design.space.sm)
         }
 
         Label {
-            text: "Export writes the palette you are looking at into "
-                  + Services.Theme.themesDir + ", where it shows up in the list above "
-                  + "and can be copied to another machine."
+            text: I18n.tr("Export writes the palette you are looking at into %1, where it shows up in the list above and can be copied to another machine.", Services.Theme.themesDir)
             role: "caption"
             dim: true
             wrapMode: Text.WordWrap
@@ -422,7 +418,7 @@ ColumnLayout {
                 mono: true
                 id: importPath
                 Layout.fillWidth: true
-                placeholder: "Path to a theme .json to import"
+                placeholder: I18n.tr("Path to a theme .json to import")
                 onAccepted: value => {
                     if (Services.Theme.importFrom(value))
                         importPath.text = "";
@@ -430,7 +426,7 @@ ColumnLayout {
             }
 
             Pill {
-                label: "Import"
+                label: I18n.tr("Import")
                 icon: "\u{f0552}"
                 onClicked: {
                     if (Services.Theme.importFrom(importPath.text))
@@ -439,7 +435,7 @@ ColumnLayout {
             }
 
             Pill {
-                label: "Export"
+                label: I18n.tr("Export")
                 icon: "\u{f0554}"
                 onClicked: Services.Theme.exportTo("")
             }
@@ -449,7 +445,7 @@ ColumnLayout {
             visible: Services.Theme.lastError !== "" || Services.Theme.lastExportPath !== ""
             text: Services.Theme.lastError !== ""
                 ? Services.Theme.lastError
-                : "Exported to " + Services.Theme.lastExportPath
+                : I18n.tr("Exported to %1", Services.Theme.lastExportPath)
             role: "caption"
             color: Services.Theme.lastError !== "" ? Design.danger : Design.ok
             wrapMode: Text.WordWrap

@@ -15,10 +15,10 @@ import "."
 MiniView {
     id: root
 
-    title: "Wi-Fi"
+    title: I18n.tr("Wi-Fi")
     icon: "\u{f0928}"
     tone: Design.blue
-    footerLabel: "Network Settings…"
+    footerLabel: I18n.tr("Network Settings…")
 
     // Connecting to a secured network needs a password field. It lived only in
     // NetworkPopup, so deleting that popup without this would have left no way
@@ -43,8 +43,8 @@ MiniView {
         width: parent.width
         visible: !root.isOn
         icon: "\u{f092e}"
-        title: "Wi-Fi is off"
-        hint: "Turn it on to see the networks around you."
+        title: I18n.tr("Wi-Fi is off")
+        hint: I18n.tr("Turn it on to see the networks around you.")
     }
 
     // ── Scanning, nothing found yet ──────────────────────────────────────────
@@ -53,8 +53,8 @@ MiniView {
         width: parent.width
         visible: root.isOn && !root.connectedNet && root.networks.length === 0
         icon: "\u{f0928}"
-        title: "Looking for networks"
-        hint: "No network in range yet. The list refreshes on its own."
+        title: I18n.tr("Looking for networks")
+        hint: I18n.tr("No network in range yet. The list refreshes on its own.")
     }
 
     ListView {
@@ -70,7 +70,7 @@ MiniView {
             spacing: Design.s(Design.space.xs)
 
             SectionLabel {
-                text: "Connected"
+                text: I18n.tr("Connected")
                 visible: root.connectedNet !== null
             }
 
@@ -117,7 +117,7 @@ MiniView {
                     // under the pointer.
                     Label {
                         visible: connMa.containsMouse
-                        text: "Disconnect"
+                        text: I18n.tr("Disconnect")
                         role: "caption"
                         color: Design.blue
                     }
@@ -139,7 +139,7 @@ MiniView {
             }
 
             SectionLabel {
-                text: "Available"
+                text: I18n.tr("Available")
                 visible: root.networks.length > 0
             }
         }
@@ -168,7 +168,7 @@ MiniView {
                 }
 
                 Label {
-                    text: rowItem.modelData.ssid || "Hidden network"
+                    text: rowItem.modelData.ssid || I18n.tr("Hidden network")
                     role: "body"
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -177,8 +177,8 @@ MiniView {
                 Label {
                     // Says why this row is one click and another asks for a
                     // password, instead of leaving the difference invisible.
-                    text: Network.isBusy(rowItem.modelData.ssid) ? "Connecting…"
-                        : (rowItem.modelData.known ? "Saved" : "")
+                    text: Network.isBusy(rowItem.modelData.ssid) ? I18n.tr("Connecting…")
+                        : (rowItem.modelData.known ? I18n.tr("Saved") : "")
                     role: "caption"
                     dim: true
                 }
@@ -241,7 +241,7 @@ MiniView {
 
             Label {
                 Layout.fillWidth: true
-                text: "This network is secured. Enter its password to join."
+                text: I18n.tr("This network is secured. Enter its password to join.")
                 role: "caption"
                 dim: true
                 horizontalAlignment: Text.AlignHCenter
@@ -253,7 +253,7 @@ MiniView {
                 Layout.fillWidth: true
                 Layout.topMargin: Design.s(Design.space.xs)
                 echoMode: TextInput.Password
-                placeholder: "Password"
+                placeholder: I18n.tr("Password")
                 onAccepted: v => root.join(v)
             }
 
@@ -263,13 +263,13 @@ MiniView {
 
                 Pill {
                     Layout.fillWidth: true
-                    label: "Cancel"
+                    label: I18n.tr("Cancel")
                     onClicked: root.cancelJoin()
                 }
 
                 Pill {
                     Layout.fillWidth: true
-                    label: "Join"
+                    label: I18n.tr("Join")
                     icon: "\u{f012c}"
                     active: pskField.text.length > 0
                     onClicked: root.join(pskField.text)

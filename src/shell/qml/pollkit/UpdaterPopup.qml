@@ -89,19 +89,18 @@ PopupShell {
 
     // ── Wording ──────────────────────────────────────────────────────────────
     readonly property string desktopTitle: {
-        if (window.checking) return "Checking for updates…";
-        if (!window.repoFound) return "Dotfiles repository not found";
+        if (window.checking) return I18n.tr("Checking for updates…");
+        if (!window.repoFound) return I18n.tr("Dotfiles repository not found");
         if (window.behind > 0)
-            return window.behind === 1 ? "1 new change" : window.behind + " new changes";
-        return window.fetchOk ? "Up to date" : "Could not check";
+            return I18n.trn("%1 new change", "%1 new changes", window.behind);
+        return window.fetchOk ? I18n.tr("Up to date") : I18n.tr("Could not check");
     }
     readonly property string desktopDetail: {
-        if (window.checking) return "Asking " + (window.remoteRef || "the remote") + " what is new";
-        if (!window.repoFound) return "Run install.sh from your clone once, so the desktop knows where it is.";
-        if (!window.fetchOk) return "The remote could not be reached (offline, or it needs a password). "
-                                    + "This is what was known at the last successful check.";
-        let s = "On " + window.branch + " at " + window.localHash;
-        if (window.ahead > 0) s += " · " + window.ahead + " local commit" + (window.ahead === 1 ? "" : "s") + " not on " + window.remoteRef;
+        if (window.checking) return I18n.tr("Asking %1 what is new", window.remoteRef || I18n.tr("the remote"));
+        if (!window.repoFound) return I18n.tr("Run install.sh from your clone once, so the desktop knows where it is.");
+        if (!window.fetchOk) return I18n.tr("The remote could not be reached (offline, or it needs a password). This is what was known at the last successful check.");
+        let s = I18n.tr("On %1 at %2", window.branch, window.localHash);
+        if (window.ahead > 0) s += " · " + I18n.trn("%1 local commit not on %2", "%1 local commits not on %2", window.ahead, window.remoteRef);
         return s;
     }
     readonly property bool canUpdate: !window.checking && window.repoFound && window.behind > 0
@@ -113,7 +112,7 @@ PopupShell {
             case "apt":    return "APT";
             case "dnf":    return "DNF";
             case "zypper": return "zypper";
-            default:       return "your package manager";
+            default:       return I18n.tr("your package manager");
         }
     }
 
@@ -127,7 +126,7 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Icon { text: "\u{f06b0}"; role: "subhead"; color: Design.accent }
-            Label { text: "Updates"; role: "subhead"; weight: Design.weight.bold }
+            Label { text: I18n.tr("Updates"); role: "subhead"; weight: Design.weight.bold }
             Item { Layout.fillWidth: true }
             IconButton {
                 icon: "\u{f0450}" // refresh
@@ -142,14 +141,14 @@ PopupShell {
             spacing: Design.s(Design.space.sm)
 
             Pill {
-                label: window.behind > 0 ? "Desktop · " + window.behind : "Desktop"
+                label: window.behind > 0 ? I18n.tr("Desktop · %1", window.behind) : I18n.tr("Desktop")
                 icon: "󰚰"
                 active: window.currentTab === "dotfiles"
                 onClicked: window.currentTab = "dotfiles"
             }
             Pill {
                 label: (window.sysCount + window.aurCount) > 0
-                       ? "System · " + (window.sysCount + window.aurCount) : "System"
+                       ? I18n.tr("System") + " · " + (window.sysCount + window.aurCount) : I18n.tr("System")
                 icon: "󰏗"
                 active: window.currentTab === "system"
                 onClicked: window.currentTab = "system"
@@ -219,8 +218,8 @@ PopupShell {
                 Layout.fillHeight: true
                 visible: !window.checking && window.incoming.length === 0
                 icon: window.fetchOk ? "\u{f012c}" : "\u{f0b9b}"
-                title: window.fetchOk ? "Nothing new" : "Offline"
-                hint: window.fetchOk ? "You have the latest desktop." : "Try again when the network is back."
+                title: window.fetchOk ? I18n.tr("Nothing new") : I18n.tr("Offline")
+                hint: window.fetchOk ? I18n.tr("You have the latest desktop.") : I18n.tr("Try again when the network is back.")
             }
             Item { Layout.fillHeight: true; visible: window.checking }
 
@@ -229,8 +228,8 @@ PopupShell {
                 Layout.fillWidth: true
                 visible: !window.checking && window.behind > 0 && !window.canUpdate
                 text: window.dirty
-                      ? "You have uncommitted edits in " + window.repoDir + ". Commit or stash them first — the update would refuse to overwrite them."
-                      : "This checkout has commits that " + window.remoteRef + " does not, so it cannot simply move forward. Merge or rebase it yourself."
+                      ? I18n.tr("You have uncommitted edits in %1. Commit or stash them first — the update would refuse to overwrite them.", window.repoDir)
+                      : I18n.tr("This checkout has commits that %1 does not, so it cannot simply move forward. Merge or rebase it yourself.", window.remoteRef)
                 role: "caption"
                 color: Design.warn
                 wrapMode: Text.WordWrap
@@ -239,7 +238,7 @@ PopupShell {
             ActionButton {
                 Layout.fillWidth: true
                 icon: "\u{f06b0}"
-                label: window.canUpdate ? "Update now" : "Up to date"
+                label: window.canUpdate ? I18n.tr("Update now") : I18n.tr("Up to date")
                 tone: window.canUpdate ? Design.ok : Design.textDim
                 enabled: window.canUpdate
                 onActivated: {
@@ -260,9 +259,9 @@ PopupShell {
 
             Label {
                 Layout.fillWidth: true
-                text: window.sysChecking ? "Checking packages…"
-                      : (window.sysCount + window.aurCount) === 0 ? "All packages up to date"
-                      : (window.sysCount + window.aurCount) + " package updates"
+                text: window.sysChecking ? I18n.tr("Checking packages…")
+                      : (window.sysCount + window.aurCount) === 0 ? I18n.tr("All packages up to date")
+                      : I18n.trn("%1 package update", "%1 package updates", window.sysCount + window.aurCount)
                 role: "title"
                 weight: Design.weight.semibold
                 color: (window.sysCount + window.aurCount) > 0 ? Design.ok : Design.text
@@ -270,8 +269,8 @@ PopupShell {
             Label {
                 Layout.fillWidth: true
                 text: window.aurCount > 0
-                      ? window.sysCount + " from the repositories, " + window.aurCount + " from the AUR"
-                      : "Managed by " + window.managerName
+                      ? I18n.tr("%1 from the repositories, %2 from the AUR", window.sysCount, window.aurCount)
+                      : I18n.tr("Managed by %1", window.managerName)
                 role: "caption"
                 dim: true
             }
@@ -280,7 +279,7 @@ PopupShell {
 
             Label {
                 Layout.fillWidth: true
-                text: "The upgrade runs in a terminal, so you can see what changes and enter your password."
+                text: I18n.tr("The upgrade runs in a terminal, so you can see what changes and enter your password.")
                 role: "caption"
                 dim: true
                 wrapMode: Text.WordWrap
@@ -289,7 +288,7 @@ PopupShell {
             ActionButton {
                 Layout.fillWidth: true
                 icon: "\u{f04e6}"
-                label: "Upgrade with " + window.managerName
+                label: I18n.tr("Upgrade with %1", window.managerName)
                 tone: Design.accent
                 onActivated: {
                     Daemon.dotfilesSys();

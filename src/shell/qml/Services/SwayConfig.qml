@@ -53,8 +53,11 @@ Singleton {
      * The four-finger set, as [gesture, sway command] pairs — one list for
      * the config file and the Settings page's runtime binding alike.
      *
-     *   up          the Launchpad, every app at a glance
+     *   up          the Launchpad, every app at a glance (with our swayfx,
+     *               the workspace overview takes the swipe up instead,
+     *               following the fingers: overview_swipe, set by the daemon)
      *   down        close whatever panel is open
+     *   pinch in    the Launchpad, as on a Mac (thumb and three fingers)
      *   left/right  carry the focused window to the neighbouring workspace
      *               and follow it there
      */
@@ -64,6 +67,7 @@ Singleton {
         return [
             ["swipe:4:up", "exec b1air-shell toggle launchpad"],
             ["swipe:4:down", "exec b1air-shell close"],
+            ["pinch:4:inward", "exec b1air-shell toggle launchpad"],
             // Two commands: written bare in a config file, where the rest of
             // the line is the binding; quoted when sent through swaymsg (see
             // InputSettingsSection._applyFourFinger).

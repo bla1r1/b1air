@@ -1,6 +1,7 @@
 #include "session_manager.hpp"
 #include <nlohmann/json.hpp>
 #include "settings_manager.hpp"
+#include "magic_mouse.hpp"
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "focustime_db.hpp"
@@ -685,6 +686,10 @@ int SessionManager::run_session() {
         }
     });
     gamepad_th.detach();
+
+    // Two-finger swipes and taps on a Magic Mouse (magic_mouse.hpp).
+    std::thread magic_mouse_th([] { magic_mouse::run(&g_session_running); });
+    magic_mouse_th.detach();
 
     int running_flag = 1;
     std::thread settings_th([&]() {

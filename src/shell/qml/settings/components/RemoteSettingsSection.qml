@@ -70,10 +70,10 @@ ColumnLayout {
 
     // ── 1. WayVNC Native Remote Desktop ──────────────────────────────────────
     Card {
-        title: "Remote Desktop (WayVNC)"
+        title: I18n.tr("Remote Desktop (WayVNC)")
         subtitle: section.vncRunning
-            ? "Server active on port " + section.vncPort + " — local session only"
-            : (section.devMode ? "Development mode: available to the local network" : "Stopped — starts on localhost in production mode")
+            ? I18n.tr("Server active on port %1 — local session only", section.vncPort)
+            : (section.devMode ? I18n.tr("Development mode: available to the local network") : I18n.tr("Stopped — starts on localhost in production mode"))
         icon: "\u{f0379}"
         accentColor: Design.blue
 
@@ -82,10 +82,10 @@ ColumnLayout {
         // settings pages use, and rolling it by hand produced a smaller switch
         // pinned to the label instead of one at the end of the row.
         Toggle {
-            label: "Remote Desktop Server"
+            label: I18n.tr("Remote Desktop Server")
             subtitle: section.vncRunning
-                ? "Active (Listening on " + (section.devMode ? section.localIp : "127.0.0.1") + ":" + section.vncPort + ")"
-                : "Lets a VNC client see and control this desktop"
+                ? I18n.tr("Active (Listening on %1:%2)", (section.devMode ? section.localIp : "127.0.0.1"), section.vncPort)
+                : I18n.tr("Lets a VNC client see and control this desktop")
             checked: section.vncRunning
             onToggled: {
                 if (!section.vncRunning) {
@@ -106,12 +106,12 @@ ColumnLayout {
 
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "VNC password"; role: "caption"; dim: true }
+            Label { text: I18n.tr("VNC password"); role: "caption"; dim: true }
             Field {
                 Layout.fillWidth: true
                 text: section.vncPassword
                 echoMode: TextInput.Password
-                placeholder: "Required for TLS authentication"
+                placeholder: I18n.tr("Required for TLS authentication")
                 // On every edit, not only on commit: the switch above is a
                 // mouse area and does not take focus, so a password typed and
                 // followed straight by a click on it was never committed and
@@ -134,13 +134,13 @@ ColumnLayout {
 
             Label {
                 visible: section.vncUser !== ""
-                text: "sign in as " + section.vncUser
+                text: I18n.tr("sign in as %1", section.vncUser)
                 role: "caption"
                 dim: true
             }
 
             ActionButton {
-                label: "Copy Address"
+                label: I18n.tr("Copy Address")
                 icon: "\u{f00c5}"
                 onActivated: {
                     Quickshell.execDetached(["wl-copy", "vnc://" + section.localIp + ":" + section.vncPort]);
@@ -151,17 +151,17 @@ ColumnLayout {
 
     // ── 2. Unattended Screen Sharing & Permissions ───────────────────────────
     Card {
-        title: "Unattended Remote Access & Permissions"
-        subtitle: "Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS"
+        title: I18n.tr("Unattended Remote Access & Permissions")
+        subtitle: I18n.tr("Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS")
         icon: "\u{f016d}"
         accentColor: Design.teal
 
         // Prompt-Free Screencast Toggle
         Toggle {
-            label: "Silent Screencast Sharing"
+            label: I18n.tr("Silent Screencast Sharing")
             subtitle: section.devMode
-                ? "Allow trusted remote tools to capture screen without interactive popup confirmation"
-                : "Available only in explicit development mode"
+                ? I18n.tr("Allow trusted remote tools to capture screen without interactive popup confirmation")
+                : I18n.tr("Available only in explicit development mode")
             checked: section.promptFree && section.devMode
             enabled: section.devMode
             onToggled: {
@@ -180,18 +180,18 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Label { text: "Kernel Input Emulation (/dev/uinput)"; weight: Design.weight.semibold }
+                Label { text: I18n.tr("Kernel Input Emulation (/dev/uinput)"); weight: Design.weight.semibold }
                 Label {
                     text: section.uinputReady
-                        ? "Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps"
-                        : "Requires input group permissions (/dev/uinput)"
+                        ? I18n.tr("Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps")
+                        : I18n.tr("Requires input group permissions (/dev/uinput)")
                     role: "caption"
                     dim: true
                 }
             }
 
             Badge {
-                text: section.uinputReady ? "Ready" : "Inactive"
+                text: section.uinputReady ? I18n.tr("Ready") : I18n.tr("Inactive")
                 color: section.uinputReady ? Design.green : Design.red
             }
         }
@@ -205,8 +205,8 @@ ColumnLayout {
 
     // ── 3. Wireless Tablet Sidecar Display ────────────────────────────────────
     Card {
-        title: "Wireless Tablet Sidecar Display"
-        subtitle: "Create a virtual second monitor to stream to an iPad or tablet via VNC"
+        title: I18n.tr("Wireless Tablet Sidecar Display")
+        subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
         icon: "\u{f004b}"
         accentColor: Design.mauve
 
@@ -217,9 +217,9 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Label { text: "Virtual Headless Display"; weight: Design.weight.semibold }
+                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold }
                 Label {
-                    text: "Creates an extra 1920x1080 workspace that can be viewed on another device"
+                    text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
                     role: "caption"
                     dim: true
                 }
@@ -229,7 +229,7 @@ ColumnLayout {
                 spacing: Design.s(Design.space.sm)
 
                 ActionButton {
-                    label: "Create Display"
+                    label: I18n.tr("Create Display")
                     icon: "\u{f0079}"
                     onActivated: {
                         Daemon.sidecarCreate(1920, 1080);
@@ -237,7 +237,7 @@ ColumnLayout {
                 }
 
                 ActionButton {
-                    label: "Remove"
+                    label: I18n.tr("Remove")
                     icon: "\u{f00d}"
                     onActivated: {
                         Daemon.sidecarRemove();

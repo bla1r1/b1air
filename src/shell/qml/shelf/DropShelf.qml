@@ -36,7 +36,7 @@ PopupShell {
         }
         if (paths.length > 0) {
             Quickshell.execDetached(["wl-copy", paths.join("\n")]);
-            Osd.show("edit-copy", paths.length === 1 ? "Path copied" : paths.length + " paths copied", "In the clipboard");
+            Osd.show("edit-copy", I18n.trn("Path copied", "%1 paths copied", paths.length), I18n.tr("In the clipboard"));
         }
     }
 
@@ -59,7 +59,7 @@ PopupShell {
             }
 
             Label {
-                text: "File Staging Shelf"
+                text: I18n.tr("File Staging Shelf")
                 role: "subhead"
                 weight: Design.weight.bold
             }
@@ -74,14 +74,14 @@ PopupShell {
             ActionButton {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0c5}"
-                label: "Copy Paths"
+                label: I18n.tr("Copy Paths")
                 onActivated: root.copyAllPaths()
             }
 
             ActionButton {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0156}"
-                label: "Clear All"
+                label: I18n.tr("Clear All")
                 onActivated: stagedFiles.clear()
             }
         }
@@ -209,7 +209,7 @@ PopupShell {
                 }
 
                 Label {
-                    text: "Drag files here to stage"
+                    text: I18n.tr("Drag files here to stage")
                     role: "body"
                     weight: Design.weight.bold
                     dim: true
@@ -217,7 +217,7 @@ PopupShell {
                 }
 
                 Label {
-                    text: "Stage documents, images, or code before sending or batch moving"
+                    text: I18n.tr("Stage documents, images, or code before sending or batch moving")
                     role: "caption"
                     dim: true
                     Layout.alignment: Qt.AlignHCenter

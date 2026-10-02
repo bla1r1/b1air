@@ -63,8 +63,7 @@ ColumnLayout {
         const command = section.cleanCommand(cmd);
         if (!name.trim() || !command) return;
         if (/[;&|`$<>'"(){}\\]/.test(command)) {
-            section.customError = "Startup commands cannot contain shell syntax (quotes, $, ;, |, & …). "
-                + "Put it in a script and add the script instead.";
+            section.customError = I18n.tr("Startup commands cannot contain shell syntax (quotes, $, ;, |, & …). Put it in a script and add the script instead.");
             return;
         }
         section.customError = "";
@@ -110,8 +109,8 @@ ColumnLayout {
 
     // ── 2. Applications Autostart ────────────────────────────────────────────
     Card {
-        title: "Autostart Applications"
-        subtitle: "Launch your favourite applications, background daemons, and scripts on login"
+        title: I18n.tr("Autostart Applications")
+        subtitle: I18n.tr("Launch your favourite applications, background daemons, and scripts on login")
         icon: "\u{f009}"
         accentColor: Design.mauve
 
@@ -125,7 +124,7 @@ ColumnLayout {
                 spacing: Design.s(Design.space.sm)
 
                 Label {
-                    text: "Startup Programs"
+                    text: I18n.tr("Startup Programs")
                     weight: Design.weight.bold
                     role: "subhead"
                     Layout.fillWidth: true
@@ -134,7 +133,7 @@ ColumnLayout {
                 ActionButton {
                     Layout.fillWidth: false
                     icon: "󰐕"
-                    label: section.showAppPicker ? "Close App List" : "Add Installed App…"
+                    label: section.showAppPicker ? I18n.tr("Close App List") : I18n.tr("Add Installed App…")
                     tone: Design.sapphire
                     onActivated: section.showAppPicker = !section.showAppPicker
                 }
@@ -180,7 +179,7 @@ ColumnLayout {
                                 selectByMouse: true
                                 onTextChanged: section.appSearchQuery = text.toLowerCase()
                                 Text {
-                                    text: "Search installed applications..."
+                                    text: I18n.tr("Search installed applications...")
                                     color: Design.textDim
                                     visible: !appSearchInput.text && !appSearchInput.activeFocus
                                     anchors.fill: parent
@@ -253,7 +252,7 @@ ColumnLayout {
 
                                 ActionButton {
                                     icon: "󰐕"
-                                    label: "Add"
+                                    label: I18n.tr("Add")
                                     tone: Design.sapphire
                                     onActivated: section.addCustomApp(appPickerItem.model.name, appPickerItem.model.exec, appPickerItem.model.icon)
                                 }
@@ -282,14 +281,14 @@ ColumnLayout {
                 Field {
                     id: customNameInput
                     Layout.preferredWidth: Design.s(150)
-                    placeholder: "Name"
+                    placeholder: I18n.tr("Name")
                 }
 
                 Field {
                     mono: true
                     id: customCmdInput
                     Layout.fillWidth: true
-                    placeholder: "Command, e.g. syncthing or steam -silent"
+                    placeholder: I18n.tr("Command, e.g. syncthing or steam -silent")
                     onAccepted: v => section.addCustomApp(customNameInput.text, v, "")
                 }
 
@@ -300,7 +299,7 @@ ColumnLayout {
                 ActionButton {
                     Layout.fillWidth: false
                     icon: "󰐕"
-                    label: "Add Binary"
+                    label: I18n.tr("Add Binary")
                     tone: Design.teal
                     onActivated: section.addCustomApp(customNameInput.text, customCmdInput.text, "")
                 }
@@ -338,7 +337,7 @@ ColumnLayout {
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
-                            Label { text: customAppItem.modelData.name || "Custom App"; weight: Design.weight.semibold }
+                            Label { text: customAppItem.modelData.name || I18n.tr("Custom App"); weight: Design.weight.semibold }
                             Label { text: customAppItem.modelData.command || ""; role: "caption"; isMono: true; dim: true }
                         }
 
@@ -362,8 +361,8 @@ ColumnLayout {
 
     // ── 3. Welcome & User Guide ──────────────────────────────────────────────
     Card {
-        title: "Session Hints & Welcome Guide"
-        subtitle: "Preferences for onboarding prompts and keybinding guides"
+        title: I18n.tr("Session Hints & Welcome Guide")
+        subtitle: I18n.tr("Preferences for onboarding prompts and keybinding guides")
         icon: "\u{f02d}"
         accentColor: Design.yellow
 
@@ -378,8 +377,8 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: "Open Guide on Login"; weight: Design.weight.semibold }
-                    Label { text: "Displays the keybinding and tips modal after desktop loads"; role: "caption"; dim: true }
+                    Label { text: I18n.tr("Open Guide on Login"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Displays the keybinding and tips modal after desktop loads"); role: "caption"; dim: true }
                 }
                 Toggle {
                     checked: section.openGuideAtStartup

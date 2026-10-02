@@ -17,7 +17,7 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     property int updateCount: 0
-    property string statusText: "Checking for updates…"
+    property string statusText: I18n.tr("Checking for updates…")
     property string manager: ""
     property string transferStatus: ""
 
@@ -28,14 +28,14 @@ ColumnLayout {
 
     function exportConfig() {
         transferProc.command = ["b1air-daemon", "config", "export", section.transferFile];
-        section.transferStatus = "Exporting…";
+        section.transferStatus = I18n.tr("Exporting…");
         transferProc.running = false;
         transferProc.running = true;
     }
 
     function importConfig() {
         transferProc.command = ["b1air-daemon", "config", "import", section.transferFile];
-        section.transferStatus = "Importing…";
+        section.transferStatus = I18n.tr("Importing…");
         transferProc.running = false;
         transferProc.running = true;
     }
@@ -70,7 +70,7 @@ ColumnLayout {
             case "apt":    return "APT";
             case "dnf":    return "DNF";
             case "zypper": return "zypper";
-            default:       return "the package manager";
+            default:       return I18n.tr("the package manager");
         }
     }
 
@@ -90,7 +90,7 @@ ColumnLayout {
                     section.manager = d.manager || "";
                 } catch (e) {}
                 section.updateCount = count;
-                section.statusText = count > 0 ? (count + " package updates available") : "System packages are up to date";
+                section.statusText = count > 0 ? I18n.trn("%1 package update available", "%1 package updates available", count) : I18n.tr("System packages are up to date");
             }
         }
     }
@@ -120,7 +120,7 @@ ColumnLayout {
 
     function checkNow() {
         section.isChecking = true;
-        section.statusText = "Checking for updates…";
+        section.statusText = I18n.tr("Checking for updates…");
         section.dotChecking = true;
         updateChecker.running = true;
         dotfilesChecker.running = true;
@@ -166,8 +166,9 @@ ColumnLayout {
     // the check found once it has, lists what an update would bring, and the
     // button pulls (and says why it cannot, when it cannot).
     Card {
-        title: "Desktop Updates"
-        subtitle: "This desktop's own code and configuration" + (section.dotRemote ? ", from " + section.dotRemote : "")
+        title: I18n.tr("Desktop Updates")
+        subtitle: section.dotRemote ? I18n.tr("This desktop's own code and configuration, from %1", section.dotRemote)
+                                     : I18n.tr("This desktop's own code and configuration")
         icon: "\u{f021}"
         accentColor: section.dotfilesUpdateAvail ? Design.ok : Design.sapphire
 
@@ -179,24 +180,24 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
                 Label {
-                    text: section.dotChecking ? "Checking…"
-                          : !section.dotFound ? "Repository not found — run install.sh from your clone once"
-                          : section.dotBehind > 0 ? (section.dotBehind === 1 ? "1 new change" : section.dotBehind + " new changes")
-                          : section.dotFetchOk ? "Up to date" : "Could not reach the remote"
+                    text: section.dotChecking ? I18n.tr("Checking…")
+                          : !section.dotFound ? I18n.tr("Repository not found — run install.sh from your clone once")
+                          : section.dotBehind > 0 ? I18n.trn("%1 new change", "%1 new changes", section.dotBehind)
+                          : section.dotFetchOk ? I18n.tr("Up to date") : I18n.tr("Could not reach the remote")
                     weight: Design.weight.semibold
                     color: section.dotfilesUpdateAvail ? Design.ok : Design.text
                 }
                 Label {
                     visible: !section.dotChecking && section.dotFound
-                    text: "On " + section.dotBranch + " at " + section.dotHash
-                          + (section.dotAhead > 0 ? " · " + section.dotAhead + " local commit(s) not pushed" : "")
+                    text: I18n.tr("On %1 at %2", section.dotBranch, section.dotHash)
+                          + (section.dotAhead > 0 ? " · " + I18n.trn("%1 local commit not pushed", "%1 local commits not pushed", section.dotAhead) : "")
                     role: "caption"
                     dim: true
                 }
             }
 
             Pill {
-                label: "Check"
+                label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
             }
@@ -215,7 +216,7 @@ ColumnLayout {
         }
         Label {
             visible: section.dotIncoming.length > 5
-            text: "…and " + (section.dotIncoming.length - 5) + " more"
+            text: I18n.tr("…and %1 more", (section.dotIncoming.length - 5))
             role: "caption"
             dim: true
         }
@@ -224,8 +225,8 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: section.dotfilesUpdateAvail && !section.dotCanUpdate
             text: section.dotDirty
-                  ? "You have uncommitted edits in the dotfiles clone. Commit or stash them first — the update will not overwrite them."
-                  : "Your clone has commits the remote does not, so it cannot simply move forward. Merge or rebase it yourself."
+                  ? I18n.tr("You have uncommitted edits in the dotfiles clone. Commit or stash them first — the update will not overwrite them.")
+                  : I18n.tr("Your clone has commits the remote does not, so it cannot simply move forward. Merge or rebase it yourself.")
             role: "caption"
             color: Design.warn
             wrapMode: Text.WordWrap
@@ -237,7 +238,7 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f06b0}"
-                label: section.dotCanUpdate ? "Update now" : "Nothing to update"
+                label: section.dotCanUpdate ? I18n.tr("Update now") : I18n.tr("Nothing to update")
                 tone: section.dotCanUpdate ? Design.ok : Design.textDim
                 enabled: section.dotCanUpdate
                 onActivated: section.runDotfilesUpdate()
@@ -245,7 +246,7 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f07c}"
-                label: "View Backups"
+                label: I18n.tr("View Backups")
                 tone: Design.textDim
                 onActivated: section.viewBackups()
             }
@@ -254,17 +255,14 @@ ColumnLayout {
 
     // ── Moving this configuration to another machine ─────────────────────────
     Card {
-        title: "Settings Backup & Transfer"
-        subtitle: "One file holding this desktop's settings, themes, pinned apps and bookmarks"
+        title: I18n.tr("Settings Backup & Transfer")
+        subtitle: I18n.tr("One file holding this desktop's settings, themes, pinned apps and bookmarks")
         icon: "\u{f0193}"
         accentColor: Design.teal
 
         Label {
             Layout.fillWidth: true
-            text: "Display layout, the main-screen choice and disabled sound devices stay behind: "
-                + "they name hardware, and on another machine they describe screens and cards that "
-                + "are not there. The weather API key is not included either — it lives in the "
-                + "secret store, and a credential does not belong in a file meant to be copied."
+            text: I18n.tr("Display layout, the main-screen choice and disabled sound devices stay behind: they name hardware, and on another machine they describe screens and cards that are not there. The weather API key is not included either — it lives in the secret store, and a credential does not belong in a file meant to be copied.")
             role: "caption"
             dim: true
             wrapMode: Text.WordWrap
@@ -285,14 +283,14 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f0552}"
-                label: "Export to Home Folder"
+                label: I18n.tr("Export to Home Folder")
                 tone: Design.teal
                 onActivated: section.exportConfig()
             }
 
             ActionButton {
                 icon: "\u{f0552}"
-                label: "Import from Home Folder"
+                label: I18n.tr("Import from Home Folder")
                 tone: Design.sapphire
                 onActivated: section.importConfig()
             }
@@ -301,8 +299,8 @@ ColumnLayout {
 
     // ── 2. System Packages Updates ───────────────────────────────────────────
     Card {
-        title: "System Packages"
-        subtitle: "Kernel, drivers and applications, managed by " + section.managerName
+        title: I18n.tr("System Packages")
+        subtitle: I18n.tr("Kernel, drivers and applications, managed by %1", section.managerName)
         icon: "\u{f0187}"
         accentColor: section.updateCount > 0 ? Design.peach : Design.green
 
@@ -313,12 +311,12 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: "Update Status"; weight: Design.weight.semibold }
+                Label { text: I18n.tr("Update Status"); weight: Design.weight.semibold }
                 Label { text: section.statusText; role: "caption"; dim: true }
             }
 
             Pill {
-                label: "Check"
+                label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
             }
@@ -336,10 +334,10 @@ ColumnLayout {
             // least as much.
             ActionButton {
                 icon: "\u{f0187}"
-                label: section.updateCount > 0 ? ("Upgrade " + section.updateCount + " Packages") : "Run Full System Upgrade"
+                label: section.updateCount > 0 ? ("Upgrade " + section.updateCount + " Packages") : I18n.tr("Run Full System Upgrade")
                 tone: section.updateCount > 0 ? Design.peach : Design.green
                 destructive: true
-                confirmLabel: "Start upgrade?"
+                confirmLabel: I18n.tr("Start upgrade?")
                 onActivated: section.runSystemUpdate()
             }
         }
@@ -347,8 +345,8 @@ ColumnLayout {
 
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
     Card {
-        title: "Disk Sweeper & Storage Maintenance"
-        subtitle: "Free up storage by clearing the package cache, systemd journals, and thumbnail cache"
+        title: I18n.tr("Disk Sweeper & Storage Maintenance")
+        subtitle: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
         icon: "\u{f014}"
         accentColor: Design.mauve
 
@@ -358,19 +356,19 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f014}"
-                label: "Clean All Caches & Logs"
+                label: I18n.tr("Clean All Caches & Logs")
                 tone: Design.sapphire
                 destructive: true
-                confirmLabel: "Delete them?"
+                confirmLabel: I18n.tr("Delete them?")
                 onActivated: Daemon.sweeperClean()
             }
 
             ActionButton {
                 icon: "\u{f128}"
-                label: "Remove Orphan Packages"
+                label: I18n.tr("Remove Orphan Packages")
                 tone: Design.mauve
                 destructive: true
-                confirmLabel: "Uninstall them?"
+                confirmLabel: I18n.tr("Uninstall them?")
                 onActivated: section.cleanOrphanPackages()
             }
         }
@@ -383,10 +381,10 @@ ColumnLayout {
                                          : Sys.commandExists("snapper") ? "snapper" : ""
 
     Card {
-        title: "Restore Points"
+        title: I18n.tr("Restore Points")
         subtitle: section.snapshotTool !== ""
-                  ? "Snapshot the system with " + section.snapshotTool + " before a big update"
-                  : "Snapshots need timeshift, or snapper on a Btrfs root — neither is installed"
+                  ? I18n.tr("Snapshot the system with %1 before a big update", section.snapshotTool)
+                  : I18n.tr("Snapshots need timeshift, or snapper on a Btrfs root — neither is installed")
         icon: "\u{f0c7}"
         accentColor: Design.teal
 
@@ -396,7 +394,7 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f0c7}"
-                label: "Create Restore Point"
+                label: I18n.tr("Create Restore Point")
                 tone: Design.teal
                 enabled: section.snapshotTool !== ""
                 onActivated: Cmd.run(["b1air-daemon", "snapshot", "create", "Manual user snapshot"], "Create snapshot")
@@ -406,8 +404,8 @@ ColumnLayout {
 
     // ── 5. Encrypted Vaults Manager (M4) ──────────────────────────────────────
     Card {
-        title: "Encrypted Security Vaults"
-        subtitle: "Mount and secure confidential directories using client-side encryption"
+        title: I18n.tr("Encrypted Security Vaults")
+        subtitle: I18n.tr("Mount and secure confidential directories using client-side encryption")
         icon: "\u{f023}"
         accentColor: Design.peach
 
@@ -417,7 +415,7 @@ ColumnLayout {
 
             ActionButton {
                 icon: "\u{f07c}"
-                label: "Open Secure Vaults Location"
+                label: I18n.tr("Open Secure Vaults Location")
                 tone: Design.peach
                 onActivated: {
                     Sys.makeDir("~/.vaults");

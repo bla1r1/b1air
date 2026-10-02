@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "../Ui"
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
@@ -154,7 +155,7 @@ Singleton {
 
         const item = {
             id: notif.id,
-            appName: notif.appName || "System",
+            appName: notif.appName || I18n.tr("System"),
             summary: notif.summary || "",
             body: notif.body || "",
             icon: root._iconSource(notif),

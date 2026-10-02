@@ -54,16 +54,16 @@ ColumnLayout {
 
     // ── 1. Master Control ────────────────────────────────────────────────────
     Card {
-        title: "Night Light"
+        title: I18n.tr("Night Light")
         subtitle: section.nightLightEnabled
-            ? "Active at " + section.tempK + "K color temperature"
-            : "Reduce blue light in evening hours to protect sleep"
+            ? I18n.tr("Active at %1K color temperature", section.tempK)
+            : I18n.tr("Reduce blue light in evening hours to protect sleep")
         icon: "\u{f0599}"
         accentColor: Design.yellow
 
         Toggle {
-            label: "Night Light"
-            subtitle: "Shift the screen towards warm colours to go easier on the eyes at night"
+            label: I18n.tr("Night Light")
+            subtitle: I18n.tr("Shift the screen towards warm colours to go easier on the eyes at night")
             checked: section.nightLightEnabled
             onToggled: section.applyTemp(!section.nightLightEnabled, section.tempK)
         }
@@ -72,8 +72,8 @@ ColumnLayout {
     // ── 2. Color Temperature Slider & Presets ────────────────────────────────
     Card {
         visible: section.nightLightEnabled
-        title: "Color Temperature"
-        subtitle: "Lower values produce warmer, amber tones with less blue light"
+        title: I18n.tr("Color Temperature")
+        subtitle: I18n.tr("Lower values produce warmer, amber tones with less blue light")
         icon: "\u{f0590}"
         accentColor: Design.yellow
 
@@ -83,7 +83,7 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "Color Warmth"; weight: Design.weight.semibold }
+                Label { text: I18n.tr("Color Warmth"); weight: Design.weight.semibold }
                 Item { Layout.fillWidth: true }
                 Label { text: section.tempK + " K"; role: "caption"; isMono: true; color: Design.yellow }
             }
@@ -101,32 +101,32 @@ ColumnLayout {
                 }
             }
 
-            Label { text: "Quick Warmth Presets"; role: "caption"; dim: true }
+            Label { text: I18n.tr("Quick Warmth Presets"); role: "caption"; dim: true }
 
             Flow {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.xs)
 
                 Pill {
-                    label: "Candle (2700K)"
+                    label: I18n.tr("Candle (2700K)")
                     active: section.tempK === 2700
                     onClicked: section.applyTemp(true, 2700)
                 }
 
                 Pill {
-                    label: "Warm Incandescent (3400K)"
+                    label: I18n.tr("Warm Incandescent (3400K)")
                     active: section.tempK === 3400
                     onClicked: section.applyTemp(true, 3400)
                 }
 
                 Pill {
-                    label: "Sunset (4500K)"
+                    label: I18n.tr("Sunset (4500K)")
                     active: section.tempK === 4500
                     onClicked: section.applyTemp(true, 4500)
                 }
 
                 Pill {
-                    label: "Daylight (6500K)"
+                    label: I18n.tr("Daylight (6500K)")
                     active: section.tempK === 6500
                     onClicked: section.applyTemp(true, 6500)
                 }

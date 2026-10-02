@@ -45,8 +45,8 @@ ColumnLayout {
 
     // ── 1. Energy Profiles Card ──────────────────────────────────────────────
     Card {
-        title: "Energy & performance"
-        subtitle: "Tune system performance and power consumption"
+        title: I18n.tr("Energy & performance")
+        subtitle: I18n.tr("Tune system performance and power consumption")
         icon: "\u{f0084}"
         accentColor: Design.green
 
@@ -57,8 +57,8 @@ ColumnLayout {
             visible: !Power.hasProfiles
             Layout.fillWidth: true
             icon: "\u{f0241}"
-            title: "No energy modes"
-            hint: "power-profiles-daemon is not running, so there is nothing to switch between."
+            title: I18n.tr("No energy modes")
+            hint: I18n.tr("power-profiles-daemon is not running, so there is nothing to switch between.")
         }
 
         RowLayout {
@@ -68,9 +68,9 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { id: "performance", label: "Performance", icon: "\u{f0e4}" },
-                    { id: "balanced",    label: "Balanced",    icon: "\u{f0241}" },
-                    { id: "power-saver", label: "Power Saver", icon: "\u{f0084}" }
+                    { id: "performance", label: I18n.tr("Performance"), icon: "\u{f0e4}" },
+                    { id: "balanced",    label: I18n.tr("Balanced"),    icon: "\u{f0241}" },
+                    { id: "power-saver", label: I18n.tr("Power Saver"), icon: "\u{f0084}" }
                 ]
 
                 Pill {
@@ -91,8 +91,8 @@ ColumnLayout {
     // mini view, so searching for it landed you on a page without it.
     Card {
         visible: Power.hasBacklight
-        title: "Display brightness"
-        subtitle: "Backlight level of the built-in panel"
+        title: I18n.tr("Display brightness")
+        subtitle: I18n.tr("Backlight level of the built-in panel")
         icon: "\u{f00df}"
         accentColor: Design.yellow
 
@@ -102,7 +102,7 @@ ColumnLayout {
             value: Power.brightness
             tone: Design.yellow
             icon: "\u{f00df}"
-            label: "Brightness"
+            label: I18n.tr("Brightness")
             onMoved: pct => Power.setBrightness(pct)
         }
     }
@@ -110,8 +110,8 @@ ColumnLayout {
     // ── 3. Battery ───────────────────────────────────────────────────────────
     Card {
         visible: Power.hasBattery
-        title: "Battery"
-        subtitle: Power.charging ? "Currently charging" : "Running on battery power"
+        title: I18n.tr("Battery")
+        subtitle: Power.charging ? I18n.tr("Currently charging") : I18n.tr("Running on battery power")
         icon: Power.charging ? "\u{f0084}" : "\u{f0079}"
         accentColor: Power.charging ? Design.ok : Design.accent
 
@@ -147,8 +147,8 @@ ColumnLayout {
                 // page did not, so the popup was strictly more informative than
                 // the page it links to.
                 Label {
-                    text: Power.status + (Power.timeRemainingText !== ""
-                        ? " • " + (Power.charging ? "until full " : "left ") + Power.timeRemainingText
+                    text: I18n.tr(Power.status) + (Power.timeRemainingText !== ""
+                        ? " • " + (Power.charging ? I18n.tr("until full %1", Power.timeRemainingText) : I18n.tr("%1 left", Power.timeRemainingText))
                         : "")
                     role: "caption"
                     dim: true
@@ -165,7 +165,7 @@ ColumnLayout {
         // is still charging at 73%, with BAT0 down to 65% of design capacity.
         SectionLabel {
             visible: Power.hasMultipleBatteries
-            text: "Installed packs"
+            text: I18n.tr("Installed packs")
             Layout.topMargin: Design.s(Design.space.sm)
         }
 
@@ -177,9 +177,9 @@ ColumnLayout {
 
                 Layout.fillWidth: true
                 title: Power.labelOf(modelData) + (modelData.model ? " · " + modelData.model : "")
-                subtitle: Power.stateTextOf(modelData)
+                subtitle: I18n.tr(Power.stateTextOf(modelData))
                     + (Power.healthOf(modelData) > 0
-                        ? " • health " + Power.healthOf(modelData) + "%"
+                        ? " • " + I18n.tr("health %1%", Power.healthOf(modelData))
                         : "")
                 value: Power.percentOf(modelData) + "%"
                 valueTone: Power.percentOf(modelData) <= 20 ? Design.danger
@@ -194,8 +194,8 @@ ColumnLayout {
                      && Power.healthOf(Power.batteries[0]) > 0
             Layout.fillWidth: true
             Layout.topMargin: Design.s(Design.space.sm)
-            title: "Battery health"
-            subtitle: "Capacity now, against what the pack shipped with"
+            title: I18n.tr("Battery health")
+            subtitle: I18n.tr("Capacity now, against what the pack shipped with")
             value: Power.batteryCount === 1 ? Power.healthOf(Power.batteries[0]) + "%" : ""
             valueTone: Power.batteryCount === 1 && Power.healthOf(Power.batteries[0]) < 70 ? Design.warn : Design.ok
         }
@@ -208,22 +208,22 @@ ColumnLayout {
     // the only way to use them was to echo into /sys as root.
     Card {
         visible: Power.hasChargeLimit || Power.hasChargeBehaviour
-        title: "Charge control"
-        subtitle: "Keep the battery off a full charge, so it ages more slowly"
+        title: I18n.tr("Charge control")
+        subtitle: I18n.tr("Keep the battery off a full charge, so it ages more slowly")
         icon: "\u{f0084}"
         accentColor: Design.teal
 
         Toggle {
             visible: Power.hasChargeLimit
-            label: "Limit the charge"
-            subtitle: "Stop charging below full. 100% means no limit."
+            label: I18n.tr("Limit the charge")
+            subtitle: I18n.tr("Stop charging below full. 100% means no limit.")
             checked: Power.chargeLimit < 100
             onToggled: Power.setChargeLimit(Power.chargeLimit < 100 ? 100 : 80)
         }
 
         Stepper {
             visible: Power.hasChargeLimit && Power.chargeLimit < 100
-            label: "Stop charging at"
+            label: I18n.tr("Stop charging at")
             valueText: Power.chargeLimit + "%"
             // Not below 50: the pack would spend its life nearly empty, which
             // trades one kind of wear for another.
@@ -233,7 +233,7 @@ ColumnLayout {
 
         SectionLabel {
             visible: Power.hasChargeBehaviour
-            text: "While plugged in"
+            text: I18n.tr("While plugged in")
             Layout.topMargin: Design.s(Design.space.sm)
         }
 
@@ -244,9 +244,9 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { id: "auto",            label: "Charge" },
-                    { id: "inhibit-charge",  label: "Hold" },
-                    { id: "force-discharge", label: "Discharge" }
+                    { id: "auto",            label: I18n.tr("Charge") },
+                    { id: "inhibit-charge",  label: I18n.tr("Hold") },
+                    { id: "force-discharge", label: I18n.tr("Discharge") }
                 ]
 
                 Pill {
@@ -268,31 +268,28 @@ ColumnLayout {
             wrapMode: Text.WordWrap
             role: "caption"
             dim: true
-            text: "These files belong to root on this machine, so a change will ask "
-                + "for a password. Re-running the installer puts you in the `power` "
-                + "group and installs the udev rule that makes it direct."
+            text: I18n.tr("These files belong to root on this machine, so a change will ask for a password. Re-running the installer puts you in the `power` group and installs the udev rule that makes it direct.")
         }
     }
 
     // ── 3.5 Low battery ──────────────────────────────────────────────────────
     Card {
         visible: Power.hasBattery
-        title: "Low battery"
-        subtitle: "What happens as the charge runs out"
+        title: I18n.tr("Low battery")
+        subtitle: I18n.tr("What happens as the charge runs out")
         icon: "\u{f0084}"
         accentColor: Design.warn
 
         Toggle {
-            label: "Warn me when the battery is low"
-            subtitle: "A notification at the level below. Nothing warned about the "
-                    + "charge before — the machine simply went off."
+            label: I18n.tr("Warn me when the battery is low")
+            subtitle: I18n.tr("A notification at the level below. Nothing warned about the charge before — the machine simply went off.")
             checked: Settings.batteryLowWarning !== false
             onToggled: Settings.set("batteryLowWarning", !(Settings.batteryLowWarning !== false))
         }
 
         Stepper {
             visible: Settings.batteryLowWarning !== false
-            label: "Warn at"
+            label: I18n.tr("Warn at")
             valueText: Power.lowThreshold + "%"
             onDecrement: Settings.set("batteryLowPercent",
                                       Math.max(Power.criticalThreshold + 5, Power.lowThreshold - 5))
@@ -300,9 +297,8 @@ ColumnLayout {
         }
 
         Toggle {
-            label: "Suspend before the battery dies"
-            subtitle: "A suspend with a few percent left keeps the session; a flat "
-                    + "battery does not."
+            label: I18n.tr("Suspend before the battery dies")
+            subtitle: I18n.tr("A suspend with a few percent left keeps the session; a flat battery does not.")
             checked: Settings.batteryCriticalAction !== "none"
             onToggled: Settings.set("batteryCriticalAction",
                                     Settings.batteryCriticalAction === "none" ? "suspend" : "none")
@@ -310,7 +306,7 @@ ColumnLayout {
 
         Stepper {
             visible: Settings.batteryCriticalAction !== "none"
-            label: "Suspend at"
+            label: I18n.tr("Suspend at")
             valueText: Power.criticalThreshold + "%"
             onDecrement: Settings.set("batteryCriticalPercent", Math.max(2, Power.criticalThreshold - 1))
             onIncrement: Settings.set("batteryCriticalPercent",
@@ -320,14 +316,14 @@ ColumnLayout {
 
     // ── 4. Screen and Sleep Timeouts ─────────────────────────────────────────
     Card {
-        title: "Screen & sleep timeouts"
-        subtitle: "Control idle dimming, display power off, and automatic system suspension"
+        title: I18n.tr("Screen & sleep timeouts")
+        subtitle: I18n.tr("Control idle dimming, display power off, and automatic system suspension")
         icon: "\u{f033e}"
         accentColor: Design.peach
 
         Toggle {
-            label: "Dim screen on lock"
-            subtitle: "Lower display brightness immediately when screen is locked"
+            label: I18n.tr("Dim screen on lock")
+            subtitle: I18n.tr("Lower display brightness immediately when screen is locked")
             checked: Settings.dimOnLock
             onToggled: Settings.set("dimOnLock", !Settings.dimOnLock)
         }
@@ -337,36 +333,36 @@ ColumnLayout {
         // machine dimmed at five minutes and locked at ten with nothing here
         // saying so, let alone offering to change it.
         Stepper {
-            label: "Dim screen after"
+            label: I18n.tr("Dim screen after")
             valueText: (Math.round(Settings.dimTimeout / 60)) + " min"
             onDecrement: section.setIdleTimeout("dimTimeout", Math.max(60, Settings.dimTimeout - 60))
             onIncrement: section.setIdleTimeout("dimTimeout", Math.min(3600, Settings.dimTimeout + 60))
         }
 
         Stepper {
-            label: "Lock screen after"
+            label: I18n.tr("Lock screen after")
             valueText: (Math.round(Settings.lockTimeout / 60)) + " min"
             onDecrement: section.setIdleTimeout("lockTimeout", Math.max(60, Settings.lockTimeout - 60))
             onIncrement: section.setIdleTimeout("lockTimeout", Math.min(7200, Settings.lockTimeout + 60))
         }
 
         Stepper {
-            label: "Turn off screen after"
+            label: I18n.tr("Turn off screen after")
             valueText: (Math.round(Settings.dpmsTimeout / 60)) + " min"
             onDecrement: section.setIdleTimeout("dpmsTimeout", Math.max(60, Settings.dpmsTimeout - 60))
             onIncrement: section.setIdleTimeout("dpmsTimeout", Math.min(3600, Settings.dpmsTimeout + 60))
         }
 
         Toggle {
-            label: "Automatic sleep"
-            subtitle: "Suspend the system automatically when left idle"
+            label: I18n.tr("Automatic sleep")
+            subtitle: I18n.tr("Suspend the system automatically when left idle")
             checked: Settings.autoSuspend
             onToggled: section.setIdleTimeout("autoSuspend", !Settings.autoSuspend)
         }
 
         Stepper {
             visible: Settings.autoSuspend
-            label: "Suspend system after"
+            label: I18n.tr("Suspend system after")
             valueText: (Math.round(Settings.suspendTimeout / 60)) + " min"
             onDecrement: section.setIdleTimeout("suspendTimeout", Math.max(300, Settings.suspendTimeout - 300))
             onIncrement: section.setIdleTimeout("suspendTimeout", Math.min(7200, Settings.suspendTimeout + 300))

@@ -13,8 +13,8 @@ Card {
     signal cityIdChangedByUser(string value)
     signal unitChangedByUser(string value)
 
-    title: "Weather"
-    subtitle: "Used by the bar, the calendar and the lock screen. The key is kept in the encrypted secret store, not in the settings file."
+    title: I18n.tr("Weather")
+    subtitle: I18n.tr("Used by the bar, the calendar and the lock screen. The key is kept in the encrypted secret store, not in the settings file.")
     icon: "\u{f0590}"
     accentColor: Design.yellow
 
@@ -31,17 +31,17 @@ Card {
         role: "caption"
         dim: true
         text: section.usingOpenWeather
-            ? "Using OpenWeather with your saved key: five days ahead. Remove the key or clear the city to go back to wttr.in."
+            ? I18n.tr("Using OpenWeather with your saved key: five days ahead. Remove the key or clear the city to go back to wttr.in.")
             : Settings.weatherKeyStored
-                ? "A key is saved. Add a city ID below and the forecast switches to OpenWeather."
-                : "Optional. Right now the forecast comes from wttr.in, which needs no key and reaches three days ahead. Save an OpenWeather key and a city ID for five days."
+                ? I18n.tr("A key is saved. Add a city ID below and the forecast switches to OpenWeather.")
+                : I18n.tr("Optional. Right now the forecast comes from wttr.in, which needs no key and reaches three days ahead. Save an OpenWeather key and a city ID for five days.")
     }
 
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Design.s(Design.space.xs)
 
-        Label { text: "OpenWeather API key"; role: "caption"; dim: true }
+        Label { text: I18n.tr("OpenWeather API key"); role: "caption"; dim: true }
 
         RowLayout {
             Layout.fillWidth: true
@@ -56,8 +56,8 @@ Card {
                 Layout.fillWidth: true
                 echoMode: TextInput.Password
                 placeholder: Settings.weatherKeyStored
-                    ? "Key saved — type a new one and press Enter to replace it"
-                    : "32-character key from openweathermap.org, then Enter"
+                    ? I18n.tr("Key saved — type a new one and press Enter to replace it")
+                    : I18n.tr("32-character key from openweathermap.org, then Enter")
                 onAccepted: v => {
                     if (v.trim() === "") return;
                     section.apiKeyChangedByUser(v.trim());
@@ -70,7 +70,7 @@ Card {
                 Layout.fillWidth: false
                 visible: Settings.weatherKeyStored
                 icon: "\u{f01b4}"
-                label: "Remove"
+                label: I18n.tr("Remove")
                 destructive: true
                 onActivated: {
                     section.apiKeyChangedByUser("");
@@ -84,13 +84,13 @@ Card {
         Layout.fillWidth: true
         spacing: Design.s(Design.space.xs)
 
-        Label { text: "City ID"; role: "caption"; dim: true }
+        Label { text: I18n.tr("City ID"); role: "caption"; dim: true }
 
         Field {
             mono: true
             Layout.fillWidth: true
             text: section.cityId
-            placeholder: "e.g. 703448 for Kyiv — the number in the city's openweathermap.org address"
+            placeholder: I18n.tr("e.g. 703448 for Kyiv — the number in the city's openweathermap.org address")
             validator: RegularExpressionValidator { regularExpression: /[0-9]*/ }
             onCommitted: v => {
                 if (v === section.cityId) return;
@@ -104,7 +104,7 @@ Card {
         Layout.fillWidth: true
         spacing: Design.s(Design.space.xs)
 
-        Label { text: "Units"; role: "caption"; dim: true }
+        Label { text: I18n.tr("Units"); role: "caption"; dim: true }
 
         RowLayout {
             Layout.fillWidth: true
@@ -112,8 +112,8 @@ Card {
 
             Repeater {
                 model: [
-                    { id: "metric", label: "Celsius" },
-                    { id: "imperial", label: "Fahrenheit" }
+                    { id: "metric", label: I18n.tr("Celsius") },
+                    { id: "imperial", label: I18n.tr("Fahrenheit") }
                 ]
 
                 Pill {

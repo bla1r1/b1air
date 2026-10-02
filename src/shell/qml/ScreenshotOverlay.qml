@@ -215,7 +215,7 @@ PanelWindow {
             Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
             Text {
                 anchors.centerIn: parent
-                text: root.isVideoMode ? "Click Record (Portal handles area selection)" : "Select region to capture"
+                text: root.isVideoMode ? I18n.tr("Click Record (Portal handles area selection)") : I18n.tr("Select region to capture")
                 font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(24); color: Design.text
             }
         }
@@ -474,7 +474,7 @@ PanelWindow {
             Text {
                 visible: micModel.count === 0
                 anchors.centerIn: parent
-                text: "No Microphones (Install pulseaudio)"
+                text: I18n.tr("No Microphones (Install pulseaudio)")
                 color: Design.textDim
                 font.pixelSize: Design.s(12)
             }
@@ -546,8 +546,8 @@ PanelWindow {
 
             Rectangle { visible: root.isVideoMode; width: Design.s(2); Layout.fillHeight: true; Layout.topMargin: Design.s(10); Layout.bottomMargin: Design.s(10); color: Design.raised; radius: Design.s(1) }
 
-            ToolbarBtn { visible: !root.isVideoMode; iconTxt: "󰄄"; label: "Capture"; onClicked: root.executeCapture(false, false) }
-            ToolbarBtn { visible: root.isVideoMode; iconTxt: "󰑊"; label: "Record"; isDanger: true; onClicked: root.executeCapture(false, true) }
+            ToolbarBtn { visible: !root.isVideoMode; iconTxt: "󰄄"; label: I18n.tr("Capture"); onClicked: root.executeCapture(false, false) }
+            ToolbarBtn { visible: root.isVideoMode; iconTxt: "󰑊"; label: I18n.tr("Record"); isDanger: true; onClicked: root.executeCapture(false, true) }
 
             ToolbarBtn { visible: !root.isVideoMode; iconTxt: "󰏫"; onClicked: root.executeCapture(true, false) }
             ToolbarBtn { visible: !root.isVideoMode; iconTxt: "⿻"; onClicked: root.performQrScan() }
@@ -645,7 +645,7 @@ PanelWindow {
             if (exitCode !== 0 || res === "") {
                 qrModel.append({ 
                     qX: root.selX + (root.selW / 2), qY: root.selY + (root.selH / 2), qW: 0, qH: 0, 
-                    qText: "Scan timed out or failed.", qSuccess: false,
+                    qText: I18n.tr("Scan timed out or failed."), qSuccess: false,
                     qTargetX: root.selX + (root.selW / 2) - Design.s(100), qTargetY: root.selY + (root.selH / 2),
                     qBaseScale: 1.0, fitsTop: false 
                 })
@@ -673,7 +673,7 @@ PanelWindow {
                     
                     let successState = !(actualText === "NOT_FOUND" || actualText.startsWith("ERROR:"));
                     if (successState) anySuccess = true;
-                    let cleanText = successState ? actualText.replace(/^QR-Code:/, "") : (actualText === "NOT_FOUND" ? "No QR code found." : actualText);
+                    let cleanText = successState ? actualText.replace(/^QR-Code:/, "") : (actualText === "NOT_FOUND" ? I18n.tr("No QR code found.") : actualText);
                     
                     let estTextWidth = Math.min(Design.s(400), cleanText.length * Design.s(8.5));
                     let pw = estTextWidth + (successState ? Design.s(140) : Design.s(40)); 
@@ -711,7 +711,7 @@ PanelWindow {
             if (qrs.length === 0) {
                 qrModel.append({ 
                     qX: root.selX + (root.selW / 2), qY: root.selY + (root.selH / 2), qW: 0, qH: 0, 
-                    qText: "No QR code found.", qSuccess: false,
+                    qText: I18n.tr("No QR code found."), qSuccess: false,
                     qTargetX: root.selX + (root.selW / 2) - Design.s(100), qTargetY: root.selY + (root.selH / 2),
                     qBaseScale: 1.0, fitsTop: false 
                 });

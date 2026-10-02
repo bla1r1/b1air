@@ -64,8 +64,8 @@ ColumnLayout {
 
     // ── 1. Color Scheme & Accents ────────────────────────────────────────────
     Card {
-        title: "Accent & Theme"
-        subtitle: "Customize the primary accent color across Quickshell and Sway"
+        title: I18n.tr("Accent & Theme")
+        subtitle: I18n.tr("Customize the primary accent color across Quickshell and Sway")
         icon: "\u{f0376}"
         accentColor: Design.mauve
 
@@ -73,7 +73,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.md)
 
-            Label { text: "Accent Color"; role: "caption"; dim: true }
+            Label { text: I18n.tr("Accent Color"); role: "caption"; dim: true }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -136,8 +136,8 @@ ColumnLayout {
     // dark desktop (or the reverse). Programs already open need a restart to
     // pick it up; GTK apps mostly follow at once.
     Card {
-        title: "Other Applications"
-        subtitle: "Browsers, GTK and Qt programs: follow the theme, or stay dark or light"
+        title: I18n.tr("Other Applications")
+        subtitle: I18n.tr("Browsers, GTK and Qt programs: follow the theme, or stay dark or light")
         icon: "\u{f0d73}"
         accentColor: Design.sapphire
 
@@ -147,9 +147,9 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { id: "auto",  label: "Follow theme" },
-                    { id: "dark",  label: "Always dark" },
-                    { id: "light", label: "Always light" }
+                    { id: "auto",  label: I18n.tr("Follow theme") },
+                    { id: "dark",  label: I18n.tr("Always dark") },
+                    { id: "light", label: I18n.tr("Always light") }
                 ]
                 Pill {
                     required property var modelData
@@ -179,10 +179,10 @@ ColumnLayout {
     readonly property bool hasSwayfx: Sway.swayfx
 
     Card {
-        title: "Compositor Effects"
+        title: I18n.tr("Compositor Effects")
         subtitle: section.hasSwayfx
-                  ? "Corner rounding, blur, shadows, and inactive window dimming"
-                  : "Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows"
+                  ? I18n.tr("Corner rounding, blur, shadows, and inactive window dimming")
+                  : I18n.tr("Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows")
         icon: "\u{f02db}"
         accentColor: Design.teal
 
@@ -194,7 +194,7 @@ ColumnLayout {
 
 
             Stepper {
-                label: "Corner Radius"
+                label: I18n.tr("Corner Radius")
                 valueText: section.cornerRadius + " px"
                 onDecrement: section.setCornerRadius(Math.max(0, section.cornerRadius - 2))
                 onIncrement: section.setCornerRadius(Math.min(24, section.cornerRadius + 2))
@@ -207,22 +207,22 @@ ColumnLayout {
             // looked like two different controls depending on which page you
             // were on.
             Toggle {
-                label: "Window Blur"
-                subtitle: "Frosted glass behind translucent windows and panels"
+                label: I18n.tr("Window Blur")
+                subtitle: I18n.tr("Frosted glass behind translucent windows and panels")
                 checked: section.blurEnabled
                 onToggled: section.toggleBlur(!section.blurEnabled)
             }
 
             Toggle {
-                label: "Window Shadows"
-                subtitle: "A soft shadow under every window"
+                label: I18n.tr("Window Shadows")
+                subtitle: I18n.tr("A soft shadow under every window")
                 checked: section.shadowsEnabled
                 onToggled: section.toggleShadows(!section.shadowsEnabled)
             }
 
             Toggle {
-                label: "Dim Inactive Windows"
-                subtitle: "Darken the windows you are not using by 20%"
+                label: I18n.tr("Dim Inactive Windows")
+                subtitle: I18n.tr("Darken the windows you are not using by 20%")
                 checked: section.dimInactive
                 onToggled: section.toggleDimInactive(!section.dimInactive)
             }

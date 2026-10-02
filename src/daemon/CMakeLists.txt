@@ -8,6 +8,7 @@ add_library(b1air-core STATIC
     backlight.cpp
     daemon_dbus.cpp
     focustime_db.cpp
+    magic_mouse.cpp
     notify.cpp
     secret_store.cpp
     session_manager.cpp

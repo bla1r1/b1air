@@ -17,12 +17,12 @@ PopupShell {
     property string searchFilter: ""
 
     readonly property var permanentTemplates: [
-        { text: "Best regards,\nBlair\nSent from b1air desktop", title: "Email Signature", type: "text", pinned: true, template: true },
-        { text: "feat(scope): short summary\n\nDetailed context and implementation rationale.", title: "Git Commit Template", type: "code", pinned: true, template: true },
-        { text: "sudo pacman -Syu && yay -Sua", title: "Arch System Upgrade", type: "code", pinned: true, template: true },
-        { text: "- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3", title: "Markdown Checklist", type: "code", pinned: true, template: true },
-        { text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", title: "Lorem Ipsum Text", type: "text", pinned: true, template: true },
-        { text: "#include <iostream>\n\nint main(int argc, char* argv[]) {\n    std::cout << \"Hello, b1air!\\n\";\n    return 0;\n}", title: "C++20 Boilerplate", type: "code", pinned: true, template: true }
+        { text: "Best regards,\nBlair\nSent from b1air desktop", title: I18n.tr("Email Signature"), type: "text", pinned: true, template: true },
+        { text: "feat(scope): short summary\n\nDetailed context and implementation rationale.", title: I18n.tr("Git Commit Template"), type: "code", pinned: true, template: true },
+        { text: "sudo pacman -Syu && yay -Sua", title: I18n.tr("Arch System Upgrade"), type: "code", pinned: true, template: true },
+        { text: "- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3", title: I18n.tr("Markdown Checklist"), type: "code", pinned: true, template: true },
+        { text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.", title: I18n.tr("Lorem Ipsum Text"), type: "text", pinned: true, template: true },
+        { text: "#include <iostream>\n\nint main(int argc, char* argv[]) {\n    std::cout << \"Hello, b1air!\\n\";\n    return 0;\n}", title: I18n.tr("C++20 Boilerplate"), type: "code", pinned: true, template: true }
     ]
 
     // Order: what the user pinned, then what they copied, then the built-ins.
@@ -70,7 +70,7 @@ PopupShell {
             }
 
             Label {
-                text: "Clipboard History"
+                text: I18n.tr("Clipboard History")
                 role: "subhead"
                 weight: Design.weight.bold
             }
@@ -85,7 +85,7 @@ PopupShell {
             ActionButton {
                 visible: Clipboard.items.count > 0
                 icon: "\u{f0156}"
-                label: "Clear All"
+                label: I18n.tr("Clear All")
                 onActivated: clearConfirm.open()
             }
         }
@@ -94,7 +94,7 @@ PopupShell {
         Field {
             id: searchInput
             Layout.fillWidth: true
-            placeholder: "Search clipboard history..."
+            placeholder: I18n.tr("Search clipboard history...")
             text: root.searchFilter
             onEdited: v => root.searchFilter = v
             Component.onCompleted: searchInput.forceActiveFocus()
@@ -168,12 +168,12 @@ PopupShell {
                                 color: Design.accent
                             }
                             Label {
-                                text: "• " + (clipCard.modelData.time || "Template")
+                                text: "• " + (clipCard.modelData.time || I18n.tr("Template"))
                                 role: "caption"
                                 dim: true
                             }
                             Label {
-                                text: "(" + clipCard.modelData.text.length + " chars)"
+                                text: I18n.tr("(%1 chars)", clipCard.modelData.text.length)
                                 role: "caption"
                                 dim: true
                             }
@@ -247,7 +247,7 @@ PopupShell {
                 }
 
                 Label {
-                    text: root.searchFilter ? "No matching clips found" : "Clipboard history is empty"
+                    text: root.searchFilter ? I18n.tr("No matching clips found") : I18n.tr("Clipboard history is empty")
                     role: "body"
                     weight: Design.weight.medium
                     color: Design.textDim
@@ -256,7 +256,7 @@ PopupShell {
 
                 Label {
                     visible: !root.searchFilter
-                    text: "Copied text and snippets will appear here automatically"
+                    text: I18n.tr("Copied text and snippets will appear here automatically")
                     role: "caption"
                     color: Design.textFaint
                     Layout.alignment: Qt.AlignHCenter
@@ -267,11 +267,11 @@ PopupShell {
 
     AppDialog {
         id: clearConfirm
-        title: "Clear clipboard history?"
-        message: "All unpinned clipboard entries will be removed."
+        title: I18n.tr("Clear clipboard history?")
+        message: I18n.tr("All unpinned clipboard entries will be removed.")
         acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: Clipboard.clearHistory()
-        Component.onCompleted: standardButton(Dialog.Ok).text = "Clear"
+        Component.onCompleted: standardButton(Dialog.Ok).text = I18n.tr("Clear")
     }
 }

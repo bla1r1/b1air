@@ -20,7 +20,7 @@ PopupShell {
     property string fileText: ""
     property string fileType: "text" // "image", "text", "pdf", "archive"
 
-    readonly property string fileName: filePath ? filePath.split("/").pop() : "File Preview"
+    readonly property string fileName: filePath ? filePath.split("/").pop() : I18n.tr("File Preview")
     readonly property string fileExt: fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : ""
 
     function detectType() {
@@ -88,21 +88,21 @@ PopupShell {
     Process {
         id: textLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, "This file is empty.")
+            onStreamFinished: root._finish(this.text, I18n.tr("This file is empty."))
         }
     }
 
     Process {
         id: archiveLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, "Could not list this archive.")
+            onStreamFinished: root._finish(this.text, I18n.tr("Could not list this archive."))
         }
     }
 
     Process {
         id: pdfLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, "PDF Document")
+            onStreamFinished: root._finish(this.text, I18n.tr("PDF Document"))
         }
     }
 
@@ -152,17 +152,17 @@ PopupShell {
             ActionButton {
                 enabled: root.filePath !== ""
                 icon: "\u{f0c5}"
-                label: "Copy Path"
+                label: I18n.tr("Copy Path")
                 onActivated: {
                     Quickshell.execDetached(["wl-copy", "--", root.filePath]);
-                    Osd.show("edit-copy", "Path copied", root.filePath);
+                    Osd.show("edit-copy", I18n.tr("Path copied"), root.filePath);
                 }
             }
 
             ActionButton {
                 enabled: root.filePath !== ""
                 icon: "\u{f08e}"
-                label: "Open"
+                label: I18n.tr("Open")
                 onActivated: {
                     Quickshell.execDetached(["xdg-open", root.filePath]);
                     root.close();
@@ -207,8 +207,8 @@ PopupShell {
                 width: parent.width - Design.s(Design.space.xl)
                 visible: root.filePath === ""
                 icon: "\u{f0214}"
-                title: "Nothing to preview"
-                hint: "Pick a file in Files and press Space."
+                title: I18n.tr("Nothing to preview")
+                hint: I18n.tr("Pick a file in Files and press Space.")
             }
 
             // 3. Text / Code / Archive / PDF Metadata Preview
@@ -219,7 +219,7 @@ PopupShell {
                 clip: true
 
                 TextArea {
-                    text: root.fileText || "Loading preview…"
+                    text: root.fileText || I18n.tr("Loading preview…")
                     readOnly: true
                     selectByMouse: true
                     font.family: Design.font.mono

@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "../Ui"
 import Quickshell
 import Quickshell.Io
 
@@ -27,7 +28,7 @@ Singleton {
     property string temp: "--°"
     property string condition: ""
     property string icon: "\u{f0590}"
-    property string location: "Weather"
+    property string location: I18n.tr("Weather")
     property bool loaded: false
 
     /** The whole forecast, so callers do not each spawn their own fetch. */
@@ -86,7 +87,7 @@ Singleton {
                     const today = doc.forecast[0];
                     const hour = root.currentHour;
                     root.temp = (hour ? hour.temp : today.max) + "\u00B0" + root.unit;
-                    root.condition = today.desc || "";
+                    root.condition = I18n.tr(today.desc || "");
                     root.icon = root._iconFor(root.condition);
                     if (doc.location)
                         root.location = doc.location;

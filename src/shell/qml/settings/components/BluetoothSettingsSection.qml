@@ -34,10 +34,10 @@ ColumnLayout {
 
     // ── 1. Bluetooth Adapter Card ────────────────────────────────────────────
     Card {
-        title: "Bluetooth"
+        title: I18n.tr("Bluetooth")
         subtitle: Network.bluetooth.power === "on"
-            ? (Network.bluetooth.connected ? "Connected to " + Network.bluetooth.connected.name : "Bluetooth is on, ready to connect")
-            : "Bluetooth adapter is disabled"
+            ? (Network.bluetooth.connected ? I18n.tr("Connected to %1", Network.bluetooth.connected.name) : I18n.tr("Bluetooth is on, ready to connect"))
+            : I18n.tr("Bluetooth adapter is disabled")
         icon: "\u{f00af}"
         accentColor: Design.mauve
 
@@ -47,8 +47,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.md)
 
             Toggle {
-                label: "Bluetooth"
-                subtitle: "Turn the adapter on to find, pair and connect devices"
+                label: I18n.tr("Bluetooth")
+                subtitle: I18n.tr("Turn the adapter on to find, pair and connect devices")
                 checked: Network.bluetooth.power === "on"
                 onToggled: Network.toggleBluetooth()
             }
@@ -95,7 +95,7 @@ ColumnLayout {
                         // button to the end of the row, and it is what the
                         // network list two files over already does.
                         Label {
-                            text: Network.adapter ? (Network.adapter.name || "Bluetooth Controller") : "Bluetooth Controller"
+                            text: Network.adapter ? (Network.adapter.name || I18n.tr("Bluetooth Controller")) : I18n.tr("Bluetooth Controller")
                             weight: Design.weight.semibold
                             Layout.fillWidth: true
                             elide: Text.ElideRight
@@ -116,7 +116,7 @@ ColumnLayout {
                     }
 
                     Pill {
-                        label: Network.scanning ? "Scanning..." : "Scan for devices"
+                        label: Network.scanning ? I18n.tr("Scanning...") : I18n.tr("Scan for devices")
                         icon: Network.scanning ? "\u{f0110}" : "\u{f002f}"
                         active: Network.scanning
                         onClicked: {
@@ -132,8 +132,8 @@ ColumnLayout {
     // ── 2. Paired Devices Card ───────────────────────────────────────────────
     Card {
         visible: Network.bluetooth.power === "on"
-        title: "Paired devices"
-        subtitle: "Devices trusted by this machine"
+        title: I18n.tr("Paired devices")
+        subtitle: I18n.tr("Devices trusted by this machine")
         icon: "\u{f00af}"
         accentColor: Design.mauve
 
@@ -162,8 +162,8 @@ ColumnLayout {
                     }
 
                     Label {
-                        text: (modelData.connected ? "Connected" : "Paired")
-                            + (modelData.battery >= 0 ? " • battery " + modelData.battery + "%" : "")
+                        text: (modelData.connected ? I18n.tr("Connected") : I18n.tr("Paired"))
+                            + (modelData.battery >= 0 ? " • " + I18n.tr("battery %1%", modelData.battery) : "")
                             + " • " + modelData.mac
                         role: "caption"
                         dim: true
@@ -174,18 +174,18 @@ ColumnLayout {
 
                 Pill {
                     visible: !modelData.connected
-                    label: "Connect"
+                    label: I18n.tr("Connect")
                     onClicked: Network.connectDevice(modelData.mac)
                 }
 
                 Pill {
                     visible: modelData.connected
-                    label: "Disconnect"
+                    label: I18n.tr("Disconnect")
                     onClicked: Network.disconnectDevice(modelData.mac)
                 }
 
                 Pill {
-                    label: "Forget"
+                    label: I18n.tr("Forget")
                     icon: "\u{f01b4}"
                     onClicked: Network.forgetDevice(modelData.mac)
                 }
@@ -196,16 +196,16 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: section.paired.length === 0
             icon: "\u{f00b0}"
-            title: "Nothing paired"
-            hint: "Click 'Scan for devices' above to find and pair new accessories."
+            title: I18n.tr("Nothing paired")
+            hint: I18n.tr("Click 'Scan for devices' above to find and pair new accessories.")
         }
     }
 
     // ── 3. Available Devices Card ────────────────────────────────────────────
     Card {
         visible: Network.bluetooth.power === "on" && (Network.scanning || section.available.length > 0)
-        title: "Available devices"
-        subtitle: "Discovered Bluetooth accessories in range"
+        title: I18n.tr("Available devices")
+        subtitle: I18n.tr("Discovered Bluetooth accessories in range")
         icon: "\u{f002f}"
         accentColor: Design.sapphire
 
@@ -242,7 +242,7 @@ ColumnLayout {
                 }
 
                 Pill {
-                    label: "Pair"
+                    label: I18n.tr("Pair")
                     icon: "\u{f00af}"
                     onClicked: Network.pairDevice(modelData.mac)
                 }
@@ -253,8 +253,8 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: section.available.length === 0
             icon: "\u{f002f}"
-            title: "Scanning for accessories..."
-            hint: "Make sure your Bluetooth device is in pairing mode."
+            title: I18n.tr("Scanning for accessories...")
+            hint: I18n.tr("Make sure your Bluetooth device is in pairing mode.")
         }
     }
 }

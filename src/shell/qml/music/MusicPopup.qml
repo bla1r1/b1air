@@ -82,7 +82,7 @@ PopupShell {
         merged.status = Media.status || "Stopped";
         merged.title = t.title && String(t.title).trim() !== ""
             ? t.title
-            : (Media.hasPlayer ? "Nothing playing" : "No media player");
+            : (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"));
         merged.source = t.source || (Media.hasPlayer ? (t.playerName || "") : "Offline");
         merged.positionStr = t.positionStr || "00:00";
         merged.lengthStr = t.lengthStr || "00:00";
@@ -692,7 +692,7 @@ PopupShell {
                             }
 
                             Text {
-                                text: root.musicData.artist ? "BY " + root.musicData.artist : ""
+                                text: root.musicData.artist ? I18n.tr("BY %1", root.musicData.artist) : ""
                                 color: Design.textDim // Better matugen match
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(14)
@@ -714,11 +714,11 @@ PopupShell {
                                         anchors.centerIn: parent
                                         spacing: Design.s(6)
                                         Icon { role: "body"; text: root.musicData.deviceIcon || "󰓃"; color: Design.accent }
-                                        Text { text: root.musicData.deviceName || "Speaker"; color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(12); font.bold: true }
+                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(12); font.bold: true }
                                     }
                                 }
                                 Text {
-                                    text: "VIA " + (root.musicData.source || "Offline")
+                                    text: I18n.tr("VIA %1", I18n.tr(root.musicData.source || "Offline"))
                                     color: Design.textFaint // Better matugen match
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(12)
@@ -982,7 +982,7 @@ PopupShell {
                         opacity: root.introEqHeader
                         transform: Translate { y: Design.s(15) * (1 - root.introEqHeader) }
 
-                        Text { text: "Equalizer"; color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.bold: true; Layout.fillWidth: true }
+                        Text { text: I18n.tr("Equalizer"); color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.bold: true; Layout.fillWidth: true }
                         
                         // Ui/ActionButton, like every other button in the
                         // shell. This was a bespoke rectangle with its own
@@ -991,7 +991,7 @@ PopupShell {
                         // row read as the two-word phrase "Saved Flat" rather
                         // than a button and a value.
                         Label {
-                            text: "Preset: " + (root.eqData.preset || "Flat")
+                            text: I18n.tr("Preset: %1", I18n.tr(root.eqData.preset || "Flat"))
                             role: "caption"
                             dim: true
                             Layout.rightMargin: Design.s(Design.space.sm)
@@ -1001,7 +1001,7 @@ PopupShell {
                             Layout.fillWidth: false
                             enabled: root.eqData.pending
                             icon: "\u{f012c}"
-                            label: root.eqData.pending ? "Apply" : "Saved"
+                            label: root.eqData.pending ? I18n.tr("Apply") : I18n.tr("Saved")
                             onActivated: {
                                 if (!root.eqData.pending)
                                     return;
@@ -1450,7 +1450,7 @@ PopupShell {
     component PresetButton : Pill {
         property string name: ""
         Layout.fillWidth: true
-        label: name
+        label: I18n.tr(name)
         active: root.eqData && root.eqData.preset === name
         onClicked: root.applyPresetOptimistically(name)
     }

@@ -178,10 +178,10 @@ ColumnLayout {
     // 1. THE SCREENS
     // =========================================================================
     Card {
-        title: "Displays"
+        title: I18n.tr("Displays")
         subtitle: monitorsModel.count > 1
-            ? "Select a screen to change its settings. Drag it to rearrange."
-            : "Select a screen to change its settings."
+            ? I18n.tr("Select a screen to change its settings. Drag it to rearrange.")
+            : I18n.tr("Select a screen to change its settings.")
         icon: "\u{f0379}"
         accentColor: section.selectedResAccent
 
@@ -351,7 +351,7 @@ ColumnLayout {
                                             font.pixelSize: 10
                                             font.weight: Font.DemiBold
                                             color: section.selectedResAccent
-                                            text: "★ Main"
+                                            text: I18n.tr("★ Main")
                                         }
                                     }
                                 }
@@ -453,8 +453,8 @@ ColumnLayout {
                     width: parent.width
                     visible: monitorsModel.count === 0
                     icon: "\u{f0379}"
-                    title: "No displays reported"
-                    hint: "sway returned an empty output list."
+                    title: I18n.tr("No displays reported")
+                    hint: I18n.tr("sway returned an empty output list.")
                 }
             }
         }
@@ -464,7 +464,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Pill {
-                label: "Identify Displays"
+                label: I18n.tr("Identify Displays")
                 icon: "\u{f0379}"
                 onClicked: Monitors.identify()
             }
@@ -472,7 +472,7 @@ ColumnLayout {
             Item { Layout.fillWidth: true }
 
             Label {
-                text: monitorsModel.count + " display" + (monitorsModel.count === 1 ? "" : "s") + " connected"
+                text: I18n.trn("%1 display connected", "%1 displays connected", monitorsModel.count)
                 role: "caption"
                 dim: true
             }
@@ -501,10 +501,10 @@ ColumnLayout {
     Timer { id: profileRecheck; interval: 1500; onTriggered: profileReader.running = true }
 
     Card {
-        title: "Remembered layouts"
+        title: I18n.tr("Remembered layouts")
         subtitle: section.profiles.length === 0
-            ? "Apply a layout and it is kept for this set of screens"
-            : "Put back automatically whenever the same screens are connected"
+            ? I18n.tr("Apply a layout and it is kept for this set of screens")
+            : I18n.tr("Put back automatically whenever the same screens are connected")
         icon: "\u{f0379}"
         accentColor: Design.teal
 
@@ -524,8 +524,8 @@ ColumnLayout {
                         elide: Text.ElideRight
                     }
                     Label {
-                        text: modelData.screens + (modelData.screens === 1 ? " screen" : " screens")
-                              + (modelData.current ? " · connected now" : "")
+                        text: I18n.trn("%1 screen", "%1 screens", modelData.screens)
+                              + (modelData.current ? " · " + I18n.tr("connected now") : "")
                         role: "caption"
                         color: modelData.current ? Design.accent : Design.textDim
                     }
@@ -533,7 +533,7 @@ ColumnLayout {
                 ActionButton {
                     Layout.fillWidth: false
                     icon: "\u{f0a7a}"
-                    label: "Forget"
+                    label: I18n.tr("Forget")
                     onActivated: {
                         profileForget.command = ["b1air-daemon", "monitors", "forget", modelData.key];
                         profileForget.running = true;
@@ -550,10 +550,10 @@ ColumnLayout {
     // nothing ever showed them. A laptop's own backlight is on Power & Battery.
     // =========================================================================
     Card {
-        title: "Brightness"
+        title: I18n.tr("Brightness")
         subtitle: Monitors.hasBrightness
-            ? "External screens that take brightness over DDC/CI"
-            : "No external screen answered over DDC/CI"
+            ? I18n.tr("External screens that take brightness over DDC/CI")
+            : I18n.tr("No external screen answered over DDC/CI")
         icon: "\u{f00df}"
         accentColor: Design.yellow
 
@@ -577,13 +577,13 @@ ColumnLayout {
             wrapMode: Text.WordWrap
             role: "caption"
             dim: true
-            text: "Most monitors do, over the same cable as the picture. It needs ddcutil and the i2c-dev module; some panels have DDC/CI switched off in their own menu."
+            text: I18n.tr("Most monitors do, over the same cable as the picture. It needs ddcutil and the i2c-dev module; some panels have DDC/CI switched off in their own menu.")
         }
 
         ButtonRow {
             ActionButton {
                 icon: "\u{f0450}"
-                label: "Detect again"
+                label: I18n.tr("Detect again")
                 onActivated: Monitors.redetect()
             }
         }
@@ -598,7 +598,7 @@ ColumnLayout {
             ? (section.activeEditIndex + 1) + ". " + section.activeMonitor.name : ""
         subtitle: section.activeMonitor
             ? ([section.activeMonitor.make, section.activeMonitor.model].filter(t => t).join(" ")
-               || "Settings for the selected screen")
+               || I18n.tr("Settings for the selected screen"))
             : ""
         icon: "\u{f0379}"
         accentColor: section.selectedRateAccent
@@ -606,8 +606,8 @@ ColumnLayout {
         // The main display: full bar, workspace 1, the focus at login.
         Toggle {
             visible: monitorsModel.count > 1
-            label: "Main display"
-            subtitle: "Carries the full bar and workspace 1, and has the focus at login"
+            label: I18n.tr("Main display")
+            subtitle: I18n.tr("Carries the full bar and workspace 1, and has the focus at login")
             checked: section.activeMonitor ? Screens.primaryName === section.activeMonitor.name : false
             onToggled: {
                 if (!section.activeMonitor) return;
@@ -620,18 +620,18 @@ ColumnLayout {
         Toggle {
             visible: monitorsModel.count > 1 && section.activeMonitor !== null
                 && Screens.primaryName === section.activeMonitor.name
-            label: "Notifications on the main display"
+            label: I18n.tr("Notifications on the main display")
             subtitle: Settings.notificationsOnMain
-                ? "Every notification appears here"
-                : "Notifications appear on the screen you are using"
+                ? I18n.tr("Every notification appears here")
+                : I18n.tr("Notifications appear on the screen you are using")
             checked: Settings.notificationsOnMain
             onToggled: Settings.set("notificationsOnMain", !Settings.notificationsOnMain)
         }
 
         // Display power / state toggle
         Toggle {
-            label: "Enable display"
-            subtitle: "Turn this video output on or off in Sway"
+            label: I18n.tr("Enable display")
+            subtitle: I18n.tr("Turn this video output on or off in Sway")
             checked: section.activeMonitor ? (section.activeMonitor.active !== false) : true
             onToggled: {
                 if (!section.activeMonitor) return;
@@ -639,7 +639,7 @@ ColumnLayout {
             }
         }
 
-        SectionLabel { text: "Resolution" }
+        SectionLabel { text: I18n.tr("Resolution") }
 
         GridLayout {
             Layout.fillWidth: true
@@ -652,11 +652,11 @@ ColumnLayout {
                     { resW: 3840, resH: 2160, label: "4K" },
                     { resW: 2560, resH: 1440, label: "QHD" },
                     { resW: 1920, resH: 1080, label: "FHD" },
-                    { resW: 1600, resH: 900,  label: "HD+" },
-                    { resW: 1366, resH: 768,  label: "WXGA" },
+                    { resW: 1600, resH: 900,  label: I18n.tr("HD+") },
+                    { resW: 1366, resH: 768,  label: I18n.tr("WXGA") },
                     { resW: 1280, resH: 720,  label: "HD" },
                     { resW: 1024, resH: 768,  label: "XGA" },
-                    { resW: 800,  resH: 600,  label: "SVGA" }
+                    { resW: 800,  resH: 600,  label: I18n.tr("SVGA") }
                 ]
 
                 Rectangle {
@@ -718,7 +718,7 @@ ColumnLayout {
         }
 
         SectionLabel {
-            text: "Refresh rate"
+            text: I18n.tr("Refresh rate")
             Layout.topMargin: Design.s(Design.space.sm)
         }
 
@@ -836,7 +836,7 @@ ColumnLayout {
 
         // Scale stepper
         Stepper {
-            label: "Scale"
+            label: I18n.tr("Scale")
             valueText: (Math.round(section.currentSysScale * 100) / 100) + "×"
             onDecrement: section.setSysScale(section.currentSysScale - 0.25)
             onIncrement: section.setSysScale(section.currentSysScale + 0.25)
@@ -848,7 +848,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Label {
-                text: "Orientation"
+                text: I18n.tr("Orientation")
                 Layout.fillWidth: true
             }
 
@@ -881,9 +881,10 @@ ColumnLayout {
             // is the logical/effective area after scaling, and the physical
             // mode sway actually applies is spelled out here now too.
             text: section.activeMonitor
-                ? "Scaled to " + Math.round(section.activeMonitor.resW / section.currentSysScale)
-                  + "×" + Math.round(section.activeMonitor.resH / section.currentSysScale)
-                  + " — physical output stays " + section.activeMonitor.resW + "×" + section.activeMonitor.resH
+                ? I18n.tr("Scaled to %1×%2 — physical output stays %3×%4",
+                          Math.round(section.activeMonitor.resW / section.currentSysScale),
+                          Math.round(section.activeMonitor.resH / section.currentSysScale),
+                          section.activeMonitor.resW, section.activeMonitor.resH)
                 : ""
             role: "caption"
             color: Design.textFaint
@@ -897,7 +898,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Label {
-                text: section.dirty ? "Unapplied changes" : "Matches what sway is running"
+                text: section.dirty ? I18n.tr("Unapplied changes") : I18n.tr("Matches what sway is running")
                 role: "caption"
                 dim: !section.dirty
                 color: section.dirty ? Design.peach : Design.textDim
@@ -905,14 +906,14 @@ ColumnLayout {
             }
 
             Pill {
-                label: "Reset"
+                label: I18n.tr("Reset")
                 enabled: section.dirty
                 opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.reload()
             }
 
             Pill {
-                label: monitorsModel.count > 1 ? "Apply All" : "Apply"
+                label: monitorsModel.count > 1 ? I18n.tr("Apply All") : I18n.tr("Apply")
                 icon: "\u{f012c}"
                 active: section.dirty
                 enabled: section.dirty
@@ -936,7 +937,7 @@ ColumnLayout {
                 name: mon.name, resW: mon.resW, resH: mon.resH,
                 rate: mon.rate, sysScale: mon.sysScale, x: 0, y: 0
             }]);
-            Osd.show("display", "Display updated", mon.resW + "×" + mon.resH + " @ " + mon.rate + " Hz");
+            Osd.show("display", I18n.tr("Display updated"), mon.resW + "×" + mon.resH + " @ " + mon.rate + " Hz");
             section.dirty = false;
             return;
         }
@@ -986,7 +987,7 @@ ColumnLayout {
 
         Monitors.apply(layout);
         if (section.otherEdits)
-            Osd.show("display", "Displays updated", layout.map(r => r.name).join(", "));
+            Osd.show("display", I18n.tr("Displays updated"), layout.map(r => r.name).join(", "));
         section.dirty = false;
         section.otherEdits = false;
     }

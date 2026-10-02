@@ -55,10 +55,9 @@ package list installs, while the suite's own Git client sat unbound; it runs
 In order. These are the ones worth building, and the reason is written down so
 that a future reader can disagree with the reason rather than guess at it.
 
-1. **The shell in Russian** (M15) — the apps are; Settings, the Control
-   Center, the bar, the launcher and the popups still speak English. The
-   mechanism (`Ui/I18n`, `i18n/ru.json`) is the same one; what is left is
-   wrapping roughly 770 strings and translating them.
+1. **The shell in Russian** (M15) — the shell is in Ukrainian now
+   (`i18n/uk.json`, every string); `ru.json` covers the apps only, and the
+   shell's strings are left to translate there.
 2. **swayfx on a pinned wlroots** — the installer builds swayfx against a
    wlroots bundled as a meson subproject when the distribution's does not
    match, so the desktop stops depending on which wlroots a distribution
@@ -335,7 +334,9 @@ everywhere.
 - [/] Translation. `Ui/I18n` with JSON per language (qsTr cannot reach the
       shell, which runs inside quickshell), plural forms included; the
       smoke test checks every translation keeps its placeholders.
-      **Built:** the apps in Russian. **Missing:** the shell.
+      **Built:** the apps in Russian; the apps and the whole shell in
+      Ukrainian, with the language picked in Settings → Keyboard.
+      **Missing:** the shell in Russian.
 - [x] A CI job that builds the suite and runs `tools/smoke.sh` on every push
       (.github/workflows/build.yml, Ubuntu 26.04).
 - [x] Files: compress to archive, batch rename (M11), and tabs.

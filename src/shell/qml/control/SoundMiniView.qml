@@ -18,10 +18,10 @@ import "."
 MiniView {
     id: root
 
-    title: "Sound"
+    title: I18n.tr("Sound")
     icon: "\u{f057f}"
     tone: Design.sapphire
-    footerLabel: "Sound Settings…"
+    footerLabel: I18n.tr("Sound Settings…")
 
     readonly property var sink: Audio.defaultSink
     readonly property var source: Audio.defaultSource
@@ -32,7 +32,7 @@ MiniView {
 
         // ── Output ───────────────────────────────────────────────────────────
         SectionLabel {
-            text: "Output volume"
+            text: I18n.tr("Output volume")
             visible: root.sink !== null
         }
 
@@ -51,7 +51,7 @@ MiniView {
         }
 
         SectionLabel {
-            text: "Output device"
+            text: I18n.tr("Output device")
             Layout.topMargin: Design.s(Design.space.xs)
         }
 
@@ -64,8 +64,8 @@ MiniView {
                 width: parent.width
                 visible: Audio.outputs.count === 0
                 icon: "\u{f075f}"
-                title: "No output devices"
-                hint: "Nothing is registered with PipeWire right now."
+                title: I18n.tr("No output devices")
+                hint: I18n.tr("Nothing is registered with PipeWire right now.")
             }
 
             ListView {
@@ -114,7 +114,7 @@ MiniView {
                         }
 
                         Label {
-                            text: dev.isDefault ? "" : (rowMa.containsMouse ? "Use this" : "")
+                            text: dev.isDefault ? "" : (rowMa.containsMouse ? I18n.tr("Use this") : "")
                             role: "caption"
                             color: Design.sapphire
                         }
@@ -140,7 +140,7 @@ MiniView {
 
         // ── Input ────────────────────────────────────────────────────────────
         SectionLabel {
-            text: "Microphone"
+            text: I18n.tr("Microphone")
             visible: root.source !== null
         }
 
@@ -171,7 +171,7 @@ MiniView {
             }
 
             Label {
-                text: "AI Noise Suppression (RNNoise)"
+                text: I18n.tr("AI Noise Suppression (RNNoise)")
                 role: "caption"
                 weight: Design.weight.medium
                 Layout.fillWidth: true
@@ -179,14 +179,14 @@ MiniView {
 
             ActionButton {
                 icon: "\u{f021}"
-                label: "Toggle Filter"
+                label: I18n.tr("Toggle Filter")
                 onActivated: Daemon.micRnnoiseToggle()
             }
         }
 
         // ── Per-Application Stream Volume Mixer ───────────────────────────────
         SectionLabel {
-            text: "Application Mixer"
+            text: I18n.tr("Application Mixer")
             visible: Audio.apps.count > 0
         }
 
@@ -212,7 +212,7 @@ MiniView {
                 }
 
                 Label {
-                    text: appStreamRow.model.description || appStreamRow.model.name || "App"
+                    text: appStreamRow.model.description || appStreamRow.model.name || I18n.tr("App")
                     role: "caption"
                     elide: Text.ElideRight
                     Layout.preferredWidth: Design.s(100)

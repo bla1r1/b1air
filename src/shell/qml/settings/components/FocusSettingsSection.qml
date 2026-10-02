@@ -95,7 +95,7 @@ ColumnLayout {
                 let key = (app.name || "").toLowerCase().trim();
                 if (key && !seen[key]) {
                     seen[key] = true;
-                    list.push({ name: app.name, icon: app.icon || "", subtitle: "Active notification source" });
+                    list.push({ name: app.name, icon: app.icon || "", subtitle: I18n.tr("Active notification source") });
                 }
             }
         }
@@ -105,12 +105,12 @@ ColumnLayout {
             let key = (item.appName || "").toLowerCase().trim();
             if (key && !seen[key]) {
                 seen[key] = true;
-                list.push({ name: item.appName, icon: item.icon || "", subtitle: "Recent notification in history" });
+                list.push({ name: item.appName, icon: item.icon || "", subtitle: I18n.tr("Recent notification in history") });
             }
         }
 
         if (list.length === 0) {
-            list.push({ name: "System", icon: "", subtitle: "System and hardware alerts" });
+            list.push({ name: "System", icon: "", subtitle: I18n.tr("System and hardware alerts") });
         }
 
         return list;
@@ -120,8 +120,8 @@ ColumnLayout {
 
     // ── 2. Today's Wellbeing Overview ────────────────────────────────────────
     Card {
-        title: "Today's Activity"
-        subtitle: "Real-time summary of your computer usage and focus intervals"
+        title: I18n.tr("Today's Activity")
+        subtitle: I18n.tr("Real-time summary of your computer usage and focus intervals")
         icon: "\u{f051e}"
         accentColor: Design.teal
 
@@ -140,7 +140,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 2
                     Label {
-                        text: "Screen Time Today"
+                        text: I18n.tr("Screen Time Today")
                         role: "caption"
                         dim: true
                     }
@@ -164,13 +164,13 @@ ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 2
                     Label {
-                        text: "Daily Goal (" + section.dailyGoalHours + "h)"
+                        text: I18n.tr("Daily Goal (%1h)", section.dailyGoalHours)
                         role: "caption"
                         dim: true
                     }
                     Label {
                         readonly property real pct: Math.min(100, Math.round((section.screenSeconds / (section.dailyGoalHours * 3600)) * 100))
-                        text: pct + "% used"
+                        text: I18n.tr("%1% used", pct)
                         role: "subhead"
                         weight: Design.weight.bold
                         color: pct > 100 ? Design.danger : Design.sapphire
@@ -189,15 +189,15 @@ ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 2
                     Label {
-                        text: "Focus Status"
+                        text: I18n.tr("Focus Status")
                         role: "caption"
                         dim: true
                     }
                     Label {
                         // Say which of the reasons is holding banners back.
-                        text: Focus.wantsDnd ? "Focusing (DND)"
-                            : Notifications.quietHours ? "Quiet hours"
-                            : Notifications.dnd ? "Do Not Disturb" : "Active"
+                        text: Focus.wantsDnd ? I18n.tr("Focusing (DND)")
+                            : Notifications.quietHours ? I18n.tr("Quiet hours")
+                            : Notifications.dnd ? I18n.tr("Do Not Disturb") : I18n.tr("Active")
                         role: "subhead"
                         weight: Design.weight.bold
                         color: Notifications.dnd ? Design.peach : Design.green
@@ -209,8 +209,8 @@ ColumnLayout {
 
     // ── 3. Application Notification Filters ──────────────────────────────────
     Card {
-        title: "Application Notification Filters"
-        subtitle: "Control banner popups and sound alerts for individual apps"
+        title: I18n.tr("Application Notification Filters")
+        subtitle: I18n.tr("Control banner popups and sound alerts for individual apps")
         icon: "\u{f0f3}"
         accentColor: Design.mauve
 
@@ -277,8 +277,8 @@ ColumnLayout {
 
     // ── 4. Pomodoro & Interval Durations ─────────────────────────────────────
     Card {
-        title: "Focus & Break Intervals"
-        subtitle: "Customize work cycles and rest duration for FocusTime timer"
+        title: I18n.tr("Focus & Break Intervals")
+        subtitle: I18n.tr("Customize work cycles and rest duration for FocusTime timer")
         icon: "\u{f0520}"
         accentColor: Design.sapphire
 
@@ -287,7 +287,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Stepper {
-                label: "Focus Work Duration"
+                label: I18n.tr("Focus Work Duration")
                 valueText: section.workDuration + " min"
                 onDecrement: {
                     const v = Math.max(5, section.workDuration - 5);
@@ -302,7 +302,7 @@ ColumnLayout {
             }
 
             Stepper {
-                label: "Short Break Duration"
+                label: I18n.tr("Short Break Duration")
                 valueText: section.shortBreakDuration + " min"
                 onDecrement: {
                     const v = Math.max(1, section.shortBreakDuration - 1);
@@ -317,7 +317,7 @@ ColumnLayout {
             }
 
             Stepper {
-                label: "Long Break Duration"
+                label: I18n.tr("Long Break Duration")
                 valueText: section.longBreakDuration + " min"
                 onDecrement: {
                     const v = Math.max(5, section.longBreakDuration - 5);
@@ -332,7 +332,7 @@ ColumnLayout {
             }
 
             Stepper {
-                label: "Daily Screen Time Limit Goal"
+                label: I18n.tr("Daily Screen Time Limit Goal")
                 valueText: section.dailyGoalHours + " hours"
                 onDecrement: {
                     const v = Math.max(1, section.dailyGoalHours - 1);
@@ -358,22 +358,22 @@ ColumnLayout {
     }
 
     Card {
-        title: "Quiet hours"
-        subtitle: Notifications.quietHours ? "On now — banners and sounds are held until " + section._hhmm(Settings.dndScheduleEnd)
-                                           : "Do Not Disturb on a schedule, every day"
+        title: I18n.tr("Quiet hours")
+        subtitle: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd))
+                                           : I18n.tr("Do Not Disturb on a schedule, every day")
         icon: "\u{f00a0}"
         accentColor: Design.lavender
 
         Toggle {
-            label: "Quiet hours"
-            subtitle: "Notifications still arrive and wait in the list; they just do not pop up or play a sound"
+            label: I18n.tr("Quiet hours")
+            subtitle: I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
             checked: Settings.dndScheduleEnabled === true
             onToggled: Settings.set("dndScheduleEnabled", !(Settings.dndScheduleEnabled === true))
         }
 
         Stepper {
             visible: Settings.dndScheduleEnabled === true
-            label: "From"
+            label: I18n.tr("From")
             valueText: section._hhmm(Settings.dndScheduleStart)
             onDecrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, -30)
             onIncrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, 30)
@@ -381,7 +381,7 @@ ColumnLayout {
 
         Stepper {
             visible: Settings.dndScheduleEnabled === true
-            label: "Until"
+            label: I18n.tr("Until")
             valueText: section._hhmm(Settings.dndScheduleEnd)
             onDecrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, -30)
             onIncrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, 30)
@@ -390,8 +390,8 @@ ColumnLayout {
 
     // ── 5. Focus Automation & Distraction Control ────────────────────────────
     Card {
-        title: "Focus Automation"
-        subtitle: "Automatic notification suppression and health reminders"
+        title: I18n.tr("Focus Automation")
+        subtitle: I18n.tr("Automatic notification suppression and health reminders")
         icon: "\u{f009b}"
         accentColor: Design.peach
 
@@ -400,8 +400,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Toggle {
-                label: "Auto-Silence Notifications in Focus Mode"
-                subtitle: "Automatically activate Do Not Disturb during active focus sessions"
+                label: I18n.tr("Auto-Silence Notifications in Focus Mode")
+                subtitle: I18n.tr("Automatically activate Do Not Disturb during active focus sessions")
                 checked: section.autoDnd
                 onToggled: {
                     const v = !section.autoDnd;
@@ -411,8 +411,8 @@ ColumnLayout {
             }
 
             Toggle {
-                label: "Hourly Eye Care & Break Reminders"
-                subtitle: "Send a gentle notification when continuous screen time reaches 60 minutes"
+                label: I18n.tr("Hourly Eye Care & Break Reminders")
+                subtitle: I18n.tr("Send a gentle notification when continuous screen time reaches 60 minutes")
                 checked: section.breakReminders
                 onToggled: {
                     const v = !section.breakReminders;
@@ -422,8 +422,8 @@ ColumnLayout {
             }
 
             Toggle {
-                label: "Auto-Start FocusTime Daemon"
-                subtitle: "Launch background activity tracker automatically on login"
+                label: I18n.tr("Auto-Start FocusTime Daemon")
+                subtitle: I18n.tr("Launch background activity tracker automatically on login")
                 checked: section.daemonAutoStart
                 onToggled: {
                     const v = !section.daemonAutoStart;

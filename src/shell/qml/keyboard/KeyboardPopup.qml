@@ -112,7 +112,7 @@ PopupShell {
             }
 
             Label {
-                text: "Input Sources"
+                text: I18n.tr("Input Sources")
                 role: "caption"
                 weight: Design.weight.bold
                 color: Design.textDim
@@ -230,7 +230,7 @@ PopupShell {
                 }
 
                 Label {
-                    text: "Keyboard Settings..."
+                    text: I18n.tr("Keyboard Settings...")
                     role: "caption"
                     weight: Design.weight.medium
                     Layout.fillWidth: true

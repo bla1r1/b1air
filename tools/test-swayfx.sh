@@ -180,6 +180,23 @@ cmd overview toggle && cmd overview hide && sleep 0.4 && alive && ok "overview: 
 open_window && sleep 0.3 && cmd kill && sleep 0.3 && alive \
     && ok "overview: windows open and close after it" || fail "windows after overview"
 cmd overview sideways && fail "overview takes sideways" || ok "overview refuses sideways"
+# overview_swipe: up with the fingers brings it in, down takes it away; a
+# short one goes back; sideways is not ours.
+cmd overview_swipe 4 && ok "overview_swipe 4" || fail "overview_swipe 4"
+cmd overview_swipe 9 && fail "overview_swipe takes 9" || ok "overview_swipe refuses 9"
+oswipe() {   # oswipe <steps> <dy per step> end|cancel
+    cmd debug_overview_swipe begin 4 || return 1
+    for _ in $(seq 1 "$1"); do cmd debug_overview_swipe update "$2" || return 1; done
+    cmd debug_overview_swipe "$3"
+}
+oswipe 20 -20 end && sleep 0.4 && alive && ok "overview swipe up: in" || fail "overview swipe up"
+oswipe 20 20 end && sleep 0.4 && alive && ok "overview swipe down: away" || fail "overview swipe down"
+oswipe 3 -6 end && sleep 0.4 && alive && ok "overview swipe, short: back" || fail "overview short swipe"
+cmd debug_overview_swipe begin 4 >/dev/null
+cmd debug_overview_swipe update 0 40 && fail "a sideways swipe is taken" || ok "overview swipe: sideways handed over"
+cmd debug_overview_swipe end >/dev/null
+cmd debug_overview_swipe begin 3 && fail "3 fingers taken" || ok "overview swipe: other fingers not taken"
+cmd overview_swipe off >/dev/null
 
 # ── Every command sway has is still found ────────────────────────────────────
 # sway looks commands up by binary search; one patch adding its command out of

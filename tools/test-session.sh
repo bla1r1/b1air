@@ -68,6 +68,10 @@ if ! swaymsg overview 2>&1 | grep -q "Unknown/invalid command"; then
     "$VKB" - 105; sleep 0.3
     "$VKB" - 28; sleep 1
     [[ "$(ws)" == 1 ]] && ok "Mod+O, Left, Enter goes to workspace 1" || fail "overview by keys" "on $(ws)"
+    # The daemon gave it the four-finger swipe up.
+    if swaymsg -q debug_overview_swipe begin 4 2>/dev/null; then ok "four fingers up bring in the overview"
+    else fail "overview_swipe is not set to 4 fingers"; fi
+    swaymsg -q debug_overview_swipe cancel 2>/dev/null
 fi
 
 # A screen plugged in comes up as its saved layout says, set by the

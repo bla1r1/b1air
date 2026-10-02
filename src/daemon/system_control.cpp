@@ -1286,7 +1286,7 @@ std::string SystemControl::pick_color() {
     const std::string hex = ppm_first_pixel(run_argv_capture({"grim", "-g", pos + " 1x1", "-t", "ppm", "-"}));
     if (hex.empty()) return "";
     (void)run_argv_with_stdin({"wl-copy"}, hex);
-    osd_status(hex + " copied", "Picked colour", "color-picker");
+    osd_status("Colour copied", hex, "color-picker");
     return hex;
 }
 
@@ -2944,6 +2944,22 @@ static std::string weather_hex_from_desc(const std::string& d_in) {
     return "#bac2de";
 }
 
+// The language the weather is described in: the desktop's own
+// (Settings → Keyboard → Interface language), else the session's locale.
+// "" for English, which is what both services send unasked.
+static std::string weather_lang() {
+    std::string v = SettingsManager::get_json_string("uiLanguage");
+    if (v.empty() || v == "auto") {
+        for (const char* name : {"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"}) {
+            const char* e = std::getenv(name);
+            if (e && *e) { v = e; break; }
+        }
+    }
+    v = v.substr(0, v.find_first_of("_.@:-"));
+    if (v == "en" || v == "C" || v == "c" || v == "POSIX") return "";
+    return v;
+}
+
 std::string SystemControl::weather_get_json(bool force) {
     const char* home = std::getenv("HOME");
     const std::string home_str = home ? home : "/tmp";
@@ -3001,7 +3017,9 @@ std::string SystemControl::weather_get_json(bool force) {
     // One cache per source and unit. A single weather.json meant that changing
     // the unit or the city kept serving the old numbers for up to 15 minutes,
     // which is exactly when someone is looking to see whether it worked.
-    std::string json_file = cache_dir + "/weather-" + unit + "-" + (use_openweather ? city_id : std::string("wttr")) + ".json";
+    // The language is in the name, so switching it fetches again.
+    std::string json_file = cache_dir + "/weather-" + unit + "-" + (use_openweather ? city_id : std::string("wttr"))
+        + (weather_lang().empty() ? std::string() : "-" + weather_lang()) + ".json";
 
     struct stat st;
     if (!force && stat(json_file.c_str(), &st) == 0) {
@@ -3014,7 +3032,9 @@ std::string SystemControl::weather_get_json(bool force) {
     }
 
     if (!use_openweather) {
-        std::string raw = run_argv_capture({"curl", "-fsS", "--max-time", "5", "https://wttr.in/?format=j1"});
+        const std::string lang = weather_lang();
+        std::string raw = run_argv_capture({"curl", "-fsS", "--max-time", "5",
+            "https://wttr.in/?format=j1" + (lang.empty() ? std::string() : "&lang=" + lang)});
         if (!raw.empty()) {
             try {
                 auto data = nlohmann::json::parse(raw);
@@ -3037,6 +3057,7 @@ std::string SystemControl::weather_get_json(bool force) {
 
                         nlohmann::json hourly_arr = nlohmann::json::array();
                         std::string day_desc = "Clear";
+                        std::string day_text;    // in the desktop's language, when wttr.in has it
                         std::string wind = "0", humid = "0", pop = "0";
 
                         if (day.contains("hourly") && day["hourly"].is_array()) {
@@ -3046,6 +3067,10 @@ std::string SystemControl::weather_get_json(bool force) {
                                 if (mid.contains("weatherDesc") && mid["weatherDesc"].is_array() && !mid["weatherDesc"].empty()) {
                                     day_desc = mid["weatherDesc"][0].value("value", "Clear");
                                 }
+                                // The icon goes by the English words; the text shown by these.
+                                const std::string lk = "lang_" + lang;
+                                if (!lang.empty() && mid.contains(lk) && mid[lk].is_array() && !mid[lk].empty())
+                                    day_text = mid[lk][0].value("value", "");
                                 wind = mid.value(imperial ? "windspeedMiles" : "windspeedKmph", "0");
                                 humid = mid.value("humidity", "0");
                                 pop = mid.value("chanceofrain", "0");
@@ -3084,7 +3109,7 @@ std::string SystemControl::weather_get_json(bool force) {
                             {"pop", pop},
                             {"icon", weather_icon_from_desc(day_desc)},
                             {"hex", weather_hex_from_desc(day_desc)},
-                            {"desc", day_desc},
+                            {"desc", day_text.empty() ? day_desc : day_text},
                             {"hourly", hourly_arr}
                         });
                         idx++;
@@ -3108,6 +3133,7 @@ std::string SystemControl::weather_get_json(bool force) {
     }
 
     std::string url = "https://api.openweathermap.org/data/2.5/forecast?APPID=" + api_key + "&id=" + city_id + "&units=" + unit;
+    if (const std::string lang = weather_lang(); !lang.empty()) url += "&lang=" + lang;
     std::string raw = run_argv_capture({"curl", "-fsS", "--max-time", "8", url});
 
     if (raw.empty() || raw.find("\"cod\":\"200\"") == std::string::npos) {

@@ -87,7 +87,7 @@ ColumnLayout {
     // ── 2. Profile Overview Card ─────────────────────────────────────────────
     Card {
         title: section.userInfo.name || section.userInfo.username
-        subtitle: "@" + section.userInfo.username + " • UID " + section.userInfo.uid + " • " + section.userInfo.home
+        subtitle: I18n.tr("@%1 • UID %2 • %3", section.userInfo.username, section.userInfo.uid, section.userInfo.home)
         icon: "\u{f007}"
         accentColor: Design.mauve
 
@@ -139,13 +139,13 @@ ColumnLayout {
 
                     ActionButton {
                         icon: "\u{f03e}"
-                        label: "Change Avatar"
+                        label: I18n.tr("Change Avatar")
                         onActivated: avatarFileDialog.open()
                     }
 
                     ActionButton {
                         icon: "\u{f084}"
-                        label: "Change Password"
+                        label: I18n.tr("Change Password")
                         tone: Design.sapphire
                         onActivated: {
                             Quickshell.execDetached([section.daemonCmd, "user", "change-password"]);
@@ -154,7 +154,7 @@ ColumnLayout {
                 }
 
                 Label {
-                    text: "Synchronized with SDDM and ~/.face.icon automatically"
+                    text: I18n.tr("Synchronized with SDDM and ~/.face.icon automatically")
                     dim: true
                 }
             }
@@ -163,8 +163,8 @@ ColumnLayout {
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
     Card {
-        title: "Account Details & Shell"
-        subtitle: "System user configurations and login preferences"
+        title: I18n.tr("Account Details & Shell")
+        subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
         accentColor: Design.blue
 
@@ -182,11 +182,11 @@ ColumnLayout {
                     spacing: Design.s(Design.space.xs)
 
                     Label {
-                        text: "Display / Full Name"
+                        text: I18n.tr("Display / Full Name")
                         weight: Design.weight.medium
                     }
                     Label {
-                        text: "Real name shown on lockscreen and greeter"
+                        text: I18n.tr("Real name shown on lockscreen and greeter")
                         dim: true
                     }
                 }
@@ -195,7 +195,7 @@ ColumnLayout {
                     id: nameField
                     Layout.preferredWidth: Design.s(220)
                     text: section.userInfo.name || ""
-                    placeholder: "Enter full name..."
+                    placeholder: I18n.tr("Enter full name...")
                     onCommitted: v => {
                         if (v.trim().length > 0) {
                             Quickshell.execDetached([section.daemonCmd, "user", "set-name", v.trim()]);
@@ -207,7 +207,7 @@ ColumnLayout {
                 ActionButton {
                     Layout.fillWidth: false
                     icon: "\u{f00c}"
-                    label: "Save"
+                    label: I18n.tr("Save")
                     tone: Design.sapphire
                     onActivated: {
                         if (nameField.text.trim().length > 0) {
@@ -234,11 +234,11 @@ ColumnLayout {
                     spacing: Design.s(Design.space.xs)
 
                     Label {
-                        text: "Default Shell"
+                        text: I18n.tr("Default Shell")
                         weight: Design.weight.medium
                     }
                     Label {
-                        text: "Login shell executed for terminals and virtual consoles"
+                        text: I18n.tr("Login shell executed for terminals and virtual consoles")
                         dim: true
                     }
                 }
@@ -273,12 +273,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.xs)
 
                 Label {
-                    text: "Assigned Groups"
+                    text: I18n.tr("Assigned Groups")
                     weight: Design.weight.medium
                 }
 
                 Label {
-                    text: section.userInfo.groups || "wheel, input, audio, video, storage"
+                    text: section.userInfo.groups || I18n.tr("wheel, input, audio, video, storage")
                     dim: true
                     wrapMode: Text.Wrap
                 }
@@ -304,24 +304,24 @@ ColumnLayout {
                 if (m) theme = m[1].trim();
             }
         }
-        return theme || "SDDM default";
+        return theme || I18n.tr("SDDM default");
     }
 
     Card {
-        title: "Session & Login Screen"
-        subtitle: "What draws this desktop, and what greets you before it"
+        title: I18n.tr("Session & Login Screen")
+        subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"
         accentColor: Design.green
 
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Compositor"; Layout.fillWidth: true }
+            Label { text: I18n.tr("Compositor"); Layout.fillWidth: true }
             Badge { text: section.compositorName; color: Design.green }
         }
 
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Login screen theme"; Layout.fillWidth: true }
+            Label { text: I18n.tr("Login screen theme"); Layout.fillWidth: true }
             Badge { text: section.greeterTheme; color: Design.sapphire }
         }
     }
@@ -329,8 +329,8 @@ ColumnLayout {
     // ── 5. File Dialog for Avatar Selection ──────────────────────────────────
     FileDialog {
         id: avatarFileDialog
-        title: "Select Avatar Image"
-        nameFilters: ["Image files (*.png *.jpg *.jpeg *.svg)"]
+        title: I18n.tr("Select Avatar Image")
+        nameFilters: [I18n.tr("Image files") + " (*.png *.jpg *.jpeg *.svg)"]
         onAccepted: {
             let path = selectedFile.toString().replace(/^file:\/\//, "");
             Quickshell.execDetached([section.daemonCmd, "user", "set-avatar", path]);
