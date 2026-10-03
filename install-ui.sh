@@ -12,12 +12,10 @@ LOG="$HOME/.dotfiles-install-$(date +%Y%m%d-%H%M%S).log"
 
 # Colors
 RESET="\e[0m"
-BOLD="\e[1m"
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
 CYAN="\e[36m"
-MAGENTA="\e[35m"
 
 log()  { echo -e "${CYAN}[INFO]${RESET} $*" | tee -a "$LOG"; }
 warn() { echo -e "${YELLOW}[WARN]${RESET} $*" | tee -a "$LOG"; }
@@ -52,8 +50,8 @@ fi
 
 if [[ "$DISTRO" == "arch" ]]; then
     PACKAGES_LABEL="Install official Arch packages (Sway, Shell, GUI, Fonts, SDDM)"
-    EXTRAS_LABEL="Install AUR packages (swayfx blur, wl-screenrec, cursors)"
-    EXTRAS_SHORT="AUR Packages (swayfx, themes)"
+    EXTRAS_LABEL="Install AUR packages (wl-screenrec, cursors)"
+    EXTRAS_SHORT="AUR Packages (recorder, cursors)"
 else
     PACKAGES_LABEL="Install distribution packages (Sway, Qt 6, Quickshell, Fonts, SDDM)"
     EXTRAS_LABEL="Download extras from upstream (Nerd Font, starship, eza)"

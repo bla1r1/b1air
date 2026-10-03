@@ -1,7 +1,8 @@
 From 47e78cb69431de08cfa525415154d1b12fba271f Mon Sep 17 00:00:00 2001
 From: b1air <dimazzzzz342@gmail.com>
 Date: Sat, 3 Oct 2026 20:57:55 +0000
-Subject: [PATCH] Add overview: every workspace of an output side by side, live
+Subject: [PATCH 7/8] Add overview: every workspace of an output side by side,
+ live
 
 `overview toggle|show|hide` shows every workspace of the focused output
 in a grid, each its own tiling tree drawn scaled down (scenefx's

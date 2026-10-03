@@ -381,8 +381,14 @@ static std::string run_argv_capture(const std::vector<std::string>& args, const 
     if (pid < 0) { close(out_pipe[0]); if (in_pipe[0] >= 0) { close(in_pipe[0]); close(in_pipe[1]); } return ""; }
     if (!input.empty()) {
         close(in_pipe[0]);
-        std::string payload = input + "\n";
-        (void)write(in_pipe[1], payload.data(), payload.size());
+        const std::string payload = input + "\n";
+        // All of it: a short write would hand the child half its input.
+        for (size_t off = 0; off < payload.size();) {
+            const ssize_t n = write(in_pipe[1], payload.data() + off, payload.size() - off);
+            if (n > 0) off += static_cast<size_t>(n);
+            else if (n < 0 && errno == EINTR) continue;
+            else break;
+        }
         close(in_pipe[1]);
     }
     std::string output;

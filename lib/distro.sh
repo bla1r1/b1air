@@ -15,6 +15,7 @@
 #   opensuse  zypper            openSUSE Tumbleweed / Slowroll
 # =============================================================================
 
+# shellcheck disable=SC2034  # read by the scripts that source this file
 B1AIR_FAMILIES="arch debian fedora opensuse"
 
 # Prints the family name, or nothing when the system is not one we know.
@@ -98,7 +99,14 @@ pm_install() {
     local family="$1"; shift
     [[ $# -gt 0 ]] || return 0
     case "$family" in
-        arch)     sudo pacman -S --needed --noconfirm "$@" ;;
+        # Only what is missing (pacman -T, which knows provides too): given
+        # an installed package, --needed still prints "warning: … is up to
+        # date -- skipping" for each, a screenful that reads like trouble.
+        arch)
+            local missing=()
+            mapfile -t missing < <(pacman -T "$@" 2>/dev/null)
+            [[ ${#missing[@]} -gt 0 ]] || return 0
+            sudo pacman -S --needed --noconfirm "${missing[@]}" ;;
         # No recommends: every package the desktop needs is named explicitly,
         # and Debian's recommends for sddm and friends drag in half of Plasma.
         debian)   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@" ;;

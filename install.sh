@@ -33,6 +33,7 @@ SKIP_SERVICES=0
 NO_AUR=0
 DRY_RUN=0
 RESTART=0
+ADD_USER=""
 
 # Colors
 RESET="\e[0m"
@@ -41,7 +42,6 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 CYAN="\e[36m"
 RED="\e[31m"
-MAGENTA="\e[35m"
 
 # ponytail: all chatter goes to stderr so $(...) captures only real return values
 log()  { printf "\n${CYAN}[INFO]${RESET} %s\n" "$*" >&2; }
@@ -90,6 +90,9 @@ Options:
                     (Nerd Font, starship, eza). Quickshell is always installed.
   --dry-run         Simulate installation without making system changes
   --restart         Ignore saved progress and run every step from scratch
+  --add-user <name> Prepare another account for b1air: the input and power
+                    groups and fish. Its configuration arrives at its first
+                    b1air login (from /usr/share/b1air/skel).
   -h, --help        Show this help message and exit
 EOF
 }
@@ -105,6 +108,8 @@ parse_args() {
             --no-aur|--no-extras) NO_AUR=1; shift ;;
             --dry-run)       DRY_RUN=1; shift ;;
             --restart)       RESTART=1; shift ;;
+            --add-user)      ADD_USER="${2:-}"; shift 2 ;;
+            --add-user=*)    ADD_USER="${1#--add-user=}"; shift ;;
             -h|--help)       usage; exit 0 ;;
             *) err "Unknown option: $1"; usage; exit 1 ;;
         esac
@@ -256,14 +261,27 @@ enable_multilib_repo() {
 # patches (src/swayfx, src/scenefx) — on every family, so that every machine
 # runs the same compositor: the distributions' swayfx packages lack the
 # patches (autotiling, the workspace swipe, starting without a GPU, ...).
-# B1AIR_SWAYFX_FROM_SOURCE=0, or a failed build, takes the distribution's
-# compositor instead: its swayfx, or plain sway — the session config is the
-# same, minus the effects (see strip_swayfx_directives), and the daemon tiles
-# by itself where the compositor does not.
+#
+# A build that fails puts plain sway from the distribution in its place, so
+# the desktop starts, and says where the build log is; the next run of the
+# installer tries the build again (this step is not remembered as done for
+# that reason). It does not reach for someone else's swayfx package: the
+# AUR's builds its own scenefx and wlroots-git interactively, which is what
+# made the installer look as if it wanted a swayfx of its own when it
+# carries one. B1AIR_SWAYFX_FROM_SOURCE=0 asks for the distribution's
+# compositor outright: its swayfx (the AUR's on Arch), or plain sway — the
+# session config is the same, minus the effects (see
+# strip_swayfx_directives), and the daemon tiles by itself where the
+# compositor does not.
 install_compositor() {
     if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]]; then
         build_swayfx_from_source && return 0
-        warn "swayfx build failed — falling back to the distribution's compositor (without our patches)."
+        warn "Building b1air's swayfx failed — the log is ${SWAYFX_BUILD_LOG}."
+        warn "Using plain sway for now (no blur, rounded corners or our patches); run install.sh again to retry the build."
+        if pkg_installed "$DISTRO" sway || install_one_of sway; then
+            return 0
+        fi
+        err "Neither our swayfx nor plain sway could be installed."; exit 1
     fi
     case "$DISTRO" in
         arch)
@@ -292,6 +310,7 @@ install_compositor() {
 # swayfx with its own wlroots and scenefx (tools/build-swayfx.sh), into
 # /usr/local, where the session finds `swayfx` first. Rebuilt only when the
 # versions pinned in that script change.
+SWAYFX_BUILD_LOG="${XDG_CACHE_HOME:-$HOME/.cache}/b1air/swayfx-build.log"
 build_swayfx_from_source() {
     local script="$REPO_DIR/tools/build-swayfx.sh"
     if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -309,7 +328,7 @@ build_swayfx_from_source() {
         warn "No build dependency list for ${DISTRO}; building swayfx with what is installed."
     fi
     log "Building swayfx with its own wlroots (takes a few minutes)..."
-    "$script" >&2 || return 1
+    B1AIR_SWAYFX_LOG="$SWAYFX_BUILD_LOG" "$script" >&2 || return 1
     hash -r
 }
 
@@ -587,8 +606,9 @@ install_aur_packages() {
     log "Installing AUR packages with ${aur_helper}..."
     for pkg in "${pkgs[@]}"; do
         pacman -Qi "$pkg" >/dev/null 2>&1 && continue
-        # Our own build is in /usr/local already (install_compositor).
-        [[ "$pkg" == swayfx ]] && "$REPO_DIR/tools/build-swayfx.sh" --check && continue
+        # Ours is built from source (install_compositor); the AUR's only when
+        # that was asked for with B1AIR_SWAYFX_FROM_SOURCE=0.
+        [[ "$pkg" == swayfx && "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]] && continue
         if [[ "$DRY_RUN" -eq 1 ]]; then
             log "Would install AUR: $pkg"
         else
@@ -786,6 +806,82 @@ deploy_dotfiles() {
     ok "Dotfiles deployed. Previous configs backed up in: $BACKUP_DIR"
 }
 
+# ── Defaults for every account ───────────────────────────────────────────────
+#
+# Everything above lands in the home of whoever ran the installer; the
+# programs are system-wide, but another account had no sway config, no shell
+# settings, no cursors or wallpapers, and logged into a bare sway. So the
+# defaults go to the system too, rendered for /usr/local/bin like the
+# installer's own copy:
+#
+#   /usr/share/b1air/skel        .config as shipped (with settings.json)
+#   /usr/share/b1air/wallpapers  the wallpapers
+#   /usr/share/icons/b1air-cursors
+#
+# b1air-session copies them into an account at its first login, and after
+# an update brings the shipped files up to date the way this installer does
+# for its own user (see seed_home there). Nothing a user chose in Settings is
+# touched: settings.json and the generated custom_*.conf are only ever added.
+install_system_defaults() {
+    [[ "$DRY_RUN" -eq 1 ]] && { log "Would install the default configuration to /usr/share/b1air"; return 0; }
+    local tmp
+    tmp="$(mktemp -d)"
+    cp -a "$REPO_DIR/.config" "$tmp/.config"
+    render_config_tree "$tmp/.config" /usr/local/bin
+    mkdir -p "$tmp/.config/b1air/themes"
+    sudo rm -rf /usr/share/b1air/skel
+    sudo install -d -m 755 /usr/share/b1air/skel
+    sudo cp -a "$tmp/.config" /usr/share/b1air/skel/
+    sudo chown -R root:root /usr/share/b1air/skel
+    sudo chmod -R u+rwX,go+rX,go-w /usr/share/b1air/skel
+    rm -rf "$tmp"
+    if [[ -d "$REPO_DIR/.wallpapers" ]]; then
+        sudo install -d -m 755 /usr/share/b1air/wallpapers
+        sudo rsync -a --chmod=D755,F644 "$REPO_DIR/.wallpapers/" /usr/share/b1air/wallpapers/
+    fi
+    if [[ -d "$REPO_DIR/.local/share/icons/b1air-cursors" ]]; then
+        sudo rm -rf /usr/share/icons/b1air-cursors
+        sudo cp -a "$REPO_DIR/.local/share/icons/b1air-cursors" /usr/share/icons/
+        sudo chown -R root:root /usr/share/icons/b1air-cursors
+    fi
+    # The version b1air-session compares against: a new one means an update.
+    local stamp
+    stamp="$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || date +%s)"
+    echo "$stamp" | sudo tee /usr/share/b1air/skel-version >/dev/null
+    # This account has just had the same files deployed: nothing for
+    # b1air-session to do at its next login.
+    mkdir -p "$HOME/.config/b1air"
+    echo "$stamp" > "$HOME/.config/b1air/skel-version"
+    ok "Defaults for every account in /usr/share/b1air (copied at their first b1air login)"
+}
+
+# install.sh --add-user <name>: what the defaults cannot carry for another
+# account, because it is the system's to give — the input group (Magic Mouse
+# gestures, remote control), the power group (battery charge limit) and fish
+# as the login shell. Their configuration arrives at their first login.
+add_user() {
+    local user="$1"
+    if ! id "$user" >/dev/null 2>&1; then
+        err "No such user: $user"; exit 1
+    fi
+    sudo -v
+    local g
+    for g in input power; do
+        getent group "$g" >/dev/null 2>&1 || sudo groupadd -f "$g"
+        sudo usermod -aG "$g" "$user" && ok "$user is in the $g group"
+    done
+    local fish
+    fish="$(command -v fish 2>/dev/null || true)"
+    if [[ -n "$fish" ]] && grep -Fxq "$fish" /etc/shells 2>/dev/null; then
+        sudo usermod -s "$fish" "$user" && ok "$user logs in with fish"
+    fi
+    if [[ -d /usr/share/b1air/skel ]]; then
+        ok "$user gets the b1air configuration at their first b1air login."
+    else
+        warn "No /usr/share/b1air/skel yet: run install.sh once as yourself first."
+    fi
+}
+
 configure_default_shell() {
     local fish
     fish="$(command -v fish 2>/dev/null || true)"
@@ -949,6 +1045,11 @@ build_b1air_suite() {
         render_config_tree "$HOME/.config" "$B1AIR_PREFIX"
         ok "sway and the user units resolve the suite through ${B1AIR_PREFIX}"
 
+        # The same defaults for every other account on the machine.
+        if [[ "$B1AIR_PREFIX" == /usr/local/bin ]]; then
+            install_system_defaults
+        fi
+
         # Entries an older install left in ~/.local/share/applications, which
         # shadow the ones just installed and may name a binary that is gone.
         local pruned
@@ -1067,6 +1168,10 @@ record_repo_path() {
 
 main() {
     parse_args "$@"
+    if [[ -n "${ADD_USER:-}" ]]; then
+        add_user "$ADD_USER"
+        exit 0
+    fi
     log "Operating as distro family: ${DISTRO} ($(distro_pretty_name))"
     ensure_sudo
     init_state
@@ -1076,7 +1181,9 @@ main() {
         preflight_checks
         step multilib   enable_multilib_repo
         step packages   install_packages
-        step compositor install_compositor
+        # Every run: cheap when our swayfx is up to date, and a build that
+        # failed last time is tried again.
+        install_compositor
         step quickshell install_quickshell
         step gpu        install_gpu_drivers
         if [[ "$DISTRO" == "arch" ]]; then

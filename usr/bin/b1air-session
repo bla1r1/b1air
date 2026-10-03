@@ -87,6 +87,39 @@ if command -v dbus-update-activation-environment >/dev/null 2>&1; then
         WLR_RENDERER_ALLOW_SOFTWARE WLR_NO_HARDWARE_CURSORS
 fi
 
+# ── This account's copy of the defaults ──────────────────────────────────────
+# install.sh puts the configuration in the home of whoever ran it, and the
+# defaults for everyone else in /usr/share/b1air (install_system_defaults).
+# An account logging in for the first time gets them all — what it already
+# has is not overwritten. After an update (a new skel-version) the shipped
+# files are brought up to date as install.sh does for its own user, with the
+# replaced ones kept in ~/.dotfiles-backup-<date>; settings.json and the
+# custom_*.conf that Settings writes are never replaced.
+seed_home() {
+    local skel=/usr/share/b1air/skel
+    [ -d "$skel/.config" ] || return 0
+    local want have mark="$HOME/.config/b1air/skel-version"
+    want="$(cat /usr/share/b1air/skel-version 2>/dev/null)"
+    have="$(cat "$mark" 2>/dev/null)"
+    [ -n "$want" ] && [ "$want" = "$have" ] && return 0
+    mkdir -p "$HOME/.config/b1air"
+    if [ ! -f "$HOME/.config/sway/conf.d/variables.conf" ]; then
+        cp -rn "$skel/.config/." "$HOME/.config/"
+    elif command -v rsync >/dev/null 2>&1; then
+        # --checksum: only files whose content differs are replaced (and kept).
+        rsync -a --checksum --backup --backup-dir="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)" \
+            --exclude 'sway/settings.json' --exclude 'sway/conf.d/custom_*.conf' \
+            "$skel/.config/" "$HOME/.config/"
+        [ -f "$HOME/.config/sway/settings.json" ] \
+            || cp "$skel/.config/sway/settings.json" "$HOME/.config/sway/settings.json"
+    fi
+    if [ -d /usr/share/b1air/wallpapers ] && [ ! -e "$HOME/.wallpapers" ]; then
+        cp -r /usr/share/b1air/wallpapers "$HOME/.wallpapers"
+    fi
+    [ -n "$want" ] && echo "$want" > "$mark"
+}
+seed_home
+
 # Prefer SwayFX so the configured rounded corners/blur are actually applied.
 # Keep vanilla Sway as a functional fallback for installations using --no-aur.
 if command -v swayfx >/dev/null 2>&1; then

@@ -72,8 +72,11 @@ int main(int argc, char* argv[]) {
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     qputenv("QML_DISABLE_DISK_CACHE", "0");
 
-    // Enable Wayland Layer Shell protocol support in Qt6
+    // Layer-shell windows: Qt from 6.5 takes them without this call, and
+    // LayerShellQt 6.6 deprecates it; older Qt still needs it.
+#if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
     LayerShellQt::Shell::useLayerShell();
+#endif
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-shell");

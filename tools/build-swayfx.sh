@@ -28,6 +28,13 @@
 # Every source can be pointed elsewhere (a mirror, a local clone):
 #   SWAYFX_REPO SWAYFX_REF SCENEFX_REPO SCENEFX_REF WLROOTS_REPO WLROOTS_REF
 #   PREFIX (/usr/local)  B1AIR_SWAYFX_SRC (where to build)
+#
+# What git, meson and the compiler say goes to a log file
+# (B1AIR_SWAYFX_LOG, ~/.cache/b1air/swayfx-build.log), not the terminal: a
+# few thousand lines of configure checks and third-party compiler notes in
+# the middle of an install read like failures, when nothing failed. A step
+# that does fail prints the end of the log and where it is.
+# B1AIR_SWAYFX_VERBOSE=1 shows it all as it happens (CI does).
 set -euo pipefail
 
 SWAYFX_REPO="${SWAYFX_REPO:-https://github.com/WillPower3309/swayfx.git}"
@@ -59,13 +66,34 @@ if [[ "${1:-}" == "--check" ]]; then
     exit
 fi
 
-as_root() { if [[ -w "$PREFIX" ]]; then "$@"; else sudo "$@"; fi; }
-fetch() {   # fetch <repo> <ref> <dir>
-    git clone --quiet --depth 1 --branch "$2" -c advice.detachedHead=false "$1" "$3" || {
-        echo "build-swayfx: could not fetch $1 at $2" >&2; exit 1; }
+LOG="${B1AIR_SWAYFX_LOG:-${XDG_CACHE_HOME:-$HOME/.cache}/b1air/swayfx-build.log}"
+mkdir -p "$(dirname "$LOG")"
+: > "$LOG"
+
+# run <what> <command...>: the command's output into the log; on failure
+# the end of it, and where the rest is.
+run() {
+    local what="$1"; shift
+    echo "build-swayfx: $what"
+    if [[ "${B1AIR_SWAYFX_VERBOSE:-0}" == "1" ]]; then
+        "$@" 2>&1 | tee -a "$LOG"
+        [[ ${PIPESTATUS[0]} -eq 0 ]] && return 0
+    elif "$@" >>"$LOG" 2>&1; then
+        return 0
+    fi
+    echo "build-swayfx: failed while: $what" >&2
+    echo "build-swayfx: the last lines of $LOG:" >&2
+    tail -n 40 "$LOG" | sed 's/^/    /' >&2
+    exit 1
 }
 
-echo "build-swayfx: $WANT"
+as_root() { if [[ -w "$PREFIX" ]]; then "$@"; else sudo "$@"; fi; }
+fetch() {   # fetch <repo> <ref> <dir>
+    run "fetching $(basename "$1" .git) $2" \
+        git clone --quiet --depth 1 --branch "$2" -c advice.detachedHead=false "$1" "$3"
+}
+
+echo "build-swayfx: $WANT (log: $LOG)"
 rm -rf "$SRC"
 mkdir -p "$(dirname "$SRC")"
 fetch "$SWAYFX_REPO" "$SWAYFX_REF" "$SRC"
@@ -78,9 +106,8 @@ fetch "$WLROOTS_REPO" "$WLROOTS_REF" "$SRC/subprojects/wlroots"
 apply_series() {   # apply_series <dir> <what> <patch>...
     local dir="$1" what="$2" patch; shift 2
     for patch in "$@"; do
-        echo "build-swayfx: applying $(basename "$patch") to $what"
-        git -C "$dir" apply --whitespace=nowarn "$patch" || {
-            echo "build-swayfx: $(basename "$patch") does not apply to $what" >&2; exit 1; }
+        run "applying $(basename "$patch") to $what" \
+            git -C "$dir" apply --whitespace=nowarn "$patch"
     done
 }
 apply_series "$SRC" "swayfx $SWAYFX_REF" "${PATCHES[@]}"
@@ -98,7 +125,7 @@ apply_series "$SRC/subprojects/scenefx" "scenefx $SCENEFX_REF" "${SCENEFX_PATCHE
 #                           method sway's switch does not name); it must still
 #                           build, as the distributions build it
 LIBDIR="lib/b1air-swayfx"
-meson setup "$SRC/build" "$SRC" \
+run "configuring" meson setup "$SRC/build" "$SRC" \
     --prefix="$PREFIX" \
     --libdir="$LIBDIR" \
     --buildtype=release \
@@ -115,12 +142,12 @@ meson setup "$SRC/build" "$SRC" \
     -Ddefault-wallpaper=false \
     -Dbash-completions=false \
     -Dzsh-completions=false
-meson compile -C "$SRC/build"
+run "compiling (a few minutes)" meson compile -C "$SRC/build"
 
 # Runtime files only: the programs and the two libraries. No wlroots headers
 # or .pc land in $PREFIX to be found by something else later.
 as_root rm -rf "$PREFIX/$LIBDIR"
-as_root meson install -C "$SRC/build" --tags runtime
+run "installing to $PREFIX" as_root meson install -C "$SRC/build" --tags runtime
 # The session starts `swayfx` when there is one (usr/bin/b1air-session).
 as_root ln -sf sway "$PREFIX/bin/swayfx"
 # swayfx's own session entry would sit in the login screen next to b1air's.
@@ -128,5 +155,5 @@ as_root rm -f "$PREFIX/share/wayland-sessions/sway.desktop"
 as_root mkdir -p "$(dirname "$STAMP")"
 echo "$WANT" | as_root tee "$STAMP" >/dev/null
 
-"$PREFIX/bin/swayfx" --version
+echo "build-swayfx: done — $("$PREFIX/bin/swayfx" --version)"
 rm -rf "$SRC"

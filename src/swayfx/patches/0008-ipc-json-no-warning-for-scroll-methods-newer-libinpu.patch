@@ -1,0 +1,31 @@
+From 4a2bb4c23f426b56c402c00632f943bb38f6a7e8 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sun, 4 Oct 2026 05:52:15 +0000
+Subject: [PATCH 8/8] ipc-json: no warning for scroll methods newer libinput
+ adds
+
+libinput 1.31 added LIBINPUT_CONFIG_SCROLL_CIRCULAR, which the switch
+over the scroll method did not name, so every build against it warned
+(-Wswitch). A default case keeps reporting such a method as "unknown".
+---
+ sway/ipc-json.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/sway/ipc-json.c b/sway/ipc-json.c
+index bb0566ab..37a642a9 100644
+--- a/sway/ipc-json.c
++++ b/sway/ipc-json.c
+@@ -1155,6 +1155,10 @@ static json_object *describe_libinput_device(struct libinput_device *device) {
+ 		case LIBINPUT_CONFIG_SCROLL_ON_BUTTON_DOWN:
+ 			scroll_method = "on_button_down";
+ 			break;
++		default:
++			// b1air: newer libinput has more (1.31 added a circular
++			// scroll); "unknown" says so without a warning when building.
++			break;
+ 		}
+ 		json_object_object_add(object, "scroll_method",
+ 				json_object_new_string(scroll_method));
+-- 
+2.43.0
+

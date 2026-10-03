@@ -392,23 +392,6 @@ static const sd_bus_vtable daemon_vtable[] = {
     SD_BUS_VTABLE_END
 };
 
-static std::string get_wayland_display() {
-    const char *wdisp = std::getenv("WAYLAND_DISPLAY");
-    if (!wdisp || strlen(wdisp) == 0) {
-        const char *rundir = std::getenv("XDG_RUNTIME_DIR");
-        if (rundir) {
-            for (int i = 0; i < 5; ++i) {
-                std::string sock = std::string(rundir) + "/wayland-" + std::to_string(i);
-                if (access(sock.c_str(), F_OK) == 0) {
-                    return "wayland-" + std::to_string(i);
-                }
-            }
-        }
-        return "wayland-1";
-    }
-    return wdisp;
-}
-
 // Panel names are QML object keys, not user text: an enum here duplicates
 // WindowRegistry.js and silently drifts out of sync with it — "zones",
 // "battery", "shelf" and half the other real panels were never in this list,

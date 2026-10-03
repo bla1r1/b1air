@@ -29,7 +29,7 @@ jobs:
             qt6-wayland-dev qt6-multimedia-dev qt6-svg-dev liblayershellqtinterface-dev \
             libwayland-dev libwayland-bin wayland-protocols
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: make -C src suite -j"$(nproc)"
@@ -84,7 +84,7 @@ jobs:
           ${{ matrix.refresh }}
           ${{ matrix.install }} git ${{ matrix.extras }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build dependencies of swayfx
         env:
@@ -98,7 +98,7 @@ jobs:
           done
 
       - name: Build swayfx
-        run: B1AIR_SWAYFX_SRC="$RUNNER_TEMP/swayfx-src" tools/build-swayfx.sh
+        run: B1AIR_SWAYFX_VERBOSE=1 B1AIR_SWAYFX_SRC="$RUNNER_TEMP/swayfx-src" tools/build-swayfx.sh
 
       - name: Test swayfx
         # As an ordinary user, as it runs in a session.
@@ -129,7 +129,7 @@ jobs:
           echo 'tester:b1airtest' | chpasswd     # for the lock screen check
           echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: install.sh
         # No services: there is no systemd to enable them with in a container.
@@ -144,3 +144,13 @@ jobs:
 
       - name: The session starts and answers its shortcuts
         run: runuser -u tester -- env B1AIR_TEST_PASSWORD=b1airtest bash -c '~/DotsFiles/tools/test-session.sh'
+
+      - name: A second account gets the desktop at its first login
+        # Nothing of the installer's in its home: b1air-session copies the
+        # defaults from /usr/share/b1air/skel (install_system_defaults).
+        run: |
+          useradd -m -s /bin/bash second
+          runuser -u tester -- bash -c 'cd ~/DotsFiles && ./install.sh --add-user second'
+          # The tests, where the second account can read them.
+          cp -a /home/tester/DotsFiles/tools /tmp/b1air-tools && chmod -R a+rX /tmp/b1air-tools
+          runuser -u second -- bash -c '/tmp/b1air-tools/test-session.sh'

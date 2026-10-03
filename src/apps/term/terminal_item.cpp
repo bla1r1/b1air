@@ -14,6 +14,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <poll.h>
+#include <cerrno>
 #include <csignal>
 #include <cmath>
 #include <algorithm>
@@ -24,6 +26,26 @@
 namespace b1air {
 
 // Default Catppuccin Mocha Palette
+// All of it to the pty, which is non-blocking: a long paste fills its
+// buffer, and what did not fit was dropped (write's result went unread).
+// Waits for room, up to a second at a time, while the shell drains it.
+static void writeAll(int fd, const char *data, size_t len) {
+    while (len > 0) {
+        const ssize_t n = ::write(fd, data, len);
+        if (n > 0) {
+            data += n;
+            len -= static_cast<size_t>(n);
+        } else if (n < 0 && errno == EINTR) {
+            continue;
+        } else if (n < 0 && errno == EAGAIN) {
+            pollfd p{fd, POLLOUT, 0};
+            if (::poll(&p, 1, 1000) <= 0) return;
+        } else {
+            return;
+        }
+    }
+}
+
 static const QColor MochaBase(30, 30, 46);         // #1e1e2e
 static const QColor MochaText(205, 214, 244);       // #cdd6f4
 static const QColor MochaSubtext0(166, 173, 200);   // #a6adc8
@@ -187,11 +209,12 @@ void TerminalItem::launch(const QString &command, const QString &workingDir) {
         // Child
         close(m_masterFd);
 
-        if (!workingDir.isEmpty()) {
-            chdir(workingDir.toUtf8().constData());
-        } else {
-            const char *home = getenv("HOME");
-            if (home) chdir(home);
+        // A folder that is gone leaves the shell in home, else where it was.
+        const char *home = getenv("HOME");
+        if (workingDir.isEmpty() || chdir(workingDir.toUtf8().constData()) != 0) {
+            if (home && chdir(home) != 0) {
+                // stays in the terminal's own working directory
+            }
         }
 
         setsid();
@@ -735,7 +758,7 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     for (const uint cp : text.toUcs4()) {
         if (cp < 0x20 || cp == 0x7f) {
             const char byte = static_cast<char>(cp);
-            write(m_masterFd, &byte, 1);
+            writeAll(m_masterFd, &byte, 1);
         } else {
             vterm_keyboard_unichar(m_vt, cp, textMod);
         }
@@ -916,7 +939,7 @@ void TerminalItem::pasteClipboard() {
         // keys, and does not run each line as it arrives.
         vterm_keyboard_start_paste(m_vt);
         QByteArray data = text.toUtf8();
-        write(m_masterFd, data.constData(), data.size());
+        writeAll(m_masterFd, data.constData(), static_cast<size_t>(data.size()));
         vterm_keyboard_end_paste(m_vt);
     }
 }
@@ -935,14 +958,14 @@ void TerminalItem::resetZoom() {
 
 void TerminalItem::clear() {
     if (m_masterFd >= 0) {
-        write(m_masterFd, "clear\n", 6);
+        writeAll(m_masterFd, "clear\n", 6);
     }
 }
 
 void TerminalItem::sendText(const QString &text) {
     if (m_masterFd >= 0) {
         QByteArray data = text.toUtf8();
-        write(m_masterFd, data.constData(), data.size());
+        writeAll(m_masterFd, data.constData(), static_cast<size_t>(data.size()));
     }
 }
 
@@ -1031,7 +1054,7 @@ int TerminalItem::cbSbPopline(int cols, VTermScreenCell *cells, void *user) {
 void TerminalItem::cbOutput(const char *s, size_t len, void *user) {
     auto *term = static_cast<TerminalItem*>(user);
     if (term && term->m_masterFd >= 0 && s && len > 0) {
-        write(term->m_masterFd, s, len);
+        writeAll(term->m_masterFd, s, len);
     }
 }
 

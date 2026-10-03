@@ -42,8 +42,11 @@ all: suite controller
 $(BUILD)/CMakeCache.txt:
 	cmake -S . -B $(BUILD)
 
+# Run as `make -jN`, the build shares make's own job slots (the leading +
+# hands them down) instead of asking for its own -j, which made the inner
+# make warn "-jN forced in submake: resetting jobserver mode".
 suite: $(BUILD)/CMakeCache.txt
-	cmake --build $(BUILD) -j$(JOBS)
+	+cmake --build $(BUILD) $(if $(findstring jobserver,$(MAKEFLAGS)),,-j$(JOBS))
 
 controller: $(TARGET_CONTROLLER)
 

@@ -137,6 +137,24 @@ build), `B1AIR_SKIP_QT_CHECK=1` (skip the Qt version check).
 
 An interrupted install resumes where it stopped; `--restart` starts over.
 
+#### Other accounts
+
+Install once, as one user; every account on the machine can then pick the
+b1air session at the login screen. The defaults go to `/usr/share/b1air`
+(configuration, wallpapers, cursors), and the session copies them into an
+account at its first login — nothing it already has is overwritten. After
+an update, the shipped files are brought up to date at the next login (the
+replaced ones are kept in `~/.dotfiles-backup-<date>`); what was chosen in
+Settings is left alone.
+
+What only root can give another account — the `input` group (Magic Mouse
+gestures, remote control), the `power` group (battery charge limit) and fish
+as its shell:
+
+```bash
+./install.sh --add-user anna
+```
+
 ---
 
 ## Keybindings

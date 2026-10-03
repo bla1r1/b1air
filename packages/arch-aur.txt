@@ -1,7 +1,8 @@
 # Arch Linux — AUR packages, installed with yay/paru unless --no-aur.
 
-# The packaged swayfx, only when our own build (tools/build-swayfx.sh) failed
-# or was turned off; plain sway is used with --no-aur.
+# The packaged swayfx, only with B1AIR_SWAYFX_FROM_SOURCE=0: otherwise
+# install.sh builds ours (tools/build-swayfx.sh), and puts plain sway in its
+# place if that build fails. Plain sway is used with --no-aur.
 swayfx
 # Screen recording: the daemon calls wl-screenrec.
 wl-screenrec
