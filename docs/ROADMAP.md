@@ -340,4 +340,23 @@ everywhere.
 - [x] A CI job that builds the suite and runs `tools/smoke.sh` on every push
       (.github/workflows/build.yml, Ubuntu 26.04).
 - [x] Files: compress to archive, batch rename (M11), and tabs.
+- [x] Own small tools in place of packages: `b1air-clip` (wl-clipboard),
+      `b1air-gamma` (wlsunset; adds a schedule: set hours or sunset to
+      sunrise, located from the time zone or a given place), sounds through
+      `pw-play` with the sound theme looked up by the daemon (libcanberra).
+      Tested by tools/test-clip.sh (in a session) and tools/test-gamma.sh.
+- [x] Idle in the session daemon (src/daemon/idle.cpp) in place of swayidle:
+      ext-idle-notify stages (dim, lock, screens off, sleep), the other
+      screens dark when the main one dims and while locked, the lock before
+      sleep through a logind delay inhibitor, Caffeine and gamepads without
+      restarts. The lock screen shows each screen's own wallpaper and one
+      password for every screen.
+- [x] b1air-lock (src/lock) in place of swaylock: the lock when Lock.qml
+      cannot load or crashes, so the session is locked either way.
+- [x] Fingerprint (fprintd): enrol, test and remove fingers in Settings →
+      User; a touch opens either lock screen beside the password (a second
+      PAM conversation with the suite's own pam/b1air-fingerprint). Checked
+      in CI against libfprint's virtual reader (tools/test-fingerprint.sh).
+      **Missing:** sudo, polkit prompts and the login screen, which read the
+      system's own PAM files.
 

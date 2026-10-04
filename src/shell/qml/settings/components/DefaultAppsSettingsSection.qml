@@ -138,8 +138,8 @@ ColumnLayout {
     Process {
         id: detector
         running: true
-        command: ["bash", "-c", "for m in \"$@\"; do printf '%s\\n' \"$(xdg-mime query default \"$m\" 2>/dev/null)\"; done",
-                  "--"].concat(section.rows.map(r => r.mimes[0]))
+        // One line per type, in order, empty where there is no default.
+        command: ["b1air-daemon", "mime-default"].concat(section.rows.map(r => r.mimes[0]))
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = this.text.split("\n");

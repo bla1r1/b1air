@@ -62,11 +62,30 @@ Singleton {
     readonly property alias chargeLimit: data.chargeLimit
     readonly property alias chargeBehaviour: data.chargeBehaviour
     readonly property alias dimOnLock: data.dimOnLock
+    // The screens that are not the main one: off when the machine goes idle,
+    // and kept off while it is locked (src/daemon/idle.cpp).
+    readonly property alias idleSecondaryOff: data.idleSecondaryOff
+    readonly property alias lockSecondaryOff: data.lockSecondaryOff
+    // A touch on the fingerprint reader opens the lock (fprintd, an
+    // enrolled finger; Settings → Users).
+    readonly property alias fingerprintUnlock: data.fingerprintUnlock
     readonly property alias dimTimeout: data.dimTimeout
     readonly property alias lockTimeout: data.lockTimeout
     readonly property alias dpmsTimeout: data.dpmsTimeout
     readonly property alias autoSuspend: data.autoSuspend
     readonly property alias suspendTimeout: data.suspendTimeout
+    // On battery: the same timeouts, kept apart (0 = never, as above). And
+    // what the lid and the power button do (src/daemon/system_control.cpp).
+    readonly property alias dimTimeoutBattery: data.dimTimeoutBattery
+    readonly property alias lockTimeoutBattery: data.lockTimeoutBattery
+    readonly property alias dpmsTimeoutBattery: data.dpmsTimeoutBattery
+    readonly property alias suspendTimeoutBattery: data.suspendTimeoutBattery
+    readonly property alias lockWithScreenOff: data.lockWithScreenOff
+    readonly property alias lockOnSleep: data.lockOnSleep
+    readonly property alias lidAction: data.lidAction
+    readonly property alias lidActionBattery: data.lidActionBattery
+    readonly property alias lidIgnoreDocked: data.lidIgnoreDocked
+    readonly property alias powerKeyAction: data.powerKeyAction
 
     // Weather. The API key lives here rather than in scripts/.env so there is
     // one store rather than two.
@@ -203,6 +222,12 @@ Singleton {
     // won — the saved values persisted to disk and were never shown again.
     readonly property alias nightLightEnabled: data.nightLightEnabled
     readonly property alias nightLightTemp: data.nightLightTemp
+    // always | hours (nightLightFrom..nightLightTo) | sun (sunset..sunrise at
+    // nightLightLocation, "lat, lon", or the time zone's city when empty).
+    readonly property alias nightLightSchedule: data.nightLightSchedule
+    readonly property alias nightLightFrom: data.nightLightFrom
+    readonly property alias nightLightTo: data.nightLightTo
+    readonly property alias nightLightLocation: data.nightLightLocation
 
     // Focus time / pomodoro.
     readonly property alias focusWorkDuration: data.focusWorkDuration
@@ -461,11 +486,24 @@ Singleton {
         chargeLimit: 100,
         chargeBehaviour: "auto",
         dimOnLock: true,
+        idleSecondaryOff: true,
+        lockSecondaryOff: true,
+        fingerprintUnlock: true,
         dimTimeout: 240,
         lockTimeout: 300,
         dpmsTimeout: 600,
         autoSuspend: false,
         suspendTimeout: 1800,
+        dimTimeoutBattery: 120,
+        lockTimeoutBattery: 300,
+        dpmsTimeoutBattery: 300,
+        suspendTimeoutBattery: 900,
+        lockWithScreenOff: false,
+        lockOnSleep: true,
+        lidAction: "sleep",
+        lidActionBattery: "sleep",
+        lidIgnoreDocked: true,
+        powerKeyAction: "ask",
         weatherApiKey: "",
         weatherCityId: "",
         weatherUnit: "metric",
@@ -520,6 +558,10 @@ Singleton {
         calCardLayout: "",
         nightLightEnabled: false,
         nightLightTemp: 4000,
+        nightLightSchedule: "always",
+        nightLightFrom: "20:00",
+        nightLightTo: "07:00",
+        nightLightLocation: "",
         soundVolumeFeedback: true,
         soundScreenshotFeedback: true,
         soundDeviceFeedback: true,
@@ -591,11 +633,24 @@ Singleton {
             property int chargeLimit: 100
             property string chargeBehaviour: "auto"
             property bool dimOnLock: true
+            property bool idleSecondaryOff: true
+            property bool lockSecondaryOff: true
+            property bool fingerprintUnlock: true
             property int dimTimeout: 240
             property int lockTimeout: 300
             property int dpmsTimeout: 600
             property bool autoSuspend: false
             property int suspendTimeout: 1800
+            property int dimTimeoutBattery: 120
+            property int lockTimeoutBattery: 300
+            property int dpmsTimeoutBattery: 300
+            property int suspendTimeoutBattery: 900
+            property bool lockWithScreenOff: false
+            property bool lockOnSleep: true
+            property string lidAction: "sleep"
+            property string lidActionBattery: "sleep"
+            property bool lidIgnoreDocked: true
+            property string powerKeyAction: "ask"
 
             property string weatherApiKey: ""
             property string weatherCityId: ""
@@ -656,6 +711,10 @@ Singleton {
 
             property bool nightLightEnabled: false
             property int nightLightTemp: 4000
+            property string nightLightSchedule: "always"
+            property string nightLightFrom: "20:00"
+            property string nightLightTo: "07:00"
+            property string nightLightLocation: ""
 
             property bool soundVolumeFeedback: true
             property bool soundScreenshotFeedback: true

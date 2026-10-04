@@ -610,7 +610,7 @@ PanelWindow {
                     visible: model.qSuccess
                     iconTxt: "󰆏"
                     onClicked: {
-                        Quickshell.execDetached(["wl-copy", model.qText]);
+                        Quickshell.execDetached(["b1air-clip", "copy", "--", model.qText]);
                         root.showQrPopup = false;
                     }
                 }

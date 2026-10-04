@@ -221,9 +221,7 @@ void B1AirBridge::playSound(const QString& soundName) {
     const QString name = soundName.trimmed();
     static const QSet<QString> allowed = {"bell", "complete", "dialog-warning", "message", "phone-incoming"};
     if (!allowed.contains(name)) return;
-    if (!QProcess::startDetached("canberra-gtk-play", QStringList() << "-i" << name)) {
-        QProcess::startDetached("pw-play", QStringList() << ("/usr/share/sounds/freedesktop/stereo/" + name + ".oga"));
-    }
+    (void)SystemControl::play_sound(name.toStdString());
 }
 
 QVariant B1AirBridge::getSetting(const QString& key, const QVariant& defaultVal) {

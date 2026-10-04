@@ -236,6 +236,11 @@ DotsFiles/
 │   │                          #   camera files git monitor notes settings term text view
 │   ├── common/                # Headers shared by several programs (QML search path)
 │   ├── qmlplugin/             # B1air.Daemon QML module
+│   ├── bg/                    # b1air-bg: the wallpaper, per screen and per workspace
+│   ├── clip/                  # b1air-clip: copy, paste and watch the clipboard (no wl-clipboard)
+│   ├── gamma/                 # b1air-gamma: night light, fixed or by hours or sunset/sunrise
+│   ├── lock/                  # b1air-lock: the lock screen when the shell's cannot run (no swaylock)
+│   ├── pam/                   # The lock screens' fingerprint PAM file (pam_fprintd)
 │   ├── compat/                # Quickshell stand-in that lets b1air-settings run on its own
 │   ├── cursors/               # Sources of the b1air cursor theme
 │   └── third_party/           # Vendored SQLite, nlohmann/json, libvterm

@@ -441,6 +441,17 @@ check_daemon_cli() {
         "$REPO/tools/test-magic-mouse.sh" "$bin" | grep FAIL | sed 's/^/      /'
         fail "Magic Mouse gestures"
     fi
+
+    # Night light: colours, schedules and sun times, with no screen.
+    local gamma="$REPO/src/build/bin/b1air-gamma"
+    if [[ ! -x "$gamma" ]]; then
+        skip "src/build/bin/b1air-gamma not built"
+    elif "$REPO/tools/test-gamma.sh" "$gamma" >/dev/null 2>&1; then
+        pass "night light schedules and sun times are right"
+    else
+        "$REPO/tools/test-gamma.sh" "$gamma" | grep FAIL | sed 's/^/      /'
+        fail "night light schedules"
+    fi
 }
 
 # ── shell-boot ───────────────────────────────────────────────────────────────

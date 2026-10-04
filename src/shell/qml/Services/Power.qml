@@ -130,7 +130,7 @@ Singleton {
     // Nothing in this desktop looked at the charge. Not a threshold, not
     // UPower's own WarningLevel, no notification and no emergency suspend —
     // the battery simply ran to zero and the machine went off mid-sentence.
-    // The only thing that ever acted on power was swayidle, and it counts
+    // The only thing that ever acted on power was the idle timer, and it counts
     // idleness, not charge.
     //
     // Two thresholds, both configurable on the Power page. The warning is a
@@ -235,7 +235,17 @@ Singleton {
 
     // ── Profile ──────────────────────────────────────────────────────────────
     property string profile: "balanced"
-    readonly property bool hasProfiles: Sys.commandExists("powerprofilesctl")
+    // Whether power-profiles-daemon answers, asked of the daemon, which talks
+    // to it over D-Bus. This looked for the powerprofilesctl program instead,
+    // which nothing here runs any more: with the service up and that Python
+    // script not installed, every page said there were no energy modes.
+    property bool hasProfiles: false
+    Process {
+        id: profilesProbe
+        running: true
+        command: ["b1air-daemon", "power-profile", "available"]
+        onExited: code => root.hasProfiles = code === 0
+    }
 
     // ── Charge control ───────────────────────────────────────────────────────
     // The charge limit and charging behaviour, as KDE's power applet has them.

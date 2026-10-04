@@ -275,7 +275,10 @@ enable_multilib_repo() {
 # compositor does not.
 install_compositor() {
     if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]]; then
-        build_swayfx_from_source && return 0
+        if build_swayfx_from_source; then
+            remove_distro_sway
+            return 0
+        fi
         warn "Building b1air's swayfx failed — the log is ${SWAYFX_BUILD_LOG}."
         warn "Using plain sway for now (no blur, rounded corners or our patches); run install.sh again to retry the build."
         if pkg_installed "$DISTRO" sway || install_one_of sway; then
@@ -305,6 +308,29 @@ install_compositor() {
     else
         err "Neither swayfx nor sway could be installed."; exit 1
     fi
+}
+
+# Ours runs from /usr/local. A sway or swayfx package beside it — the
+# distribution's, the AUR's, or one an earlier install.sh put there as the
+# fallback — is a second compositor: a second "Sway" session at the login
+# screen, and a second swaymsg on the PATH. Removed once ours is built;
+# B1AIR_KEEP_DISTRO_SWAY=1 keeps them. A package something else depends on
+# is refused by the package manager and kept, with a word.
+remove_distro_sway() {
+    [[ "${B1AIR_KEEP_DISTRO_SWAY:-0}" == "1" ]] && return 0
+    local found=() pkg
+    for pkg in sway swayfx swayfx-git sway-git; do
+        pkg_installed "$DISTRO" "$pkg" && found+=("$pkg")
+    done
+    [[ ${#found[@]} -gt 0 ]] || return 0
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would remove the packaged ${found[*]}: b1air's swayfx in /usr/local replaces it"
+        return 0
+    fi
+    log "Removing the packaged ${found[*]}: b1air's swayfx in /usr/local replaces it (B1AIR_KEEP_DISTRO_SWAY=1 to keep)"
+    pm_remove "$DISTRO" "${found[@]}" \
+        || warn "Could not remove ${found[*]} (something depends on it); both stay installed, ours is the one b1air starts."
+    hash -r
 }
 
 # swayfx with its own wlroots and scenefx (tools/build-swayfx.sh), into
@@ -1102,10 +1128,10 @@ post_install_checks() {
     [[ "$DRY_RUN" -eq 1 ]] && { log "Would verify the installed commands."; return 0; }
     log "Running environment verification..."
     # ponytail: every app must be present — this gate is what keeps SDDM off a broken system
-    local commands=(sway swaylock sddm quickshell
+    local commands=(sway sddm quickshell
         b1air-daemon b1air-polkit-agent b1air-secret-service b1air-shell
         b1air-files b1air-settings b1air-monitor b1air-term b1air-text
-        b1air-view b1air-notes b1air-git b1air-camera b1air-bg)
+        b1air-view b1air-notes b1air-git b1air-camera b1air-bg b1air-clip b1air-gamma b1air-lock pw-play)
     # The terminal niceties the fish config uses when present. Missing ones
     # cost a prettier prompt, not a working desktop.
     local recommended=(fish starship eza bat fzf)

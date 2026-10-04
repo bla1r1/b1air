@@ -116,6 +116,21 @@ pm_install() {
     esac
 }
 
+# pm_remove <family> <pkg>... — the packages themselves, not what depends on
+# them or what they pulled in: a package something else needs is refused by
+# the package manager, and the caller keeps going.
+pm_remove() {
+    local family="$1"; shift
+    [[ $# -gt 0 ]] || return 0
+    case "$family" in
+        arch)     sudo pacman -R --noconfirm "$@" ;;
+        debian)   sudo env DEBIAN_FRONTEND=noninteractive apt-get remove -y "$@" ;;
+        fedora)   sudo dnf remove -y --noautoremove "$@" ;;
+        opensuse) sudo zypper -n remove --no-clean-deps "$@" ;;
+        *) return 1 ;;
+    esac
+}
+
 # The whiptail provider, which install-ui.sh needs before anything else.
 whiptail_package() {
     case "$1" in

@@ -84,30 +84,24 @@ ColumnLayout {
 
     // (The page title is in the Settings header bar now.)
 
-    // ── 2. Profile Overview Card ─────────────────────────────────────────────
+    // ── 2. Profile ───────────────────────────────────────────────────────────
+    // The person, not the account record: the picture, the name and the
+    // login. The UID and the home directory that were the subtitle here are
+    // nothing anyone changes from this page.
     Card {
-        title: section.userInfo.name || section.userInfo.username
-        subtitle: I18n.tr("@%1 • UID %2 • %3", section.userInfo.username, section.userInfo.uid, section.userInfo.home)
-        icon: "\u{f007}"
-        accentColor: Design.mauve
-
         RowLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.lg)
 
-            // Circular Avatar with Accent Frame
             Rectangle {
-                Layout.preferredWidth: Design.s(72)
-                Layout.preferredHeight: Design.s(72)
+                Layout.preferredWidth: Design.s(88)
+                Layout.preferredHeight: Design.s(88)
                 radius: width / 2
-                color: Design.surface
-                border.width: Design.s(2)
-                border.color: Design.accent
+                color: Design.tint(Design.accent, 0.14)
                 clip: true
 
                 Image {
                     anchors.fill: parent
-                    anchors.margins: Design.s(2)
                     visible: section.userInfo.avatar !== ""
                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                     sourceSize: Qt.size(256, 256)
@@ -115,11 +109,13 @@ ColumnLayout {
                     fillMode: Image.PreserveAspectCrop
                 }
 
-                Icon {
+                // The initial, where there is no picture.
+                Label {
                     anchors.centerIn: parent
                     visible: section.userInfo.avatar === ""
-                    text: "\u{f007}"
-                    role: "hero"
+                    text: String(section.userInfo.name || section.userInfo.username || "?").charAt(0).toUpperCase()
+                    role: "title"
+                    weight: Design.weight.semibold
                     color: Design.accent
                 }
 
@@ -132,32 +128,175 @@ ColumnLayout {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
+                spacing: Design.s(Design.space.xs)
 
-                ButtonRow {
+                Label {
+                    text: section.userInfo.name || section.userInfo.username
+                    role: "title"
+                    weight: Design.weight.semibold
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                Label {
+                    text: "@" + section.userInfo.username
+                    dim: true
+                }
+
+                // Under the name, not at the far end of the card.
+                RowLayout {
+                    Layout.topMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.sm)
 
                     ActionButton {
+                        Layout.fillWidth: false
                         icon: "\u{f03e}"
                         label: I18n.tr("Change Avatar")
                         onActivated: avatarFileDialog.open()
                     }
 
                     ActionButton {
+                        Layout.fillWidth: false
                         icon: "\u{f084}"
                         label: I18n.tr("Change Password")
-                        tone: Design.sapphire
-                        onActivated: {
-                            Quickshell.execDetached([section.daemonCmd, "user", "change-password"]);
-                        }
+                        onActivated: Quickshell.execDetached([section.daemonCmd, "user", "change-password"])
                     }
                 }
+            }
+        }
+    }
 
-                Label {
-                    text: I18n.tr("Synchronized with SDDM and ~/.face.icon automatically")
-                    dim: true
+    Card {
+        title: I18n.tr("Fingerprint")
+        subtitle: section.fp.available ? section.fp.device : I18n.tr("Open the lock screen with a touch")
+        icon: "\u{f0237}"
+        accentColor: Design.teal
+
+        EmptyState {
+            visible: !section.fp.available
+            Layout.fillWidth: true
+            icon: "\u{f0237}"
+            title: section.fp.service ? I18n.tr("No fingerprint reader") : I18n.tr("Fingerprint support is not installed")
+            hint: section.fp.service ? I18n.tr("fprintd is running, but it found no reader it can drive.")
+                                     : I18n.tr("Install fprintd (and its PAM module) to use a fingerprint reader.")
+        }
+
+        // The fingers already saved, each with a way to remove it.
+        Repeater {
+            model: section.fp.available ? (section.fp.enrolled || []) : []
+            RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                Icon { text: "\u{f0237}"; color: Design.teal }
+                Label { text: section.fingerNames[modelData] || modelData; Layout.fillWidth: true }
+                ActionButton {
+                    icon: "\u{f0a7a}"
+                    label: I18n.tr("Remove")
+                    destructive: true
+                    confirmLabel: I18n.tr("Remove?")
+                    onActivated: {
+                        fpDelete.command = [section.daemonCmd, "fingerprint", "delete", modelData];
+                        fpDelete.running = true;
+                    }
                 }
             }
+        }
+
+        Label {
+            visible: section.fp.available && !section.fpEnrolling
+            text: (section.fp.enrolled || []).length === 0 ? I18n.tr("No finger saved yet. Pick one to add:")
+                                                           : I18n.tr("Add another finger:")
+            role: "caption"
+            dim: true
+        }
+
+        Flow {
+            visible: section.fp.available && !section.fpEnrolling
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: section.fingerOrder.filter(f => (section.fp.enrolled || []).indexOf(f) < 0)
+                Pill {
+                    required property var modelData
+                    label: section.fingerNames[modelData]
+                    active: section.fpFinger === modelData
+                    onClicked: section.fpFinger = modelData
+                }
+            }
+        }
+
+        RowLayout {
+            visible: section.fp.available
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+            ActionButton {
+                visible: !section.fpEnrolling && section.fpFinger !== ""
+                icon: "\u{f0415}"
+                label: I18n.tr("Add %1", section.fingerNames[section.fpFinger] || "")
+                onActivated: {
+                    section.fpDone = 0;
+                    section.fpMessage = section.fp.scanType === "swipe" ? I18n.tr("Swipe your finger across the reader")
+                                                                         : I18n.tr("Touch the reader");
+                    section.fpMessageBad = false;
+                    section.fpEnrolling = true;
+                    fpEnroll.running = true;
+                }
+            }
+            ActionButton {
+                visible: section.fpEnrolling
+                icon: "\u{f0156}"
+                label: I18n.tr("Cancel")
+                onActivated: fpEnroll.running = false
+            }
+            ActionButton {
+                visible: !section.fpEnrolling && (section.fp.enrolled || []).length > 0
+                icon: "\u{f0237}"
+                label: section.fpTest === "listening" ? I18n.tr("Touch the reader…") : I18n.tr("Test")
+                onActivated: {
+                    section.fpTest = "listening";
+                    fpVerify.running = false;
+                    fpVerify.running = true;
+                }
+            }
+            Label {
+                visible: section.fpTest === "match" || section.fpTest === "no-match"
+                text: section.fpTest === "match" ? I18n.tr("Recognised") : I18n.tr("Not recognised")
+                color: section.fpTest === "match" ? Design.ok : Design.danger
+            }
+            Item { Layout.fillWidth: true }
+        }
+
+        // Enrolling: a dot per touch the reader wants, filled as they come.
+        ColumnLayout {
+            visible: section.fpEnrolling || section.fpMessage !== ""
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Row {
+                visible: section.fpEnrolling && section.fp.stages > 0
+                spacing: Design.s(6)
+                Repeater {
+                    model: section.fp.stages
+                    Rectangle {
+                        required property int index
+                        width: Design.s(14); height: width; radius: width / 2
+                        color: index < section.fpDone ? Design.teal : Design.hover
+                        Behavior on color { ColorAnimation { duration: Design.duration.base } }
+                    }
+                }
+            }
+            Label {
+                text: section.fpMessage
+                color: section.fpMessageBad ? Design.danger : Design.text
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+
+        Toggle {
+            visible: section.fp.available
+            label: I18n.tr("Unlock with a fingerprint")
+            subtitle: I18n.tr("On the lock screen, a touch on the reader works as well as the password")
+            checked: Settings.fingerprintUnlock !== false
+            onToggled: Settings.set("fingerprintUnlock", !(Settings.fingerprintUnlock !== false))
         }
     }
 
@@ -260,29 +399,6 @@ ColumnLayout {
                     }
                 }
             }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.line
-            }
-
-            // Assigned Groups
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.xs)
-
-                Label {
-                    text: I18n.tr("Assigned Groups")
-                    weight: Design.weight.medium
-                }
-
-                Label {
-                    text: section.userInfo.groups || I18n.tr("wheel, input, audio, video, storage")
-                    dim: true
-                    wrapMode: Text.Wrap
-                }
-            }
         }
     }
 
@@ -325,6 +441,107 @@ ColumnLayout {
             Badge { text: section.greeterTheme; color: Design.sapphire }
         }
     }
+
+    // ── Fingerprint ──────────────────────────────────────────────────────────
+    //
+    // fprintd (KDE and GNOME use the same), through the daemon
+    // (src/daemon/fingerprint.cpp): which reader, which fingers, enrolling
+    // one touch at a time, deleting. A touch then opens the lock screen,
+    // beside the password.
+    property var fp: ({ available: false, service: false, device: "", stages: 0, scanType: "", enrolled: [] })
+    property string fpFinger: "right-index-finger"
+    property bool fpEnrolling: false
+    property int fpDone: 0              // touches taken in this enrolment
+    property string fpMessage: ""
+    property bool fpMessageBad: false
+    property string fpTest: ""          // "", "listening", "match", "no-match"
+
+    readonly property var fingerNames: ({
+        "right-thumb": I18n.tr("Right thumb"), "right-index-finger": I18n.tr("Right index finger"),
+        "right-middle-finger": I18n.tr("Right middle finger"), "right-ring-finger": I18n.tr("Right ring finger"),
+        "right-little-finger": I18n.tr("Right little finger"), "left-thumb": I18n.tr("Left thumb"),
+        "left-index-finger": I18n.tr("Left index finger"), "left-middle-finger": I18n.tr("Left middle finger"),
+        "left-ring-finger": I18n.tr("Left ring finger"), "left-little-finger": I18n.tr("Left little finger")
+    })
+    readonly property var fingerOrder: ["right-index-finger", "right-thumb", "right-middle-finger", "right-ring-finger",
+        "right-little-finger", "left-index-finger", "left-thumb", "left-middle-finger", "left-ring-finger",
+        "left-little-finger"]
+
+    function fpRefresh() { fpStatus.running = false; fpStatus.running = true; }
+
+    function fpEventText(result) {
+        const swipe = section.fp.scanType === "swipe";
+        switch (result) {
+        case "enroll-stage-passed": return swipe ? I18n.tr("Good. Swipe again") : I18n.tr("Good. Lift and touch again");
+        case "enroll-retry-scan": return I18n.tr("Try that again");
+        case "enroll-swipe-too-short": return I18n.tr("The swipe was too short");
+        case "enroll-finger-not-centered": return I18n.tr("Put the middle of your finger on the reader");
+        case "enroll-remove-and-retry": return I18n.tr("Lift your finger and try again");
+        case "enroll-duplicate": return I18n.tr("That finger is already saved");
+        case "enroll-data-full": return I18n.tr("The reader has no room for more fingers");
+        case "enroll-disconnected": return I18n.tr("The reader was disconnected");
+        case "enroll-completed": return I18n.tr("Fingerprint saved");
+        case "PermissionDenied": return I18n.tr("Not allowed to use the reader");
+        case "AlreadyInUse": return I18n.tr("The reader is busy");
+        default: return I18n.tr("The reader could not do that (%1)", result);
+        }
+    }
+
+    Process {
+        id: fpStatus
+        running: true
+        command: [section.daemonCmd, "fingerprint", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { section.fp = JSON.parse(this.text); } catch (e) { return; }
+                // The finger offered is one not saved yet.
+                const saved = section.fp.enrolled || [];
+                if (saved.indexOf(section.fpFinger) >= 0)
+                    section.fpFinger = section.fingerOrder.find(f => saved.indexOf(f) < 0) || "";
+            }
+        }
+    }
+
+    // One line a touch ("status …"), then "done …". stdin open: stopping
+    // this Process closes it, and the daemon stops the scan and lets the
+    // reader go.
+    Process {
+        id: fpEnroll
+        stdinEnabled: true
+        command: [section.daemonCmd, "fingerprint", "enroll", section.fpFinger]
+        stdout: SplitParser {
+            onRead: line => {
+                const parts = line.trim().split(" ");
+                if (parts[0] === "status") {
+                    if (parts[1] === "enroll-stage-passed") section.fpDone++;
+                    section.fpMessage = section.fpEventText(parts[1]);
+                    section.fpMessageBad = parts[1] !== "enroll-stage-passed" && parts[1] !== "enroll-completed";
+                } else if (parts[0] === "done") {
+                    const result = parts[1] === "error" ? parts[2] : parts[1];
+                    if (result !== "cancelled") {
+                        section.fpMessage = section.fpEventText(result);
+                        section.fpMessageBad = result !== "enroll-completed";
+                    }
+                }
+            }
+        }
+        onExited: { section.fpEnrolling = false; section.fpRefresh(); }
+    }
+
+    Process {
+        id: fpVerify
+        stdinEnabled: true
+        command: [section.daemonCmd, "fingerprint", "verify"]
+        stdout: SplitParser {
+            onRead: line => {
+                const parts = line.trim().split(" ");
+                if (parts[0] === "done")
+                    section.fpTest = parts[1] === "verify-match" ? "match" : "no-match";
+            }
+        }
+    }
+
+    Process { id: fpDelete; onExited: section.fpRefresh() }
 
     // ── 5. File Dialog for Avatar Selection ──────────────────────────────────
     FileDialog {

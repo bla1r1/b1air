@@ -166,7 +166,7 @@ PopupShell {
 
     function copyResult() {
         if (window.calcResult) {
-            Quickshell.execDetached(["wl-copy", window.calcResult]);
+            Quickshell.execDetached(["b1air-clip", "copy", "--", window.calcResult]);
             window.close();
         }
     }

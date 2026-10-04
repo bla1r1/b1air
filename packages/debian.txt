@@ -4,18 +4,19 @@
 # Quickshell is not packaged here; install.sh builds it from source with the
 # dependencies in packages/quickshell-build/debian.txt. swayFX is not packaged
 # either: install.sh builds it with its own wlroots (tools/build-swayfx.sh,
-# dependencies in packages/swayfx-build/debian.txt). Plain sway below is the
-# fallback should that build fail.
+# dependencies in packages/swayfx-build/debian.txt). Plain sway is installed
+# only should that build fail — two would put two Sway sessions at the login
+# screen.
 
 # Core & build
-build-essential git rsync curl unzip xz-utils jq cmake ninja-build ccache pkgconf
+build-essential git rsync curl unzip xz-utils cmake ninja-build ccache pkgconf
 libssl-dev libsystemd-dev libpolkit-agent-1-dev libarchive-dev polkitd ca-certificates
 
 # Qt 6 development (the b1air suite is built on this machine)
 qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev
 qt6-svg-dev liblayershellqtinterface-dev ?qmake6
 # b1air-bg talks Wayland itself: the client library, the scanner, the protocols
-libwayland-dev libwayland-bin wayland-protocols
+libwayland-dev libwayland-bin wayland-protocols libcairo2-dev libxkbcommon-dev libpam0g-dev
 
 # Qt 6 runtime: platform plugins and the QML modules the shell and greeter import
 qt6-wayland libqt6svg6 ?qt6-svg-plugins layer-shell-qt
@@ -27,7 +28,7 @@ qml6-module-qtquick-virtualkeyboard qt6-virtualkeyboard-plugin
 ?qt6-ffmpeg-multimedia-plugin
 
 # Wayland session
-sway swaybg swayidle swaylock xwayland
+xwayland
 xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
 ?wayvnc
 
@@ -38,15 +39,16 @@ fish fzf bat zoxide btop ?eza ?starship ?fastfetch
 ?firefox-esr ?firefox
 
 # Clipboard & screenshots
-wl-clipboard grim slurp ?satty
+grim slurp ?satty
 
 # Audio & media
-# canberra-gtk-play (event sounds) lives in gnome-session-canberra on Debian.
-pipewire wireplumber pipewire-pulse playerctl sound-theme-freedesktop
-?gnome-session-canberra ffmpeg gifsicle
+pipewire pipewire-bin wireplumber pipewire-pulse pulseaudio-utils playerctl sound-theme-freedesktop
+ffmpeg gifsicle ?wf-recorder
 
 # System & hardware
-upower brightnessctl ddcutil libnotify-bin mesa-utils
+# Fingerprint readers (Settings → User, the lock screens)
+?fprintd ?libpam-fprintd
+upower ddcutil
 
 # Network & Bluetooth
 network-manager bluez
@@ -62,7 +64,7 @@ fonts-liberation fontconfig
 # Tools the shell and daemon call out to
 imagemagick tesseract-ocr tesseract-ocr-eng zbar-tools qrencode
 power-profiles-daemon poppler-utils gocryptfs ?easyeffects
-xdg-utils file libglib2.0-bin ?wlsunset ?snapper
+xdg-utils file libglib2.0-bin libgtk-3-bin openssl ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g libarchive-tools

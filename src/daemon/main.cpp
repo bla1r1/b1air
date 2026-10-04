@@ -2,6 +2,8 @@
 #include "focustime_db.hpp"
 #include "user_manager.hpp"
 #include "system_control.hpp"
+#include "idle.hpp"
+#include "fingerprint.hpp"
 #include "settings_manager.hpp"
 #include "magic_mouse.hpp"
 #include "session_manager.hpp"
@@ -10,6 +12,7 @@
 #include "version.hpp"
 #include "proc_util.hpp"
 
+#include <cctype>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -70,7 +73,7 @@ static void print_usage(const char* prog) {
               << "                                     Control keyboard backlight\n"
               << "  wallpaper {set <file> [output]|random [dir]|restore|screens}\n"
               << "                                     Manage and apply desktop & SDDM wallpaper\n"
-              << "  night-light {on [temp]|off|toggle|auto}\n"
+              << "  night-light {on [temp] [--schedule always|hours|sun]|off|toggle}\n"
               << "                                     Control color temperature & blue light filter\n"
               << "  term-theme {list|set <theme>}      List or switch b1air-term color palettes\n"
               << "  gamepad-inhibit                    Run daemon to inhibit idle when gamepads are active\n"
@@ -87,7 +90,7 @@ static void print_usage(const char* prog) {
               << "  polkit [agent|dialog <action> <msg> [user]]\n"
               << "                                     Native Polkit authentication agent & dialog\n"
               << "  reload                             Reload compositor and Quickshell\n"
-              << "  lock [quickshell|swaylock]         Lock session with b1air theme\n"
+              << "  lock [quickshell|fallback]         Lock session with b1air theme\n"
               << "  version                            Print version information\n"
               << "  help                               Show this help message\n";
 }
@@ -228,7 +231,7 @@ int main(int argc, char* argv[]) {
         std::cout << (used ? "in-use" : "idle") << "\n";
         return used ? 0 : 1;
     } else if (cmd == "focus" || cmd == "focus-tracker") {
-        // `focus away` / `focus back` are swayidle's, not a person's: they mark
+        // `focus away` / `focus back` are the idle thread's, not a person's: they mark
         // the start and end of an idle stretch so the break reminder can tell
         // ten hours at the screen from ten hours asleep. A mark is a file whose
         // mtime is the whole message, which is why this touches rather than
@@ -463,6 +466,34 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " dotfiles {status|sync|sys}\n";
             return 1;
         }
+    } else if (cmd == "sound") {
+        // sound <event-name> [--target <pipewire-node>]
+        if (argc < 3) {
+            std::cerr << "Usage: " << argv[0] << " sound <name> [--target <node>]\n";
+            return 1;
+        }
+        const std::string target = (argc >= 5 && std::string(argv[3]) == "--target") ? argv[4] : "";
+        return SystemControl::play_sound(argv[2], target) ? 0 : 1;
+    } else if (cmd == "packages") {
+        const std::string sub = (argc >= 3) ? argv[2] : "";
+        if (sub == "clean-cache") return SystemControl::packages_clean("cache") ? 0 : 1;
+        if (sub == "clean-orphans") return SystemControl::packages_clean("orphans") ? 0 : 1;
+        if (sub == "upgrade") return SystemControl::packages_upgrade();
+        std::cerr << "Usage: " << argv[0] << " packages {clean-cache|clean-orphans|upgrade}\n";
+        return 1;
+    } else if (cmd == "ethernet-ipv4") {
+        // ethernet-ipv4 <ifname> auto
+        // ethernet-ipv4 <ifname> manual <address> <prefix> [gateway] [dns]
+        if (argc < 4) {
+            std::cerr << "Usage: " << argv[0] << " ethernet-ipv4 <ifname> auto|manual <address> <prefix> [gateway] [dns]\n";
+            return 1;
+        }
+        auto arg = [&](int i) { return i < argc ? std::string(argv[i]) : std::string(); };
+        return SystemControl::ethernet_ipv4(arg(2), arg(3), arg(4), arg(5), arg(6), arg(7)) ? 0 : 1;
+    } else if (cmd == "mime-default") {
+        std::vector<std::string> mimes(argv + 2, argv + argc);
+        for (const auto& app : SystemControl::mime_defaults(mimes)) std::cout << app << "\n";
+        return 0;
     } else if (cmd == "updates") {
         std::string sub = (argc >= 3) ? argv[2] : "check";
         if (sub == "up" || sub == "upgrade") {
@@ -499,8 +530,29 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " volume {get|up [N]|down [N]|mute}\n";
             return 1;
         }
+    } else if (cmd == "fingerprint") {
+        const std::string sub = argc >= 3 ? argv[2] : "status";
+        if (sub == "status") {
+            std::cout << fingerprint::status_json() << "\n";
+            return 0;
+        }
+        if (sub == "enroll" && argc >= 4) return fingerprint::enroll(argv[3]);
+        if (sub == "delete" && argc >= 4) return fingerprint::remove(argv[3]);
+        if (sub == "verify") return fingerprint::verify();
+        std::cerr << "Usage: " << argv[0] << " fingerprint {status|enroll <finger>|delete <finger>|all|verify}\n";
+        return 1;
+    } else if (cmd == "lid") {
+        // lid close|open, from sway's bindswitch: what Settings → Power says.
+        const std::string sub = argc >= 3 ? argv[2] : "";
+        if (sub != "close" && sub != "open") {
+            std::cerr << "Usage: " << argv[0] << " lid {close|open}\n";
+            return 1;
+        }
+        return SystemControl::lid_event(sub == "close") ? 0 : 1;
+    } else if (cmd == "power-key") {
+        return SystemControl::power_key() ? 0 : 1;
     } else if (cmd == "dpms") {
-        // Screens off and on, for swayidle's timeouts: `output * power`,
+        // Screens off and on (the idle thread does this itself): `output * power`,
         // which sway took over from the older `dpms` command.
         const std::string sub = argc >= 3 ? argv[2] : "";
         if (sub != "on" && sub != "off") {
@@ -696,6 +748,12 @@ int main(int argc, char* argv[]) {
         } else if (sub == "screens") {
             std::cout << SystemControl::wallpaper_overrides_json() << "\n";
             return 0;
+        } else if (sub == "shown" && argc >= 4) {
+            // wallpaper shown <output>: the file on that screen now.
+            const std::string path = SystemControl::wallpaper_shown_on(argv[3]);
+            if (path.empty()) return 1;
+            std::cout << path << "\n";
+            return 0;
         } else if (sub == "workspaces") {
             std::cout << SystemControl::wallpaper_workspaces_json() << "\n";
             return 0;
@@ -709,22 +767,36 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else if (cmd == "night-light" || cmd == "nightlight") {
-        std::string sub = (argc >= 3) ? argv[2] : "toggle";
-        // --quiet: the Settings page and the Control Center show the state
-        // themselves, and the slider restarts wlsunset on every step.
-        const bool quiet = argc >= 5 ? std::string(argv[4]) == "--quiet"
-                         : (argc >= 4 && std::string(argv[3]) == "--quiet");
+        // night-light on [kelvin] [--schedule always|hours|sun] [--from HH:MM]
+        //                 [--to HH:MM] [--location "lat,lon"] [--quiet]
+        // Without the schedule options, the schedule saved in the settings.
+        // The Settings page passes them: its own write of the file may not
+        // have landed yet when this reads it.
+        const std::string sub = (argc >= 3) ? argv[2] : "toggle";
+        bool quiet = false;
+        int temp = -1;
+        auto schedule = SystemControl::NightSchedule::from_settings();
+        for (int i = 3; i < argc; ++i) {
+            const std::string a = argv[i];
+            const bool has_value = i + 1 < argc;
+            if (a == "--quiet") quiet = true;
+            else if (a == "--schedule" && has_value) schedule.mode = argv[++i];
+            else if (a == "--from" && has_value) schedule.from = argv[++i];
+            else if (a == "--to" && has_value) schedule.to = argv[++i];
+            else if (a == "--location" && has_value) schedule.location = argv[++i];
+            else if (temp < 0 && !a.empty() && std::isdigit(static_cast<unsigned char>(a[0]))) temp = std::atoi(a.c_str());
+            else { std::cerr << "night-light: unknown option " << a << "\n"; return 1; }
+        }
         if (sub == "on") {
-            int temp = (argc >= 4 && std::string(argv[3]) != "--quiet") ? std::atoi(argv[3]) : 4000;
-            return SystemControl::night_light_on(temp, !quiet) ? 0 : 1;
+            if (temp < 0) temp = SettingsManager::get_json_int("nightLightTemp", 4000);
+            return SystemControl::night_light_on(temp, !quiet, schedule) ? 0 : 1;
         } else if (sub == "off") {
             return SystemControl::night_light_off(!quiet) ? 0 : 1;
         } else if (sub == "toggle") {
             return SystemControl::night_light_toggle() ? 0 : 1;
-        } else if (sub == "auto") {
-            return SystemControl::night_light_auto() ? 0 : 1;
         } else {
-            std::cerr << "Usage: " << argv[0] << " night-light {on [temp] [--quiet]|off [--quiet]|toggle|auto}\n";
+            std::cerr << "Usage: " << argv[0] << " night-light {on [kelvin] [--schedule always|hours|sun] "
+                         "[--from HH:MM] [--to HH:MM] [--location lat,lon] [--quiet] | off [--quiet] | toggle}\n";
             return 1;
         }
     } else if (cmd == "term-theme") {
@@ -779,12 +851,11 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         std::string sub = argv[2];
-        // Before the D-Bus hand-off: restarting swayidle is a local operation
-        // on this session's own processes, and the running daemon has no
-        // Power method for it — sending it over the bus would just fail.
-        // Settings calls this after changing an idle timeout so the new
-        // timings apply to the session the user is looking at, not the next.
-        if (sub == "idle-reload") return SessionManager::restart_swayidle() ? 0 : 1;
+        // Before the D-Bus hand-off: a file the session's idle thread watches
+        // (idle.cpp), local to this session. Settings calls this after
+        // changing a timeout; the idle thread also notices the settings file
+        // itself, so this is a nudge, not a requirement.
+        if (sub == "idle-reload") { idle::reload(); return 0; }
         if (DaemonDBus::is_running()) return DaemonDBus::call_power(sub) ? 0 : 1;
         if (sub == "lock") return SystemControl::lock_session_async() ? 0 : 1;
         if (sub == "logout") return SystemControl::logout_session() ? 0 : 1;
@@ -798,6 +869,8 @@ int main(int argc, char* argv[]) {
         if (sub == "get") {
             std::cout << SystemControl::power_profile_get() << "\n";
             return 0;
+        } else if (sub == "available") {
+            return SystemControl::power_profile_available() ? 0 : 1;
         } else if (sub == "set") {
             if (argc < 4) {
                 std::cerr << "Usage: " << argv[0] << " power-profile set <performance|balanced|power-saver>\n";
@@ -1007,7 +1080,7 @@ int main(int argc, char* argv[]) {
         return 0;
     } else if (cmd == "lock") {
         if (DaemonDBus::is_running()) return DaemonDBus::call_lock() ? 0 : 1;
-        // No explicit mode: this is the common path (swayidle, the lock
+        // No explicit mode: this is the common path (the lock
         // keybind) and should return as soon as the lock screen is spawned,
         // not block until it's dismissed. An explicit mode is a manual
         // debug override, where waiting for the real result is expected.

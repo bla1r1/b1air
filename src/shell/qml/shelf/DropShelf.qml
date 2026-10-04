@@ -35,7 +35,7 @@ PopupShell {
             paths.push(stagedFiles.get(i).path);
         }
         if (paths.length > 0) {
-            Quickshell.execDetached(["wl-copy", paths.join("\n")]);
+            Quickshell.execDetached(["b1air-clip", "copy", "--", paths.join("\n")]);
             Osd.show("edit-copy", I18n.trn("Path copied", "%1 paths copied", paths.length), I18n.tr("In the clipboard"));
         }
     }

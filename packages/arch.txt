@@ -4,10 +4,10 @@
 # sway with --no-aur) is chosen by install.sh, not listed here.
 
 # Core & build
-base-devel git rsync curl unzip jq cmake ccache openssl polkit pkgconf wayland wayland-protocols
+base-devel git rsync curl unzip cmake ccache openssl polkit pkgconf wayland wayland-protocols cairo libxkbcommon pam
 
 # Wayland session
-swaybg swayidle swaylock xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk xorg-xwayland
+xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk xorg-xwayland
 layer-shell-qt wayvnc
 # Every QML file imports Quickshell; without it b1air-shell starts and dies.
 quickshell
@@ -19,15 +19,16 @@ fish starship eza bat fzf zoxide fastfetch btop
 firefox
 
 # Clipboard & screenshots
-wl-clipboard grim slurp satty
+grim slurp satty
 
 # Audio & media
-pipewire wireplumber pipewire-pulse playerctl libcanberra sound-theme-freedesktop ffmpeg gifsicle noise-suppression-for-voice
+pipewire wireplumber pipewire-pulse libpulse playerctl sound-theme-freedesktop ffmpeg gifsicle noise-suppression-for-voice
 
 # System & hardware
-upower brightnessctl ddcutil pacman-contrib libnotify
+# Fingerprint readers (Settings → User, the lock screens)
+?fprintd
+upower ddcutil pacman-contrib
 # glxinfo: the session turns compositor effects off on a software rasterizer.
-mesa-utils
 
 # Network & Bluetooth
 networkmanager bluez bluez-utils
@@ -45,7 +46,7 @@ papirus-icon-theme
 # Tools the shell and daemon call out to
 imagemagick tesseract tesseract-data-eng zbar qrencode
 power-profiles-daemon poppler gocryptfs easyeffects
-xdg-utils file glib2 wlsunset snapper
+xdg-utils file glib2 gtk3 snapper
 
 # Storage & archives (libarchive powers extraction in b1air-files)
 udisks2 gvfs ntfs-3g libarchive

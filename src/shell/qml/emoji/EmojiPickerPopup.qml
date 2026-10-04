@@ -170,7 +170,7 @@ PopupShell {
     }
 
     function selectEmoji(emojiStr) {
-        Quickshell.execDetached(["wl-copy", emojiStr]);
+        Quickshell.execDetached(["b1air-clip", "copy", "--", emojiStr]);
         window.close();
     }
 

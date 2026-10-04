@@ -29,7 +29,7 @@ PopupShell {
     readonly property string aspect: measureH > 0 ? (measureW / measureH).toFixed(2) + ":1" : "N/A"
 
     function copyDimensions() {
-        Quickshell.execDetached(["wl-copy", measureW + "x" + measureH]);
+        Quickshell.execDetached(["b1air-clip", "copy", "--", measureW + "x" + measureH]);
         Osd.show("edit-copy", I18n.tr("%1 × %2 px copied", measureW, measureH), I18n.tr("Screen ruler"));
         root.close();
     }

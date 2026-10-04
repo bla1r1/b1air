@@ -162,7 +162,10 @@ Singleton {
         // PipeWire node names are external data. Never interpolate them into
         // a shell command; accept only the syntax supported by the tools.
         if (!/^[A-Za-z0-9_.:@-]+$/.test(target)) return;
-        Quickshell.execDetached(["paplay", "--device=" + target, "/usr/share/sounds/freedesktop/stereo/bell.oga"]);
+        const args = ["b1air-daemon", "sound", "bell"];
+        if (target !== "@DEFAULT_AUDIO_SINK@")
+            args.push("--target", target);
+        Quickshell.execDetached(args);
     }
 
     function isDeviceDisabled(name) {

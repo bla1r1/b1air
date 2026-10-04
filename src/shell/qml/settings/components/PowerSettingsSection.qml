@@ -16,14 +16,10 @@ ColumnLayout {
     /**
      * Change an idle setting and make it take effect now.
      *
-     * swayidle's command line is built out of these four timeouts once, when
-     * the session starts, so every change here only applied at the next login
-     * — with nothing on the page to say so. Someone shortening "Turn off
-     * screen after" to test it would sit through the old timeout and conclude
-     * the setting did nothing.
-     *
-     * The daemon rebuilds swayidle from the file, so the write has to have
-     * landed first; Settings.set writes asynchronously, hence the small delay.
+     * The session's idle thread (src/daemon/idle.cpp) notices the settings
+     * file changing on its own; the nudge after the write lands is for the
+     * moment the file watch is not there yet. It was swayidle, whose command
+     * line was built once at login, so a change here waited for the next.
      */
     function setIdleTimeout(key, value) {
         Settings.set(key, value);
@@ -314,12 +310,107 @@ ColumnLayout {
         }
     }
 
-    // ── 4. Screen and Sleep Timeouts ─────────────────────────────────────────
+    // ── 4. When idle ─────────────────────────────────────────────────────────
+    //
+    // Each step on its own, "Never" included, for plugged in and on battery
+    // apart — the way KDE's Energy Saving and Windows' power plan set it: the
+    // screen can go off without the machine locking, or lock without the
+    // screen going off, or neither. The session's idle thread
+    // (src/daemon/idle.cpp) follows the profile for the power source now.
+
+    // Which profile the page is showing.
+    property string profile: Power.hasBattery && !Power.charging ? "battery" : "ac"
+    readonly property bool onBatteryProfile: section.profile === "battery"
+    function keyOf(base) { return section.onBatteryProfile ? base + "Battery" : base; }
+
+    // The steps Windows offers, in seconds; 0 is never.
+    readonly property var timeoutSteps: [0, 60, 120, 180, 300, 600, 900, 1200, 1500, 1800, 2700, 3600, 7200, 10800, 18000]
+
+    function timeoutText(seconds) {
+        if (seconds <= 0) return I18n.tr("Never");
+        if (seconds < 3600) return I18n.tr("%1 min", Math.round(seconds / 60));
+        return I18n.tr("%1 h", Math.round(seconds / 360) / 10);
+    }
+
+    function stepFrom(seconds, dir) {
+        const steps = section.timeoutSteps;
+        let i = 0;
+        while (i < steps.length - 1 && steps[i] < seconds) i++;
+        if (dir > 0) return steps[Math.min(steps.length - 1, steps[i] > seconds ? i : i + 1)];
+        return steps[Math.max(0, steps[i] >= seconds ? i - 1 : i)];
+    }
+
+    // The sleep timeout of the plugged-in profile has a switch of its own
+    // (autoSuspend) from before; "Never" here is that switch off.
+    function sleepSeconds() {
+        if (section.onBatteryProfile) return Settings.suspendTimeoutBattery;
+        return Settings.autoSuspend ? Settings.suspendTimeout : 0;
+    }
+
+    function setTimeout(base, seconds) {
+        if (base === "suspendTimeout" && !section.onBatteryProfile) {
+            Settings.apply(seconds > 0 ? { autoSuspend: true, suspendTimeout: seconds } : { autoSuspend: false });
+        } else {
+            Settings.set(section.keyOf(base), seconds);
+        }
+        idleReload.restart();
+    }
+
     Card {
-        title: I18n.tr("Screen & sleep timeouts")
-        subtitle: I18n.tr("Control idle dimming, display power off, and automatic system suspension")
+        title: I18n.tr("When idle")
+        subtitle: section.onBatteryProfile ? I18n.tr("On battery") : I18n.tr("Plugged in")
         icon: "\u{f033e}"
         accentColor: Design.peach
+
+        Flow {
+            visible: Power.hasBattery
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Pill {
+                icon: "\u{f06a5}"
+                label: I18n.tr("Plugged in")
+                active: !section.onBatteryProfile
+                onClicked: section.profile = "ac"
+            }
+            Pill {
+                icon: "\u{f0079}"
+                label: I18n.tr("On battery")
+                active: section.onBatteryProfile
+                onClicked: section.profile = "battery"
+            }
+        }
+
+        Repeater {
+            model: [
+                { base: "dimTimeout",     label: I18n.tr("Dim the screen after") },
+                { base: "dpmsTimeout",    label: I18n.tr("Turn off the screen after") },
+                { base: "lockTimeout",    label: I18n.tr("Lock after") },
+                { base: "suspendTimeout", label: I18n.tr("Sleep after") }
+            ]
+            Stepper {
+                required property var modelData
+                readonly property int seconds: modelData.base === "suspendTimeout"
+                    ? section.sleepSeconds() : (Settings[section.keyOf(modelData.base)] || 0)
+                label: modelData.label
+                valueText: section.timeoutText(seconds)
+                onDecrement: section.setTimeout(modelData.base, section.stepFrom(seconds, -1))
+                onIncrement: section.setTimeout(modelData.base, section.stepFrom(seconds, 1))
+            }
+        }
+
+        Toggle {
+            label: I18n.tr("Lock when the screen turns off")
+            subtitle: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
+            checked: Settings.lockWithScreenOff
+            onToggled: Settings.set("lockWithScreenOff", !Settings.lockWithScreenOff)
+        }
+
+        Toggle {
+            label: I18n.tr("Lock before sleep")
+            subtitle: I18n.tr("Waking up shows the lock screen, not the desktop")
+            checked: Settings.lockOnSleep
+            onToggled: Settings.set("lockOnSleep", !Settings.lockOnSleep)
+        }
 
         Toggle {
             label: I18n.tr("Dim screen on lock")
@@ -328,44 +419,88 @@ ColumnLayout {
             onToggled: Settings.set("dimOnLock", !Settings.dimOnLock)
         }
 
-        // Dimming and locking were the two timeouts swayidle was already
-        // being built with and the only two this page did not show, so the
-        // machine dimmed at five minutes and locked at ten with nothing here
-        // saying so, let alone offering to change it.
-        Stepper {
-            label: I18n.tr("Dim screen after")
-            valueText: (Math.round(Settings.dimTimeout / 60)) + " min"
-            onDecrement: section.setIdleTimeout("dimTimeout", Math.max(60, Settings.dimTimeout - 60))
-            onIncrement: section.setIdleTimeout("dimTimeout", Math.min(3600, Settings.dimTimeout + 60))
-        }
-
-        Stepper {
-            label: I18n.tr("Lock screen after")
-            valueText: (Math.round(Settings.lockTimeout / 60)) + " min"
-            onDecrement: section.setIdleTimeout("lockTimeout", Math.max(60, Settings.lockTimeout - 60))
-            onIncrement: section.setIdleTimeout("lockTimeout", Math.min(7200, Settings.lockTimeout + 60))
-        }
-
-        Stepper {
-            label: I18n.tr("Turn off screen after")
-            valueText: (Math.round(Settings.dpmsTimeout / 60)) + " min"
-            onDecrement: section.setIdleTimeout("dpmsTimeout", Math.max(60, Settings.dpmsTimeout - 60))
-            onIncrement: section.setIdleTimeout("dpmsTimeout", Math.min(3600, Settings.dpmsTimeout + 60))
+        Toggle {
+            label: I18n.tr("Other screens off when idle")
+            subtitle: I18n.tr("When the main screen dims, the others go dark; any input brings them back")
+            checked: Settings.idleSecondaryOff
+            onToggled: Settings.set("idleSecondaryOff", !Settings.idleSecondaryOff)
         }
 
         Toggle {
-            label: I18n.tr("Automatic sleep")
-            subtitle: I18n.tr("Suspend the system automatically when left idle")
-            checked: Settings.autoSuspend
-            onToggled: section.setIdleTimeout("autoSuspend", !Settings.autoSuspend)
+            label: I18n.tr("Only the main screen while locked")
+            subtitle: I18n.tr("The lock screen shows on the main screen; the others stay off until it is opened")
+            checked: Settings.lockSecondaryOff
+            onToggled: Settings.set("lockSecondaryOff", !Settings.lockSecondaryOff)
+        }
+    }
+
+    // ── 5. Lid and power button ──────────────────────────────────────────────
+    //
+    // logind's HandleLidSwitch and HandlePowerKey are a system file, the same
+    // for every account and editable only as root. The session takes both
+    // over (a logind inhibitor, while sway's bindings send them to the
+    // daemon) and does what is chosen here.
+    readonly property var lidChoices: [
+        { id: "sleep",      label: I18n.tr("Sleep") },
+        { id: "lock",       label: I18n.tr("Lock") },
+        { id: "screen-off", label: I18n.tr("Turn off the screen") },
+        { id: "shutdown",   label: I18n.tr("Shut down") },
+        { id: "nothing",    label: I18n.tr("Do nothing") }
+    ]
+
+    Card {
+        title: Power.hasBattery ? I18n.tr("Lid and power button") : I18n.tr("Power button")
+        subtitle: I18n.tr("What they do, instead of the system default")
+        icon: "\u{f0425}"
+        accentColor: Design.accent
+
+        Label {
+            visible: Power.hasBattery
+            text: section.onBatteryProfile ? I18n.tr("Closing the lid, on battery") : I18n.tr("Closing the lid, plugged in")
+            role: "caption"
+            dim: true
+        }
+        Flow {
+            visible: Power.hasBattery
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: section.lidChoices
+                Pill {
+                    required property var modelData
+                    readonly property string current: Settings[section.keyOf("lidAction")] || "sleep"
+                    label: modelData.label
+                    active: current === modelData.id
+                    onClicked: Settings.set(section.keyOf("lidAction"), modelData.id)
+                }
+            }
         }
 
-        Stepper {
-            visible: Settings.autoSuspend
-            label: I18n.tr("Suspend system after")
-            valueText: (Math.round(Settings.suspendTimeout / 60)) + " min"
-            onDecrement: section.setIdleTimeout("suspendTimeout", Math.max(300, Settings.suspendTimeout - 300))
-            onIncrement: section.setIdleTimeout("suspendTimeout", Math.min(7200, Settings.suspendTimeout + 300))
+        Toggle {
+            visible: Power.hasBattery
+            label: I18n.tr("With another screen connected, only turn off the built-in one")
+            subtitle: I18n.tr("Closing the lid while docked keeps working on the other screen")
+            checked: Settings.lidIgnoreDocked
+            onToggled: Settings.set("lidIgnoreDocked", !Settings.lidIgnoreDocked)
+        }
+
+        Label {
+            text: I18n.tr("Pressing the power button")
+            role: "caption"
+            dim: true
+        }
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: [{ id: "ask", label: I18n.tr("Ask what to do") }].concat(section.lidChoices)
+                Pill {
+                    required property var modelData
+                    label: modelData.label
+                    active: (Settings.powerKeyAction || "ask") === modelData.id
+                    onClicked: Settings.set("powerKeyAction", modelData.id)
+                }
+            }
         }
     }
 }

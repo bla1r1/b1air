@@ -154,7 +154,7 @@ PopupShell {
                 icon: "\u{f0c5}"
                 label: I18n.tr("Copy Path")
                 onActivated: {
-                    Quickshell.execDetached(["wl-copy", "--", root.filePath]);
+                    Quickshell.execDetached(["b1air-clip", "copy", "--", root.filePath]);
                     Osd.show("edit-copy", I18n.tr("Path copied"), root.filePath);
                 }
             }

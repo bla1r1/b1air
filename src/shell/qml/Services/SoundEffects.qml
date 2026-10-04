@@ -29,7 +29,9 @@ Singleton {
      * from here.
      */
     function _play(soundName) {
-        Quickshell.execDetached(["canberra-gtk-play", "-i", soundName]);
+        // The daemon finds the file in the sound theme and plays it with
+        // pw-play (it was canberra-gtk-play, from GTK 3's libcanberra).
+        Quickshell.execDetached(["b1air-daemon", "sound", soundName]);
     }
 
     /**

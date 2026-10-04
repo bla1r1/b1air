@@ -21,7 +21,7 @@ public:
     // only grants a few seconds before forcing sleep regardless, so a
     // blocking call there gets killed mid-lock and looks like it never ran.
     static bool lock_session_async();
-    static bool run_swaylock();
+    static bool run_fallback_lock();
     static bool run_quickshell_lock();
     static bool logout_session();
     static bool suspend_system();
@@ -71,6 +71,8 @@ public:
 
     // Power Profiles (performance, balanced, power-saver)
     static std::string power_profile_get();
+    // power-profiles-daemon is there to switch: it answers on D-Bus.
+    static bool power_profile_available();
     static bool power_profile_set(const std::string& profile);
 
     // Battery charge control: the limit the pack stops charging at, and what
@@ -169,6 +171,24 @@ public:
     static std::string dotfiles_status_json();
     static bool dotfiles_sync();
     static bool dotfiles_sys();
+    // Package cache and orphan cleanup, in a held terminal, for whichever
+    // package manager this is. what: "cache" or "orphans".
+    static bool packages_clean(const std::string& what);
+    // The system upgrade's steps for this package manager, and running them
+    // in the calling terminal (`b1air-daemon packages upgrade`).
+    static std::vector<std::vector<std::string>> packages_upgrade_steps();
+    static int packages_upgrade();
+    // A freedesktop sound-theme event ("bell", "camera-shutter"), through
+    // pw-play; on the default output, or on `target` (a PipeWire node name).
+    static bool play_sound(const std::string& name, const std::string& target = {});
+    // A wired connection's IPv4: method "auto", or "manual" with an address,
+    // prefix, gateway and DNS server (the last two may be empty). Through
+    // NetworkManager, or with `ip` directly where it does not manage the link.
+    static bool ethernet_ipv4(const std::string& ifname, const std::string& method,
+                              const std::string& address, const std::string& prefix,
+                              const std::string& gateway, const std::string& dns);
+    // `xdg-mime query default` for each type, one line each (empty if none).
+    static std::vector<std::string> mime_defaults(const std::vector<std::string>& mimes);
 
     // Advanced Screen Capture, Recording, OCR & QR Scanner
     static bool capture(const std::string& mode = "full", const std::string& geom = "", bool edit = false,
@@ -222,18 +242,37 @@ public:
     // One workspace's own wallpaper (drawn by b1air-bg), and taking a
     // screen's or a workspace's own back to the shared one.
     static bool wallpaper_set_workspace(const std::string& filepath, const std::string& workspace);
+    // The picture b1air-bg shows on this screen now (its workspace's own,
+    // the screen's own, or the shared one): for the lock screen.
+    static std::string wallpaper_shown_on(const std::string& output);
     static bool wallpaper_unset(const std::string& output, const std::string& workspace = "");
     static std::string wallpaper_workspaces_json();
-    static bool wallpaper_apply_overrides();
     static std::string wallpaper_overrides_path();
     // [{name, id, wallpaper}] for the connected screens.
     static std::string wallpaper_overrides_json();
 
     // Night Light & Day/Night Ambiance
+    // When the night light is warm: always, between two times, or from
+    // sunset to sunrise (at `location`, "lat,lon", or the time zone's city).
+    struct NightSchedule {
+        std::string mode = "always";   // always | hours | sun
+        std::string from = "20:00";
+        std::string to = "07:00";
+        std::string location;
+        static NightSchedule from_settings();
+    };
     static bool night_light_on(int temp = 4000, bool announce = true);
+    static bool night_light_on(int temp, bool announce, const NightSchedule& schedule);
     static bool night_light_off(bool announce = true);
     static bool night_light_toggle();
-    static bool night_light_auto();
+
+    // Power source: true on mains, or on a machine with no battery at all.
+    static bool on_ac_power();
+    // The lid and the power button, as Settings → Power says (sway binds
+    // them to `b1air-daemon lid close|open` and `power-key`; the idle thread
+    // tells logind to leave them to us while those bindings are there).
+    static bool lid_event(bool closed);
+    static bool power_key();
 
     // System updates and the brightness status line.
     //

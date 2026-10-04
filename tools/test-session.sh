@@ -101,6 +101,52 @@ swaymsg -q output HEADLESS-2 unplug
 printf '%s\n' "$saved_profiles" > "$PROFILES"
 sleep 1
 
+# The clipboard history: the shell watches the clipboard (b1air-clip watch)
+# and keeps what is copied, in the secret store.
+mark="test-session clipboard $$"
+b1air-clip copy -- "$mark"
+found=""
+for _ in $(seq 1 30); do
+    b1air-secret-service get clipboard-history 2>/dev/null | grep -qF "$mark" && { found=1; break; }
+    sleep 0.2
+done
+[[ -n "$found" ]] && ok "copied text lands in the clipboard history" || fail "the clipboard history missed a copy"
+
+# Large copies do not stop the history saving: the store refuses anything
+# over 1 MB, and four 300 KB copies used to be the end of every later save.
+for n in 1 2 3 4; do
+    head -c 300000 /dev/zero | tr '\0' "$n" | b1air-clip copy; sleep 0.6
+done
+mark2="after the big ones $$"
+b1air-clip copy -- "$mark2"
+found=""
+for _ in $(seq 1 30); do
+    b1air-secret-service get clipboard-history 2>/dev/null | grep -qF "$mark2" && { found=1; break; }
+    sleep 0.2
+done
+size="$(b1air-secret-service get clipboard-history 2>/dev/null | wc -c)"
+[[ -n "$found" && "$size" -lt 1048576 ]] && ok "the clipboard history keeps saving after large copies ($size bytes)" \
+    || fail "the clipboard history after large copies" "found=${found:-no} size=$size"
+
+# b1air-clip itself, in this session.
+while IFS= read -r line; do
+    case "$line" in
+        "ok   "*) ok "clip: ${line#ok   }" ;;
+        "FAIL "*) rest="${line#FAIL }"; fail "clip: $rest" ;;
+    esac
+done < <("$here/test-clip.sh" 2>&1)
+
+# Night light on a screen that has no gamma control (a headless one): the
+# daemon says it could not, rather than claiming success, and leaves no
+# b1air-gamma behind. Where the screen has it, it stays on.
+if b1air-daemon night-light on 3500 --quiet >/dev/null 2>&1; then
+    running b1air-gamma && ok "night light holds the screen" || fail "night light said on, nothing running"
+    b1air-daemon night-light off --quiet >/dev/null 2>&1
+else
+    running '^b1air-gamma' && fail "a failed night light left b1air-gamma running" \
+        || ok "night light reports a screen without gamma control"
+fi
+
 # The lock screen, when the account has a password to test with
 # (B1AIR_TEST_PASSWORD): locked, shortcuts are refused; the password opens
 # it; shortcuts work again. A lock that cannot be opened, or that leaves the
@@ -125,6 +171,91 @@ if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then
     sleep 1
     "$VKB" logo 4; sleep 1
     [[ "$(ws)" == 3 ]] && ok "unlocked: Mod+3 works again" || fail "after unlocking, Mod+3" "on $(ws)"
+fi
+
+# Idle, as the session's own idle thread runs it (src/daemon/idle.cpp), with
+# timeouts of seconds and a second screen: that screen goes dark when the
+# main one dims, the lock comes up (with a password to test with), every
+# screen goes off, input brings back the main one only while locked, and
+# opening the lock brings back the other. Caffeine holds all of it off.
+SETTINGS="$HOME/.config/sway/settings.json"
+saved_settings="$(cat "$SETTINGS")"
+idle_timeouts() {   # dim lock screens
+    python3 - "$SETTINGS" "$@" <<'PY'
+import json, sys
+p, dim, lock, screens = sys.argv[1], *map(int, sys.argv[2:])
+d = json.load(open(p))
+d.update(dimTimeout=dim, lockTimeout=lock, dpmsTimeout=screens, autoSuspend=False,
+         idleSecondaryOff=True, lockSecondaryOff=True)
+json.dump(d, open(p, "w"), indent=2)
+PY
+}
+power_of() { swaymsg -t get_outputs -r | python3 -c 'import json,sys
+for o in json.load(sys.stdin):
+    if o["name"] == sys.argv[1]: print("on" if o.get("power") else "off")' "$1"; }
+before_outputs="$(swaymsg -t get_outputs -r | python3 -c 'import json,sys; print(" ".join(o["name"] for o in json.load(sys.stdin)))')"
+swaymsg -q create_output; sleep 0.5
+SECOND="$(swaymsg -t get_outputs -r | python3 -c 'import json,sys
+old=sys.argv[1].split()
+print(next((o["name"] for o in json.load(sys.stdin) if o["name"] not in old), ""))' "$before_outputs")"
+MAIN="$(swaymsg -t get_outputs -r | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["name"])')"
+lock_state() { cat "$XDG_RUNTIME_DIR/b1air/lock-state" 2>/dev/null; }
+if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then idle_timeouts 2 4 6; else idle_timeouts 2 0 6; fi
+b1air-daemon power idle-reload
+sleep 3
+[[ "$(power_of "$SECOND")" == off && "$(power_of "$MAIN")" == on ]] \
+    && ok "idle: the other screen goes dark when the main one dims" \
+    || fail "idle: dim stage" "main $(power_of "$MAIN"), other $(power_of "$SECOND")"
+sleep 4
+[[ "$(power_of "$MAIN")" == off ]] && ok "idle: every screen off after the screens timeout" \
+    || fail "idle: screens stage" "main $(power_of "$MAIN")"
+if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then
+    [[ "$(lock_state)" == locked ]] && ok "idle: the lock came up, and says so" || fail "idle: lock stage" "$(lock_state)"
+    "$VKB" - 42; sleep 1   # shift: input
+    [[ "$(power_of "$MAIN")" == on && "$(power_of "$SECOND")" == off ]] \
+        && ok "idle: input while locked brings back the main screen only" \
+        || fail "idle: wake while locked" "main $(power_of "$MAIN"), other $(power_of "$SECOND")"
+    "$VKB" - "${codes[@]}" 28
+    for _ in $(seq 1 50); do [[ "$(lock_state)" != locked ]] && break; sleep 0.2; done
+    sleep 1
+    [[ "$(power_of "$SECOND")" == on ]] && ok "idle: opening the lock brings back the other screen" \
+        || fail "idle: after unlock" "other $(power_of "$SECOND"), lock-state $(lock_state)"
+else
+    "$VKB" - 42; sleep 1
+    [[ "$(power_of "$MAIN")" == on && "$(power_of "$SECOND")" == on ]] && ok "idle: input brings every screen back" \
+        || fail "idle: wake" "main $(power_of "$MAIN"), other $(power_of "$SECOND")"
+fi
+b1air-daemon caffeine on >/dev/null 2>&1
+sleep 8
+[[ "$(power_of "$MAIN")" == on && "$(power_of "$SECOND")" == on && "$(lock_state)" != locked ]] \
+    && ok "idle: Caffeine holds every stage off" || fail "idle: Caffeine" "main $(power_of "$MAIN"), other $(power_of "$SECOND")"
+b1air-daemon caffeine off >/dev/null 2>&1
+printf '%s\n' "$saved_settings" > "$SETTINGS"
+b1air-daemon power idle-reload
+swaymsg -q output "$SECOND" unplug
+
+# The lock screen that cannot load leaves the machine locked all the same:
+# a Lock.qml that is not QML, and b1air-lock takes its place; the password
+# opens it. (Before, a broken Lock.qml meant no lock at all.)
+if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then
+    mkdir -p "$HOME/.config/b1air-shell"
+    had_lock_qml=""
+    [[ -e "$HOME/.config/b1air-shell/Lock.qml" ]] && had_lock_qml=1 && mv "$HOME/.config/b1air-shell/Lock.qml" "$RT/Lock.qml.saved"
+    echo 'this is not QML {' > "$HOME/.config/b1air-shell/Lock.qml"
+    rm -f "$XDG_RUNTIME_DIR/b1air/lock-spawned"
+    b1air-daemon lock
+    for _ in $(seq 1 50); do [[ "$(lock_state)" == locked ]] && break; sleep 0.2; done
+    if pgrep -x b1air-lock >/dev/null && [[ "$(lock_state)" == locked ]]; then
+        ok "a lock screen that cannot load: b1air-lock locks instead"
+    else
+        fail "fallback lock" "b1air-lock $(pgrep -c -x b1air-lock), lock-state $(lock_state)"
+    fi
+    "$VKB" - "${codes[@]}" 28
+    for _ in $(seq 1 50); do pgrep -x b1air-lock >/dev/null || break; sleep 0.2; done
+    [[ "$(lock_state)" == unlocked ]] && ! pgrep -x b1air-lock >/dev/null \
+        && ok "the password opens b1air-lock" || fail "b1air-lock did not open" "$(lock_state)"
+    rm -f "$HOME/.config/b1air-shell/Lock.qml"
+    [[ -n "$had_lock_qml" ]] && mv "$RT/Lock.qml.saved" "$HOME/.config/b1air-shell/Lock.qml"
 fi
 
 echo "test-session: $PASS passed, $FAILED failed"

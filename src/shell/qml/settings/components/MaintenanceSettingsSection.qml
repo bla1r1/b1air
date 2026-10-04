@@ -138,24 +138,14 @@ ColumnLayout {
         Quickshell.execDetached(["xdg-open", Quickshell.env("HOME") + "/.dotfiles-backups"]);
     }
 
+    // The daemon picks the package manager and opens a terminal that stays
+    // on what it printed.
     function cleanPackageCache() {
-        Quickshell.execDetached(["b1air-term", "-e", "bash", "-lc",
-            "if command -v pacman >/dev/null; then sudo paccache -rk2 || sudo pacman -Sc --noconfirm; " +
-            "elif command -v apt-get >/dev/null; then sudo apt-get clean; " +
-            "elif command -v dnf >/dev/null; then sudo dnf clean packages; " +
-            "elif command -v zypper >/dev/null; then sudo zypper clean --all; fi; " +
-            "printf '\\nDone! Press enter to exit\\n'; read -r _"]);
+        Quickshell.execDetached(["b1air-daemon", "packages", "clean-cache"]);
     }
 
     function cleanOrphanPackages() {
-        Quickshell.execDetached(["b1air-term", "-e", "bash", "-lc",
-            "if command -v pacman >/dev/null; then o=$(pacman -Qtdq); " +
-            "if [ -n \"$o\" ]; then sudo pacman -Rns $o; else echo 'No orphan packages found.'; fi; " +
-            "elif command -v apt-get >/dev/null; then sudo apt-get autoremove; " +
-            "elif command -v dnf >/dev/null; then sudo dnf autoremove; " +
-            "elif command -v zypper >/dev/null; then zypper packages --unneeded; " +
-            "echo 'Review the list above and remove what you do not need with: sudo zypper rm <name>'; fi; " +
-            "printf '\\nPress enter to exit\\n'; read -r _"]);
+        Quickshell.execDetached(["b1air-daemon", "packages", "clean-orphans"]);
     }
 
     // ── 1. Desktop Environment Updates ───────────────────────────────────────

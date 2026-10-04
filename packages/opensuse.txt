@@ -7,19 +7,19 @@
 # sway, is the fallback.
 
 # Core & build
-gcc-c++ make git rsync curl unzip xz jq cmake ninja ccache pkgconf
+gcc-c++ make git rsync curl unzip xz cmake ninja ccache pkgconf
 libopenssl-devel systemd-devel polkit-devel libarchive-devel polkit
 
 # Qt 6 development
 qt6-base-devel qt6-declarative-devel qt6-wayland-devel qt6-multimedia-devel
-qt6-svg-devel layer-shell-qt6-devel wayland-devel wayland-protocols-devel
+qt6-svg-devel layer-shell-qt6-devel wayland-devel wayland-protocols-devel cairo-devel libxkbcommon-devel pam-devel
 
 # Qt 6 runtime
 qt6-wayland qt6-svg qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports
 ?layer-shell-qt6
 
 # Wayland session
-swaybg swayidle swaylock xwayland
+xwayland
 xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
 ?wayvnc
 
@@ -30,14 +30,16 @@ fish fzf bat zoxide btop fastfetch eza starship
 ?MozillaFirefox
 
 # Clipboard & screenshots
-wl-clipboard grim slurp ?satty
+grim slurp ?satty
 
 # Audio & media
-pipewire wireplumber pipewire-pulseaudio playerctl libcanberra0 ?canberra-gtk-play sound-theme-freedesktop
-?ffmpeg ?gifsicle
+pipewire wireplumber pipewire-pulseaudio pulseaudio-utils playerctl pipewire-tools sound-theme-freedesktop
+?ffmpeg ?gifsicle ?wf-recorder
 
 # System & hardware
-upower brightnessctl ddcutil libnotify-tools Mesa-demo-x
+# Fingerprint readers (Settings → User, the lock screens)
+?fprintd ?fprintd-pam
+upower ddcutil
 
 # Network & Bluetooth
 NetworkManager bluez
@@ -53,7 +55,7 @@ noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts liber
 # Tools the shell and daemon call out to
 ImageMagick tesseract-ocr tesseract-ocr-traineddata-english zbar qrencode
 ?power-profiles-daemon poppler-tools ?gocryptfs ?easyeffects
-xdg-utils file glib2-tools ?wlsunset ?snapper
+xdg-utils file glib2-tools openssl ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g bsdtar

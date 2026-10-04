@@ -36,6 +36,9 @@
 #include <cstdio>
 #include <cstdarg>
 #include <dirent.h>
+#include <map>
+#include <set>
+#include <poll.h>
 #include <filesystem>
 #include <csignal>
 #include <climits>
@@ -52,35 +55,6 @@ static bool is_game_mode_active() {
     return (access(runtime_path("game-mode.state").c_str(), F_OK) == 0);
 }
 
-// ── Helper to execute command and capture single line stdout ────────────────
-static std::string exec_cmd(const std::string& cmd) {
-    std::array<char, 256> buffer;
-    std::string result;
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return "";
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-        result += buffer.data();
-    }
-    pclose(pipe);
-    // Trim trailing newline
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
-        result.pop_back();
-    }
-    return result;
-}
-
-static std::string exec_cmd_full(const std::string& cmd) {
-    std::array<char, 4096> buffer;
-    std::string result;
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return "";
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
-        result += buffer.data();
-    }
-    pclose(pipe);
-    return result;
-}
-
 static std::string json_escape(const std::string& s) {
     std::string out;
     out.reserve(s.size());
@@ -94,18 +68,6 @@ static std::string json_escape(const std::string& s) {
         else if (c == '\t') out += "\\t";
         else out += c;
     }
-    return out;
-}
-
-// Quote data before passing it to one of the legacy shell-only helpers.
-// New code should prefer execve/QProcess and avoid a shell entirely.
-static std::string shell_quote(const std::string& s) {
-    std::string out = "'";
-    for (char c : s) {
-        if (c == '\'') out += "'\\''";
-        else out += c;
-    }
-    out += "'";
     return out;
 }
 
@@ -401,6 +363,88 @@ static std::string run_argv_capture(const std::vector<std::string>& args, const 
     return output;
 }
 
+// A program's standard output, with no shell in between: the arguments go
+// to it as they are, what it says on stderr is dropped, and with timeout_s
+// it is stopped after that many seconds, so a hung ddcutil or package
+// manager cannot hold up the daemon. (This replaced popen() of shell
+// pipelines — `nmcli … | grep | head`, `du … | tail | cut` — whose
+// filtering is done in C++ now.)
+static std::string run_out(const std::vector<std::string>& args, unsigned timeout_s = 0) {
+    if (args.empty()) return "";
+    int fds[2];
+    if (pipe2(fds, O_CLOEXEC) != 0) return "";
+    std::vector<char*> argv;
+    for (const auto& arg : args) argv.push_back(const_cast<char*>(arg.c_str()));
+    argv.push_back(nullptr);
+    const pid_t pid = fork();
+    if (pid == 0) {
+        dup2(fds[1], STDOUT_FILENO);
+        const int null_fd = open("/dev/null", O_RDWR);
+        if (null_fd >= 0) { dup2(null_fd, STDIN_FILENO); dup2(null_fd, STDERR_FILENO); }
+        if (timeout_s > 0) {
+            signal(SIGALRM, SIG_DFL);
+            sigset_t set;
+            sigemptyset(&set);
+            sigaddset(&set, SIGALRM);
+            sigprocmask(SIG_UNBLOCK, &set, nullptr);
+            alarm(timeout_s);
+        }
+        execvp(argv[0], argv.data());
+        _exit(127);
+    }
+    close(fds[1]);
+    if (pid < 0) { close(fds[0]); return ""; }
+    std::string output;
+    std::array<char, 4096> buffer;
+    ssize_t count;
+    while ((count = read(fds[0], buffer.data(), buffer.size())) > 0 || (count < 0 && errno == EINTR))
+        if (count > 0) output.append(buffer.data(), static_cast<size_t>(count));
+    close(fds[0]);
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+    return output;
+}
+
+static std::vector<std::string> lines_of(const std::string& text) {
+    std::vector<std::string> out;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        out.push_back(line);
+    }
+    return out;
+}
+
+// The first line of a program's output, trimmed.
+static std::string run_line(const std::vector<std::string>& args, unsigned timeout_s = 0) {
+    const auto lines = lines_of(run_out(args, timeout_s));
+    std::string first = lines.empty() ? std::string() : lines.front();
+    while (!first.empty() && std::isspace(static_cast<unsigned char>(first.back()))) first.pop_back();
+    return first;
+}
+
+// How many lines of a program's output pass the test.
+template <typename Pred>
+static int count_lines(const std::vector<std::string>& args, unsigned timeout_s, Pred keep) {
+    int n = 0;
+    for (const auto& line : lines_of(run_out(args, timeout_s)))
+        if (!line.empty() && keep(line)) ++n;
+    return n;
+}
+
+static bool on_path(const std::string& program);
+
+// ImageMagick's command: `magick` (version 7, where `convert` is a
+// deprecated alias that warns on every call), else `convert` (version 6,
+// which is all Debian and Ubuntu ship). The arguments are the same.
+static std::vector<std::string> imagemagick(std::initializer_list<std::string> args) {
+    std::vector<std::string> argv = {on_path("magick") ? "magick" : "convert"};
+    argv.insert(argv.end(), args.begin(), args.end());
+    return argv;
+}
+static bool ppd_set_active(const std::string& profile);
+
 static bool logind_call(const char* method, const char* signature = "", ...) {
     sd_bus* bus = nullptr;
     sd_bus_error error = SD_BUS_ERROR_NULL;
@@ -484,7 +528,7 @@ bool SystemControl::enable_game_mode() {
         ipc.send_command(0, cmd);
     }
 
-    (void)run_argv_status({"powerprofilesctl", "set", "performance"});
+    (void)ppd_set_active("performance");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "256"});
     SettingsManager::set_json_value("notificationsDnd", "true");
 
@@ -515,7 +559,7 @@ bool SystemControl::disable_game_mode() {
         ipc.send_command(0, cmd);
     }
 
-    (void)run_argv_status({"powerprofilesctl", "set", "balanced"});
+    (void)ppd_set_active("balanced");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0"});
     SettingsManager::set_json_value("notificationsDnd", "false");
 
@@ -543,36 +587,50 @@ bool SystemControl::run_quickshell_lock() {
     if (qs_lock.empty()) {
         return false;
     }
-    // "Dim screen on lock" on the Power page. The setting existed, the toggle
-    // wrote it, and nothing read it: the backlight went down on every lock
-    // whatever it said.
-    const bool dim = SettingsManager::get_json_bool("dimOnLock", true);
-    if (dim) ddc_dim();
-    const int ret = run_argv_status({"quickshell", "-p", qs_lock}) ? 0 : 1;
-    if (dim) ddc_undim();
-    return (ret == 0);
+    // "Dim screen on lock" is the session's idle thread's (idle.cpp): it
+    // sees this lock screen come up and go, as it sees every other.
+    setenv("QML_XHR_ALLOW_FILE_READ", "1", 1);   // theme and language files, as below
+    return run_argv_status({"quickshell", "-p", qs_lock});
 }
 
 bool SystemControl::lock_session_async() {
     // Called from more than one place that can legitimately overlap — a lid
-    // bindswitch and swayidle's own `lock`/before-sleep hooks can all fire
+    // bindswitch, the idle thread's lock stage and its before-sleep lock can all fire
     // within the same second of a lid close. Without this, each one spawns
     // its own Lock.qml, stacking duplicate lock screens on top of each other.
     bool lock_up = false;
     proc::for_each([&](const proc::Process& p) {
-        lock_up = p.exe_name == "quickshell" && p.cmdline.find("Lock.qml") != std::string::npos;
+        lock_up = (p.exe_name == "quickshell" && p.cmdline.find("Lock.qml") != std::string::npos)
+               || p.exe_name == "b1air-lock";
         return !lock_up;
     });
     if (lock_up) return true;
 
+    // A lock started a moment ago may not be a quickshell process yet (the
+    // fork below has not reached exec), and LockSession comes straight back
+    // as logind's Lock signal, which the idle thread answers by locking:
+    // a stamp, shared by every process that locks, covers that gap.
+    const std::string stamp = runtime_path("lock-spawned");
+    // An unlock since (Lock.qml writes lock-state) ends that cover early.
+    struct stat st{}, state{};
+    if (stat(stamp.c_str(), &st) == 0 && std::time(nullptr) - st.st_mtime < 3) {
+        const bool opened_since = stat(runtime_path("lock-state").c_str(), &state) == 0
+            && state.st_mtime >= st.st_mtime && read_file_string(runtime_path("lock-state")).rfind("locked", 0) != 0;
+        if (!opened_since) return true;
+    }
+    (void)write_private_file(stamp, "");
+
     (void)logind_session_call("LockSession");
     const std::string qs_lock = b1air::qml_entry("Lock.qml");
-    if (qs_lock.empty()) return run_swaylock();
 
     // Double-fork so the daemon never has to wait on this: the immediate
-    // child exits right away (reaped below) and the grandchild — the actual
-    // quickshell process — is reparented to init, instead of sitting around
-    // as a zombie under the daemon until something happens to reap it.
+    // child exits right away (reaped below) and the grandchild is reparented
+    // to init, instead of sitting around as a zombie under the daemon.
+    //
+    // The grandchild runs the lock screen and waits on it. One that fails —
+    // Quickshell missing, a QML error, a crash — leaves b1air-lock in its
+    // place: the session gets locked either way. Before, a Lock.qml that
+    // could not load left the machine unlocked, with nothing said.
     pid_t pid = fork();
     if (pid == 0) {
         setsid();
@@ -582,7 +640,22 @@ bool SystemControl::lock_session_async() {
                 dup2(null_fd, STDIN_FILENO); dup2(null_fd, STDOUT_FILENO); dup2(null_fd, STDERR_FILENO);
                 if (null_fd > STDERR_FILENO) close(null_fd);
             }
-            execlp("quickshell", "quickshell", "-p", qs_lock.c_str(), static_cast<char*>(nullptr));
+            if (!qs_lock.empty()) {
+                const pid_t qs = fork();
+                if (qs == 0) {
+                    // The theme and the language are read with XMLHttpRequest
+                    // from files, which Qt refuses without this; a lock
+                    // started outside the session's environment came up
+                    // English and in the built-in colours.
+                    setenv("QML_XHR_ALLOW_FILE_READ", "1", 1);
+                    execlp("quickshell", "quickshell", "-p", qs_lock.c_str(), static_cast<char*>(nullptr));
+                    _exit(127);
+                }
+                int status = 0;
+                while (qs > 0 && waitpid(qs, &status, 0) < 0 && errno == EINTR) {}
+                if (qs > 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) _exit(0);
+            }
+            execlp("b1air-lock", "b1air-lock", static_cast<char*>(nullptr));
             _exit(127);
         }
         _exit(0);
@@ -591,66 +664,28 @@ bool SystemControl::lock_session_async() {
     return pid > 0;
 }
 
-bool SystemControl::run_swaylock() {
-    if (proc::running("swaylock")) return true;
-
-    std::string help_text = exec_cmd_full("swaylock --help 2>&1");
-    auto supports = [&](const std::string& flag) {
-        return help_text.find(flag) != std::string::npos;
-    };
-
-    const char* home = std::getenv("HOME");
-    std::string home_str = home ? home : "";
-    std::string user_wp = home_str + "/.config/sway/wallpaper.jpg";
-    std::string cache_wp = home_str + "/.cache/current_wallpaper.jpg";
-
-    std::vector<std::string> args = {"swaylock", "--ignore-empty-password", "--color", "1a1b26", "--font", "JetBrainsMono Nerd Font"};
-
-    if (access("/var/cache/wallpaper/current.jpg", R_OK) == 0) {
-        args.insert(args.end(), {"--image", "/var/cache/wallpaper/current.jpg", "--scaling", "fill"});
-    } else if (access(cache_wp.c_str(), R_OK) == 0) {
-        args.insert(args.end(), {"--image", cache_wp, "--scaling", "fill"});
-    } else if (access(user_wp.c_str(), R_OK) == 0) {
-        args.insert(args.end(), {"--image", user_wp, "--scaling", "fill"});
-    }
-
-    auto add_flag = [&](const char* flag) { if (supports(flag)) args.emplace_back(flag); };
-    auto add_pair = [&](const char* flag, const char* value) { if (supports(flag)) args.insert(args.end(), {flag, value}); };
-    add_flag("--indicator-idle-visible"); add_pair("--indicator-radius", "85"); add_pair("--indicator-thickness", "6");
-    add_pair("--ring-color", "7aa2f7"); add_pair("--inside-color", "16161ecc"); add_pair("--line-color", "00000000");
-    add_pair("--separator-color", "00000000"); add_pair("--key-hl-color", "7aa2f7"); add_pair("--bs-hl-color", "f7768e");
-    add_pair("--text-color", "c0caf5"); add_pair("--text-clear-color", "e0af68"); add_pair("--ring-ver-color", "9ece6a");
-    add_pair("--inside-ver-color", "16161ecc"); add_pair("--text-ver-color", "9ece6a"); add_pair("--ring-wrong-color", "f7768e");
-    add_pair("--inside-wrong-color", "16161ecc"); add_pair("--text-wrong-color", "f7768e"); add_flag("--show-keyboard-layout");
-    add_pair("--layout-bg-color", "16161ecc"); add_pair("--layout-border-color", "7aa2f7"); add_pair("--layout-text-color", "c0caf5");
-    add_flag("--screenshots");
-    if (supports("--clock")) {
-        args.emplace_back("--clock");
-        add_pair("--timestr", "%H:%M"); add_pair("--datestr", "%A, %B %d, %Y");
-    }
-    add_pair("--effect-blur", "10x4"); add_pair("--effect-dim", "0.20"); add_pair("--effect-vignette", "0.25:0.25");
-    add_pair("--grace", "1"); add_pair("--fade-in", "0.2");
-
-    const bool dim = SettingsManager::get_json_bool("dimOnLock", true);
-    if (dim) ddc_dim();
-    const int ret = run_argv_status(args) ? 0 : 1;
-    if (dim) ddc_undim();
-    return (ret == 0);
+// The lock screen when Lock.qml cannot be had: b1air-lock (src/lock), which
+// needs no Quickshell and no QML. It was swaylock, with two dozen colour
+// flags read off its --help to look like the desktop. Blocks until opened.
+bool SystemControl::run_fallback_lock() {
+    if (proc::running("b1air-lock")) return true;
+    (void)logind_session_call("LockSession");
+    return run_argv_status({"b1air-lock"});
 }
 
 bool SystemControl::lock_session(const std::string& mode) {
     // Tell logind first so inhibitors, lock state and suspend coordination use
     // the same session lifecycle as KDE/GNOME.
     (void)logind_session_call("LockSession");
-    if (mode == "swaylock") {
-        return run_swaylock();
+    if (mode == "fallback" || mode == "swaylock") {
+        return run_fallback_lock();
     }
     if (mode == "quickshell") {
         if (run_quickshell_lock()) return true;
-        return run_swaylock();
+        return run_fallback_lock();
     }
     if (run_quickshell_lock()) return true;
-    return run_swaylock();
+    return run_fallback_lock();
 }
 
 bool SystemControl::logout_session() {
@@ -663,8 +698,86 @@ bool SystemControl::suspend_system() {
     // lock_session() blocks until the screen is unlocked again — an idle
     // timeout calling this would never reach Suspend until someone typed
     // their password first, defeating the entire point of auto-suspend.
-    lock_session_async();
+    // Settings → Power, "Lock before sleep": on unless switched off.
+    if (SettingsManager::get_json_bool("lockOnSleep", true)) lock_session_async();
     return logind_call("Suspend", "b", true);
+}
+
+bool SystemControl::on_ac_power() {
+    bool battery = false, mains = false;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator("/sys/class/power_supply", ec)) {
+        const std::string type = read_file_string((e.path() / "type").string());
+        if (type.rfind("Battery", 0) == 0) {
+            // A peripheral's battery (a mouse, a gamepad) says scope=Device.
+            if (read_file_string((e.path() / "scope").string()).rfind("Device", 0) != 0) battery = true;
+        } else if (read_file_string((e.path() / "online").string()).rfind("1", 0) == 0) {
+            mains = true;   // Mains, USB, USB_C, Wireless: whatever is feeding it
+        }
+    }
+    return mains || !battery;
+}
+
+namespace {
+
+// What the lid or the power button does, for the power source now:
+// sleep | lock | screen-off | shutdown | nothing (and ask, for the button).
+std::string power_action(const char* key, const char* fallback) {
+    std::string v = SettingsManager::get_json_string(std::string(key) + (SystemControl::on_ac_power() ? "" : "Battery"));
+    if (v.empty()) v = SettingsManager::get_json_string(key);
+    return v.empty() ? fallback : v;
+}
+
+bool internal_output(const std::string& name) {
+    return name.rfind("eDP", 0) == 0 || name.rfind("LVDS", 0) == 0 || name.rfind("DSI", 0) == 0;
+}
+
+} // namespace
+
+bool SystemControl::lid_event(bool closed) {
+    SwayIPC ipc;
+    std::vector<std::string> internal, external;
+    if (ipc.connect()) {
+        const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+        if (outputs.is_array())
+            for (const auto& o : outputs) {
+                if (!o.value("active", false)) continue;
+                const std::string n = o.contains("name") && o["name"].is_string() ? o["name"].get<std::string>() : "";
+                if (!n.empty()) (internal_output(n) ? internal : external).push_back(n);
+            }
+    }
+    auto power = [&](const std::vector<std::string>& names, bool on) {
+        for (const auto& n : names) (void)SwayIPC::run("output \"" + n + "\" power " + (on ? "on" : "off"));
+    };
+    if (!closed) {
+        // Back to what was there: the built-in screen on, unless the lock
+        // keeps the others dark (the idle thread wakes the main one).
+        power(internal, true);
+        return true;
+    }
+    // Docked — another screen connected — the lid only puts the built-in one
+    // away, as logind's HandleLidSwitchDocked=ignore and every desktop do.
+    if (!external.empty() && SettingsManager::get_json_bool("lidIgnoreDocked", true)) {
+        power(internal, false);
+        return true;
+    }
+    const std::string action = power_action("lidAction", "sleep");
+    if (action == "sleep") return suspend_system();
+    if (action == "lock") { power(internal, false); return lock_session_async(); }
+    if (action == "screen-off") { (void)SwayIPC::run("output * power off"); return true; }
+    if (action == "shutdown") return shutdown_system();
+    power(internal, false);   // nothing: but a closed lid shows nothing anyway
+    return true;
+}
+
+bool SystemControl::power_key() {
+    const std::string action = power_action("powerKeyAction", "ask");
+    if (action == "ask") return util::spawn_detached({"b1air-shell", "toggle", "session"});
+    if (action == "sleep") return suspend_system();
+    if (action == "lock") return lock_session_async();
+    if (action == "screen-off") { (void)SwayIPC::run("output * power off"); return true; }
+    if (action == "shutdown") return shutdown_system();
+    return true;
 }
 
 bool SystemControl::reboot_system() {
@@ -676,10 +789,57 @@ bool SystemControl::shutdown_system() {
 }
 
 // ── Power Profiles ───────────────────────────────────────────────────────────
+// power-profiles-daemon over D-Bus, as powerprofilesctl talks to it (that
+// program is a Python script: a whole interpreter started for one property).
+// Its newer name first, then the one older releases answer to.
+static std::string ppd_get_active() {
+    sd_bus* bus = nullptr;
+    if (sd_bus_open_system(&bus) < 0) return "";
+    std::string result;
+    const std::pair<const char*, const char*> names[] = {
+        {"org.freedesktop.UPower.PowerProfiles", "/org/freedesktop/UPower/PowerProfiles"},
+        {"net.hadess.PowerProfiles", "/net/hadess/PowerProfiles"}};
+    for (const auto& [service, path] : names) {
+        char* value = nullptr;
+        sd_bus_error error = SD_BUS_ERROR_NULL;
+        if (sd_bus_get_property_string(bus, service, path, service, "ActiveProfile", &error, &value) >= 0 && value) {
+            result = value;
+            free(value);
+            sd_bus_error_free(&error);
+            break;
+        }
+        sd_bus_error_free(&error);
+    }
+    sd_bus_flush_close_unref(bus);
+    return result;
+}
+
+static bool ppd_set_active(const std::string& profile) {
+    sd_bus* bus = nullptr;
+    if (sd_bus_open_system(&bus) < 0) return false;
+    bool ok = false;
+    const std::pair<const char*, const char*> names[] = {
+        {"org.freedesktop.UPower.PowerProfiles", "/org/freedesktop/UPower/PowerProfiles"},
+        {"net.hadess.PowerProfiles", "/net/hadess/PowerProfiles"}};
+    for (const auto& [service, path] : names) {
+        sd_bus_error error = SD_BUS_ERROR_NULL;
+        ok = sd_bus_set_property(bus, service, path, service, "ActiveProfile", &error, "s", profile.c_str()) >= 0;
+        sd_bus_error_free(&error);
+        if (ok) break;
+    }
+    sd_bus_flush_close_unref(bus);
+    return ok;
+}
+
+bool SystemControl::power_profile_available() {
+    return !ppd_get_active().empty();
+}
+
 std::string SystemControl::power_profile_get() {
-    std::string out = exec_cmd("powerprofilesctl get 2>/dev/null");
+    std::string out = ppd_get_active();
     if (!out.empty()) return out;
-    std::string gov = exec_cmd("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null");
+    std::string gov = read_file_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+    while (!gov.empty() && std::isspace(static_cast<unsigned char>(gov.back()))) gov.pop_back();
     if (gov == "performance") return "performance";
     if (gov == "powersave") return "power-saver";
     return "balanced";
@@ -687,7 +847,7 @@ std::string SystemControl::power_profile_get() {
 
 bool SystemControl::power_profile_set(const std::string& profile) {
     if (profile != "performance" && profile != "power-saver" && profile != "balanced") return false;
-    if (run_argv_status({"powerprofilesctl", "set", profile})) {
+    if (ppd_set_active(profile)) {
         return true;
     }
     std::string gov = (profile == "performance" ? "performance" : (profile == "power-saver" ? "powersave" : "schedutil"));
@@ -851,22 +1011,14 @@ bool SystemControl::caffeine_is_active() {
 
 bool SystemControl::caffeine_set(bool active) {
     if (active) {
-        int fd = open(runtime_path("caffeine.state").c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0600);
-        if (fd >= 0) close(fd);
-        // The inhibitor is the feature. Announcing it without checking left a
-        // machine promising to stay awake and going to sleep anyway.
-        if (!SwayIPC::run("inhibit_idle focus")) {
-            unlink(runtime_path("caffeine.state").c_str());
-            notify_user("b1air DE", "Could not keep the screen awake",
-                        "The compositor refused the idle inhibitor.", "dialog-error");
-            return false;
-        }
+        if (!write_private_file(runtime_path("caffeine.state"), "1\n")) return false;
         osd_status("Caffeine on", "Screen stays awake", "caffeine");
     } else {
         unlink(runtime_path("caffeine.state").c_str());
-        (void)SwayIPC::run("inhibit_idle none");
         osd_status("Caffeine off", "Screen sleeps as usual", "caffeine");
     }
+    // The idle thread sees caffeine.state come and go (idle.cpp) and holds
+    // its stages off meanwhile.
     return true;
 }
 
@@ -964,6 +1116,11 @@ static bool try_exec_present(const std::string& try_exec) {
         start = end + 1;
     }
     return false;
+}
+
+// Whether a program is on PATH.
+static bool on_path(const std::string& program) {
+    return !program.empty() && try_exec_present(program);
 }
 
 /**
@@ -1291,7 +1448,7 @@ std::string SystemControl::pick_color() {
     if (pos.empty() || !valid_geometry(pos)) return "";
     const std::string hex = ppm_first_pixel(run_argv_capture({"grim", "-g", pos + " 1x1", "-t", "ppm", "-"}));
     if (hex.empty()) return "";
-    (void)run_argv_with_stdin({"wl-copy"}, hex);
+    (void)run_argv_with_stdin({"b1air-clip", "copy"}, hex);
     osd_status("Colour copied", hex, "color-picker");
     return hex;
 }
@@ -2125,7 +2282,6 @@ void SystemControl::watch_outputs() {
         last = key;
         std::cerr << "[b1air-displays] screens now: " << key << "\n";
         monitors_restore();
-        wallpaper_apply_overrides();
         monitors_arm_hotplug();
     });
 }
@@ -2377,9 +2533,11 @@ std::string SystemControl::get_layout_shorthand() {
 
 // ── Wi-Fi & Network Status ───────────────────────────────────────────────────
 std::string SystemControl::get_wifi_status_json() {
-    std::string radio = exec_cmd("nmcli -t -f WIFI general 2>/dev/null | head -n1");
+    std::string radio = run_line({"nmcli", "-t", "-f", "WIFI", "general"}, 5);
     if (radio == "enabled") {
-        std::string line = exec_cmd("nmcli -t -f IN-USE,SIGNAL device wifi list 2>/dev/null | grep '^\\*' | head -n1");
+        std::string line;
+        for (const auto& l : lines_of(run_out({"nmcli", "-t", "-f", "IN-USE,SIGNAL", "device", "wifi", "list"}, 10)))
+            if (!l.empty() && l[0] == '*') { line = l; break; }
         if (!line.empty()) {
             size_t colon = line.find(':');
             std::string sig_str = (colon != std::string::npos) ? line.substr(colon + 1) : "0";
@@ -2397,8 +2555,9 @@ std::string SystemControl::get_wifi_status_json() {
     }
 
     // Check for active wired Ethernet (common in Virtual Machines)
-    std::string wired = exec_cmd("nmcli -t -f TYPE,STATE device 2>/dev/null | grep -E '^ethernet:connected'");
-    if (!wired.empty()) {
+    const int wired = count_lines({"nmcli", "-t", "-f", "TYPE,STATE", "device"}, 5,
+                                  [](const std::string& l) { return l.rfind("ethernet:connected", 0) == 0; });
+    if (wired > 0) {
         return "{\"text\":\"󰈀 Wired\",\"class\":\"connected\"}";
     }
 
@@ -2411,7 +2570,7 @@ std::string SystemControl::get_wifi_status_json() {
 
 // ── Interactive Wi-Fi Management ─────────────────────────────────────────────
 std::string SystemControl::wifi_list_json() {
-    std::string out = exec_cmd("nmcli -t -f SSID,BSSID,SIGNAL,SECURITY,IN-USE device wifi list 2>/dev/null");
+    std::string out = run_out({"nmcli", "-t", "-f", "SSID,BSSID,SIGNAL,SECURITY,IN-USE", "device", "wifi", "list"}, 10);
     std::istringstream stream(out);
     std::string line;
     std::vector<std::string> json_items;
@@ -2476,9 +2635,11 @@ std::string SystemControl::wifi_connect(const std::string& ssid, const std::stri
 
 // ── Interactive Bluetooth Management ─────────────────────────────────────────
 std::string SystemControl::bt_list_json() {
-    std::string paired_out = exec_cmd("bluetoothctl paired-devices 2>/dev/null");
-    std::string all_out = exec_cmd("bluetoothctl devices 2>/dev/null");
-    std::string info_out = exec_cmd("bluetoothctl info 2>/dev/null");
+    std::string paired_out = run_out({"bluetoothctl", "devices", "Paired"}, 5);
+    if (paired_out.find("Device ") == std::string::npos)   // bluetoothctl before 5.66
+        paired_out = run_out({"bluetoothctl", "paired-devices"}, 5);
+    std::string all_out = run_out({"bluetoothctl", "devices"}, 5);
+    std::string info_out = run_out({"bluetoothctl", "info"}, 5);
 
     std::unordered_map<std::string, std::pair<std::string, bool>> devs;
 
@@ -2539,7 +2700,8 @@ bool SystemControl::bt_pair(const std::string& mac) {
 
 // ── Media Player Status ──────────────────────────────────────────────────────
 std::string SystemControl::get_media_status_json() {
-    std::string output = exec_cmd("playerctl metadata --format '{{status}}\x1f{{artist}}\x1f{{title}}\x1f{{playerName}}' 2>/dev/null");
+    std::string output = run_line({"playerctl", "metadata", "--format",
+                                   "{{status}}\x1f{{artist}}\x1f{{title}}\x1f{{playerName}}"}, 5);
     if (output.empty()) {
         return "{\"text\":\"\",\"class\":\"hidden\",\"tooltip\":\"No active player\"}";
     }
@@ -2597,11 +2759,53 @@ int SystemControl::get_volume() {
  * Sound"; both were switches storing values nothing read. The QML side has a
  * SoundEffects service, but the events they describe happen here — the volume
  * keys and the capture both run in the daemon — so the sounds belong here too.
- * libcanberra and sound-theme-freedesktop are already in the package list.
  */
 static void play_feedback_sound(const char* setting_key, const char* sound_name) {
     if (!SettingsManager::get_json_bool(setting_key, true)) return;
-    (void)util::spawn_detached({"canberra-gtk-play", "-i", sound_name});
+    (void)SystemControl::play_sound(sound_name);
+}
+
+/**
+ * The file for a sound-theme event, the way the freedesktop sound theme spec
+ * looks one up: the user's sounds first, then each data directory, the
+ * "freedesktop" theme, stereo, and the name with its last "-part" dropped
+ * until something matches ("dialog-warning-auth" → "dialog-warning"). This
+ * is all libcanberra did for us here, and canberra-gtk-play, its GTK 3
+ * command, is going away with GTK 3.
+ */
+static std::string sound_theme_file(std::string name) {
+    std::vector<std::string> roots;
+    const std::string home = home_dir();
+    if (const char* x = std::getenv("XDG_DATA_HOME"); x && *x) roots.push_back(std::string(x) + "/sounds");
+    else if (!home.empty()) roots.push_back(home + "/.local/share/sounds");
+    const char* dirs = std::getenv("XDG_DATA_DIRS");
+    std::stringstream ds(dirs && *dirs ? dirs : "/usr/local/share:/usr/share");
+    for (std::string d; std::getline(ds, d, ':');)
+        if (!d.empty()) roots.push_back(d + "/sounds");
+    while (!name.empty()) {
+        for (const auto& root : roots)
+            for (const char* ext : {".oga", ".ogg", ".wav"}) {
+                const std::string f = root + "/freedesktop/stereo/" + name + ext;
+                if (access(f.c_str(), R_OK) == 0) return f;
+            }
+        const auto dash = name.rfind('-');
+        if (dash == std::string::npos) break;
+        name.resize(dash);
+    }
+    return {};
+}
+
+bool SystemControl::play_sound(const std::string& name, const std::string& target) {
+    static const std::regex ok_name("[a-z0-9-]{1,64}");
+    static const std::regex ok_target("[A-Za-z0-9_.:@-]{1,128}");
+    if (!std::regex_match(name, ok_name)) return false;
+    if (!target.empty() && !std::regex_match(target, ok_target)) return false;
+    const std::string file = sound_theme_file(name);
+    if (file.empty()) return false;
+    std::vector<std::string> argv = {"pw-play"};
+    if (!target.empty()) argv.push_back("--target=" + target);
+    argv.push_back(file);
+    return util::spawn_detached(argv);
 }
 
 bool SystemControl::volume_up(int step) {
@@ -2724,7 +2928,7 @@ static std::vector<DdcDisplay> detect_ddc_displays(bool force = false) {
         }
     }
 
-    std::string raw = exec_cmd_full("timeout 2s ddcutil detect --brief 2>/dev/null");
+    std::string raw = run_out({"ddcutil", "detect", "--brief"}, 2);
     std::istringstream stream(raw);
     std::string line, cur_display, cur_bus, cur_model;
 
@@ -2880,10 +3084,13 @@ bool SystemControl::ddc_refresh() {
 }
 
 bool SystemControl::ddc_dim() {
-    std::string cur = std::to_string(brightness_get());
-    std::ofstream out(runtime_path("brightness.saved"));
-    out << cur << "\n";
-    out.close();
+    // The brightness to come back to, kept only by the first of two dims in a
+    // row: idle dims, then the lock dims again, and the second used to save
+    // the already-dimmed 10% — so unlocking brought the screen back at 10%.
+    if (access(runtime_path("brightness.saved").c_str(), F_OK) != 0) {
+        std::ofstream out(runtime_path("brightness.saved"));
+        out << brightness_get() << "\n";
+    }
 
     (void)backlight::set_percent(backlight::screen(), 10);
     (void)run_argv_status({"ddcutil", "setvcp", "10", "10", "--noverify"});
@@ -3297,6 +3504,9 @@ std::string SystemControl::weather_get_current_info(const std::string& field) {
     const auto doc = nlohmann::json::parse(json, nullptr, false);
     if (!doc.is_object() || !doc.contains("forecast") || !doc["forecast"].is_array() || doc["forecast"].empty())
         return "";
+    // The placeholder written when no forecast could be had (offline, no
+    // key): zeros, which read as a real 0°C. Nothing to show instead.
+    if (doc["forecast"][0].value("desc", std::string()) == "Weather unavailable") return "";
     const std::string unit = doc.value("unit", std::string("C"));
     const nlohmann::json& hours = doc["forecast"][0].value("hourly", nlohmann::json::array());
     if (!hours.is_array() || hours.empty()) return "";
@@ -3367,42 +3577,21 @@ bool SystemControl::wallpaper_set(const std::string& filepath, const std::string
     const char* home = std::getenv("HOME");
     std::string cache_file = std::string(home ? home : "/tmp") + "/.cache/current_wallpaper.jpg";
 
-    // Copy to user cache
-    (void)run_argv_status({"cp", "-f", resolved_path, cache_file});
-    // Copy to SDDM cache if writable
-    (void)run_argv_status({"cp", "-f", resolved_path, "/var/cache/wallpaper/current.jpg"});
+    // The user's cache (b1air-bg and the lock screen read it), and the login
+    // screen's, where that is writable.
+    {
+        std::error_code ec;
+        const auto overwrite = std::filesystem::copy_options::overwrite_existing;
+        std::filesystem::copy_file(resolved_path, cache_file, overwrite, ec);
+        std::filesystem::copy_file(resolved_path, "/var/cache/wallpaper/current.jpg", overwrite, ec);
+    }
 
-    // Apply to Sway. At login the session asks before sway's IPC socket is
-    // always up; falling through to a swaybg of our own then left a second
-    // wallpaper layer running for the whole session, under sway's, that no
-    // later change ever reached. A couple of seconds of patience first.
-    SwayIPC ipc;
-    bool connected = ipc.connect();
-    for (int i = 0; !connected && i < 20; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        connected = ipc.connect();
-    }
-    if (connected) {
-        ipc.send_command(0, "output * bg '" + resolved_path + "' fill");
-        // A new picture for every screen replaces any one screen's own; a
-        // restore keeps them and lays them back over the shared one.
-        if (mode == "restore") {
-            wallpaper_apply_overrides();
-        } else {
-            (void)unlink(wallpaper_overrides_path().c_str());
-            // sway keeps a screen's own `output NAME bg` over `output * bg`,
-            // so "every screen" has to be said to each of them as well.
-            const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
-            if (outputs.is_array())
-                for (const auto& o : outputs)
-                    ipc.send_command(0, "output \"" + json_str(o, "name", "") + "\" bg '" + resolved_path + "' fill");
-        }
-    } else if (!util::command_exists("b1air-bg")) {
-        // b1air-bg, where installed, picks the new picture up from the cache
-        // file on its own.
-        (void)proc::kill_all("swaybg");
-        (void)util::spawn_detached({"swaybg", "-m", "fill", "-i", resolved_path});
-    }
+    // A new picture for every screen replaces any one screen's own; a
+    // restore keeps them.
+    if (mode != "restore") (void)unlink(wallpaper_overrides_path().c_str());
+    // b1air-bg draws the background and picks the new picture up from the
+    // cache file and wallpapers.json on its own. This also sent sway
+    // `output * bg …`, which draws nothing with `swaybg_command -`.
 
     return true;
 }
@@ -3454,6 +3643,30 @@ static std::string cache_wallpaper_copy(const std::string& resolved, const std::
     return cached;
 }
 
+std::string SystemControl::wallpaper_shown_on(const std::string& output) {
+    const auto map = load_wallpaper_map();
+    auto readable = [](const nlohmann::json& v) {
+        return v.is_string() && access(v.get<std::string>().c_str(), R_OK) == 0 ? v.get<std::string>() : std::string();
+    };
+    SwayIPC ipc;
+    if (ipc.connect()) {
+        const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+        if (outputs.is_array())
+            for (const auto& o : outputs) {
+                if (json_str(o, "name", "") != output) continue;
+                const std::string ws = json_str(o, "current_workspace", "");
+                if (!ws.empty() && map["workspaces"].contains(ws))
+                    if (auto p = readable(map["workspaces"][ws]); !p.empty()) return p;
+                const std::string id = output_identity(o);
+                if (map["outputs"].contains(id))
+                    if (auto p = readable(map["outputs"][id]); !p.empty()) return p;
+            }
+    }
+    const char* home = std::getenv("HOME");
+    const std::string shared = std::string(home ? home : "/tmp") + "/.cache/current_wallpaper.jpg";
+    return access(shared.c_str(), R_OK) == 0 ? shared : std::string();
+}
+
 bool SystemControl::wallpaper_set_output(const std::string& filepath, const std::string& output) {
     std::string resolved;
     if (!safe_wallpaper_file(filepath, resolved) || access(resolved.c_str(), R_OK) != 0) return false;
@@ -3472,8 +3685,6 @@ bool SystemControl::wallpaper_set_output(const std::string& filepath, const std:
     auto map = load_wallpaper_map();
     map["outputs"][identity] = cached;
     if (!save_wallpaper_map(map)) return false;
-    // For swaybg, when b1air-bg is not the one drawing; harmless when it is.
-    ipc.send_command(0, "output \"" + output + "\" bg '" + cached + "' fill");
     return true;
 }
 
@@ -3511,10 +3722,6 @@ bool SystemControl::wallpaper_unset(const std::string& output, const std::string
         if (it == map["outputs"].end()) return !identity.empty();
         if (it->is_string()) removed = it->get<std::string>();
         map["outputs"].erase(it);
-        const char* home = std::getenv("HOME");
-        const std::string shared = std::string(home ? home : "/tmp") + "/.cache/current_wallpaper.jpg";
-        if (access(shared.c_str(), R_OK) == 0 && safe_sway_path(shared))
-            ipc.send_command(0, "output \"" + output + "\" bg '" + shared + "' fill");
     }
     if (!save_wallpaper_map(map)) return false;
     // The cached copy is ours; the original never was.
@@ -3526,23 +3733,6 @@ bool SystemControl::wallpaper_unset(const std::string& output, const std::string
 
 std::string SystemControl::wallpaper_workspaces_json() {
     return load_wallpaper_map()["workspaces"].dump();
-}
-
-bool SystemControl::wallpaper_apply_overrides() {
-    const auto map = load_wallpaper_map()["outputs"];
-    if (!map.is_object() || map.empty()) return true;
-    SwayIPC ipc;
-    if (!ipc.connect()) return false;
-    const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
-    if (!outputs.is_array()) return false;
-    for (const auto& o : outputs) {
-        const auto it = map.find(output_identity(o));
-        if (it == map.end() || !it->is_string()) continue;
-        const std::string path = it->get<std::string>();
-        if (access(path.c_str(), R_OK) == 0 && safe_sway_path(path))
-            ipc.send_command(0, "output \"" + json_str(o, "name", "") + "\" bg '" + path + "' fill");
-    }
-    return true;
 }
 
 std::string SystemControl::wallpaper_overrides_json() {
@@ -3599,72 +3789,78 @@ bool SystemControl::wallpaper_restore() {
 }
 
 // ── Night Light ──────────────────────────────────────────────────────────────
+SystemControl::NightSchedule SystemControl::NightSchedule::from_settings() {
+    NightSchedule s;
+    if (auto v = SettingsManager::get_json_string("nightLightSchedule"); !v.empty()) s.mode = v;
+    if (auto v = SettingsManager::get_json_string("nightLightFrom"); !v.empty()) s.from = v;
+    if (auto v = SettingsManager::get_json_string("nightLightTo"); !v.empty()) s.to = v;
+    s.location = SettingsManager::get_json_string("nightLightLocation");
+    return s;
+}
+
 bool SystemControl::night_light_on(int temp, bool announce) {
-    // spawn_detached tells you the fork worked, not that the program ran:
-    // with wlsunset missing the exec fails inside the child and this still
-    // announced "Night Light Enabled" over a screen that never changed
-    // colour. Check the binary is there, then check it stayed up.
-    if (!try_exec_present("wlsunset")) {
-        notify_user("Night Light", "wlsunset is not installed",
-                    "Install wlsunset to use night light.", "dialog-error");
-        return false;
-    }
+    return night_light_on(temp, announce, NightSchedule::from_settings());
+}
 
-    // wlsunset has no "fixed temperature" mode; it moves between -t at night
-    // and -T by day. This passed -t alone, so -T stayed at its 6500 K default,
-    // and with no location given wlsunset decides it is permanently day and
-    // sits at 6500 K — which is no filter at all. The shell's own attempt
-    // passed -t and -T equal, which wlsunset refuses outright ("high temp
-    // must be higher than low") and exits. So night light had never tinted
-    // the screen from any of the three places that offer it. A one-kelvin
-    // gap makes both ends the chosen value.
+bool SystemControl::night_light_on(int temp, bool announce, const NightSchedule& schedule) {
+    static const std::regex time_re(R"(([01][0-9]|2[0-3]):[0-5][0-9])");
+    static const std::regex location_re(R"(\s*(-?[0-9]{1,2}(?:\.[0-9]+)?)\s*,\s*(-?[0-9]{1,3}(?:\.[0-9]+)?)\s*)");
+    const std::string mode = (schedule.mode == "hours" || schedule.mode == "sun") ? schedule.mode : "always";
+
+    // b1air-gamma holds the temperature and follows the schedule itself; a
+    // running one is told about changes (this file and SIGUSR1) and fades to
+    // them, so the Settings slider does not flash the screen white on every
+    // step the way restarting wlsunset did.
     temp = std::clamp(temp, 1000, 6500);
-    (void)proc::kill_all("wlsunset");
-    if (!util::spawn_detached({"wlsunset", "-t", std::to_string(temp), "-T", std::to_string(temp + 1)})) {
-        notify_user("Night Light", "Could not start wlsunset", {}, "dialog-error");
-        return false;
+    std::ostringstream conf;
+    conf << "temp=" << temp << "\nmode=" << mode << "\n";
+    if (std::regex_match(schedule.from, time_re)) conf << "from=" << schedule.from << "\n";
+    if (std::regex_match(schedule.to, time_re)) conf << "to=" << schedule.to << "\n";
+    std::smatch m;
+    if (std::regex_match(schedule.location, m, location_re))
+        conf << "lat=" << m[1].str() << "\nlon=" << m[2].str() << "\n";
+    if (!write_private_file(runtime_path("gamma"), conf.str())) return false;
+
+    if (proc::running("b1air-gamma")) {
+        (void)proc::kill_all("b1air-gamma", SIGUSR1);
+    } else {
+        // spawn_detached tells you the fork worked, not that the program
+        // ran: check it is there first, and still up a moment later. It
+        // exits at once when no screen accepts gamma control.
+        if (!try_exec_present("b1air-gamma")) {
+            notify_user("Night Light", "b1air-gamma is not installed", {}, "dialog-error");
+            return false;
+        }
+        if (!util::spawn_detached({"b1air-gamma"})) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        if (!proc::running("b1air-gamma")) {
+            notify_user("Night Light", "Night light could not start",
+                        "No screen here accepts colour changes.", "dialog-error");
+            return false;
+        }
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    if (!proc::running("wlsunset")) {
-        notify_user("Night Light", "wlsunset exited immediately",
-                    "The compositor may not support gamma control.", "dialog-error");
-        return false;
-    }
-
-    // Quiet for the Settings slider, which restarts this on every step, and
-    // for the login restore: a toast per notch, or one at every login, is
-    // noise about something the user is looking at.
+    // Quiet for the Settings slider and for the login restore: a toast per
+    // notch, or one at every login, is noise about something the user is
+    // looking at.
     if (announce)
-        osd_status("Night Light on", "Warm colours", "weather-clear-night");
+        osd_status("Night Light on", mode == "always" ? "Warm colours" : "Warm colours at night",
+                   "weather-clear-night");
     return true;
 }
 
 bool SystemControl::night_light_off(bool announce) {
-    (void)proc::kill_all("wlsunset");
+    (void)proc::kill_all("b1air-gamma");
     if (announce)
         osd_status("Night Light off", "Standard colours", "weather-clear");
     return true;
 }
 
 bool SystemControl::night_light_toggle() {
-    if (proc::running("wlsunset")) {
+    if (proc::running("b1air-gamma")) {
         return night_light_off();
     } else {
         return night_light_on(SettingsManager::get_json_int("nightLightTemp", 4000));
-    }
-}
-
-bool SystemControl::night_light_auto() {
-    auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
-    struct tm* tm = std::localtime(&in_time_t);
-    int hour = tm->tm_hour;
-
-    if (hour >= 20 || hour < 7) {
-        return night_light_on(4000);
-    } else {
-        return night_light_off();
     }
 }
 
@@ -3674,29 +3870,49 @@ bool SystemControl::night_light_auto() {
 // whichever package manager this is. All of them read cached metadata and need
 // no root: checkupdates syncs into its own temporary database, `apt-get -s`
 // only simulates, and dnf and zypper refresh into the user's cache.
-static const char* const kPendingUpdatesCmd =
-    "if command -v checkupdates >/dev/null 2>&1; then checkupdates; "
-    "elif command -v apt-get >/dev/null 2>&1; then apt-get -s -o Debug::NoLocking=1 upgrade | grep '^Inst '; "
-    "elif command -v dnf >/dev/null 2>&1; then dnf -q check-update | grep -E '^[^[:space:]]+[.][^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+$'; "
-    "elif command -v zypper >/dev/null 2>&1; then zypper -q list-updates | grep '^v '; "
-    "fi";
+// Pending updates from whichever package manager this is, counted from its
+// own listing (one line an update). A minute at most: a slow mirror must not
+// hold the daemon.
+static int pending_system_updates() {
+    if (on_path("checkupdates"))   // Arch (pacman-contrib)
+        return count_lines({"checkupdates"}, 60, [](const std::string&) { return true; });
+    if (on_path("apt-get"))
+        return count_lines({"apt-get", "-s", "-o", "Debug::NoLocking=1", "upgrade"}, 60,
+                           [](const std::string& l) { return l.rfind("Inst ", 0) == 0; });
+    if (on_path("dnf")) {
+        // "name.arch  version  repo": three fields, the first with a dot.
+        static const std::regex row(R"(^\S+\.\S+\s+\S+\s+\S+$)");
+        return count_lines({"dnf", "-q", "check-update"}, 60,
+                           [](const std::string& l) { return std::regex_match(l, row); });
+    }
+    if (on_path("zypper"))
+        return count_lines({"zypper", "-q", "list-updates"}, 60,
+                           [](const std::string& l) { return l.rfind("v ", 0) == 0; });
+    return 0;
+}
+
+static std::string package_manager_name() {
+    for (const char* m : {"pacman", "apt-get", "dnf", "zypper"})
+        if (on_path(m)) return std::string(m) == "apt-get" ? "apt" : m;
+    return "";
+}
 
 std::string SystemControl::get_updates_json(bool /*force*/) {
     int system_updates = 0;
     int aur_updates = 0;
 
-    std::string sys_str = exec_cmd(std::string("{ ") + kPendingUpdatesCmd + "; } 2>/dev/null | wc -l");
-    try { system_updates = std::stoi(sys_str); } catch (...) { system_updates = 0; }
+    system_updates = pending_system_updates();
 
     // The AUR exists only on Arch; elsewhere neither helper is installed and
     // this counts nothing.
-    std::string aur_str = exec_cmd("{ if command -v yay >/dev/null 2>&1; then yay -Qua; "
-                                   "elif command -v paru >/dev/null 2>&1; then paru -Qua; fi; } 2>/dev/null | wc -l");
-    try { aur_updates = std::stoi(aur_str); } catch (...) { aur_updates = 0; }
+    for (const char* helper : {"yay", "paru"}) {
+        if (!on_path(helper)) continue;
+        aur_updates = count_lines({helper, "-Qua"}, 60, [](const std::string&) { return true; });
+        break;
+    }
 
     // Which package manager answered, for the windows that name it.
-    const std::string manager = exec_cmd(
-        "for m in pacman apt-get dnf zypper; do command -v $m >/dev/null 2>&1 && { echo ${m%-get}; break; }; done");
+    const std::string manager = package_manager_name();
 
     int total = system_updates + aur_updates;
     if (total == 0) {
@@ -3791,30 +4007,74 @@ bool SystemControl::term_theme_set(const std::string& theme) {
 }
 
 // ── Gamepad Idle Inhibitor ───────────────────────────────────────────────────
+//
+// A gamepad is not something libinput or the compositor reads, so playing
+// with one looks like nobody is there: the screen dimmed, locked and slept
+// mid-game. This reads the joystick devices and, while one is in use, holds
+// the idle stages off (idle.cpp), for two minutes after
+// the last real input.
+//
+// It used to open each /dev/input/js* every two seconds and call any byte
+// "activity" — but a joystick device answers every open with its initial
+// state (JS_EVENT_INIT), so a pad merely plugged in counted as play. And the
+// hold was `systemd-inhibit --what=idle sleep 120`, a logind inhibitor that
+// swayidle did not consult: it held nothing.
 int SystemControl::run_gamepad_inhibit() {
-    std::cout << "[b1air-gamepad] Monitoring joystick activity (/dev/input/js*)...\n";
+    struct JsEvent { uint32_t time; int16_t value; uint8_t type; uint8_t number; };
+    constexpr uint8_t kButton = 0x01, kAxis = 0x02, kInit = 0x80;
+    constexpr int kHoldSeconds = 120;
+    constexpr int kAxisDeadzone = 8000;   // of ±32767: stick drift is not play
+
+    const std::string state = runtime_path("gamepad.state");
+    unlink(state.c_str());
+
+    std::map<std::string, int> pads;
+    auto last_input = std::chrono::steady_clock::time_point{};
+    bool holding = false;
+
     while (true) {
-        DIR* dir = opendir("/dev/input");
-        if (dir) {
-            struct dirent* entry;
-            while ((entry = readdir(dir)) != nullptr) {
-                if (std::strncmp(entry->d_name, "js", 2) == 0) {
-                    std::string js_path = std::string("/dev/input/") + entry->d_name;
-                    int fd = open(js_path.c_str(), O_RDONLY | O_NONBLOCK);
-                    if (fd >= 0) {
-                        char buf[64];
-                        ssize_t n = read(fd, buf, sizeof(buf));
-                        close(fd);
-                        if (n > 0) {
-                            (void)util::spawn_detached({"systemd-inhibit", "--what=idle", "--who=b1air-gamepad",
-                                                     "--why=Gamepad Active", "sleep", "120"});
-                        }
-                    }
-                }
-            }
+        // Pads come and go: the directory is read again every pass.
+        std::set<std::string> present;
+        if (DIR* dir = opendir("/dev/input")) {
+            while (const dirent* e = readdir(dir))
+                if (std::strncmp(e->d_name, "js", 2) == 0) present.insert(std::string("/dev/input/") + e->d_name);
             closedir(dir);
         }
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        for (auto it = pads.begin(); it != pads.end();) {
+            if (!present.count(it->first)) { close(it->second); it = pads.erase(it); }
+            else ++it;
+        }
+        for (const auto& path : present) {
+            if (pads.count(path)) continue;
+            const int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+            if (fd >= 0) pads[path] = fd;
+        }
+
+        std::vector<pollfd> fds;
+        for (const auto& [path, fd] : pads) fds.push_back({fd, POLLIN, 0});
+        if (fds.empty()) std::this_thread::sleep_for(std::chrono::seconds(2));
+        else (void)poll(fds.data(), fds.size(), 2000);
+
+        for (auto& p : fds) {
+            if (p.revents & (POLLERR | POLLHUP | POLLNVAL)) continue;   // gone; dropped next pass
+            if (!(p.revents & POLLIN)) continue;
+            JsEvent ev{};
+            while (read(p.fd, &ev, sizeof(ev)) == static_cast<ssize_t>(sizeof(ev))) {
+                if (ev.type & kInit) continue;
+                const bool real = (ev.type == kButton)
+                               || (ev.type == kAxis && std::abs(static_cast<int>(ev.value)) > kAxisDeadzone);
+                if (real) last_input = std::chrono::steady_clock::now();
+            }
+        }
+
+        const bool active = last_input != std::chrono::steady_clock::time_point{}
+            && std::chrono::steady_clock::now() - last_input < std::chrono::seconds(kHoldSeconds);
+        if (active != holding) {
+            holding = active;
+            // The idle thread watches this file (idle.cpp).
+            if (active) (void)write_private_file(state, "1\n");
+            else unlink(state.c_str());
+        }
     }
     return 0;
 }
@@ -3988,11 +4248,12 @@ std::string SystemControl::media_get_info_json() {
     std::string tmp_dir = home_str + "/.cache/sway/music";
     mkdir(tmp_dir.c_str(), 0755);
 
-    std::string metadata = exec_cmd("playerctl metadata --format '{{status}}\x1f{{mpris:artUrl}}\x1f{{xesam:title}}\x1f{{xesam:artist}}\x1f{{mpris:length}}\x1f{{position}}\x1f{{playerName}}' 2>/dev/null");
+    std::string metadata = run_line({"playerctl", "metadata", "--format",
+        "{{status}}\x1f{{mpris:artUrl}}\x1f{{xesam:title}}\x1f{{xesam:artist}}\x1f{{mpris:length}}\x1f{{position}}\x1f{{playerName}}"}, 5);
 
     std::string placeholder = tmp_dir + "/placeholder_blank.png";
     if (access(placeholder.c_str(), R_OK) != 0) {
-        (void)run_argv_status({"convert", "-size", "500x500", "xc:#313244", placeholder});
+        (void)run_argv_status(imagemagick({"-size", "500x500", "xc:#313244", placeholder}));
     }
 
     std::string default_grad = "linear-gradient(45deg, #cba6f7, #89b4fa, #f38ba8, #cba6f7)";
@@ -4034,7 +4295,7 @@ std::string SystemControl::media_get_info_json() {
     std::string time_str = position_str + " / " + length_str;
 
     // Detect device name
-    std::string sink = exec_cmd("pactl get-default-sink 2>/dev/null");
+    std::string sink = run_line({"pactl", "get-default-sink"}, 3);
     std::string dev_icon = "󰓃";
     std::string dev_name = "Speaker";
     if (sink.find("bluez") != std::string::npos) {
@@ -4076,25 +4337,40 @@ std::string SystemControl::media_get_info_json() {
     } else if (!raw_url.empty()) {
         // Spawn async processor
         std::thread([=]() {
+            auto copy = [](const std::string& from, const std::string& to) {
+                std::error_code ec;
+                return std::filesystem::copy_file(from, to, std::filesystem::copy_options::overwrite_existing, ec);
+            };
             if (safe_art_url(raw_url) && (raw_url.rfind("http://", 0) == 0 || raw_url.rfind("https://", 0) == 0)) {
                 if (!run_argv_status({"curl", "-fsS", "--proto", "=http,https", "--proto-redir", "=http,https",
                                       "--connect-timeout", "3", "--max-time", "10", "--max-filesize", "5242880",
                                       "-o", final_art, raw_url}))
-                    (void)run_argv_status({"cp", placeholder, final_art});
+                    (void)copy(placeholder, final_art);
             } else if (safe_art_url(raw_url) && raw_url.rfind("file://", 0) == 0) {
                 std::string clean = raw_url.substr(7);
                 char local_path[PATH_MAX];
                 struct stat local_stat{};
                 if (!realpath(clean.c_str(), local_path) || stat(local_path, &local_stat) != 0 ||
                     !S_ISREG(local_stat.st_mode) || local_stat.st_size <= 0 || local_stat.st_size > 5 * 1024 * 1024 ||
-                    !run_argv_status({"cp", local_path, final_art}))
-                    (void)run_argv_status({"cp", placeholder, final_art});
+                    !copy(local_path, final_art))
+                    (void)copy(placeholder, final_art);
             } else {
-                (void)run_argv_status({"cp", placeholder, final_art});
+                (void)copy(placeholder, final_art);
             }
-            if (!run_argv_status({"convert", final_art, "-blur", "0x20", "-brightness-contrast", "-30x-10", blur_path}))
-                (void)run_argv_status({"cp", final_art, blur_path});
-            std::string colors = exec_cmd("convert " + shell_quote(final_art) + " -resize 50x50 -alpha off +dither -quantize RGB -colors 3 -depth 8 -format '%c' histogram:info: 2>/dev/null | grep -E -o '#[0-9A-Fa-f]{6}' | head -n 3 | tr '\\n' ' '");
+            if (!run_argv_status(imagemagick({final_art, "-blur", "0x20", "-brightness-contrast", "-30x-10", blur_path})))
+                (void)copy(final_art, blur_path);
+            // The three main colours of the cover, from ImageMagick's histogram.
+            std::string colors;
+            {
+                const std::string hist = run_out(imagemagick({final_art, "-resize", "50x50", "-alpha", "off",
+                                                  "+dither", "-quantize", "RGB", "-colors", "3", "-depth", "8",
+                                                  "-format", "%c", "histogram:info:"}), 10);
+                static const std::regex hex("#[0-9A-Fa-f]{6}");
+                int found = 0;
+                for (auto it = std::sregex_iterator(hist.begin(), hist.end(), hex);
+                     it != std::sregex_iterator() && found < 3; ++it, ++found)
+                    colors += it->str() + " ";
+            }
             std::stringstream css(colors);
             std::string c1, c2, c3;
             css >> c1 >> c2 >> c3;
@@ -4239,17 +4515,19 @@ std::string SystemControl::dotfiles_status_json() {
     // updater window waiting on it — until the fetch gave up. A failed fetch
     // is reported (fetch_ok) so the window can say the answer may be stale
     // instead of claiming "up to date".
-    const std::string fetch_out = exec_cmd(
-        "GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C " + shell_quote(repo) +
-        " fetch --quiet origin 2>&1; echo \"rc=$?\"");
-    const bool fetch_ok = fetch_out.size() >= 4 && fetch_out.compare(fetch_out.size() - 4, 4, "rc=0") == 0;
+    const bool fetch_ok = run_argv_status_env({"git", "-C", repo, "fetch", "--quiet", "origin"},
+        {{"GIT_TERMINAL_PROMPT", "0"}, {"GIT_SSH_COMMAND", "ssh -o BatchMode=yes"}});
 
-    std::string branch = exec_cmd("git -C " + shell_quote(repo) + " rev-parse --abbrev-ref HEAD 2>/dev/null");
+    auto git = [&repo](std::vector<std::string> args) {
+        args.insert(args.begin(), {"git", "-C", repo});
+        return run_line(args, 10);
+    };
+    std::string branch = git({"rev-parse", "--abbrev-ref", "HEAD"});
     if (branch.empty()) branch = "main";
-    std::string local_hash = exec_cmd("git -C " + shell_quote(repo) + " rev-parse --short HEAD 2>/dev/null");
-    std::string remote_ref = exec_cmd("git -C " + shell_quote(repo) + " rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null");
+    std::string local_hash = git({"rev-parse", "--short", "HEAD"});
+    std::string remote_ref = git({"rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"});
     if (remote_ref.empty()) remote_ref = "origin/main";
-    std::string remote_hash = exec_cmd("git -C " + shell_quote(repo) + " rev-parse --short " + shell_quote(remote_ref) + " 2>/dev/null");
+    std::string remote_hash = git({"rev-parse", "--short", remote_ref});
 
     // The changelog line used to come from a hardcoded
     // api.github.com/repos/bla1r1/DotsFiles call — dead weight (a second
@@ -4257,8 +4535,7 @@ std::string SystemControl::dotfiles_status_json() {
     // and it would silently go stale the moment the repo moved or was
     // renamed. `git log` already has the answer locally, for whatever
     // remote `origin` actually points at right now.
-    std::string remote_message = exec_cmd("git -C " + shell_quote(repo) + " log -1 --pretty=%s " +
-                                          shell_quote(remote_ref) + " 2>/dev/null");
+    std::string remote_message = git({"log", "-1", "--pretty=%s", remote_ref});
 
     // `local_hash != remote_hash` cannot tell "there is something to pull" from
     // "there is something to push", and the two are opposite answers. A
@@ -4274,9 +4551,7 @@ std::string SystemControl::dotfiles_status_json() {
     // right number is the reverse. Only the left one is an update.
     long behind = 0, ahead = 0;
     {
-        const std::string counts = exec_cmd("git -C " + shell_quote(repo) +
-                                            " rev-list --left-right --count " +
-                                            shell_quote(remote_ref + "...HEAD") + " 2>/dev/null");
+        const std::string counts = git({"rev-list", "--left-right", "--count", remote_ref + "...HEAD"});
         std::istringstream in(counts);
         in >> behind >> ahead;
     }
@@ -4288,9 +4563,8 @@ std::string SystemControl::dotfiles_status_json() {
     // one looked the same.
     std::string incoming = "[";
     if (behind > 0) {
-        const std::string log = exec_cmd("git -C " + shell_quote(repo) +
-                                         " log --no-merges -n 30 --pretty=format:%h%x1f%s " +
-                                         shell_quote("HEAD.." + remote_ref) + " 2>/dev/null");
+        const std::string log = run_out({"git", "-C", repo, "log", "--no-merges", "-n", "30",
+                                         "--pretty=format:%h%x1f%s", "HEAD.." + remote_ref}, 10);
         std::istringstream lines(log);
         std::string line;
         bool first = true;
@@ -4306,7 +4580,7 @@ std::string SystemControl::dotfiles_status_json() {
 
     // Uncommitted edits to tracked files make `git pull --ff-only` refuse, so
     // the window warns before the update rather than the update failing.
-    const bool dirty = !exec_cmd("git -C " + shell_quote(repo) + " status --porcelain -uno 2>/dev/null").empty();
+    const bool dirty = !run_line({"git", "-C", repo, "status", "--porcelain", "-uno"}, 10).empty();
 
     return "{\"ok\":true,\"fetch_ok\":" + std::string(fetch_ok ? "true" : "false") +
            ",\"dirty\":" + (dirty ? "true" : "false") + ",\"incoming\":" + incoming + ","
@@ -4319,24 +4593,146 @@ bool SystemControl::dotfiles_sync() {
     // --pull: update-dotfiles.sh leaves git alone unless asked, and this never
     // asked — so "Update" rebuilt and redeployed the commit already checked
     // out, and the updater still said N changes behind afterwards.
-    std::string script = "bash " + shell_quote(repo + "/update-dotfiles.sh") + " --pull --repo-dir " + shell_quote(repo) + "; printf '\\nPress Enter to close...\\n'; read -r _";
-    // bash, not fish: `read -r` is not a fish builtin option, so the window
-    // closed on an error instead of waiting for Enter.
-    return util::spawn_detached({"b1air-term", "-e", "bash", "-lc", script});
+    // --hold keeps the window, and what the update printed, until a key.
+    return util::spawn_detached({"b1air-term", "--hold", "-e", "bash", repo + "/update-dotfiles.sh",
+                                 "--pull", "--repo-dir", repo});
 }
 
 bool SystemControl::dotfiles_sys() {
-    // Was handed to `fish -lc`, which has no `if ...; then ...; fi`: the
-    // upgrade window printed a syntax error and never ran anything.
-    const std::string script = "if command -v yay >/dev/null 2>&1; then yay -Syu; "
-                              "elif command -v paru >/dev/null 2>&1; then paru -Syu; "
-                              "elif command -v pacman >/dev/null 2>&1; then sudo pacman -Syu; "
-                              "elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get upgrade; "
-                              "elif command -v dnf >/dev/null 2>&1; then sudo dnf upgrade --refresh; "
-                              "elif command -v zypper >/dev/null 2>&1; then sudo zypper refresh && sudo zypper dup; "
-                              "else echo 'No supported package manager found.'; fi; "
-                              "printf '\\nPress Enter to close...\\n'; read -r _";
-    return util::spawn_detached({"b1air-term", "-e", "bash", "-lc", script});
+    // The upgrade, in a terminal that stays open on what it printed (--hold).
+    // The steps are run by `b1air-daemon packages upgrade` in that terminal,
+    // one after another: apt and zypper want their lists refreshed first,
+    // which used to be `sudo sh -c "apt-get update && apt-get upgrade"`.
+    if (packages_upgrade_steps().empty()) return false;
+    return util::spawn_detached({"b1air-term", "--hold", "-e", "b1air-daemon", "packages", "upgrade"});
+}
+
+std::vector<std::vector<std::string>> SystemControl::packages_upgrade_steps() {
+    if (on_path("yay")) return {{"yay", "-Syu"}};
+    if (on_path("paru")) return {{"paru", "-Syu"}};
+    if (on_path("pacman")) return {{"sudo", "pacman", "-Syu"}};
+    if (on_path("apt-get")) return {{"sudo", "apt-get", "update"}, {"sudo", "apt-get", "upgrade"}};
+    if (on_path("dnf")) return {{"sudo", "dnf", "upgrade", "--refresh"}};
+    if (on_path("zypper")) return {{"sudo", "zypper", "refresh"}, {"sudo", "zypper", "dup"}};
+    return {};
+}
+
+// Each step in this terminal, as typed: stdin, stdout and stderr are the
+// terminal's, so sudo can ask and the package manager can ask. A step that
+// fails ends it there, as && did.
+int SystemControl::packages_upgrade() {
+    const auto steps = packages_upgrade_steps();
+    if (steps.empty()) {
+        std::cerr << "No package manager found.\n";
+        return 1;
+    }
+    for (const auto& step : steps) {
+        std::cout << "\n$";
+        for (const auto& a : step) std::cout << ' ' << a;
+        std::cout << "\n" << std::flush;
+        const pid_t pid = fork();
+        if (pid < 0) return 1;
+        if (pid == 0) {
+            std::vector<char*> argv;
+            for (const auto& a : step) argv.push_back(const_cast<char*>(a.c_str()));
+            argv.push_back(nullptr);
+            execvp(argv[0], argv.data());
+            _exit(127);
+        }
+        int status = 0;
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+    }
+    return 0;
+}
+
+bool SystemControl::packages_clean(const std::string& what) {
+    std::vector<std::string> cmd;
+    if (what == "cache") {
+        if (on_path("paccache")) cmd = {"sudo", "paccache", "-rk2"};
+        else if (on_path("pacman")) cmd = {"sudo", "pacman", "-Sc"};
+        else if (on_path("apt-get")) cmd = {"sudo", "apt-get", "clean"};
+        else if (on_path("dnf")) cmd = {"sudo", "dnf", "clean", "packages"};
+        else if (on_path("zypper")) cmd = {"sudo", "zypper", "clean", "--all"};
+    } else if (what == "orphans") {
+        if (on_path("pacman")) {
+            // pacman -Rns with nothing to remove is an error, so the list is
+            // read here first and an empty one is said, not run.
+            const auto orphans = lines_of(run_out({"pacman", "-Qtdq"}, 30));
+            if (orphans.empty()) {
+                osd_status("No orphan packages", "Nothing to remove", "edit-clear");
+                return true;
+            }
+            cmd = {"sudo", "pacman", "-Rns"};
+            cmd.insert(cmd.end(), orphans.begin(), orphans.end());
+        } else if (on_path("apt-get")) cmd = {"sudo", "apt-get", "autoremove"};
+        else if (on_path("dnf")) cmd = {"sudo", "dnf", "autoremove"};
+        // zypper has no autoremove: the list, to pick from with `zypper rm`.
+        else if (on_path("zypper")) cmd = {"zypper", "packages", "--unneeded"};
+    }
+    if (cmd.empty()) return false;
+    std::vector<std::string> argv = {"b1air-term", "--hold", "-e"};
+    argv.insert(argv.end(), cmd.begin(), cmd.end());
+    return util::spawn_detached(argv);
+}
+
+bool SystemControl::ethernet_ipv4(const std::string& ifname, const std::string& method,
+                                  const std::string& address, const std::string& prefix,
+                                  const std::string& gateway, const std::string& dns) {
+    static const std::regex name_re(R"([A-Za-z0-9_.:-]{1,64})");
+    static const std::regex addr_re(R"((?:[0-9]{1,3}\.){3}[0-9]{1,3}|[0-9A-Fa-f:]+)");
+    static const std::regex prefix_re(R"([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8])");
+    if (!std::regex_match(ifname, name_re)) return false;
+    const bool manual = method == "manual";
+    if (manual) {
+        if (!std::regex_match(address, addr_re) || !std::regex_match(prefix, prefix_re)) return false;
+        if (!gateway.empty() && !std::regex_match(gateway, addr_re)) return false;
+        if (!dns.empty() && !std::regex_match(dns, addr_re)) return false;
+    } else if (method != "auto") {
+        return false;
+    }
+    const std::string cidr = address + "/" + prefix;
+
+    // The connection on this device, by name: nmcli modifies connections,
+    // not devices, and the device name is only sometimes the connection's.
+    std::string conn;
+    for (const auto& line : lines_of(run_out({"nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show"}, 5))) {
+        const auto colon = line.rfind(':');
+        if (colon != std::string::npos && line.substr(colon + 1) == ifname) {
+            conn = line.substr(0, colon);
+            // -t escapes ':' inside a name as "\:".
+            conn = std::regex_replace(conn, std::regex(R"(\\:)"), ":");
+            break;
+        }
+    }
+    if (conn.empty() && on_path("nmcli")) conn = ifname;
+
+    bool ok = false;
+    if (on_path("nmcli")) {
+        if (manual)
+            ok = run_argv_status({"nmcli", "connection", "modify", conn, "ipv4.method", "manual",
+                                  "ipv4.addresses", cidr, "ipv4.gateway", gateway, "ipv4.dns", dns});
+        else
+            ok = run_argv_status({"nmcli", "connection", "modify", conn, "ipv4.method", "auto",
+                                  "ipv4.addresses", "", "ipv4.gateway", "", "ipv4.dns", ""});
+        if (ok) (void)run_argv_status({"nmcli", "connection", "up", conn});
+    }
+    if (!ok && manual) {
+        // Not NetworkManager's link: set it directly. Needs the privilege
+        // to, which the session usually has not, so this is the fallback.
+        ok = run_argv_status({"ip", "addr", "flush", "dev", ifname})
+          && run_argv_status({"ip", "addr", "add", cidr, "dev", ifname});
+        if (ok && !gateway.empty())
+            (void)run_argv_status({"ip", "route", "replace", "default", "via", gateway, "dev", ifname});
+    }
+    return ok;
+}
+
+std::vector<std::string> SystemControl::mime_defaults(const std::vector<std::string>& mimes) {
+    std::vector<std::string> out;
+    out.reserve(mimes.size());
+    for (const auto& m : mimes) out.push_back(run_line({"xdg-mime", "query", "default", m}, 5));
+    return out;
 }
 
 // ── Screen Capture, Recording & QR Scanner ───────────────────────────────────
@@ -4453,7 +4849,7 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
     if (format == "webp") {
         // imagemagick is already a declared dependency. If the conversion
         // fails the PNG stays where it is rather than the capture being lost.
-        (void)run_argv_status({"magick", filepath, filepath});
+        (void)run_argv_status(imagemagick({filepath, filepath}));
     }
 
     const std::string mime = (format == "png") ? "image/png"
@@ -4461,11 +4857,11 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
 
     if (edit) {
         if (!run_argv_status_env({"satty", "--filename", filepath, "--output-filename", filepath,
-                                  "--init-tool", "brush", "--copy-command", "wl-copy"},
+                                  "--init-tool", "brush", "--copy-command", "b1air-clip copy -t image/png"},
                                  {{"GSK_RENDERER", "gl"}})) return false;
     } else if (to_clipboard) {
         const std::string image = read_file_string(filepath);
-        if (image.empty() || !run_argv_with_raw_stdin({"wl-copy", "-t", mime}, image)) return false;
+        if (image.empty() || !run_argv_with_raw_stdin({"b1air-clip", "copy", "-t", mime}, image)) return false;
     }
 
     if (!keep_file) {
@@ -4553,9 +4949,9 @@ bool SystemControl::record_toggle(const std::string& geom, double desk_vol, doub
     if (modules_fd < 0) return false;
 
     if (!desk_mute) {
-        std::string desk_sink = exec_cmd("pactl get-default-sink 2>/dev/null");
+        std::string desk_sink = run_line({"pactl", "get-default-sink"}, 3);
         if (!desk_sink.empty()) {
-            std::string sink_id = exec_cmd("pactl load-module module-null-sink sink_name=qs_virt_desk 2>/dev/null");
+            std::string sink_id = run_line({"pactl", "load-module", "module-null-sink", "sink_name=qs_virt_desk"}, 5);
             std::string loop_id = run_argv_capture({"pactl", "load-module", "module-loopback",
                                                      "source=" + desk_sink + ".monitor", "sink=qs_virt_desk"});
             int vol_int = static_cast<int>(desk_vol * 65536);
@@ -4566,9 +4962,9 @@ bool SystemControl::record_toggle(const std::string& geom, double desk_vol, doub
     }
 
     if (!mic_mute) {
-        std::string source = (!mic_dev.empty() && mic_dev != "null") ? mic_dev : exec_cmd("pactl get-default-source 2>/dev/null");
+        std::string source = (!mic_dev.empty() && mic_dev != "null") ? mic_dev : run_line({"pactl", "get-default-source"}, 3);
         if (!source.empty()) {
-            std::string sink_id = exec_cmd("pactl load-module module-null-sink sink_name=qs_virt_mic 2>/dev/null");
+            std::string sink_id = run_line({"pactl", "load-module", "module-null-sink", "sink_name=qs_virt_mic"}, 5);
             std::string loop_id = run_argv_capture({"pactl", "load-module", "module-loopback",
                                                      "source=" + source, "sink=qs_virt_mic"});
             int vol_int = static_cast<int>(mic_vol * 65536);
@@ -4897,7 +5293,15 @@ std::string SystemControl::remote_desktop_status_json() {
     }
     const char* bind = std::getenv("B1AIR_DEV_MODE");
     bool dev_mode = bind && std::string(bind) == "1";
-    std::string ip = dev_mode ? exec_cmd("ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'") : "127.0.0.1";
+    // The address this machine would reach the internet from: the word
+    // after "src" in `ip route get`.
+    std::string ip = "127.0.0.1";
+    if (dev_mode) {
+        std::istringstream route(run_line({"ip", "route", "get", "1.1.1.1"}, 3));
+        std::string word;
+        while (route >> word)
+            if (word == "src" && (route >> word)) { ip = word; break; }
+    }
     while (!ip.empty() && (ip.back() == '\n' || ip.back() == '\r' || ip.back() == ' ')) ip.pop_back();
     if (ip.empty()) ip = "127.0.0.1";
     
@@ -4971,7 +5375,7 @@ bool SystemControl::qr_generate(const std::string& text, const std::string& out_
     if (!run_argv_status({"qrencode", "-s", "8", "-m", "2", "-o", path, "--", text})) return false;
 
     const std::string png = read_file_string(path);
-    if (!png.empty()) (void)run_argv_with_raw_stdin({"wl-copy", "-t", "image/png"}, png);
+    if (!png.empty()) (void)run_argv_with_raw_stdin({"b1air-clip", "copy", "-t", "image/png"}, png);
     osd_status("QR code copied", "In the clipboard as an image", "edit-copy");
     return true;
 }
@@ -5000,7 +5404,7 @@ bool SystemControl::ocr_screen(const std::string& geom) {
     }
 
     // Send OCR text through stdin; never place recognized content in a shell command.
-    (void)run_argv_with_raw_stdin({"wl-copy"}, text);
+    (void)run_argv_with_raw_stdin({"b1air-clip", "copy"}, text);
 
     std::string preview = text.substr(0, 70);
     for (char& c : preview) if (c == '\'' || c == '"') c = ' ';
@@ -5208,7 +5612,7 @@ bool SystemControl::zones_apply(int zone_id) {
 
 bool SystemControl::audio_switch_output() {
     // 1. List short sinks from PulseAudio/PipeWire
-    std::string sinks_raw = exec_cmd_full("pactl list short sinks 2>/dev/null");
+    std::string sinks_raw = run_out({"pactl", "list", "short", "sinks"}, 5);
     std::vector<std::string> sink_names;
     std::vector<std::string> sink_descs;
 
@@ -5233,7 +5637,7 @@ bool SystemControl::audio_switch_output() {
         return false;
     }
 
-    std::string current_default = exec_cmd("pactl get-default-sink 2>/dev/null");
+    std::string current_default = run_line({"pactl", "get-default-sink"}, 3);
     int current_idx = -1;
     for (size_t i = 0; i < sink_names.size(); ++i) {
         if (sink_names[i] == current_default) {
@@ -5336,7 +5740,7 @@ bool SystemControl::record_gif(const std::string& geom) {
 
     // Copy to clipboard
     const std::string gif_data = read_file_string(gif_path);
-    if (!gif_data.empty()) (void)run_argv_with_raw_stdin({"wl-copy", "-t", "image/gif"}, gif_data);
+    if (!gif_data.empty()) (void)run_argv_with_raw_stdin({"b1air-clip", "copy", "-t", "image/gif"}, gif_data);
     notify_user("Screen-to-GIF", "GIF Saved & Copied", "Copied animated GIF to clipboard", gif_path);
     return true;
 }
@@ -5388,37 +5792,70 @@ std::string SystemControl::disk_sweeper_scan() {
     // The package cache of whichever manager this is; du totals the ones that
     // exist and complains about the rest on stderr. The JSON key keeps its old
     // name because the Settings page reads it.
-    std::string pacman_cache = exec_cmd("du -shc /var/cache/pacman/pkg /var/cache/apt/archives "
-                                        "/var/cache/dnf /var/cache/libdnf5 /var/cache/zypp/packages "
-                                        "2>/dev/null | tail -n1 | cut -f1");
-    if (pacman_cache.empty() || pacman_cache == "0") pacman_cache = "0 B";
+    // Sizes measured here rather than by du: the package caches of whichever
+    // manager this is (the JSON key keeps its old name because the Settings
+    // page reads it), the user's cache and its thumbnails.
+    auto dir_bytes = [](const std::filesystem::path& dir) -> uintmax_t {
+        std::error_code ec;
+        uintmax_t total = 0;
+        if (!std::filesystem::is_directory(dir, ec)) return 0;
+        for (auto it = std::filesystem::recursive_directory_iterator(
+                 dir, std::filesystem::directory_options::skip_permission_denied, ec);
+             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            std::error_code fe;
+            if (it->is_regular_file(fe) && !it->is_symlink(fe)) total += it->file_size(fe);
+        }
+        return total;
+    };
+    // As du -h writes it: 1 decimal under 10, a whole number above.
+    auto human = [](uintmax_t bytes) {
+        const char* units[] = {"B", "K", "M", "G", "T"};
+        double v = static_cast<double>(bytes);
+        int u = 0;
+        while (v >= 1024.0 && u < 4) { v /= 1024.0; ++u; }
+        char buf[32];
+        if (u == 0) std::snprintf(buf, sizeof(buf), "%ju B", bytes);
+        else if (v < 10.0) std::snprintf(buf, sizeof(buf), "%.1f%s", v, units[u]);
+        else std::snprintf(buf, sizeof(buf), "%.0f%s", v, units[u]);
+        return std::string(buf);
+    };
+    uintmax_t pkg_bytes = 0;
+    for (const char* d : {"/var/cache/pacman/pkg", "/var/cache/apt/archives", "/var/cache/dnf",
+                          "/var/cache/libdnf5", "/var/cache/zypp/packages"})
+        pkg_bytes += dir_bytes(d);
+    std::string pacman_cache = human(pkg_bytes);
 
     const char* home = std::getenv("HOME");
     std::string user_cache = "0 B";
     std::string thumb_cache = "0 B";
     if (home) {
-        user_cache = run_argv_capture({"du", "-sh", std::string(home) + "/.cache"});
-        thumb_cache = run_argv_capture({"du", "-sh", std::string(home) + "/.cache/thumbnails"});
-        const auto trim_size = [](std::string value) {
-                const size_t tab = value.find('\t');
-                if (tab != std::string::npos) value.resize(tab);
-                while (!value.empty() && (value.back() == '\n' || value.back() == '\r')) value.pop_back();
-                return value;
-            };
-        if (!user_cache.empty()) user_cache = trim_size(user_cache);
-        if (!thumb_cache.empty()) thumb_cache = trim_size(thumb_cache);
+        user_cache = human(dir_bytes(std::filesystem::path(home) / ".cache"));
+        thumb_cache = human(dir_bytes(std::filesystem::path(home) / ".cache/thumbnails"));
     }
 
-    std::string journal = exec_cmd("journalctl --disk-usage 2>/dev/null | grep -oE '[0-9\\.]+[M|G|K]B' | head -1");
+    std::string journal;
+    {
+        static const std::regex size(R"([0-9.]+[KMGT]B?)");
+        std::smatch m;
+        const std::string usage = run_line({"journalctl", "--disk-usage"}, 10);
+        if (std::regex_search(usage, m, size)) journal = m.str();
+    }
     if (journal.empty()) journal = "< 50 MB";
 
-    std::string orphans = exec_cmd(
-        "{ if command -v pacman >/dev/null 2>&1; then pacman -Qtdq; "
-        "elif command -v apt-get >/dev/null 2>&1; then apt-get -s -o Debug::NoLocking=1 autoremove | grep '^Remv '; "
-        "elif command -v dnf >/dev/null 2>&1; then dnf -q repoquery --unneeded; "
-        "elif command -v zypper >/dev/null 2>&1; then zypper -q packages --unneeded | grep '^i'; "
-        "fi; } 2>/dev/null | wc -l");
-    if (orphans.empty()) orphans = "0";
+    // Packages nothing needs any more, as each manager lists them.
+    int orphan_count = 0;
+    if (on_path("pacman"))
+        orphan_count = count_lines({"pacman", "-Qtdq"}, 30, [](const std::string&) { return true; });
+    else if (on_path("apt-get"))
+        orphan_count = count_lines({"apt-get", "-s", "-o", "Debug::NoLocking=1", "autoremove"}, 30,
+                                   [](const std::string& l) { return l.rfind("Remv ", 0) == 0; });
+    else if (on_path("dnf"))
+        orphan_count = count_lines({"dnf", "-q", "repoquery", "--unneeded"}, 60,
+                                   [](const std::string&) { return true; });
+    else if (on_path("zypper"))
+        orphan_count = count_lines({"zypper", "-q", "packages", "--unneeded"}, 60,
+                                   [](const std::string& l) { return l.rfind("i", 0) == 0; });
+    const std::string orphans = std::to_string(orphan_count);
 
     std::ostringstream json;
     json << "{"
@@ -5499,7 +5936,17 @@ bool SystemControl::snapshot_create(const std::string& comment) {
 }
 
 std::string SystemControl::snapshot_list() {
-    std::string out = exec_cmd_full("timeshift --list 2>/dev/null | grep -E '>|([0-9]{4}-[0-9]{2}-[0-9]{2})' | head -5 || snapper list 2>/dev/null | tail -5");
+    // Any snapshot listed by timeshift (a dated row), else any snapper row.
+    std::string out;
+    if (on_path("timeshift")) {
+        static const std::regex row(R"(>|[0-9]{4}-[0-9]{2}-[0-9]{2})");
+        for (const auto& l : lines_of(run_out({"timeshift", "--list"}, 30)))
+            if (std::regex_search(l, row)) { out = l; break; }
+    }
+    if (out.empty() && on_path("snapper")) {
+        const auto rows = lines_of(run_out({"snapper", "list"}, 30));
+        if (!rows.empty()) out = rows.back();
+    }
     std::ostringstream json;
     json << "{\"ok\":true,\"has_snapshots\":" << (!out.empty() ? "true" : "false") << "}";
     return json.str();
@@ -5520,7 +5967,16 @@ bool SystemControl::vault_unmount(const std::string& mount_point) {
 }
 
 std::string SystemControl::vault_status() {
-    std::string mounts = exec_cmd_full("mount | grep -E 'gocryptfs|cryfs|encfs' | awk '{print $3}'");
+    // Encrypted vaults mounted now: their filesystem type in /proc/self/mounts.
+    std::string mounts;
+    {
+        std::ifstream table("/proc/self/mounts");
+        std::string dev, dir, type, rest;
+        while (table >> dev >> dir >> type && std::getline(table, rest))
+            if (type.find("gocryptfs") != std::string::npos || type.find("cryfs") != std::string::npos
+                    || type.find("encfs") != std::string::npos)
+                mounts += dir + "\n";
+    }
     return mounts.empty() ? "{\"active\":false,\"mounts\":[]}" : "{\"active\":true}";
 }
 
@@ -5624,30 +6080,64 @@ std::string SystemControl::get_system_stats_json() {
         }
     }
 
-    // 6. Top Processes via ps
+    // 6. Top processes, from /proc. %CPU and %MEM as ps reports them: CPU
+    // time over the process's lifetime, and resident memory over the total.
     std::ostringstream proc_json;
     proc_json << "[";
-    const std::string process_output = run_argv_capture({"ps", "-eo", "pid,pcpu,pmem,user,comm", "--sort=-pcpu"});
-    std::istringstream process_stream(process_output);
-    std::string line;
-    bool first = true;
-    // Skip the header and limit in-process instead of through a shell pipeline.
-    std::getline(process_stream, line);
-    int process_count = 0;
-    while (process_count < 35 && std::getline(process_stream, line)) {
-        std::istringstream fields(line);
-        int pid;
-        float pcpu, pmem;
-        std::string user, comm;
-        if (!(fields >> pid >> pcpu >> pmem >> user >> comm)) continue;
-        if (!first) proc_json << ",";
-        first = false;
-        proc_json << "{\"pid\":" << pid
-                  << ",\"cpu\":" << pcpu
-                  << ",\"mem\":" << pmem
-                  << ",\"user\":\"" << json_escape(user) << "\""
-                  << ",\"name\":\"" << json_escape(comm) << "\"}";
-        ++process_count;
+    {
+        struct Row { int pid; double cpu, mem; std::string user, name; };
+        std::vector<Row> rows;
+        const double hz = static_cast<double>(sysconf(_SC_CLK_TCK));
+        const double page_kb = static_cast<double>(sysconf(_SC_PAGESIZE)) / 1024.0;
+        double uptime = 0;
+        { std::ifstream u("/proc/uptime"); u >> uptime; }
+        std::map<uid_t, std::string> users;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator("/proc", ec)) {
+            const std::string pid_s = e.path().filename().string();
+            if (pid_s.empty() || !std::all_of(pid_s.begin(), pid_s.end(), ::isdigit)) continue;
+            const std::string stat = read_file_string(e.path() / "stat");
+            // The name is in parentheses and may hold spaces or ')'; the
+            // fields go on after the last ')'.
+            const auto open = stat.find('('), close = stat.rfind(')');
+            if (open == std::string::npos || close == std::string::npos || close < open) continue;
+            std::istringstream f(stat.substr(close + 2));
+            std::string field;
+            std::vector<std::string> v;
+            while (f >> field) v.push_back(field);
+            // After the name: state is [0], utime [11], stime [12],
+            // starttime [19], rss [21].
+            if (v.size() < 22) continue;
+            const double ticks = std::stod(v[11]) + std::stod(v[12]);
+            const double elapsed = uptime - std::stod(v[19]) / hz;
+            Row r;
+            r.pid = std::stoi(pid_s);
+            r.cpu = elapsed > 0 ? 100.0 * (ticks / hz) / elapsed : 0;
+            r.mem = total_kb > 0 ? 100.0 * std::stod(v[21]) * page_kb / static_cast<double>(total_kb) : 0;
+            r.name = stat.substr(open + 1, close - open - 1);
+            struct stat st{};
+            if (::stat(e.path().c_str(), &st) == 0) {
+                auto it = users.find(st.st_uid);
+                if (it == users.end()) {
+                    const passwd* pw = getpwuid(st.st_uid);
+                    it = users.emplace(st.st_uid, pw ? pw->pw_name : std::to_string(st.st_uid)).first;
+                }
+                r.user = it->second;
+            }
+            rows.push_back(std::move(r));
+        }
+        std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.cpu > b.cpu; });
+        if (rows.size() > 35) rows.resize(35);
+        bool first = true;
+        for (const auto& r : rows) {
+            if (!first) proc_json << ",";
+            first = false;
+            proc_json << "{\"pid\":" << r.pid
+                      << ",\"cpu\":" << r.cpu
+                      << ",\"mem\":" << r.mem
+                      << ",\"user\":\"" << json_escape(r.user) << "\""
+                      << ",\"name\":\"" << json_escape(r.name) << "\"}";
+        }
     }
     proc_json << "]";
 

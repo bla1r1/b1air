@@ -55,6 +55,11 @@ ShellRoot {
     }
 
     // Shared state across all monitors
+    //
+    // The password and whether it is being typed are one for every screen.
+    // Each screen had its own field, and the keys went to whichever screen
+    // had the keyboard: typing on one showed nothing on the other, so a
+    // person looking at the main screen saw it ignore them.
     QtObject {
         id: lockUI
         property bool failed: false
@@ -62,6 +67,102 @@ ShellRoot {
         // The eye button: show what has been typed.
         property bool peek: false
         property string statusText: I18n.tr("Locked")
+        property bool inputActive: false
+        property string text: ""
+        // A fingerprint is being waited for (pam_fprintd), and the last touch
+        // did not match.
+        property bool fpActive: false
+        property bool fpFailed: false
+    }
+
+    // ── Fingerprint ──────────────────────────────────────────────────────────
+    //
+    // Alongside the password, not instead of it: a second PAM conversation
+    // with the suite's own file (b1air-fingerprint: pam_fprintd only), so a
+    // touch on the reader opens the lock while the password field still
+    // works. Only when Settings → Users says so and a finger is enrolled.
+    readonly property string fpConfigDir: Sys.exists("/usr/share/b1air/pam/b1air-fingerprint") ? "/usr/share/b1air/pam"
+        : (Quickshell.env("HOME") || "") + "/.local/share/b1air/pam"
+    property bool fpReady: false
+    property int fpErrors: 0
+
+    Process {
+        id: fpProbe
+        running: Services.Settings.fingerprintUnlock !== false
+        command: ["b1air-daemon", "fingerprint", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let d = {};
+                try { d = JSON.parse(this.text); } catch (e) { return; }
+                root.fpReady = d.available === true && (d.enrolled || []).length > 0
+                    && Sys.exists(root.fpConfigDir + "/b1air-fingerprint");
+                if (root.fpReady && rootLock.secure) root.startFingerprint();
+            }
+        }
+    }
+
+    function startFingerprint() {
+        if (!root.fpReady || fpPam.active) return;
+        lockUI.fpActive = fpPam.start();
+    }
+
+    PamContext {
+        id: fpPam
+        config: "b1air-fingerprint"
+        configDirectory: root.fpConfigDir
+        // pam_fprintd reports a finger that does not match as an error
+        // message and keeps listening for its remaining tries.
+        onPamMessage: {
+            if (fpPam.messageIsError) {
+                lockUI.fpFailed = true;
+                fpFailReset.restart();
+            }
+        }
+        onCompleted: result => {
+            lockUI.fpActive = false;
+            if (result === PamResult.Success) {
+                root.unlocked();
+                return;
+            }
+            // No match after its tries, or the reader timed out: listen again.
+            lockUI.fpFailed = true;
+            fpFailReset.restart();
+            fpRestart.restart();
+        }
+        onError: err => {
+            lockUI.fpActive = false;
+            // The reader went away, fprintd is not running: try a few times,
+            // then leave it to the password.
+            if (++root.fpErrors < 3) fpRestart.restart();
+            console.warn("[b1air-lock] fingerprint:", err);
+        }
+    }
+    Timer { id: fpRestart; interval: 800; onTriggered: root.startFingerprint() }
+    Timer { id: fpFailReset; interval: 2000; onTriggered: lockUI.fpFailed = false }
+
+    // Up or not, for the session's idle thread (src/daemon/idle.cpp): while
+    // locked, only the main screen comes back on input, and before the
+    // machine sleeps it waits for this to say "locked".
+    FileView {
+        id: lockState
+        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/lock-state"
+        blockWrites: true
+        atomicWrites: true
+    }
+    Connections {
+        target: rootLock
+        function onSecureStateChanged() {
+            if (rootLock.secure) {
+                lockState.setText("locked\n");
+                root.startFingerprint();
+            }
+        }
+    }
+    function unlocked() {
+        if (fpPam.active) fpPam.abort();
+        lockState.setText("unlocked\n");
+        rootLock.locked = false;
+        Qt.quit();
     }
 
     // System Authentication hook
@@ -81,8 +182,7 @@ ShellRoot {
         onCompleted: (result) => {
             lockUI.authenticating = false;
             if (result === PamResult.Success) {
-                rootLock.locked = false;
-                Qt.quit();
+                root.unlocked();
             } else {
                 lockUI.failed = true;
                 lockUI.statusText = I18n.tr("Access Denied");
@@ -141,7 +241,22 @@ ShellRoot {
                 readonly property real sc: LayoutMath.getScale(surface.width, 1.0, surface.height)
                 // --------------------------------
 
-                property string staticWallpaperPath: "file://" + (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/b1air/lock_bg.png"
+                // The picture this screen shows on the desktop, asked of the
+                // daemon (the screen's own, its workspace's, or the shared
+                // one). It was read from $XDG_RUNTIME_DIR/b1air/lock_bg.png,
+                // a file nothing has written for a long time: the lock screen
+                // had no picture at all, only the base colour.
+                property string staticWallpaperPath: Paths.fileUrl((Quickshell.env("HOME") || "") + "/.cache/current_wallpaper.jpg")
+                Process {
+                    running: surface.screen !== null
+                    command: ["b1air-daemon", "wallpaper", "shown", surface.screen ? surface.screen.name : ""]
+                    stdout: StdioCollector {
+                        onStreamFinished: {
+                            const path = this.text.trim();
+                            if (path !== "") screenRoot.staticWallpaperPath = Paths.fileUrl(path);
+                        }
+                    }
+                }
 
                 // Was its own `cat /sys/class/power_supply/BAT*/capacity` poller.
                 // This machine has two BAT* nodes and the glob's first match
@@ -157,12 +272,21 @@ ShellRoot {
                                             : Sys.exists("~/.face") ? Paths.fileUrl(Quickshell.env("HOME") + "/.face") : ""
                 property string kbLayout: "US"
                 property string weatherIcon: ""
-                property string weatherTemp: "--°C"
+                property string weatherTemp: ""
 
                 // UI States
                 property real introState: 0.0
                 property bool powerMenuOpen: false
-                property bool inputActive: false 
+                // Shared with every screen through lockUI (an alias cannot
+                // reach out of the surface component, so both ways by hand).
+                property bool inputActive: lockUI.inputActive
+                onInputActiveChanged: if (lockUI.inputActive !== inputActive) lockUI.inputActive = inputActive
+                Connections {
+                    target: lockUI
+                    function onInputActiveChanged() {
+                        if (screenRoot.inputActive !== lockUI.inputActive) screenRoot.inputActive = lockUI.inputActive;
+                    }
+                }
                 property bool isPlayingIntro: true
                 // No battery under power_supply: a desktop.
                 property bool isDesktop: !Sys.listDir("/sys/class/power_supply").some(n => n.startsWith("BAT"))
@@ -223,10 +347,10 @@ ShellRoot {
                     stdout: StdioCollector {
                         onStreamFinished: {
                             let lines = this.text.trim().split("\n");
-                            if (lines.length >= 2) {
-                                screenRoot.weatherIcon = lines[0] || "";
-                                screenRoot.weatherTemp = lines[1] || "--°C";
-                            }
+                            // Nothing printed: no forecast to be had. The pill
+                            // goes rather than show a made-up 0°C.
+                            screenRoot.weatherIcon = lines.length >= 2 ? (lines[0] || "") : "";
+                            screenRoot.weatherTemp = lines.length >= 2 ? (lines[1] || "") : "";
                         }
                     }
                 }
@@ -316,9 +440,18 @@ ShellRoot {
                 // ---------------------------------------------------------
                 // 2. MAIN CONTENT LAYER
                 // ---------------------------------------------------------
+                // As at the login screen: moving the mouse is enough to bring
+                // the password up, as a key is; a click was needed before.
                 MouseArea {
                     anchors.fill: parent
                     enabled: !screenRoot.isPlayingIntro
+                    hoverEnabled: true
+                    onPositionChanged: {
+                        if (!screenRoot.inputActive && !screenRoot.powerMenuOpen) {
+                            screenRoot.inputActive = true;
+                            inputField.forceActiveFocus();
+                        }
+                    }
                     onClicked: {
                         if (screenRoot.powerMenuOpen) screenRoot.powerMenuOpen = false;
                         if (!screenRoot.inputActive) screenRoot.inputActive = true;
@@ -386,6 +519,19 @@ ShellRoot {
                             color: Design.text
                         }
 
+                        // The reader is listening even before anything is typed.
+                        Text {
+                            visible: lockUI.fpActive || lockUI.fpFailed
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: 24 * screenRoot.sc
+                            text: "\u{f0237}  " + (lockUI.fpFailed ? I18n.tr("Fingerprint not recognised")
+                                                                 : I18n.tr("Touch the reader to unlock"))
+                            font.family: Design.font.mono
+                            font.pixelSize: 15 * screenRoot.sc
+                            color: lockUI.fpFailed ? Design.danger : Design.textDim
+                            Behavior on color { ColorAnimation { duration: Design.duration.base } }
+                        }
+
                         Timer {
                             interval: 1000; running: true; repeat: true; triggeredOnStart: true
                             onTriggered: {
@@ -433,9 +579,12 @@ ShellRoot {
                                 color: Qt.rgba(Design.raised.r, Design.raised.g, Design.raised.b, 0.5)
                                 visible: avatarImg.status !== Image.Ready
                                 
+                                // The account glyph, where there is no picture.
+                                // This was mdi chevron-double-left ("«") — a back
+                                // arrow standing where the person's picture goes.
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "󰄽"
+                                    text: "\u{f0004}"
                                     font.family: Design.font.icon
                                     font.pixelSize: 64 * screenRoot.sc
                                     color: Design.textDim
@@ -612,7 +761,7 @@ ShellRoot {
                                     onAccepted: {
                                         if (text.length > 0 && pam.responseRequired && !lockUI.authenticating) {
                                             lockUI.authenticating = true;
-                                            lockUI.statusText = "Authenticating...";
+                                            lockUI.statusText = I18n.tr("Authenticating…");
                                             lockUI.failed = false;
                                             pam.respond(text);
                                             lockUI.peek = false;
@@ -622,7 +771,23 @@ ShellRoot {
                                         }
                                     }
                                     
+                                    // One password for every screen: what is typed here
+                                    // goes to lockUI, and what is typed on another screen
+                                    // comes back from it (below).
+                                    Connections {
+                                        target: lockUI
+                                        function onTextChanged() {
+                                            if (inputField.text === lockUI.text) return;
+                                            if (lockUI.text === "") {
+                                                inputField.oldText = "";
+                                                passModel.clear();
+                                            }
+                                            inputField.text = lockUI.text;
+                                        }
+                                    }
+
                                     onTextChanged: {
+                                        if (lockUI.text !== text) lockUI.text = text;
                                         if (lockUI.authenticating) return;
 
                                         if (text.length > 0 && !screenRoot.inputActive) {
@@ -652,7 +817,7 @@ ShellRoot {
 
                                         if (text.length > 0) {
                                             lockUI.failed = false;
-                                            lockUI.statusText = I18n.tr("Enter PIN");
+                                            lockUI.statusText = I18n.tr("Enter password");
                                         } else {
                                             if (!lockUI.failed) lockUI.statusText = I18n.tr("Locked");
                                         }
@@ -734,6 +899,27 @@ ShellRoot {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: lockUI.peek = !lockUI.peek
                                     }
+                                }
+                            }
+
+                            // The reader is listening: say so, and flash on a miss.
+                            RowLayout {
+                                visible: lockUI.fpActive || lockUI.fpFailed
+                                Layout.alignment: Qt.AlignLeft
+                                spacing: 8 * screenRoot.sc
+                                Text {
+                                    text: "\u{f0237}"
+                                    font.family: Design.font.icon
+                                    font.pixelSize: 18 * screenRoot.sc
+                                    color: lockUI.fpFailed ? Design.danger : Design.accent
+                                    Behavior on color { ColorAnimation { duration: Design.duration.base } }
+                                }
+                                Text {
+                                    text: lockUI.fpFailed ? I18n.tr("Fingerprint not recognised")
+                                                          : I18n.tr("Or touch the fingerprint reader")
+                                    font.family: Design.font.mono
+                                    font.pixelSize: 13 * screenRoot.sc
+                                    color: lockUI.fpFailed ? Design.danger : Design.textDim
                                 }
                             }
                         }
@@ -825,6 +1011,7 @@ ShellRoot {
 
                     // Weather Pill
                     Rectangle {
+                        visible: screenRoot.weatherTemp !== ""
                         property bool isHovered: weatherMouse.containsMouse
                         Layout.preferredHeight: 48 * screenRoot.sc
                         Layout.preferredWidth: weatherLayoutRow.implicitWidth + (36 * screenRoot.sc)

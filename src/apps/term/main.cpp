@@ -38,9 +38,16 @@ int main(int argc, char* argv[]) {
     app.setApplicationDisplayName("Terminal");
     // --dropdown: the same terminal under its own app_id, which the sway
     // window rule turns into the panel that slides down from the top.
-    bool dropdown = false;
-    for (int i = 1; i < argc; ++i)
-        if (QString::fromUtf8(argv[i]) == QLatin1String("--dropdown")) dropdown = true;
+    // --hold: the window stays when the command given with -e ends, with its
+    // exit code on screen, until a key is pressed — for a command whose
+    // output is the point (the updater), instead of a shell's `read`.
+    bool dropdown = false, hold = false;
+    for (int i = 1; i < argc; ++i) {
+        const QString a = QString::fromUtf8(argv[i]);
+        if (a == QLatin1String("-e")) break;
+        if (a == QLatin1String("--dropdown")) dropdown = true;
+        if (a == QLatin1String("--hold")) hold = true;
+    }
     app.setDesktopFileName(dropdown ? "b1air-dropdown" : "b1air-term");
     app.setOrganizationName("bla1r1");
 
@@ -55,7 +62,7 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         const QString raw = QString::fromUtf8(argv[i]);
         const QString arg = raw == "-e" ? raw : b1air::app::path_arg(raw);
-        if (raw == QLatin1String("--dropdown")) {
+        if (raw == QLatin1String("--dropdown") || raw == QLatin1String("--hold")) {
             continue;
         } else if (arg == "-e" && i + 1 < argc) {
             QStringList cmdParts;
@@ -79,6 +86,7 @@ int main(int argc, char* argv[]) {
 
     engine.rootContext()->setContextProperty("InitialCommand", initialCommand);
     engine.rootContext()->setContextProperty("InitialDir", initialDir);
+    engine.rootContext()->setContextProperty("HoldOnExit", hold && !initialCommand.isEmpty());
 
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
         for (const auto& w : warnings) {

@@ -34,7 +34,7 @@ Item {
         // sent a search for either to a page that has neither.
         { id: "windows",     icon: "\u{f0379}", label: I18n.tr("Window & Gaps"), desc: I18n.tr("Gaps, borders and how new windows are tiled"),    color: Design.sapphire, tags: "gaps border padding tiling sway layout inner outer smart borders smart gaps autotiling dwindle split hyprland spiral" },
         { id: "animations",  icon: "\u{f0e1e}", label: I18n.tr("Animations"), desc: I18n.tr("How windows and workspaces move, and how faded unfocused ones are"), color: Design.mauve, tags: "animation animations motion slide fade popin duration speed swipe inactive opacity transparency special workspace scratchpad overview expose hyprland effects" },
-        { id: "nightlight",  icon: "\u{f0599}", label: I18n.tr("Night Light"), desc: I18n.tr("Warmer screen colours at night, and how warm"),      color: Design.yellow,   tags: "night light wlsunset blue light temperature schedule eye protect" },
+        { id: "nightlight",  icon: "\u{f0599}", label: I18n.tr("Night Light"), desc: I18n.tr("Warmer screen colours at night, and how warm"),      color: Design.yellow,   tags: "night light blue light temperature schedule eye protect" },
 
         // ── Input & Navigation ────────────────────────────────────────────────
         { isHeader: true, label: I18n.tr("INPUT & SHORTCUTS") },
@@ -53,7 +53,7 @@ Item {
 
         // ── System & Administration ───────────────────────────────────────────
         { isHeader: true, label: I18n.tr("SYSTEM") },
-        { id: "user",        icon: "\u{f007}",  label: I18n.tr("User Profile"), desc: I18n.tr("Your name, picture and account"),     color: Design.mauve,    tags: "user profile avatar name username password account hostname" },
+        { id: "user",        icon: "\u{f007}",  label: I18n.tr("User Profile"), desc: I18n.tr("Your name, picture and account"),     color: Design.mauve,    tags: "user profile avatar name username password account hostname fingerprint fprint" },
         { id: "remote",      icon: "\u{f0379}", label: I18n.tr("Remote Desktop"), desc: I18n.tr("Let another computer see or control this one"),   color: Design.blue,     tags: "remote desktop vnc rdp ssh anydesk screen sharing wayvnc" },
         { id: "maintenance", icon: "\u{f0187}", label: I18n.tr("Maintenance"), desc: I18n.tr("Updates, backups, cleanup and restore points"),      color: Design.green,    tags: "maintenance clean disk cache logs cleanup packages pacman apt dnf zypper trim system" },
         { id: "about",       icon: "\u{f035b}", label: I18n.tr("About System"), desc: I18n.tr("This computer, this desktop, and the services behind it"),     color: Design.mauve,    tags: "about system version kernel arch sway quickshell specs hardware cpu ram" }

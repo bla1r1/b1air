@@ -65,7 +65,7 @@ Global singletons managing D-Bus protocols, daemons, and system integration.
 - **`Audio.qml`**: PipeWire integration (sinks, sources, per-application stream volumes).
 - **`Network.qml`**: NetworkManager D-Bus (Wi-Fi scan, connection states, Ethernet IPv4/DHCP).
 - **`Notifications.qml`**: Native `org.freedesktop.Notifications` server with DND and history.
-- **`Clipboard.qml`**: Wayland clipboard listener (`wl-paste`), auto-typing detection, search, and persistence.
+- **`Clipboard.qml`**: Wayland clipboard listener (`b1air-clip watch`), auto-typing detection, search, and persistence.
 - **`Power.qml`**: UPower battery monitoring, system uptime, and power state actions.
 - **`Media.qml`**: MPRIS2 player controller (playback, metadata, volume).
 - **`Monitors.qml`**: Display outputs, modes, scaling, and positioning.

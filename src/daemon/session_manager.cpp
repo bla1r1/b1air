@@ -2,6 +2,7 @@
 #include <nlohmann/json.hpp>
 #include "settings_manager.hpp"
 #include "magic_mouse.hpp"
+#include "idle.hpp"
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "focustime_db.hpp"
@@ -28,6 +29,7 @@
 #include <array>
 #include <mutex>
 #include <chrono>
+#include <sstream>
 
 namespace b1air {
 
@@ -37,23 +39,6 @@ static void session_sig_handler(int) {
     g_session_running = 0;
 }
 
-// ── Spawn helper that runs command in background detached ────────────────────
-static void spawn_shell_detached(const std::string& cmd) {
-    if (cmd.empty() || cmd.size() > 4096) return;
-    const pid_t pid = fork();
-    if (pid < 0) return;
-    if (pid == 0) {
-        setsid();
-        setenv("QT_QPA_PLATFORM", "wayland;xcb", 1);
-        const int null_fd = open("/dev/null", O_RDWR | O_CLOEXEC);
-        if (null_fd >= 0) {
-            dup2(null_fd, STDIN_FILENO); dup2(null_fd, STDOUT_FILENO); dup2(null_fd, STDERR_FILENO);
-            if (null_fd > STDERR_FILENO) close(null_fd);
-        }
-        execl("/bin/sh", "sh", "-c", cmd.c_str(), static_cast<char*>(nullptr));
-        _exit(127);
-    }
-}
 
 // Every long-lived helper this session starts goes through util::spawn_detached,
 // which double-forks so the grandchild is orphaned and reaped by init.
@@ -90,32 +75,6 @@ static bool run_status(const std::vector<std::string>& args) {
     return waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static std::string run_capture(const std::vector<std::string>& args) {
-    if (args.empty()) return {};
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return {};
-    const pid_t pid = fork();
-    if (pid < 0) { close(pipefd[0]); close(pipefd[1]); return {}; }
-    if (pid == 0) {
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]); close(pipefd[1]);
-        std::vector<char*> argv;
-        for (const auto& arg : args) argv.push_back(const_cast<char*>(arg.c_str()));
-        argv.push_back(nullptr);
-        execvp(argv[0], argv.data());
-        _exit(127);
-    }
-    close(pipefd[1]);
-    std::string output;
-    std::array<char, 512> buffer{};
-    ssize_t n;
-    while ((n = read(pipefd[0], buffer.data(), buffer.size())) > 0) output.append(buffer.data(), static_cast<size_t>(n));
-    close(pipefd[0]);
-    int status = 0;
-    waitpid(pid, &status, 0);
-    return output;
-}
-
 static bool safe_custom_command(const std::string& cmd) {
     if (cmd.empty() || cmd.size() > 1024) return false;
     for (unsigned char c : cmd) {
@@ -138,75 +97,7 @@ static bool is_process_running(const std::string& pattern) {
 // ── Focus Tracker Thread ─────────────────────────────────────────────────────
 namespace {
 
-/**
- * swayidle's command line, from the settings file.
- *
- * "Automatic sleep" on the Power page wrote `autoSuspend` and nothing read
- * it: the suspend timeout went into this command whatever the toggle said,
- * so a machine with automatic sleep switched off still suspended itself on
- * the timer below the switch. The setting is honoured here — the timeout is
- * simply not part of the command when it is off.
- */
-std::vector<std::string> build_swayidle_command(const DesktopSettings& settings) {
-    const bool auto_suspend = SettingsManager::get_json_bool("autoSuspend", true);
-
-    // An argument list, not a shell line: each command below is one argument,
-    // which swayidle itself hands to sh. The whole line used to go through a
-    // shell of ours first, with the inner commands in single quotes and
-    // swaymsg's in double quotes inside those.
-    std::vector<std::string> argv = {
-        "swayidle", "-w",
-        "lock", "b1air-daemon lock",
-        // The dim timeout is already the desktop's "nobody is here" signal, so
-        // the break reminder rides on it rather than running a second idle
-        // watch. Without this, continuous screen time was only ever reset by
-        // locking, and a machine that never locks reported "600 minutes at
-        // the screen without a break" to someone who had been asleep for
-        // nine hours.
-        "timeout", std::to_string(settings.dimTimeout),
-            "b1air-daemon ddc dim; b1air-daemon focus away",
-            "resume", "b1air-daemon ddc undim; b1air-daemon focus back",
-        "timeout", std::to_string(settings.lockTimeout),
-            "b1air-daemon power lock",
-            "resume", "b1air-daemon ddc undim",
-        "timeout", std::to_string(settings.dpmsTimeout),
-            "b1air-daemon dpms off",
-            "resume", "b1air-daemon dpms on; b1air-daemon ddc undim",
-    };
-    if (auto_suspend) {
-        argv.insert(argv.end(), {"timeout", std::to_string(settings.suspendTimeout),
-                                 "b1air-daemon power suspend",
-                                 "resume", "b1air-daemon dpms on; b1air-daemon ddc undim"});
-    }
-
-    // `loginctl lock-session` only asks logind to emit the session's Lock
-    // signal and returns immediately — it doesn't wait for our lock screen to
-    // actually be up. That's fine when something is there to catch the signal,
-    // but a lid-close suspend (handled entirely by logind's own
-    // HandleLidSwitch, never touching b1air-daemon's suspend_system()) has
-    // nothing subscribed to it, so the system suspended before the lock screen
-    // had rendered — it only appeared to lock on resume, once the spawn that
-    // started before sleep finally got to run. Calling the lock command
-    // directly, the same one `lock` above uses, blocks before-sleep until the
-    // screen is actually up.
-    argv.insert(argv.end(), {"before-sleep", "b1air-daemon lock"});
-    return argv;
-}
-
 } // namespace
-
-bool SessionManager::restart_swayidle() {
-    (void)proc::kill_all("swayidle");
-
-    // A new swayidle overlapping the old one leaves two sets of timers running
-    // against the same seat — the shorter one wins and the change appears not
-    // to have applied — so wait for the old one to be gone, a second at most.
-    // (The scan skips zombies, so one not yet reaped does not hold this up.)
-    for (int i = 0; i < 20 && proc::running("swayidle"); ++i) usleep(50 * 1000);
-
-    spawn_argv_detached(build_swayidle_command(SettingsManager::load()));
-    return true;
-}
 
 void SessionManager::run_focus_tracker() {
     // Every failure below used to be a bare `return`. Screen-time tracking then
@@ -298,7 +189,7 @@ void SessionManager::run_focus_tracker() {
             }
             if (locked) continue;
 
-            // Away and back, as swayidle saw them. Being idle is not screen
+            // Away and back, as the idle thread saw them. Being idle is not screen
             // time, and coming back from it starts a fresh stretch — the same
             // meaning locking has, arrived at without needing a lock screen.
             const auto mark = [](const char* name) -> std::chrono::system_clock::time_point {
@@ -377,7 +268,10 @@ void SessionManager::run_focus_tracker() {
     // not the end of one event. That is exactly how an XWayland window with a
     // null app_id used to end the session (see str_field in sway_ipc.cpp).
     auto on_event = [&]() {
-        bool is_locked = (access(runtime_path("swaylock.lock").c_str(), F_OK) == 0);
+        // The lock screen says it is up (Lock.qml and b1air-lock write this);
+        // it was a swaylock.lock file that nothing has ever written, so a
+        // locked machine counted as screen time.
+        const bool is_locked = idle::locked();
         WindowInfo win = query.get_focused_window();
         std::string new_app = is_locked ? "Screen Locked" : (win.app_class.empty() ? "Desktop" : win.app_class);
         std::string new_title = is_locked ? "Locked" : win.title;
@@ -702,10 +596,12 @@ int SessionManager::run_session() {
         spawn_argv_detached({"b1air-polkit-agent"});
     }
 
-    // 9. Launch Swayidle
-    if (!is_process_running("swayidle")) {
-        spawn_argv_detached(build_swayidle_command(settings));
-    }
+    // 9. Idle: dimming, locking, screens off and sleep, in this process
+    //    (idle.cpp) — it was swayidle, restarted for every change of a
+    //    timeout and every flip of Caffeine. One left from before goes.
+    (void)proc::kill_all("swayidle");
+    std::thread idle_th([]() { idle::run(&g_session_running); });
+    idle_th.detach();
 
     // 10. The desktop shell, and a supervisor that owns it.
     //
@@ -828,30 +724,32 @@ int SessionManager::run_session() {
 
     // 12. Auto-tune compositor effects for software rasterizer / VM (KDE Plasma approach)
     //
-    // glxinfo lives in mesa-utils and used to be missing, so this check quietly
-    // did nothing and left blur and shadows enabled on a software rasterizer —
-    // which is what made scrolling cost most of a core inside a VM. When the
-    // tool is unavailable, fall back to looking for a DRM render node: no node
-    // means no hardware renderer.
-    const std::string glx_info = run_capture({"glxinfo"});
-    bool software_render = glx_info.find("llvmpipe") != std::string::npos ||
-                           glx_info.find("softpipe") != std::string::npos ||
-                           glx_info.find("swrast")   != std::string::npos;
-    if (glx_info.empty()) {
-        // A virtual GPU still publishes a render node, so its presence proves
-        // nothing; the DRM driver name is what distinguishes one.
-        char drv[256] = {0};
-        const ssize_t n = readlink("/sys/class/drm/card0/device/driver", drv, sizeof(drv) - 1);
-        const std::string driver = n > 0 ? std::string(drv) : std::string();
-        for (const char* virt : {"virtio", "vmwgfx", "qxl", "bochs", "vboxvideo"}) {
-            if (driver.find(virt) != std::string::npos) { software_render = true; break; }
+    // From sysfs: the kernel driver behind each DRM card. A machine whose only
+    // cards are virtual or bare framebuffers (no GPU the renderer can use)
+    // ends up on llvmpipe, where blur and shadows cost most of a core just
+    // scrolling. This was glxinfo, from mesa-utils — a package installed for
+    // this one check, and a GL context created at every login to make it.
+    bool software_render = true;
+    {
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator("/sys/class/drm", ec)) {
+            const std::string name = e.path().filename().string();
+            // card0, card1 — not the connectors (card0-HDMI-A-1) or render nodes.
+            if (name.rfind("card", 0) != 0 || name.find('-') != std::string::npos) continue;
+            const std::string driver =
+                std::filesystem::read_symlink(e.path() / "device/driver", ec).filename().string();
+            if (ec || driver.empty()) continue;
+            bool virt = false;
+            for (const char* v : {"virtio", "vmwgfx", "qxl", "bochs", "vboxvideo", "cirrus",
+                                  "simpledrm", "simple-framebuffer", "efifb", "vkms", "hyperv"})
+                if (driver.find(v) != std::string::npos) { virt = true; break; }
+            if (!virt) { software_render = false; break; }
         }
-        if (driver.empty()) software_render = true;  // no DRM device at all
     }
     if (software_render) {
         (void)SwayIPC::run("blur disable; shadows disable; default_dim_inactive 0.0");
     }
-    mark("glxinfo / renderer detection done");
+    mark("renderer detection done");
 
     // 12. Autostart Applications from settings.json
     for (const auto& app : settings.autostartApps) {
@@ -868,11 +766,19 @@ int SessionManager::run_session() {
     }
 
     for (const auto& custom_cmd : settings.autostartCustom) {
-        // Custom autostart is intentionally shell-backed, but reject command
-        // chaining and substitutions so a malformed settings file cannot turn
-        // this into an arbitrary command injection primitive.
+        // A program and its arguments, split at spaces: Settings refuses
+        // shell syntax in these (quotes, $, ;, |, & …), so there is nothing
+        // a shell would add, and none is started for them.
         if (safe_custom_command(custom_cmd)) {
-            spawn_shell_detached(custom_cmd);
+            std::vector<std::string> argv;
+            std::istringstream words(custom_cmd);
+            const char* home = std::getenv("HOME");
+            for (std::string w; words >> w;) {
+                // The one bit of shell anyone writes here: ~ for home.
+                if (home && (w == "~" || w.rfind("~/", 0) == 0)) w = home + w.substr(1);
+                argv.push_back(w);
+            }
+            if (!argv.empty()) spawn_argv_detached(argv);
         }
     }
 

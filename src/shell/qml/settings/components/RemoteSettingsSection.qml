@@ -143,7 +143,7 @@ ColumnLayout {
                 label: I18n.tr("Copy Address")
                 icon: "\u{f00c5}"
                 onActivated: {
-                    Quickshell.execDetached(["wl-copy", "vnc://" + section.localIp + ":" + section.vncPort]);
+                    Quickshell.execDetached(["b1air-clip", "copy", "--", "vnc://" + section.localIp + ":" + section.vncPort]);
                 }
             }
         }

@@ -96,6 +96,10 @@ install:
 	install -m 644 apps/*/b1air-*.svg $(DATADIR)/icons/hicolor/scalable/apps/
 	install -m 644 apps/*/b1air-*.svg $(QMLDIR)/icons/apps/
 	-gtk-update-icon-cache -q -t -f $(DATADIR)/icons/hicolor >/dev/null 2>&1
+	# The lock screens' fingerprint PAM file (pam/), read from here rather
+	# than /etc/pam.d.
+	mkdir -p $(DATADIR)/b1air/pam
+	install -m 644 pam/b1air-fingerprint $(DATADIR)/b1air/pam/
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
 	rm -rf $(DATADIR)/icons/b1air-cursors

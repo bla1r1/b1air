@@ -144,7 +144,7 @@ Scope {
     //
     // A fresh process is the only thing that returns it, so the shell starts
     // one when nobody can see it happen: long idle, which by then means the
-    // screen is off (swayidle blanks it at 10 minutes), and only when all of
+    // screen is off (the idle thread blanks it at 10 minutes), and only when all of
     // this holds —
     //   · it has actually grown (a fresh shell is not restarted for nothing),
     //   · it has been up an hour — otherwise a shell that starts large would

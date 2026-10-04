@@ -21,6 +21,7 @@ Rectangle {
     property string subtitle: ""
     property string icon: ""
     property color accentColor: "transparent"
+    readonly property color tone: card.accentColor.a > 0 ? card.accentColor : Design.accent
     default property alias content: body.data
 
     Layout.fillWidth: true
@@ -41,26 +42,25 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
+            spacing: Design.s(Design.space.md)
             visible: card.title.length > 0 || card.subtitle.length > 0
 
+            // The icon on a soft tile of its colour, as the system settings of
+            // macOS and GNOME draw a section. It was a bare glyph beside a
+            // coloured bar down the card's edge.
             Rectangle {
-                // A color compared to a string is never equal, so this was
-                // always true and the icon beside it was always painted with a
-                // fully transparent accentColor — an invisible glyph holding a
-                // gap open next to every card title.
-                visible: card.accentColor.a > 0
-                Layout.preferredWidth: Design.s(4)
-                Layout.fillHeight: true
-                radius: width / 2
-                color: card.accentColor
-            }
-
-            Icon {
                 visible: card.icon !== ""
-                text: card.icon
-                role: "subhead"
-                color: card.accentColor.a > 0 ? card.accentColor : Design.accent
+                Layout.preferredWidth: Design.s(32)
+                Layout.preferredHeight: Design.s(32)
+                radius: Design.s(9)
+                color: Design.tint(card.tone, 0.16)
+
+                Icon {
+                    anchors.centerIn: parent
+                    text: card.icon
+                    role: "body"
+                    color: card.tone
+                }
             }
 
             ColumnLayout {

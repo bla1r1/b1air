@@ -27,7 +27,7 @@ jobs:
             libssl-dev libsystemd-dev libpolkit-agent-1-dev libarchive-dev \
             qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-declarative-dev-tools \
             qt6-wayland-dev qt6-multimedia-dev qt6-svg-dev liblayershellqtinterface-dev \
-            libwayland-dev libwayland-bin wayland-protocols
+            libwayland-dev libwayland-bin wayland-protocols libcairo2-dev libxkbcommon-dev libpam0g-dev
 
       - uses: actions/checkout@v5
 
@@ -38,6 +38,15 @@ jobs:
         # HOME is root's in the container; the daemon's read-only verbs
         # create their state under it, which is part of what is tested.
         run: make -C src smoke
+
+      - name: Fingerprint, against fprintd's virtual reader
+        # A system bus, polkitd and fprintd of its own in the container, the
+        # libfprint virtual device standing in for a reader.
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get install -y --no-install-recommends fprintd libpam-fprintd dbus-daemon polkitd python3
+          tools/test-fingerprint.sh src/build/bin/b1air-daemon
 
   # swayfx with our patch series, built the way install.sh builds it, on
   # every family install.sh supports, then started headless on the software

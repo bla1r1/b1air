@@ -262,22 +262,14 @@ Singleton {
         const gatewayValue = String(gateway || "");
         const dnsValue = String(dns || "");
         const prefixValue = String(prefix || "24");
-        // Keep the fallback shell positional-only.  NetworkManager values can
-        // originate from the UI and must never become shell source text.
-        if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(name)) return;
-        if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:\/[0-9]{1,2})?$|^[0-9A-Fa-f:]+(?:\/[0-9]{1,3})?$/.test(address)) return;
-        if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9A-Fa-f:]+$/.test(gatewayValue) && gatewayValue !== "") return;
-        if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9A-Fa-f:]+$/.test(dnsValue) && dnsValue !== "") return;
-        if (!/^([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8])$/.test(prefixValue)) return;
-        if (method === "auto") {
-            Quickshell.execDetached(["sh", "-c",
-                "nmcli connection modify \"$1\" ipv4.method auto ipv4.addresses '' ipv4.gateway '' ipv4.dns '' 2>/dev/null || true; nmcli connection up \"$1\" 2>/dev/null || true",
-                "--", name]);
-        } else {
-            Quickshell.execDetached(["sh", "-c",
-                "nmcli connection modify \"$1\" ipv4.method manual ipv4.addresses \"$2/$3\" ipv4.gateway \"$4\" ipv4.dns \"$5\" 2>/dev/null || { ip addr flush dev \"$1\"; ip addr add \"$2/$3\" dev \"$1\"; [ -n \"$4\" ] && ip route add default via \"$4\" dev \"$1\"; }; nmcli connection up \"$1\" 2>/dev/null || true",
-                "--", name, address, prefixValue, gatewayValue, dnsValue]);
-        }
+        // The daemon checks every value again and runs nmcli (or `ip`, where
+        // NetworkManager does not manage the link) as argv: nothing typed
+        // here ever becomes shell source text.
+        if (method === "auto")
+            Quickshell.execDetached(["b1air-daemon", "ethernet-ipv4", name, "auto"]);
+        else
+            Quickshell.execDetached(["b1air-daemon", "ethernet-ipv4", name, "manual",
+                                     address.replace(/\/.*$/, ""), prefixValue, gatewayValue, dnsValue]);
         ethTimer.start();
     }
 

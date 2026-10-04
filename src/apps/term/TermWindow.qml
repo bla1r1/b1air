@@ -196,8 +196,19 @@ Window {
                                 }
                             }
 
-                            onProcessFinished: {
+                            // --hold keeps the first tab's finished command
+                            // on screen until a key is pressed.
+                            property bool holding: false
+                            onProcessFinished: exitCode => {
+                                if (index === 0 && !holding && typeof HoldOnExit !== "undefined" && HoldOnExit) {
+                                    holding = true;
+                                    showNotice(I18n.tr("[finished with code %1 — press any key to close]", exitCode));
+                                    return;
+                                }
                                 window.closeTab(index);
+                            }
+                            onKeyAfterExit: {
+                                if (holding) window.closeTab(index);
                             }
                         }
                     }

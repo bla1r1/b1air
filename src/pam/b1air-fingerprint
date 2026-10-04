@@ -1,0 +1,7 @@
+# Fingerprint unlock for the b1air lock screens (Lock.qml, b1air-lock).
+#
+# Read from this directory, not /etc/pam.d (pam_start_confdir): the lock
+# screens run it beside the password conversation, so it holds the reader
+# only, and the system's own PAM files are left alone. A failed or timed-out
+# attempt is started again by the lock screen.
+auth required pam_fprintd.so max-tries=3 timeout=30

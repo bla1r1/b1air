@@ -642,9 +642,7 @@ PopupShell {
                 activeColor: Design.yellow
                 glyphTone: on ? Design.yellow : Design.textDim
                 detail: on ? I18n.tr("Warm (%1K)", Settings.nightLightTemp) : I18n.tr("Off")
-                // Through the daemon, like the Settings page. The command that
-                // was here passed wlsunset equal -t and -T, which it refuses,
-                // so this tile had never changed the screen.
+                // Through the daemon, like the Settings page.
                 onToggled: {
                     const next = !Settings.nightLightEnabled;
                     Settings.set("nightLightEnabled", next);

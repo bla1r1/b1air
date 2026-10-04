@@ -7,7 +7,7 @@ import Quickshell.Io
 // =============================================================================
 // Clipboard Service
 //
-// Monitors Wayland clipboard (wl-paste) and provides searchable history with
+// Monitors the Wayland clipboard (b1air-clip) and provides searchable history with
 // pinning, formatting detection (text, url, hex color, code), and 1-click restore.
 // Replaces external tools (copyq, cliphist, rofi_clipboard).
 // =============================================================================
@@ -114,49 +114,23 @@ Singleton {
 
     // 2. Clipboard monitor: a watcher, and a poll that covers for it
     //
-    // `wl-paste --watch` runs its command on every clipboard change and keeps
-    // running. StdioCollector hands over its text when the stream *closes*, and
-    // this stream never closes — so nothing was ever collected. Measured: copy
-    // twice, open the popup, and the six seeded templates are still all there
-    // is. SplitParser delivers a record at a time instead. The watched command
-    // marks the end of each one with U+001E, the ASCII record separator, which
-    // is the one thing that cannot turn up inside pasted text — a newline can,
-    // so the default marker would cut multi-line clips into pieces.
+    // `b1air-clip watch` prints every text put on the clipboard, each one
+    // followed by U+001E, the ASCII record separator — the one thing that
+    // cannot turn up inside pasted text, where a newline can. SplitParser
+    // hands over a record at a time; a StdioCollector would wait for a stream
+    // that never closes.
     //
-    // The watcher alone is not enough. Measured on sway 1.12 with wl-clipboard
-    // 2.3.0: one-shot `wl-paste` returns the current clipboard correctly, while
-    // `wl-paste --watch` fires for nothing at all — three copies, zero events,
-    // no error on stderr. A clipboard manager that silently records nothing is
-    // worse than none, so the watcher is the fast path and `reconcile` below is
-    // the guarantee.
-    // `stdinEnabled` is not there to write anything: it is what makes stdin a
-    // pipe, so `cat` blocks until the shell process goes away and the wrapper
-    // can then kill the watcher. Without it the watcher outlived the shell —
-    // reparented to init and still subscribed to the clipboard — so every
-    // restart of the shell left another one behind. Measured: six orphaned
-    // `wl-paste --watch` processes after an afternoon of restarts, and with
-    // that many subscribers the compositor stopped delivering change events to
-    // any of them, which is a clipboard history that silently stops recording.
+    // It is text only and at most 256 KB of it, so a screenshot on the
+    // clipboard is not pushed into the shell as megabytes of "text". And it
+    // ends when its stdin closes — `stdinEnabled` makes that a pipe from the
+    // shell — so a restarted shell does not leave watchers behind, which on
+    // the old `wl-paste --watch` wrapper piled up until the compositor stopped
+    // telling any of them about changes.
     Process {
         id: watcher
         running: true
         stdinEnabled: true
-        //
-        // Text only, and at most 256 KB of it. A bare `wl-paste` hands over
-        // whatever type comes first, and with an image on the clipboard —
-        // every screenshot is copied there by default — that was megabytes of
-        // PNG bytes pushed into the shell as "text" and kept in the history.
-        // Measured: a 4K screenshot jammed three readers on 14 MB each.
-        //
-        // The trap ends the watcher however this wrapper ends. `kill $w` after
-        // `cat` only ran when stdin closed; a SIGTERM (the Process being
-        // stopped or restarted) killed bash first, and the watcher lived on,
-        // reparented to init — three of them on the test session, each reading
-        // every copy. `wait` is interruptible, so the trap runs at once.
-        command: ["bash", "-c",
-                  "trap 'kill $w $c 2>/dev/null' EXIT; trap 'exit 0' TERM INT HUP; " +
-                  "wl-paste --watch sh -c 'wl-paste --type text --no-newline 2>/dev/null | head -c 262144; printf \"\\036\"' & w=$!; " +
-                  "cat <&0 >/dev/null 2>&1 & c=$!; wait $c"]
+        command: ["b1air-clip", "watch", "--max", "262144"]
         stdout: SplitParser {
             splitMarker: "\u001e"
             onRead: data => {
@@ -206,7 +180,7 @@ Singleton {
 
     Process {
         id: pollProc
-        command: ["sh", "-c", "wl-paste --type text --no-newline 2>/dev/null | head -c 262144"]
+        command: ["b1air-clip", "paste", "--max", "262144"]
         stdout: StdioCollector {
             onStreamFinished: {
                 if (this.text)
@@ -280,10 +254,10 @@ Singleton {
     function copyToClipboard(text) {
         if (!text) return;
         root.lastText = text;
-        // wl-copy takes the text as its argument; "--" so a text starting
+        // b1air-clip takes the text as its argument; "--" so a text starting
         // with "-" is not read as an option. (data-control, so no focus
         // needed — the shell's own surfaces rarely have it.)
-        Quickshell.execDetached(["wl-copy", "--", text]);
+        Quickshell.execDetached(["b1air-clip", "copy", "--", text]);
     }
 
     /**
@@ -339,16 +313,29 @@ Singleton {
         root._save();
     }
 
+    /** Bytes the string takes as UTF-8, as the store counts them. */
+    function _utf8Length(str) {
+        let n = 0;
+        for (let i = 0; i < str.length; i++) {
+            const c = str.charCodeAt(i);
+            if (c < 0x80) n += 1;
+            else if (c < 0x800) n += 2;
+            else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; }   // a surrogate pair
+            else n += 3;
+        }
+        return n;
+    }
+
     function _save() {
         if (!root._loaded) {
             root._saveWanted = true;
             return;
         }
 
-        const arr = [];
+        const all = [];
         for (let i = 0; i < root.items.count; i++) {
             const it = root.items.get(i);
-            arr.push({
+            all.push({
                 id: it.id,
                 text: it.text,
                 preview: it.preview,
@@ -357,6 +344,25 @@ Singleton {
                 pinned: it.pinned
             });
         }
+
+        // The store takes at most 1 MB a value (src/daemon/secret_store.cpp)
+        // and refused anything over without a word: one large paste — a log,
+        // a JSON dump — and no save went through again, so everything copied
+        // since was gone at the next login. What fits is saved: pinned
+        // clips first, then the newest; one that does not fit stays in the
+        // list until logout and is skipped on disk.
+        const budget = 900 * 1024;
+        const order = all.map((e, i) => i).sort((a, b) => (all[b].pinned ? 1 : 0) - (all[a].pinned ? 1 : 0) || a - b);
+        const keep = {};
+        let used = 2;
+        for (const i of order) {
+            const size = root._utf8Length(JSON.stringify(all[i])) + 1;
+            if (used + size > budget)
+                continue;
+            keep[i] = true;
+            used += size;
+        }
+        const arr = all.filter((e, i) => keep[i]);
         root.pendingSave = JSON.stringify(arr);
         saveDebounce.restart();
     }

@@ -640,8 +640,19 @@ void TerminalItem::childExited() {
     QMetaObject::invokeMethod(this, [this, code]() { emit processFinished(code); }, Qt::QueuedConnection);
 }
 
+void TerminalItem::showNotice(const QString &text) {
+    if (!m_vt) return;
+    const QByteArray bytes = ("\r\n" + text + "\r\n").toUtf8();
+    vterm_input_write(m_vt, bytes.constData(), static_cast<size_t>(bytes.size()));
+    vterm_screen_flush_damage(m_vts);
+    update();
+}
+
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
-    if (m_masterFd < 0) return;
+    if (m_masterFd < 0) {
+        if (m_finished) emit keyAfterExit();
+        return;
+    }
     restartBlink();
 
     if (m_viewOffset > 0) {
