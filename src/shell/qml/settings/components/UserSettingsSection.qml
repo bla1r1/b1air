@@ -14,6 +14,11 @@ import "../../Services"
 
 ColumnLayout {
     id: section
+
+    // First-run setup (SetupWizard) shows a part of the page: "account"
+    // (name, picture, shell) or "fingerprint" (its own step, there only when
+    // a reader is). "" is the whole page, as Settings shows it.
+    property string part: ""
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -89,6 +94,7 @@ ColumnLayout {
     // login. The UID and the home directory that were the subtitle here are
     // nothing anyone changes from this page.
     Card {
+        visible: section.part !== "fingerprint"
         RowLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.lg)
@@ -166,6 +172,7 @@ ColumnLayout {
     }
 
     Card {
+        visible: section.part !== "account"
         title: I18n.tr("Fingerprint")
         subtitle: section.fp.available ? section.fp.device : I18n.tr("Open the lock screen with a touch")
         icon: "\u{f0237}"
@@ -316,6 +323,7 @@ ColumnLayout {
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
     Card {
+        visible: section.part !== "fingerprint"
         title: I18n.tr("Account Details & Shell")
         subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
@@ -438,6 +446,7 @@ ColumnLayout {
     }
 
     Card {
+        visible: section.part === ""
         title: I18n.tr("Session & Login Screen")
         subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"

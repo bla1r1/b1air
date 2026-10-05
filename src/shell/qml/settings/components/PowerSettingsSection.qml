@@ -318,10 +318,11 @@ ColumnLayout {
     // screen going off, or neither. The session's idle thread
     // (src/daemon/idle.cpp) follows the profile for the power source now.
 
-    // Which profile the page is showing.
-    property string profile: Power.hasBattery && !Power.charging ? "battery" : "ac"
-    readonly property bool onBatteryProfile: section.profile === "battery"
-    function keyOf(base) { return section.onBatteryProfile ? base + "Battery" : base; }
+    // Plugged in and on battery side by side, one column each, the lid with
+    // them. The page showed one of the two behind a switch, and the lid's
+    // choice followed that switch from another card — so which of the two
+    // you were changing depended on something two screens up.
+    function keyOf(base, battery) { return battery ? base + "Battery" : base; }
 
     // The steps Windows offers, in seconds; 0 is never.
     readonly property var timeoutSteps: [0, 60, 120, 180, 300, 600, 900, 1200, 1500, 1800, 2700, 3600, 7200, 10800, 18000]
@@ -342,59 +343,140 @@ ColumnLayout {
 
     // The sleep timeout of the plugged-in profile has a switch of its own
     // (autoSuspend) from before; "Never" here is that switch off.
-    function sleepSeconds() {
-        if (section.onBatteryProfile) return Settings.suspendTimeoutBattery;
-        return Settings.autoSuspend ? Settings.suspendTimeout : 0;
+    function seconds(base, battery) {
+        if (base === "suspendTimeout" && !battery)
+            return Settings.autoSuspend ? Settings.suspendTimeout : 0;
+        return Settings[section.keyOf(base, battery)] || 0;
     }
 
-    function setTimeout(base, seconds) {
-        if (base === "suspendTimeout" && !section.onBatteryProfile) {
+    function setTimeout(base, battery, seconds) {
+        if (base === "suspendTimeout" && !battery) {
             Settings.apply(seconds > 0 ? { autoSuspend: true, suspendTimeout: seconds } : { autoSuspend: false });
         } else {
-            Settings.set(section.keyOf(base), seconds);
+            Settings.set(section.keyOf(base, battery), seconds);
         }
         idleReload.restart();
     }
 
+    function lidIndex(battery) {
+        const v = Settings[section.keyOf("lidAction", battery)] || "sleep";
+        return Math.max(0, section.lidChoices.findIndex(c => c.id === v));
+    }
+    function stepLid(battery, dir) {
+        const n = section.lidChoices.length;
+        const i = (section.lidIndex(battery) + dir + n) % n;
+        Settings.set(section.keyOf("lidAction", battery), section.lidChoices[i].id);
+    }
+
+    readonly property var idleRows: [
+        { base: "dimTimeout",     label: I18n.tr("Dim the screen after") },
+        { base: "dpmsTimeout",    label: I18n.tr("Turn off the screen after") },
+        { base: "lockTimeout",    label: I18n.tr("Lock after") },
+        { base: "suspendTimeout", label: I18n.tr("Sleep after") }
+    ]
+
     Card {
         title: I18n.tr("When idle")
-        subtitle: section.onBatteryProfile ? I18n.tr("On battery") : I18n.tr("Plugged in")
+        subtitle: Power.hasBattery
+            ? I18n.tr("Plugged in and on battery each their own; the one in use is marked")
+            : I18n.tr("What happens when the computer is left alone")
         icon: "\u{f033e}"
         accentColor: Design.peach
 
-        Flow {
-            visible: Power.hasBattery
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                icon: "\u{f06a5}"
-                label: I18n.tr("Plugged in")
-                active: !section.onBatteryProfile
-                onClicked: section.profile = "ac"
-            }
-            Pill {
-                icon: "\u{f0079}"
-                label: I18n.tr("On battery")
-                active: section.onBatteryProfile
-                onClicked: section.profile = "battery"
-            }
-        }
+            spacing: Design.s(Design.space.sm)
 
-        Repeater {
-            model: [
-                { base: "dimTimeout",     label: I18n.tr("Dim the screen after") },
-                { base: "dpmsTimeout",    label: I18n.tr("Turn off the screen after") },
-                { base: "lockTimeout",    label: I18n.tr("Lock after") },
-                { base: "suspendTimeout", label: I18n.tr("Sleep after") }
-            ]
-            Stepper {
-                required property var modelData
-                readonly property int seconds: modelData.base === "suspendTimeout"
-                    ? section.sleepSeconds() : (Settings[section.keyOf(modelData.base)] || 0)
-                label: modelData.label
-                valueText: section.timeoutText(seconds)
-                onDecrement: section.setTimeout(modelData.base, section.stepFrom(seconds, -1))
-                onIncrement: section.setTimeout(modelData.base, section.stepFrom(seconds, 1))
+            // Header: which column is which, and which one applies now.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+                Item { Layout.fillWidth: true }
+                Repeater {
+                    model: Power.hasBattery ? [false, true] : [false]
+                    RowLayout {
+                        id: colHead
+                        required property bool modelData
+                        readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: Design.s(170)
+                        spacing: Design.s(Design.space.xs)
+                        Item { Layout.fillWidth: true }
+                        Icon {
+                            text: colHead.modelData ? "\u{f0079}" : "\u{f06a5}"
+                            role: "caption"
+                            color: colHead.now ? Design.accent : Design.textDim
+                        }
+                        Label {
+                            text: colHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
+                            role: "caption"
+                            weight: colHead.now ? Design.weight.bold : Design.weight.regular
+                            color: colHead.now ? Design.accent : Design.textDim
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+
+            Repeater {
+                model: section.idleRows
+                delegate: RowLayout {
+                    id: idleRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.md)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.md)
+                        Label {
+                            Layout.fillWidth: true
+                            text: idleRow.modelData.label
+                            role: "caption"
+                            dim: true
+                            elide: Text.ElideRight
+                        }
+                        Repeater {
+                            model: Power.hasBattery ? [false, true] : [false]
+                            Stepper {
+                                required property bool modelData
+                                Layout.fillWidth: false
+                                Layout.preferredWidth: Design.s(170)
+                                readonly property int value: section.seconds(idleRow.modelData.base, modelData)
+                                valueText: section.timeoutText(value)
+                                onDecrement: section.setTimeout(idleRow.modelData.base, modelData, section.stepFrom(value, -1))
+                                onIncrement: section.setTimeout(idleRow.modelData.base, modelData, section.stepFrom(value, 1))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The lid, in the same two columns.
+            RowLayout {
+                visible: Power.hasBattery
+                Layout.fillWidth: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.md)
+                    Label {
+                        Layout.fillWidth: true
+                        text: I18n.tr("Closing the lid")
+                        role: "caption"
+                        dim: true
+                        elide: Text.ElideRight
+                    }
+                    Repeater {
+                        model: [false, true]
+                        Stepper {
+                            required property bool modelData
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: Design.s(170)
+                            valueText: section.lidChoices[section.lidIndex(modelData)].label
+                            onDecrement: section.stepLid(modelData, -1)
+                            onIncrement: section.stepLid(modelData, 1)
+                        }
+                    }
+                }
             }
         }
 
@@ -450,31 +532,11 @@ ColumnLayout {
 
     Card {
         title: Power.hasBattery ? I18n.tr("Lid and power button") : I18n.tr("Power button")
-        subtitle: I18n.tr("What they do, instead of the system default")
+        subtitle: Power.hasBattery
+            ? I18n.tr("The lid's action is set above, with the idle times")
+            : I18n.tr("What it does, instead of the system default")
         icon: "\u{f0425}"
         accentColor: Design.accent
-
-        Label {
-            visible: Power.hasBattery
-            text: section.onBatteryProfile ? I18n.tr("Closing the lid, on battery") : I18n.tr("Closing the lid, plugged in")
-            role: "caption"
-            dim: true
-        }
-        Flow {
-            visible: Power.hasBattery
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: section.lidChoices
-                Pill {
-                    required property var modelData
-                    readonly property string current: Settings[section.keyOf("lidAction")] || "sleep"
-                    label: modelData.label
-                    active: current === modelData.id
-                    onClicked: Settings.set(section.keyOf("lidAction"), modelData.id)
-                }
-            }
-        }
 
         Toggle {
             visible: Power.hasBattery

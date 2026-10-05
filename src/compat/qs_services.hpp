@@ -270,6 +270,9 @@ class NotificationServer : public QObject {
     Q_PROPERTY(bool bodyMarkupSupported MEMBER m_bodyMarkupSupported)
     Q_PROPERTY(bool bodySupported MEMBER m_bodySupported)
     Q_PROPERTY(bool persistenceSupported MEMBER m_persistenceSupported)
+    // Services/Notifications.qml sets it; without the property here the
+    // whole Services module failed to load in the standalone window.
+    Q_PROPERTY(QVariantList extraHints MEMBER m_extraHints)
 
 public:
     explicit NotificationServer(QObject* parent = nullptr) : QObject(parent) {}
@@ -280,6 +283,7 @@ signals:
 private:
     bool m_keepOnReload = false, m_imageSupported = false, m_actionsSupported = false;
     bool m_bodyMarkupSupported = false, m_bodySupported = false, m_persistenceSupported = false;
+    QVariantList m_extraHints;
 };
 
 /** Registers everything in this header under its Quickshell module URI. */

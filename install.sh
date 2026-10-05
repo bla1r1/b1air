@@ -11,6 +11,8 @@ set -euo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/distro.sh
 source "$REPO_DIR/lib/distro.sh"
+# shellcheck source=lib/fingerprint.sh
+source "$REPO_DIR/lib/fingerprint.sh"
 
 # The daemon's dotfiles_sync/status/sys look for the repo by guessing among a
 # few hardcoded paths, so a clone anywhere else silently made those features
@@ -910,28 +912,6 @@ add_user() {
     fi
 }
 
-configure_default_shell() {
-    local fish
-    fish="$(command -v fish 2>/dev/null || true)"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would set the login shell to ${fish:-fish}"
-        return 0
-    fi
-    if [[ -z "$fish" ]]; then
-        warn "Fish is not installed; keeping the current login shell."
-        return 0
-    fi
-    if ! grep -Fxq "$fish" /etc/shells 2>/dev/null; then
-        warn "$fish is not listed in /etc/shells; keeping the current login shell."
-        return 0
-    fi
-    local current_shell
-    current_shell="$(getent passwd "$USER" | cut -d: -f7)"
-    if [[ "$current_shell" != "$fish" ]]; then
-        chsh -s "$fish" "$USER" || sudo usermod -s "$fish" "$USER" || warn "Could not set Fish as the login shell."
-    fi
-}
-
 # enable_first_unit <unit...> — unit names differ between distributions
 # (vboxservice vs virtualbox-guest-utils, vmtoolsd vs open-vm-tools).
 enable_first_unit() {
@@ -993,6 +973,27 @@ enable_sddm() {
     if [[ -f /etc/X11/default-display-manager ]]; then
         command -v sddm | sudo tee /etc/X11/default-display-manager >/dev/null
     fi
+    # A server or minimal install (Fedora, openSUSE, Debian without a desktop
+    # task) boots to multi-user.target, where an enabled SDDM never starts.
+    if [[ "$(systemctl get-default 2>/dev/null)" != "graphical.target" ]]; then
+        log "Setting the default boot target to graphical.target."
+        sudo systemctl set-default graphical.target || return 1
+    fi
+}
+
+# NetworkManager next to another network daemon: both fight over the links,
+# and systemd-networkd-wait-online, finding nothing it manages come up,
+# holds the boot for its full two-minute timeout. archinstall's "copy ISO
+# network config" leaves networkd enabled; plain Arch installs often dhcpcd.
+disable_competing_network_daemons() {
+    local unit
+    for unit in systemd-networkd.service systemd-networkd.socket \
+                systemd-networkd-wait-online.service dhcpcd.service; do
+        if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+            warn "Disabling $unit: NetworkManager manages the network now."
+            sudo systemctl disable "$unit" 2>/dev/null || true
+        fi
+    done
 }
 
 enable_services() {
@@ -1002,7 +1003,8 @@ enable_services() {
         return 0
     fi
 
-    sudo systemctl enable NetworkManager || warn "Failed to enable NetworkManager"
+    sudo systemctl enable NetworkManager && disable_competing_network_daemons \
+        || warn "Failed to enable NetworkManager"
     sudo systemctl enable bluetooth || warn "Failed to enable Bluetooth"
     # Installed above, but inert until enabled: the shell's power-profile
     # switch talks to this daemon, and printing needs the cups socket.
@@ -1072,6 +1074,12 @@ build_b1air_suite() {
         # fallback install does not leave 39 keybinds pointing at /usr/local.
         render_config_tree "$HOME/.config" "$B1AIR_PREFIX"
         ok "sway and the user units resolve the suite through ${B1AIR_PREFIX}"
+
+        # What update-dotfiles.sh compares against to skip an unchanged suite.
+        if [[ -d "$REPO_DIR/.git" ]]; then
+            mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/b1air"
+            git -C "$REPO_DIR" rev-parse HEAD > "${XDG_STATE_HOME:-$HOME/.local/state}/b1air/suite-installed"
+        fi
 
         # The same defaults for every other account on the machine.
         if [[ "$B1AIR_PREFIX" == /usr/local/bin ]]; then
@@ -1163,25 +1171,17 @@ post_install_checks() {
     fi
 }
 
+fingerprint_step() {
+    [[ "$DRY_RUN" -eq 1 ]] && { log "Would check the fingerprint reader's driver."; return 0; }
+    local aur=""
+    [[ "$DISTRO" == arch && "$NO_AUR" -eq 0 ]] && aur="$(ensure_aur_helper)"
+    fingerprint_setup "$DISTRO" "$aur"
+}
+
 aur_step() {
     local aur_helper
     aur_helper="$(ensure_aur_helper)"
     install_aur_packages "$aur_helper"
-}
-
-# xdg-user-dirs is in the package list, but the package alone does nothing:
-# it ships its own XDG-autostart entry that would run xdg-user-dirs-update on
-# first login, and sway (unlike GNOME/KDE/XFCE) never runs XDG autostart
-# entries at all — nothing in this repo's autostart.conf does either. Every
-# other DE creates ~/Downloads, ~/Documents etc. on first login; here that
-# needs a direct, one-time call instead of a login hook that can never fire.
-create_user_dirs() {
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would run xdg-user-dirs-update to create ~/Downloads, ~/Documents, etc."
-        return 0
-    fi
-    command -v xdg-user-dirs-update >/dev/null 2>&1 || return 0
-    xdg-user-dirs-update
 }
 
 record_repo_path() {
@@ -1224,22 +1224,25 @@ main() {
             step extras install_extras
         fi
         step vm-tools   detect_and_install_vm_guest_tools
+        # Every run, not a step: cheap when the driver is in place, and a
+        # reader that appeared since (a dock, a new board) gets one.
+        fingerprint_step
     else
         warn "Skipping packages installation (--skip-packages)."
     fi
 
     if [[ "$SKIP_DOTFILES" -eq 0 ]]; then
-        # After deploy_dotfiles, not before: its rsync --delete on ~/.config
-        # would otherwise wipe user-dirs.dirs right back out, since it is not
-        # part of this repo's tracked .config tree.
         step dotfiles   deploy_dotfiles
-        step user-dirs  create_user_dirs
         step suite      build_b1air_suite
         step remote-perms configure_remote_desktop_permissions
     else
         warn "Skipping dotfiles deployment."
     fi
-    step default-shell  configure_default_shell
+    # The login shell, language, Wi-Fi, theme and the rest are each
+    # account's own choice, made in the first-run setup (Settings → setup,
+    # started from autostart.conf), and ~/Downloads and the other folders
+    # are made at every login (autostart.conf) — for every account, not
+    # only the one this ran as. This script installs.
 
     # The login screen reads the desktop palette from /var/cache/wallpaper
     # (see usr/share/sddm/themes/b1air/components/ThemeColors.qml). Nothing has

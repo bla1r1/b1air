@@ -286,7 +286,7 @@ Singleton {
         }
         Design.applyPalette(palette);
         const name = String(displayName || "").trim()
-            || "Wallpaper " + Qt.formatDateTime(new Date(), "d MMM hh-mm");
+            || "Wallpaper " + I18n.locale.toString(new Date(), "d MMM hh-mm");
         return root._saveNew(name, Design.exportPalette());
     }
 

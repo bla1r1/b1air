@@ -315,7 +315,7 @@ PanelWindow {
             // Settings → Native Top Bar offers a 24-hour toggle. Nothing read
             // it: the bar formatted "hh:mm" unconditionally, so the switch
             // stored a value and the clock never changed.
-            topBar.clockTime = Qt.formatTime(now, Settings.barClock24h ? "hh:mm" : "h:mm AP");
+            topBar.clockTime = I18n.locale.toString(now, Settings.barClock24h ? "hh:mm" : "h:mm AP");
             topBar.clockDate = I18n.date(now, "dddd, d MMMM yyyy");
         }
     }
@@ -1171,6 +1171,49 @@ PanelWindow {
                                 Sway.command("input type:keyboard xkb_switch_layout next");
                                 Quickshell.execDetached(["b1air-daemon", "layout"]);
                             }
+                        }
+                    }
+
+                    // Network: the cable when it is plugged in, otherwise the
+                    // Wi-Fi signal and the network's name. The bar had no sign
+                    // of the network at all. A click opens the Wi-Fi list.
+                    Item {
+                        id: netPill
+                        visible: Network.hasWifi || Network.wiredUp
+                        width: netRow.implicitWidth
+                        height: Design.s(20)
+                        anchors.verticalCenter: parent.verticalCenter
+                        readonly property bool wifiOn: Network.wifi.power === "on"
+                        Row {
+                            id: netRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Design.s(4)
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: Network.wiredUp ? "\u{f0200}"
+                                    : Network.activeWifi ? Network._wifiIcon(Network.activeWifiSignal)
+                                    : netPill.wifiOn ? "\u{f092e}" : "\u{f05aa}"
+                                font.family: topBar.fontMain
+                                font.pixelSize: Design.s(13)
+                                color: (Network.wiredUp || Network.activeWifi) ? topBar.colFgDim : topBar.colRed
+                            }
+                            Text {
+                                visible: !Network.wiredUp && Network.activeWifi !== null
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.min(implicitWidth, Design.s(90))
+                                elide: Text.ElideRight
+                                text: Network.activeWifi ? Network.activeWifi.name : ""
+                                font.family: topBar.fontMain
+                                font.pixelSize: Design.s(11)
+                                font.bold: true
+                                color: topBar.colFg
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: topBar.requestCommand("toggle:wifi:", true)
                         }
                     }
 

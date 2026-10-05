@@ -34,6 +34,10 @@ import "../../Services"
 ColumnLayout {
     id: section
 
+    // First-run setup (SetupWizard) shows the page without the cards for
+    // later: what anyone needs on the first day, not everything there is.
+    property bool essentials: false
+
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -415,6 +419,7 @@ ColumnLayout {
 
     Card {
         id: bindCard
+        visible: !section.essentials
         title: I18n.tr("Desktop shortcuts")
         subtitle: I18n.tr("Change the key for any of these. The full list is on the Shortcuts page.")
         icon: "\u{f11c}"

@@ -44,8 +44,8 @@ upower ddcutil
 # Network & Bluetooth
 NetworkManager bluez
 
-# Display manager
-sddm-qt6
+# Display manager (its X11 greeter needs Xorg, skipped by --no-recommends)
+sddm-qt6 ?xorg-x11-server
 
 # Theming & fonts
 kvantum-qt6 ?adw-gtk3 papirus-icon-theme

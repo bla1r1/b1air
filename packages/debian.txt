@@ -53,8 +53,9 @@ upower ddcutil
 # Network & Bluetooth
 network-manager bluez
 
-# Display manager
-sddm
+# Display manager. Its greeter runs on X11, and Xorg is only a recommend
+# of sddm — skipped by --no-install-recommends, leaving a black tty1.
+sddm xserver-xorg-core xserver-xorg-input-libinput
 
 # Theming & fonts (JetBrains Mono Nerd Font is fetched by install.sh)
 ?qt6-style-kvantum ?qt-style-kvantum ?adw-gtk3 papirus-icon-theme

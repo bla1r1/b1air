@@ -1,3 +1,4 @@
+#include "i18n.hpp"
 #include "sway_ipc.hpp"
 #include "focustime_db.hpp"
 #include "user_manager.hpp"
@@ -197,6 +198,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string cmd = argv[1];
+    b1air::I18n::use_time_locale();
 
     if (cmd == "dbus" || cmd == "service" || cmd == "dbus-service") {
         return DaemonDBus::run_service();
