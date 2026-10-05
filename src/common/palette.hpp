@@ -17,17 +17,17 @@ struct Colour {
 };
 
 struct Palette {
-    Colour ground{0x1e / 255.0, 0x1e / 255.0, 0x2e / 255.0};
-    Colour low{0x18 / 255.0, 0x18 / 255.0, 0x25 / 255.0};
-    Colour mid{0x31 / 255.0, 0x32 / 255.0, 0x44 / 255.0};
-    Colour high{0x45 / 255.0, 0x47 / 255.0, 0x5a / 255.0};
-    Colour text{0xe0 / 255.0, 0xe5 / 255.0, 0xf8 / 255.0};
-    Colour dim{0xaf / 255.0, 0xb6 / 255.0, 0xce / 255.0};
-    Colour primary{0x89 / 255.0, 0xb4 / 255.0, 0xfa / 255.0};
-    Colour tertiary{0xcb / 255.0, 0xa6 / 255.0, 0xf7 / 255.0};
-    Colour error{0xf3 / 255.0, 0x8b / 255.0, 0xa8 / 255.0};
-    Colour warn{0xf9 / 255.0, 0xe2 / 255.0, 0xaf / 255.0};
-    Colour ok{0xa6 / 255.0, 0xe3 / 255.0, 0xa1 / 255.0};
+    Colour ground{0x20 / 255.0, 0x23 / 255.0, 0x26 / 255.0};
+    Colour low{0x1b / 255.0, 0x1e / 255.0, 0x20 / 255.0};
+    Colour mid{0x29 / 255.0, 0x2c / 255.0, 0x30 / 255.0};
+    Colour high{0x31 / 255.0, 0x36 / 255.0, 0x3b / 255.0};
+    Colour text{0xfc / 255.0, 0xfc / 255.0, 0xfc / 255.0};
+    Colour dim{0xb4 / 255.0, 0xbb / 255.0, 0xc2 / 255.0};
+    Colour primary{0x3d / 255.0, 0xae / 255.0, 0xe9 / 255.0};
+    Colour tertiary{0xb0 / 255.0, 0x7a / 255.0, 0xd9 / 255.0};
+    Colour error{0xed / 255.0, 0x4b / 255.0, 0x5b / 255.0};
+    Colour warn{0xfd / 255.0, 0xbc / 255.0, 0x4b / 255.0};
+    Colour ok{0x2e / 255.0, 0xcc / 255.0, 0x71 / 255.0};
 
     static Palette load() {
         Palette p;

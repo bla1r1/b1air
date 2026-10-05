@@ -63,30 +63,30 @@ QtObject {
     }
 
     // ── Surfaces ─────────────────────────────────────────────────────────────
-    readonly property color ground: pick("ground", "#1a1b26")          // backdrop
-    readonly property color lowest: pick("lowest", "#16161e")          // inputs, popups
-    readonly property color low: pick("low", "#1f2335")                // panels
-    readonly property color mid: pick("mid", "#24283b")                // cards
-    readonly property color high: pick("high", "#292e42")              // hover
-    readonly property color highest: pick("highest", "#3b4261")        // pressed
+    readonly property color ground: pick("ground", "#202326")          // backdrop
+    readonly property color lowest: pick("lowest", "#141618")          // inputs, popups
+    readonly property color low: pick("low", "#1b1e20")                // panels
+    readonly property color mid: pick("mid", "#292c30")                // cards
+    readonly property color high: pick("high", "#31363b")              // hover
+    readonly property color highest: pick("highest", "#3e434a")        // pressed
 
     // ── Content ──────────────────────────────────────────────────────────────
-    readonly property color text: pick("text", "#c0caf5")
-    readonly property color textDim: pick("textDim", "#a9b1d6")
-    readonly property color outline: pick("outline", "#565f89")        // inactive borders
-    readonly property color outlineVariant: pick("outlineVariant", "#414868")
+    readonly property color text: pick("text", "#fcfcfc")
+    readonly property color textDim: pick("textDim", "#b4bbc2")
+    readonly property color outline: pick("outline", "#6b737a")        // inactive borders
+    readonly property color outlineVariant: pick("outlineVariant", "#3a3f44")
 
     // ── Accent ───────────────────────────────────────────────────────────────
-    readonly property color primary: pick("primary", "#7aa2f7")
-    readonly property color primaryText: pick("primaryText", "#16161e")
-    readonly property color primaryBox: pick("primaryBox", "#3b4261")
-    readonly property color tertiary: pick("tertiary", "#bb9af7")
+    readonly property color primary: pick("primary", "#3daee9")
+    readonly property color primaryText: pick("primaryText", "#0d1b24")
+    readonly property color primaryBox: pick("primaryBox", "#1f4a63")
+    readonly property color tertiary: pick("tertiary", "#b07ad9")
 
     // ── Status ───────────────────────────────────────────────────────────────
-    readonly property color error: pick("error", "#f7768e")
-    readonly property color errorText: pick("errorText", "#16161e")
-    readonly property color warning: pick("yellow", "#e0af68")
-    readonly property color ok: pick("green", "#9ece6a")
+    readonly property color error: pick("error", "#ed4b5b")
+    readonly property color errorText: pick("errorText", "#ffffff")
+    readonly property color warning: pick("yellow", "#fdbc4b")
+    readonly property color ok: pick("green", "#2ecc71")
 
     // Whether the session resolved to a dark face. Kept for components that
     // need to choose a shadow or an overlay rather than a palette colour.

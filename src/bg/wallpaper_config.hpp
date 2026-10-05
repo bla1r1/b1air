@@ -20,7 +20,7 @@ struct WallpaperConfig {
     std::map<std::string, std::string> outputs;
     std::map<std::string, std::string> workspaces;
     int transition_ms = 400;
-    uint32_t ground = 0x1e1e2e;   // the theme's backdrop, where there is no picture
+    uint32_t ground = 0x202326;   // the theme's backdrop, where there is no picture
 
     static WallpaperConfig load();
 

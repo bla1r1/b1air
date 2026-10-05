@@ -451,33 +451,6 @@ ColumnLayout {
                 }
             }
 
-            // The lid, in the same two columns.
-            RowLayout {
-                visible: Power.hasBattery
-                Layout.fillWidth: true
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.md)
-                    Label {
-                        Layout.fillWidth: true
-                        text: I18n.tr("Closing the lid")
-                        role: "caption"
-                        dim: true
-                        elide: Text.ElideRight
-                    }
-                    Repeater {
-                        model: [false, true]
-                        Stepper {
-                            required property bool modelData
-                            Layout.fillWidth: false
-                            Layout.preferredWidth: Design.s(170)
-                            valueText: section.lidChoices[section.lidIndex(modelData)].label
-                            onDecrement: section.stepLid(modelData, -1)
-                            onIncrement: section.stepLid(modelData, 1)
-                        }
-                    }
-                }
-            }
         }
 
         Toggle {
@@ -530,27 +503,82 @@ ColumnLayout {
         { id: "nothing",    label: I18n.tr("Do nothing") }
     ]
 
+    // The lid and the power button, each its own card: one card with the
+    // two read as one setting.
     Card {
-        title: Power.hasBattery ? I18n.tr("Lid and power button") : I18n.tr("Power button")
-        subtitle: Power.hasBattery
-            ? I18n.tr("The lid's action is set above, with the idle times")
-            : I18n.tr("What it does, instead of the system default")
-        icon: "\u{f0425}"
-        accentColor: Design.accent
+        visible: Power.hasBattery
+        title: I18n.tr("Closing the lid")
+        subtitle: I18n.tr("Plugged in and on battery each their own")
+        icon: "\u{f0322}"
+        accentColor: Design.peach
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.md)
+            Item { Layout.fillWidth: true }
+            Repeater {
+                model: [false, true]
+                RowLayout {
+                    id: lidHead
+                    required property bool modelData
+                    readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Design.s(170)
+                    spacing: Design.s(Design.space.xs)
+                    Item { Layout.fillWidth: true }
+                    Icon {
+                        text: lidHead.modelData ? "\u{f0079}" : "\u{f06a5}"
+                        role: "caption"
+                        color: lidHead.now ? Design.accent : Design.textDim
+                    }
+                    Label {
+                        text: lidHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
+                        role: "caption"
+                        weight: lidHead.now ? Design.weight.bold : Design.weight.regular
+                        color: lidHead.now ? Design.accent : Design.textDim
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.md)
+            Label {
+                Layout.fillWidth: true
+                text: I18n.tr("When the lid closes")
+                role: "caption"
+                dim: true
+                elide: Text.ElideRight
+            }
+            Repeater {
+                model: [false, true]
+                Stepper {
+                    required property bool modelData
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Design.s(170)
+                    valueText: section.lidChoices[section.lidIndex(modelData)].label
+                    onDecrement: section.stepLid(modelData, -1)
+                    onIncrement: section.stepLid(modelData, 1)
+                }
+            }
+        }
 
         Toggle {
-            visible: Power.hasBattery
             label: I18n.tr("With another screen connected, only turn off the built-in one")
             subtitle: I18n.tr("Closing the lid while docked keeps working on the other screen")
             checked: Settings.lidIgnoreDocked
             onToggled: Settings.set("lidIgnoreDocked", !Settings.lidIgnoreDocked)
         }
+    }
 
-        Label {
-            text: I18n.tr("Pressing the power button")
-            role: "caption"
-            dim: true
-        }
+    Card {
+        title: I18n.tr("Power button")
+        subtitle: I18n.tr("What it does, instead of the system default")
+        icon: "\u{f0425}"
+        accentColor: Design.accent
+
         Flow {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.xs)

@@ -73,7 +73,7 @@ struct Rect {
     bool contains(double px, double py) const { return w > 0 && px >= x && px < x + w && py >= y && py < y + h; }
 };
 
-enum class Action { None, Menu, Reboot, Suspend, PowerOff };
+enum class Action { None, Menu, Reboot, Suspend, PowerOff, Reveal };
 
 struct Output {
     uint32_t global = 0;
@@ -86,24 +86,25 @@ struct Output {
     bool configured = false;
     cairo_surface_t* wallpaper = nullptr;   // small: drawn up, which blurs it
     bool wallpaper_tried = false;
-    // Where the power button and its menu were drawn, for the pointer.
-    Rect power, items[3];
+    // Where the power button and its menu were drawn, for the pointer; and
+    // the eye that shows the password.
+    Rect power, items[3], eye;
 };
 
 struct Colour {
     double r, g, b;
 };
 
-// The desktop theme's colours, Catppuccin Mocha's until it is read.
+// The desktop theme's colours, Breeze Dark's until it is read.
 struct Palette {
-    Colour ground{0x1e / 255.0, 0x1e / 255.0, 0x2e / 255.0};
-    Colour mid{0x31 / 255.0, 0x32 / 255.0, 0x44 / 255.0};
-    Colour text{0xe0 / 255.0, 0xe5 / 255.0, 0xf8 / 255.0};
-    Colour dim{0xaf / 255.0, 0xb6 / 255.0, 0xce / 255.0};
-    Colour primary{0x89 / 255.0, 0xb4 / 255.0, 0xfa / 255.0};
-    Colour tertiary{0xcb / 255.0, 0xa6 / 255.0, 0xf7 / 255.0};
-    Colour error{0xf3 / 255.0, 0x8b / 255.0, 0xa8 / 255.0};
-    Colour warn{0xf9 / 255.0, 0xe2 / 255.0, 0xaf / 255.0};
+    Colour ground{0x20 / 255.0, 0x23 / 255.0, 0x26 / 255.0};
+    Colour mid{0x29 / 255.0, 0x2c / 255.0, 0x30 / 255.0};
+    Colour text{0xfc / 255.0, 0xfc / 255.0, 0xfc / 255.0};
+    Colour dim{0xb4 / 255.0, 0xbb / 255.0, 0xc2 / 255.0};
+    Colour primary{0x3d / 255.0, 0xae / 255.0, 0xe9 / 255.0};
+    Colour tertiary{0xb0 / 255.0, 0x7a / 255.0, 0xd9 / 255.0};
+    Colour error{0xed / 255.0, 0x4b / 255.0, 0x5b / 255.0};
+    Colour warn{0xfd / 255.0, 0xbc / 255.0, 0x4b / 255.0};
 };
 
 struct App {
@@ -130,6 +131,7 @@ struct App {
     uint32_t group = 0;
 
     std::string password;
+    bool reveal = false;   // the eye: the password as text, not dots
     Status status = Status::Idle;
     bool caps = false;
     bool locked = false;
@@ -615,18 +617,55 @@ void draw(Output* o) {
         layout_w = 64 * u;
     }
 
-    // A dot a character (counted as UTF-8 code points), as many as fit.
-    size_t chars = 0;
-    for (unsigned char c : g.password)
-        if ((c & 0xC0) != 0x80) ++chars;
-    const double gap = 16 * u, r = 5 * u;
-    const size_t fit = static_cast<size_t>(std::max(1.0, (fw - layout_w - 48 * u) / gap));
-    const size_t shown = std::min(chars, fit);
-    double x = cx - layout_w / 2 - (static_cast<double>(shown) - 1) * gap / 2;
-    set(cr, p.text, 0.95);
-    for (size_t i = 0; i < shown; ++i, x += gap) {
-        cairo_arc(cr, x, fy + fh / 2, r, 0, 2 * M_PI);
-        cairo_fill(cr);
+    // The eye at the left end, once something is typed: a click shows the
+    // password as text, another hides it again. It hid what was typed with
+    // no way to check it, and a typo was found by being refused.
+    double eye_w = 0;
+    o->eye = {};
+    if (!g.password.empty()) {
+        o->eye = {fx + 12 * u, fy + 10 * u, 40 * u, fh - 20 * u};
+        eye_w = 52 * u;
+        const bool over = g.pointer_on == o && o->eye.contains(g.px, g.py);
+        if (over) {
+            rounded(cr, o->eye.x, o->eye.y, o->eye.w, o->eye.h, o->eye.h / 2);
+            set(cr, p.primary, 0.18);
+            cairo_fill(cr);
+        }
+        font(cr, 20 * u, false, true);
+        set(cr, g.reveal ? p.primary : p.dim, 0.95);
+        boxed_text(cr, g.reveal ? "\U000F0209" : "\U000F0208", o->eye);   // eye-off / eye
+    }
+
+    const double inner_l = fx + 24 * u + eye_w, inner_r = fx + fw - 24 * u - layout_w;
+    if (g.reveal && !g.password.empty()) {
+        // As text, its end in view when it is wider than the field.
+        cairo_save(cr);
+        cairo_rectangle(cr, inner_l, fy, inner_r - inner_l, fh);
+        cairo_clip(cr);
+        font(cr, 20 * u, false);
+        cairo_font_extents_t fe;
+        cairo_font_extents(cr, &fe);
+        const double tw = text_width(cr, g.password);
+        const double tx = tw <= inner_r - inner_l ? (inner_l + inner_r - tw) / 2 : inner_r - tw;
+        set(cr, p.text, 0.95);
+        cairo_move_to(cr, tx, fy + (fh + fe.ascent - fe.descent) / 2);
+        cairo_show_text(cr, g.password.c_str());
+        cairo_new_path(cr);
+        cairo_restore(cr);
+    } else {
+        // A dot a character (counted as UTF-8 code points), as many as fit.
+        size_t chars = 0;
+        for (unsigned char c : g.password)
+            if ((c & 0xC0) != 0x80) ++chars;
+        const double gap = 16 * u, r = 5 * u;
+        const size_t fit = static_cast<size_t>(std::max(1.0, (inner_r - inner_l) / gap));
+        const size_t shown = std::min(chars, fit);
+        double x = (inner_l + inner_r) / 2 - (static_cast<double>(shown) - 1) * gap / 2;
+        set(cr, p.text, 0.95);
+        for (size_t i = 0; i < shown; ++i, x += gap) {
+            cairo_arc(cr, x, fy + fh / 2, r, 0, 2 * M_PI);
+            cairo_fill(cr);
+        }
     }
 
     const Words& wd = words();
@@ -792,6 +831,7 @@ void submit() {
     std::thread(check_password, g.password).detach();
     std::fill(g.password.begin(), g.password.end(), '\0');
     g.password.clear();
+    g.reveal = false;
     draw_all();
 }
 
@@ -853,6 +893,7 @@ void kb_key(void*, struct wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32
         if (n > 0 && static_cast<unsigned char>(buf[0]) >= 0x20 && buf[0] != 0x7f) g.password.append(buf, static_cast<size_t>(n));
     }
     g.status = g.password.empty() ? Status::Idle : Status::Typing;
+    if (g.password.empty()) g.reveal = false;   // shown again only when asked
     draw_all();
 }
 
@@ -906,6 +947,7 @@ void pt_leave(void*, struct wl_pointer*, uint32_t, struct wl_surface*) {
 
 Action hit(const Output* o, double x, double y) {
     if (o->power.contains(x, y)) return Action::Menu;
+    if (o->eye.contains(x, y)) return Action::Reveal;
     if (!g.menu_open) return Action::None;
     if (o->items[0].contains(x, y)) return Action::Reboot;
     if (o->items[1].contains(x, y)) return Action::Suspend;
@@ -927,6 +969,9 @@ void pt_button(void*, struct wl_pointer*, uint32_t, uint32_t, uint32_t button, u
     const Action a = hit(g.pointer_on, g.px, g.py);
     if (a == Action::Menu) {
         g.menu_open = !g.menu_open;
+    } else if (a == Action::Reveal) {
+        g.reveal = !g.reveal;
+        g.menu_open = false;
     } else if (a != Action::None) {
         g.menu_open = false;
         run_power(a);

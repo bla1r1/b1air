@@ -131,7 +131,7 @@ Item {
                 id: backgroundColor
                 anchors.fill: parent
                 anchors.margins: 0
-                color: root.state === "lockState" && Config.lockScreenUseBackgroundColor ? Config.lockScreenBackgroundColor : root.state === "loginState" && Config.loginScreenUseBackgroundColor ? Config.loginScreenBackgroundColor : "#1a1b26"
+                color: root.state === "lockState" && Config.lockScreenUseBackgroundColor ? Config.lockScreenBackgroundColor : root.state === "loginState" && Config.loginScreenUseBackgroundColor ? Config.loginScreenBackgroundColor : "#202326"
                 visible: parent.displayColor
             }
         }

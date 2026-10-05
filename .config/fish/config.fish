@@ -9,29 +9,32 @@ if status is-interactive
     # a shell that says "Welcome back" says.
     set -g fish_greeting "Welcome back, $USER 🐟"
 
-    # ── Tokyo Night Syntax Highlighting ──────────────────────────────────────
-    set -g fish_color_normal c0caf5
-    set -g fish_color_command 7aa2f7 --bold
-    set -g fish_color_keyword bb9af7
-    set -g fish_color_quote 9ece6a
-    set -g fish_color_redirection 7dcfff
-    set -g fish_color_end ff9e64
-    set -g fish_color_error f7768e
-    set -g fish_color_param 9d7cd8
-    set -g fish_color_comment 565f89
-    set -g fish_color_selection --background=283457
-    set -g fish_color_search_match --background=283457
-    set -g fish_color_operator 7dcfff
-    set -g fish_color_escape bb9af7
-    set -g fish_color_autosuggestion 565f89
-    set -g fish_color_cancel f7768e
+    # ── Syntax highlighting ──────────────────────────────────────────────────
+    # Named colours, not hex: they come from the terminal's palette, which
+    # follows the desktop theme (Breeze or Adwaita, dark or light). Fixed
+    # Tokyo Night hex values were pale pastels on a light terminal.
+    set -g fish_color_normal normal
+    set -g fish_color_command blue --bold
+    set -g fish_color_keyword magenta
+    set -g fish_color_quote green
+    set -g fish_color_redirection cyan
+    set -g fish_color_end yellow
+    set -g fish_color_error red --bold
+    set -g fish_color_param normal
+    set -g fish_color_comment brblack
+    set -g fish_color_selection --reverse
+    set -g fish_color_search_match --reverse
+    set -g fish_color_operator cyan
+    set -g fish_color_escape magenta
+    set -g fish_color_autosuggestion brblack
+    set -g fish_color_cancel red
 
     # Pager colors
-    set -g fish_pager_color_progress 565f89
-    set -g fish_pager_color_prefix 7dcfff --bold
-    set -g fish_pager_color_completion c0caf5
-    set -g fish_pager_color_description 565f89
-    set -g fish_pager_color_selected_background --background=283457
+    set -g fish_pager_color_progress brblack
+    set -g fish_pager_color_prefix cyan --bold
+    set -g fish_pager_color_completion normal
+    set -g fish_pager_color_description brblack
+    set -g fish_pager_color_selected_background --reverse
 
     # ── Environment & Exports ────────────────────────────────────────────────
     set -gx EDITOR nvim

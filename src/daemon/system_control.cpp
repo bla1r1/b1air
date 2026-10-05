@@ -3758,21 +3758,26 @@ bool SystemControl::wallpaper_random(const std::string& dir_arg) {
     const char* home = std::getenv("HOME");
     std::string target_dir = dir_arg.empty() ? (std::string(home ? home : "") + "/.wallpapers") : dir_arg;
 
-    DIR* dir = opendir(target_dir.c_str());
-    if (!dir) return false;
-
+    // The folder and one level of category folders below it (Mountains/,
+    // Sky/…), as Settings → Wallpaper lists them.
     std::vector<std::string> images;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_name[0] == '.') continue;
-        std::string name = entry->d_name;
+    std::error_code ec;
+    for (auto it = std::filesystem::recursive_directory_iterator(target_dir, ec);
+         !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+        const std::string name = it->path().filename().string();
+        if (!name.empty() && name[0] == '.') {
+            if (it->is_directory()) it.disable_recursion_pending();
+            continue;
+        }
+        if (it->is_directory()) {
+            if (it.depth() >= 1) it.disable_recursion_pending();
+            continue;
+        }
         std::string lower = name;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-        if (lower.ends_with(".jpg") || lower.ends_with(".jpeg") || lower.ends_with(".png") || lower.ends_with(".webp")) {
-            images.push_back(target_dir + "/" + name);
-        }
+        if (lower.ends_with(".jpg") || lower.ends_with(".jpeg") || lower.ends_with(".png") || lower.ends_with(".webp"))
+            images.push_back(it->path().string());
     }
-    closedir(dir);
 
     if (images.empty()) return false;
 
@@ -3788,6 +3793,11 @@ bool SystemControl::wallpaper_restore() {
     if (access(cache_file.c_str(), R_OK) == 0) {
         return wallpaper_set(cache_file, "restore");
     }
+    // Nothing chosen yet — a first login: the default, the daytime clouds
+    // (tools/make-cloud-wallpapers.sh), rather than whichever file a random
+    // pick landed on.
+    const std::string fallback = std::string(home ? home : "") + "/.wallpapers/Sky/clouds-day.jpg";
+    if (access(fallback.c_str(), R_OK) == 0) return wallpaper_set(fallback);
     return wallpaper_random();
 }
 
@@ -4032,6 +4042,11 @@ int SystemControl::run_gamepad_inhibit() {
     unlink(state.c_str());
 
     std::map<std::string, int> pads;
+    // A pad whose fd failed, and when to try it again. The fd used to stay
+    // open: poll answered POLLERR at once on every pass — a pad unplugged
+    // whose node lingers, or one that errors after a resume — and this
+    // thread spun a core at 100% until the node went away.
+    std::map<std::string, std::chrono::steady_clock::time_point> retry;
     auto last_input = std::chrono::steady_clock::time_point{};
     bool holding = false;
 
@@ -4047,19 +4062,29 @@ int SystemControl::run_gamepad_inhibit() {
             if (!present.count(it->first)) { close(it->second); it = pads.erase(it); }
             else ++it;
         }
+        const auto now = std::chrono::steady_clock::now();
         for (const auto& path : present) {
             if (pads.count(path)) continue;
+            if (const auto r = retry.find(path); r != retry.end() && now < r->second) continue;
             const int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
             if (fd >= 0) pads[path] = fd;
+            else retry[path] = now + std::chrono::seconds(5);
         }
 
         std::vector<pollfd> fds;
-        for (const auto& [path, fd] : pads) fds.push_back({fd, POLLIN, 0});
+        std::vector<std::string> paths;
+        for (const auto& [path, fd] : pads) { fds.push_back({fd, POLLIN, 0}); paths.push_back(path); }
         if (fds.empty()) std::this_thread::sleep_for(std::chrono::seconds(2));
         else (void)poll(fds.data(), fds.size(), 2000);
 
-        for (auto& p : fds) {
-            if (p.revents & (POLLERR | POLLHUP | POLLNVAL)) continue;   // gone; dropped next pass
+        for (size_t i = 0; i < fds.size(); ++i) {
+            auto& p = fds[i];
+            if (p.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                close(p.fd);
+                pads.erase(paths[i]);
+                retry[paths[i]] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                continue;
+            }
             if (!(p.revents & POLLIN)) continue;
             JsEvent ev{};
             while (read(p.fd, &ev, sizeof(ev)) == static_cast<ssize_t>(sizeof(ev))) {

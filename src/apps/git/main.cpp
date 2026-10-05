@@ -5,6 +5,7 @@
 #include <QFile>
 #include <iostream>
 #include "qml_search.hpp"
+#include "avatar_cache.hpp"
 #include "git_backend.hpp"
 
 int main(int argc, char* argv[]) {
@@ -32,6 +33,7 @@ int main(int argc, char* argv[]) {
     app.setOrganizationName("b1air");
 
     GitBackend gitBackend;
+    AvatarCache avatars;
 
     // Launched from the menu there is no argument, and the repo path stayed
     // empty — runGit() then early-returns for every call, so the whole window
@@ -50,6 +52,7 @@ int main(int argc, char* argv[]) {
     });
 
     engine.rootContext()->setContextProperty("GitBackend", &gitBackend);
+    engine.rootContext()->setContextProperty("Avatars", &avatars);
 
     b1air::app::add_import_paths(engine, "git");
 

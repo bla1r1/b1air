@@ -184,6 +184,19 @@ QStringList coAuthorNames(const QString& field) {
     return names;
 }
 
+/** The emails of the same trailers, by name, for the avatars. */
+QVariantMap coAuthorEmails(const QString& field) {
+    QVariantMap emails;
+    for (const auto& v : field.split(QChar(0x1d), Qt::SkipEmptyParts)) {
+        const QString t = v.trimmed();
+        const int lt = t.indexOf('<'), gt = t.indexOf('>', lt);
+        if (lt < 0 || gt < 0) continue;
+        const QString name = lt > 0 ? t.left(lt).trimmed() : t.mid(lt + 1, gt - lt - 1);
+        emails.insert(name, t.mid(lt + 1, gt - lt - 1).trimmed());
+    }
+    return emails;
+}
+
 // Commits read per page. One page is well under 50ms even on a large
 // repository, and more than a window's worth of rows.
 constexpr int kHistoryPage = 300;
@@ -206,6 +219,7 @@ QVariant HistoryModel::data(const QModelIndex& index, int role) const {
     case TimeRole: return c.time;
     case MessageRole: return c.message;
     case CoAuthorsRole: return c.coAuthors;
+    case EmailRole: return c.email;
     case SyncRole: return !m_hasRemote ? QString()
                         : m_unpushed.contains(c.fullHash) ? QStringLiteral("local")
                                                           : QStringLiteral("pushed");
@@ -216,7 +230,7 @@ QVariant HistoryModel::data(const QModelIndex& index, int role) const {
 QHash<int, QByteArray> HistoryModel::roleNames() const {
     return {{FullHashRole, "fullHash"}, {HashRole, "hash"}, {AuthorRole, "author"},
             {TimeRole, "time"}, {MessageRole, "message"}, {SyncRole, "sync"},
-            {CoAuthorsRole, "coAuthors"}};
+            {CoAuthorsRole, "coAuthors"}, {EmailRole, "email"}};
 }
 
 bool HistoryModel::canFetchMore(const QModelIndex& parent) const {
@@ -260,7 +274,7 @@ QList<HistoryModel::Commit> HistoryModel::readPage(int skip) const {
     if (!gitOk(m_repoPath, QStringList() << "log" << "--skip=" + QString::number(skip)
                                          << "-n" << QString::number(kHistoryPage)
                                          << "--pretty=format:%H%x1f%h%x1f%an%x1f%ct%x1f%s%x1f"
-                                            "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)%x1e",
+                                            "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)%x1f%ae%x1e",
                nullptr, &out))
         return page;
 
@@ -268,7 +282,8 @@ QList<HistoryModel::Commit> HistoryModel::readPage(int skip) const {
         const QStringList parts = rec.trimmed().split(kFieldSep);
         if (parts.size() < 5) continue;
         page.append({parts[0], parts[1], parts[2], parts[3].toLongLong(), parts[4],
-                     parts.size() > 5 ? coAuthorNames(parts[5]) : QStringList()});
+                     parts.size() > 5 ? coAuthorNames(parts[5]) : QStringList(),
+                     parts.size() > 6 ? parts[6] : QString()});
     }
     return page;
 }
@@ -1070,6 +1085,7 @@ void GitBackend::selectCommit(const QString& hash) {
             QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption);
         m_commitInfo["body"] = QString(f[5]).remove(coLine).trimmed();
         m_commitInfo["coAuthors"] = coAuthorNames(f[6]);
+        m_commitInfo["coAuthorEmails"] = coAuthorEmails(f[6]);
     }
 
     // --diff-merges=first-parent: a merge shows what it brought into the

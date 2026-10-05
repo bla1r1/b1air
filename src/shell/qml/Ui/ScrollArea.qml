@@ -33,15 +33,8 @@ Rectangle {
         clip: true
 
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        ScrollBar.vertical: ScrollBar {
-            active: true
-            policy: ScrollBar.AsNeeded
-            contentItem: Rectangle {
-                implicitWidth: Design.s(3)
-                radius: width / 2
-                color: Design.active
-                opacity: 0.5
-            }
-        }
+        // The suite's one bar (OverflowBar): this one was 3px at half
+        // opacity, there to be seen and hard to take hold of.
+        ScrollBar.vertical: OverflowBar {}
     }
 }

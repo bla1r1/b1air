@@ -19,7 +19,12 @@ Rectangle {
 
     property alias text: input.text
     property alias validator: input.validator
-    property alias echoMode: input.echoMode
+    // TextInput.Password gets an eye at the right end: a click shows what was
+    // typed, another hides it. Every password field had dots and no way to
+    // check them, so a typo in a Wi-Fi passphrase was found by failing.
+    property int echoMode: TextInput.Normal
+    property bool _revealed: false
+    readonly property bool _secret: root.echoMode === TextInput.Password
     property alias readOnly: input.readOnly
     property alias horizontalAlignment: input.horizontalAlignment
     property string placeholder: ""
@@ -69,8 +74,9 @@ Rectangle {
         id: input
         anchors.fill: parent
         anchors.leftMargin: Design.s(Design.space.md)
-        anchors.rightMargin: Design.s(Design.space.md)
+        anchors.rightMargin: root._secret ? eye.width + Design.s(Design.space.sm) : Design.s(Design.space.md)
         verticalAlignment: TextInput.AlignVCenter
+        echoMode: root._secret && root._revealed ? TextInput.Normal : root.echoMode
         clip: true
 
         font.family: root.mono ? Design.font.mono : Design.font.sans
@@ -88,6 +94,32 @@ Rectangle {
             root.committed(text);
         }
         onActiveFocusChanged: if (!activeFocus) root.committed(text)
+    }
+
+    Rectangle {
+        id: eye
+        visible: root._secret
+        anchors.right: parent.right
+        anchors.rightMargin: Design.s(4)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Design.s(28); height: width
+        radius: Design.s(Design.radius.ctl)
+        color: eyeArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent"
+        Icon {
+            anchors.centerIn: parent
+            // eye / eye-off
+            text: root._revealed ? "\u{f0209}" : "\u{f0208}"
+            role: "body"
+            color: root._revealed ? Design.accent : Design.textDim
+        }
+        MouseArea {
+            id: eyeArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            // A click toggles; the field keeps the keyboard.
+            onClicked: { root._revealed = !root._revealed; input.forceActiveFocus(); }
+        }
     }
 
     Label {
