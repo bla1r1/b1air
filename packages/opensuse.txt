@@ -15,7 +15,7 @@ qt6-base-devel qt6-declarative-devel qt6-wayland-devel qt6-multimedia-devel
 qt6-svg-devel layer-shell-qt6-devel wayland-devel wayland-protocols-devel cairo-devel libxkbcommon-devel pam-devel
 
 # Qt 6 runtime
-qt6-wayland qt6-svg qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports
+qt6-wayland libQt6Svg6 qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports
 ?layer-shell-qt6
 
 # Wayland session
@@ -49,7 +49,7 @@ sddm-qt6
 
 # Theming & fonts
 kvantum-qt6 ?adw-gtk3 papirus-icon-theme
-noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts liberation-fonts
+noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts ?mozilla-fira-fonts liberation-fonts
 ?jetbrains-mono-fonts fontconfig
 
 # Tools the shell and daemon call out to

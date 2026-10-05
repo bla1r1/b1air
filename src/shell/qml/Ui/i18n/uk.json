@@ -1946,5 +1946,9 @@
  "…and %1 more": "…і ще %1",
  "↑↓←→ move    ↵ open    right-click pin": "↑↓←→ рух    ↵ відкрити    правий клік — закріпити",
  "↵ Copy": "↵ Копіювати",
- "★ Main": "★ Основний"
+ "★ Main": "★ Основний",
+ "Fingerprint at the login screen": "Відбиток на екрані входу",
+ "Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.": "Залиште пароль порожнім, натисніть Enter і прикладіть палець. Лише екран входу: sudo і системні запити й далі просять пароль. Сховище паролів лишається заблокованим, доки не введено пароль.",
+ "%1 makes a layout the default, %2 removes it. Changes apply immediately.": "%1 робить розкладку типовою, %2 прибирає її. Зміни діють одразу.",
+ "default": "типова"
 }

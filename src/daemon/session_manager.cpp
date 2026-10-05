@@ -268,7 +268,7 @@ void SessionManager::run_focus_tracker() {
     // not the end of one event. That is exactly how an XWayland window with a
     // null app_id used to end the session (see str_field in sway_ipc.cpp).
     auto on_event = [&]() {
-        // The lock screen says it is up (Lock.qml and b1air-lock write this);
+        // The lock screen says it is up (b1air-lock writes this);
         // it was a swaylock.lock file that nothing has ever written, so a
         // locked machine counted as screen time.
         const bool is_locked = idle::locked();

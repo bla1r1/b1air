@@ -292,7 +292,9 @@ install_compositor() {
             [[ "$NO_AUR" -eq 1 ]] && install_one_of sway
             return 0 ;;
         debian)
-            # No swayfx package here; plain sway (packages/debian.txt).
+            # No swayfx package here: plain sway (not in packages/debian.txt,
+            # which would put it beside ours when ours is built).
+            install_one_of sway || { err "sway could not be installed."; exit 1; }
             return 0 ;;
     esac
     if pkg_installed "$DISTRO" sway && ! pkg_installed "$DISTRO" swayfx; then
@@ -1240,7 +1242,7 @@ main() {
     step default-shell  configure_default_shell
 
     # The login screen reads the desktop palette from /var/cache/wallpaper
-    # (see usr/share/sddm/themes/b1air/components/Palette.qml). Nothing has
+    # (see usr/share/sddm/themes/b1air/components/ThemeColors.qml). Nothing has
     # written it yet on a fresh machine, so the very first login would show the
     # theme's built-in fallback colours rather than the ones just installed.
     if command -v b1air-daemon >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/b1air-daemon" ]]; then

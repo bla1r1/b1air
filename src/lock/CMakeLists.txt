@@ -1,9 +1,9 @@
-# b1air-lock — the lock screen when the shell's own (Lock.qml) cannot run, in
-# place of swaylock. Plain wayland-client with ext-session-lock-v1 (protocol/,
+# b1air-lock — the session's lock screen, in place of swaylock (and of the
+# shell's QML one). Plain wayland-client with ext-session-lock-v1 (protocol/,
 # from wayland-protocols, MIT), cairo to draw, xkbcommon for the keys, PAM to
 # check the password; b1air-bg's decoder for the wallpaper and b1air-core for
 # which wallpaper and which language.
-pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client cairo xkbcommon)
+pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon)
 # PAM by its library and header, not pkg-config: Debian's pam.pc requires
 # audit.pc, which only libaudit-dev has.
 find_library(PAM_LIBRARY pam REQUIRED)

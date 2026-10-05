@@ -39,10 +39,30 @@ Item {
     property string userIcon: ""
     property bool userNeedsPassword: true
 
+    // Fingerprint login (Settings → User on the desktop: b1air-daemon
+    // fingerprint login on): the PAM file sends an empty password to the
+    // reader. The daemon leaves this file when it is on; it is loaded as the
+    // palette is, since the greeter may not read files.
+    property bool fingerprintLogin: false
+    Component.onCompleted: {
+        const c = Qt.createComponent("file:///etc/b1air/fingerprint-login.qml");
+        fingerprintLogin = c.status === Component.Ready;
+    }
+    readonly property var fpWords: ({
+        en: { hint: "Password or finger", touch: "Touch the fingerprint reader" },
+        uk: { hint: "Пароль або палець", touch: "Прикладіть палець до сканера" },
+        ru: { hint: "Пароль или палец", touch: "Приложите палец к сканеру" }
+    })
+    function fpWord(key) {
+        const w = fpWords[Qt.locale().name.slice(0, 2)] || fpWords.en;
+        return w[key];
+    }
+
     function login() {
         var user = foundUsers ? userName : userInput.text;
         if (user && user !== "") {
             safeStateChange("authenticating");
+            spinner.label = fingerprintLogin && password.text === "" ? fpWord("touch") : "";
             sddm.login(user, password.text, sessionIndex);
         } else {
             loginMessage.warn(textConstants.promptUser || "Enter your user!", "error");
@@ -57,8 +77,10 @@ Item {
             loginMessage.warn(textConstants.loginFailed || "Login failed", "error");
             password.text = "";
         }
+        // What PAM says on the way (pam_fprintd's "place your finger",
+        // "no match, try again") is information, not a failure.
         function onInformationMessage(message) {
-            loginMessage.warn(message, "error");
+            loginMessage.warn(message, "normal");
         }
         target: sddm
     }
@@ -305,7 +327,8 @@ Item {
                     enabled: loginScreen.state === "normal"
                     visible: loginScreen.userNeedsPassword || !loginScreen.foundUsers
                     icon: Config.getIcon(Config.passwordInputIcon)
-                    placeholder: (textConstants && textConstants.password) ? textConstants.password : "Password"
+                    placeholder: loginScreen.fingerprintLogin ? loginScreen.fpWord("hint")
+                        : (textConstants && textConstants.password) ? textConstants.password : "Password"
                     isPassword: true
                     splitBorderRadius: true
                     onAccepted: {

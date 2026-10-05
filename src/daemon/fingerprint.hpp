@@ -15,6 +15,15 @@
 //
 // The lock screens do not use this: they authenticate through PAM
 // (pam_fprintd), alongside the password, with the PAM file the suite ships.
+//
+//   b1air-daemon fingerprint login status      {"supported", "enabled", ...}
+//   b1air-daemon fingerprint login on|off      as root (pkexec)
+//
+// The login screen (SDDM) reads only /etc/pam.d/sddm, so that one file —
+// and no other: not sudo, polkit or the console — gets a marked block
+// before its first auth line: an empty password goes to the reader
+// (pam_fprintd), a typed one on to the password check as before. The
+// greeter learns it is on from /etc/b1air/fingerprint-login.qml.
 
 #include <string>
 
@@ -24,5 +33,8 @@ std::string status_json();
 int enroll(const std::string& finger);
 int remove(const std::string& finger);   // "all" for every one
 int verify();
+
+std::string login_status_json();
+int login_set(bool on);   // 0 done, 1 refused, 2 not possible here
 
 } // namespace b1air::fingerprint

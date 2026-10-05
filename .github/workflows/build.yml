@@ -48,6 +48,39 @@ jobs:
           apt-get install -y --no-install-recommends fprintd libpam-fprintd dbus-daemon polkitd python3
           tools/test-fingerprint.sh src/build/bin/b1air-daemon
 
+  # Every name in the package lists is in that family's repositories, asked
+  # of its own package manager (and the AUR's API for Arch): a renamed or
+  # dropped package stops install.sh half way on a new machine.
+  packages:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: debian
+            image: ubuntu:26.04
+            prepare: apt-get update
+          - family: fedora
+            image: fedora:latest
+            prepare: dnf -q makecache
+          - family: arch
+            image: archlinux:latest
+            prepare: pacman -Sy --noconfirm && pacman -S --noconfirm --needed curl
+          - family: opensuse
+            image: opensuse/tumbleweed
+            prepare: zypper -n refresh
+    name: packages (${{ matrix.family }})
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - name: Repositories
+        run: ${{ matrix.prepare }}
+      - name: Every listed package exists
+        run: tools/check-packages.sh ${{ matrix.family }}
+
   # swayfx with our patch series, built the way install.sh builds it, on
   # every family install.sh supports, then started headless on the software
   # renderer (no GPU on the runner — which is itself what scenefx patch 0001

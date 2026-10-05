@@ -13,16 +13,15 @@ public:
     static std::string get_game_mode_status_json();
 
     // Power & Session management
-    static bool lock_session(const std::string& mode = "auto"); // "auto", "quickshell", "swaylock"
+    static bool lock_session();   // blocks until opened
     // Non-blocking: spawns the lock screen and returns immediately, instead
     // of waiting for it to be dismissed. lock_session() waits for
-    // run_quickshell_lock()'s child to exit, which is fine for an explicit
+    // run_lock()'s child to exit, which is fine for an explicit
     // "lock now" call but wrong for swayidle's before-sleep hook — logind
     // only grants a few seconds before forcing sleep regardless, so a
     // blocking call there gets killed mid-lock and looks like it never ran.
     static bool lock_session_async();
-    static bool run_fallback_lock();
-    static bool run_quickshell_lock();
+    static bool run_lock();
     static bool logout_session();
     static bool suspend_system();
     static bool reboot_system();
@@ -150,6 +149,8 @@ public:
     // Weather Forecast & Live Status
     static std::string weather_get_json(bool force = false);
     static std::string weather_get_current_info(const std::string& field = "current");
+    static std::string weather_cached_info(const std::string& field = "current");
+    static std::string weather_current_from(const std::string& json, const std::string& field);
 
     // Equalizer & EasyEffects Controls
     static std::string eq_get_state_json();

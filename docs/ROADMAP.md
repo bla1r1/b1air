@@ -351,12 +351,23 @@ everywhere.
       sleep through a logind delay inhibitor, Caffeine and gamepads without
       restarts. The lock screen shows each screen's own wallpaper and one
       password for every screen.
-- [x] b1air-lock (src/lock) in place of swaylock: the lock when Lock.qml
-      cannot load or crashes, so the session is locked either way.
+- [x] b1air-lock (src/lock) in place of swaylock, and the default lock
+      screen: wallpaper, clock, account picture and name, layout, battery,
+      weather, power menu, the theme's colours. The only lock screen: the
+      shell's QML one is gone, and a b1air-lock that dies while locked is
+      replaced by a new one.
 - [x] Fingerprint (fprintd): enrol, test and remove fingers in Settings →
       User; a touch opens either lock screen beside the password (a second
       PAM conversation with the suite's own pam/b1air-fingerprint). Checked
       in CI against libfprint's virtual reader (tools/test-fingerprint.sh).
-      **Missing:** sudo, polkit prompts and the login screen, which read the
-      system's own PAM files.
+- [x] Native where QML is not needed: the lock screen (b1air-lock) and
+      the Print overlay (b1air-shot: selection with handles, picture or
+      video with sound and microphone, QR with copy and open), each a
+      program of its own that starts in milliseconds instead of a
+      Quickshell process with a QML engine. QML stays for what lives in the
+      running shell and for SDDM, which takes nothing else.
+- [x] Fingerprint at the login screen, opt-in: a block in /etc/pam.d/sddm
+      only (an empty password goes to the reader, a typed one straight to
+      the password check). sudo and polkit are deliberately left on the
+      password.
 

@@ -9,7 +9,7 @@ This directory contains the unified Wayland native desktop shell for the DotsFil
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        SHELL LAYER & IPC ROUTER                        │
-│             Main.qml • WindowRegistry.js • Lock.qml • Screenshot       │
+│             Main.qml • WindowRegistry.js • Screenshot                  │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
         ┌───────────────────────────┴───────────────────────────┐
@@ -42,8 +42,6 @@ This directory contains the unified Wayland native desktop shell for the DotsFil
 ### 1. Root Orchestrators
 - **`Main.qml`**: Central window manager process. Listens to Sway IPC commands, manages smooth layer morphing animations, and loads widgets dynamically.
 - **`WindowRegistry.js`**: Declarative routing table defining exact geometry, scaling factors, screen alignment, and target QML components.
-- **`Lock.qml`**: Standalone Wayland lock screen overlay with PAM authentication and ambient animations.
-- **`ScreenshotOverlay.qml`**: Interactive full-screen snip overlay with live loupe, window detection, and instant copy/save actions.
 
 ---
 

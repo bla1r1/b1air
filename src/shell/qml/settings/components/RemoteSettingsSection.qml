@@ -217,11 +217,14 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold }
+                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 Label {
+                    // Wrapped: on one line it pushed the buttons past the card's edge.
                     text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
                     role: "caption"
                     dim: true
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
                 }
             }
 

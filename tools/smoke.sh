@@ -477,9 +477,11 @@ check_shell_boot() {
         printf '      %s\n' "the shell exited within 8 seconds"; bad=1
     fi
     # PipeWire is not this project's problem and is absent on headless test
-    # machines; everything else at ERROR is.
-    if grep -a "ERROR" "$log" | grep -av "pipewire" | head -5 | grep -q .; then
-        grep -a "ERROR" "$log" | grep -av "pipewire" | head -5 | sed 's/^/      /'
+    # machines, and neither is Mesa probing for a Vulkan driver a machine
+    # without a GPU lacks ("MESA: error: ZINK: … VK_ERROR_…"); everything
+    # else at ERROR is.
+    if grep -a "ERROR" "$log" | grep -av -e "pipewire" -e "^MESA:" | head -5 | grep -q .; then
+        grep -a "ERROR" "$log" | grep -av -e "pipewire" -e "^MESA:" | head -5 | sed 's/^/      /'
         bad=1
     fi
     kill "$pid" 2>/dev/null
