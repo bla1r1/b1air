@@ -147,6 +147,34 @@ else
         || ok "night light reports a screen without gamma control"
 fi
 
+# Print: the region overlay (b1air-shot) comes up; with a selection kept
+# from before, Enter captures exactly that region, and the overlay goes.
+# Then Escape closes one without capturing. KEY_SYSRQ (Print)=99, KEY_ENTER=28,
+# KEY_ESC=1.
+shots="$HOME/Pictures/Screenshots"
+mkdir -p "$HOME/.cache"; echo "100,80,320,200" > "$HOME/.cache/qs_screenshot_geom"; echo false > "$HOME/.cache/qs_screenshot_mode"
+before_shots="$(ls "$shots" 2>/dev/null | wc -l)"
+"$VKB" - 99
+for _ in $(seq 1 30); do running '^b1air-shot' && break; sleep 0.1; done
+if running '^b1air-shot'; then
+    ok "Print brings up the region overlay"
+    sleep 0.5
+    "$VKB" - 28
+    for _ in $(seq 1 50); do [[ "$(ls "$shots" 2>/dev/null | wc -l)" -gt "$before_shots" ]] && break; sleep 0.2; done
+    newest="$(ls -t "$shots"/* 2>/dev/null | head -1)"
+    size="$([[ -n "$newest" ]] && python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(24); print("%dx%d" % struct.unpack(">II", d[16:24]))' "$newest" 2>/dev/null)"
+    [[ "$size" == 320x200 ]] && ! running '^b1air-shot' && ok "Enter captures the selected region (320x200), and the overlay goes" \
+        || fail "capture from the overlay" "file ${newest:-none}, size ${size:-?}"
+    "$VKB" - 99
+    for _ in $(seq 1 30); do running '^b1air-shot' && break; sleep 0.1; done
+    sleep 0.5
+    "$VKB" - 1
+    for _ in $(seq 1 30); do running '^b1air-shot' || break; sleep 0.1; done
+    ! running '^b1air-shot' && ok "Escape closes it" || fail "Escape left the overlay up"
+else
+    fail "Print opened no overlay"
+fi
+
 # The lock screen, when the account has a password to test with
 # (B1AIR_TEST_PASSWORD): locked, shortcuts are refused; the password opens
 # it; shortcuts work again. A lock that cannot be opened, or that leaves the
@@ -155,7 +183,8 @@ if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then
     declare -A KEY=([a]=30 [b]=48 [c]=46 [d]=32 [e]=18 [f]=33 [g]=34 [h]=35 [i]=23 [j]=36 [k]=37 [l]=38 [m]=50
                     [n]=49 [o]=24 [p]=25 [q]=16 [r]=19 [s]=31 [t]=20 [u]=22 [v]=47 [w]=17 [x]=45 [y]=21 [z]=44
                     [1]=2 [2]=3 [3]=4 [4]=5 [5]=6 [6]=7 [7]=8 [8]=9 [9]=10 [0]=11)
-    lock_up() { pgrep -u "$(id -u)" -f 'Lock.qml' >/dev/null; }
+    # b1air-lock, the default lock screen.
+    lock_up() { pgrep -u "$(id -u)" -x b1air-lock >/dev/null; }
     b1air-daemon lock
     for _ in $(seq 1 50); do lock_up && break; sleep 0.2; done
     sleep 2
@@ -234,28 +263,28 @@ printf '%s\n' "$saved_settings" > "$SETTINGS"
 b1air-daemon power idle-reload
 swaymsg -q output "$SECOND" unplug
 
-# The lock screen that cannot load leaves the machine locked all the same:
-# a Lock.qml that is not QML, and b1air-lock takes its place; the password
-# opens it. (Before, a broken Lock.qml meant no lock at all.)
+# b1air-lock killed while locked: the session stays locked (the compositor
+# holds it), a new b1air-lock takes its place, and the password opens it.
+type_password() { "$VKB" - "${codes[@]}" 28; }
 if [[ -n "${B1AIR_TEST_PASSWORD:-}" ]]; then
-    mkdir -p "$HOME/.config/b1air-shell"
-    had_lock_qml=""
-    [[ -e "$HOME/.config/b1air-shell/Lock.qml" ]] && had_lock_qml=1 && mv "$HOME/.config/b1air-shell/Lock.qml" "$RT/Lock.qml.saved"
-    echo 'this is not QML {' > "$HOME/.config/b1air-shell/Lock.qml"
     rm -f "$XDG_RUNTIME_DIR/b1air/lock-spawned"
     b1air-daemon lock
-    for _ in $(seq 1 50); do [[ "$(lock_state)" == locked ]] && break; sleep 0.2; done
-    if pgrep -x b1air-lock >/dev/null && [[ "$(lock_state)" == locked ]]; then
-        ok "a lock screen that cannot load: b1air-lock locks instead"
+    for _ in $(seq 1 50); do pgrep -x b1air-lock >/dev/null && [[ "$(lock_state)" == locked ]] && break; sleep 0.2; done
+    first="$(pgrep -x b1air-lock)"
+    pkill -KILL -x b1air-lock
+    for _ in $(seq 1 50); do second="$(pgrep -x b1air-lock)"; [[ -n "$second" && "$second" != "$first" ]] && break; sleep 0.2; done
+    sleep 2   # "locked" comes before the keyboard is the lock's: keys before that go nowhere
+    before="$(ws)"
+    "$VKB" logo 2; sleep 1
+    if [[ -n "$second" && "$second" != "$first" && "$(ws)" == "$before" ]]; then
+        ok "b1air-lock killed while locked: a new one takes over, still locked"
     else
-        fail "fallback lock" "b1air-lock $(pgrep -c -x b1air-lock), lock-state $(lock_state)"
+        fail "b1air-lock restarted" "first $first, now ${second:-none}, workspace $before -> $(ws)"
     fi
-    "$VKB" - "${codes[@]}" 28
+    type_password
     for _ in $(seq 1 50); do pgrep -x b1air-lock >/dev/null || break; sleep 0.2; done
     [[ "$(lock_state)" == unlocked ]] && ! pgrep -x b1air-lock >/dev/null \
-        && ok "the password opens b1air-lock" || fail "b1air-lock did not open" "$(lock_state)"
-    rm -f "$HOME/.config/b1air-shell/Lock.qml"
-    [[ -n "$had_lock_qml" ]] && mv "$RT/Lock.qml.saved" "$HOME/.config/b1air-shell/Lock.qml"
+        && ok "and the password opens it" || fail "the restarted b1air-lock did not open" "$(lock_state)"
 fi
 
 echo "test-session: $PASS passed, $FAILED failed"

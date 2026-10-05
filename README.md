@@ -29,6 +29,9 @@ Key components:
 * **Compositor**: SwayFX with hardware-accelerated rounded corners, soft shadows, and selective blur. Window chrome, the greeter and the Qt/Kvantum application theme use Tokyo Night (`#1a1b26`); the Qt6/QML shell and the native apps share one design system built on a Catppuccin Mocha palette (`Ui/Design.qml`).
 * **Core Daemon (`b1air-daemon`)**: A single compiled C++20 binary that manages window autotiling, focus tracking (SQLite3), audio and microphone controls (PipeWire via `wpctl`), PAM user profiles, and power management without shell script overhead.
 * **Desktop Shell**: Lightweight Qt6/QML overlays providing an application launcher, clipboard history, control center, emoji picker, and a visual Alt+Tab window switcher.
+* **Own small tools** in place of the usual helpers, each with its tests: `b1air-lock` (the lock screen, instead of swaylock), idle handling inside the daemon (instead of swayidle), `b1air-clip` (instead of wl-clipboard), `b1air-gamma` (night light with a schedule, instead of wlsunset), `b1air-bg` (wallpaper, instead of swaybg), `b1air-shot` (the Print overlay: region, recording, QR — instead of a QML one started per press).
+* **Lock screen**: `b1air-lock` by default — up in milliseconds, before the machine sleeps: each screen's wallpaper blurred, clock, account picture and name, one password field for every screen, keyboard layout, battery, weather, and a reboot / sleep / shut down menu. It is the only lock screen — no QML; one that dies while locked is replaced by a new one, the session staying locked.
+* **Fingerprint** (fprintd): enrol and test fingers in Settings → User; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
 * **Remote Access**: Built-in headless WayVNC support and unattended screencasting configuration for AnyDesk, RustDesk, and OBS with persistent uinput permissions.
 
 ---
@@ -46,7 +49,7 @@ Graphical desktop configuration:
 * Toggles for Night Light, Game Mode (disables blur and pins performance governor), and Remote Desktop.
 
 ### SDDM Greeter
-Matches the desktop Tokyo Night theme with digital clock, user avatar synchronization, session selection, and virtual keyboard support.
+Takes the desktop's live palette (written by `b1air-daemon` to `/var/cache/wallpaper`), with digital clock, user avatar synchronization, session selection, virtual keyboard support, and fingerprint login when it is turned on in Settings → User.
 
 ---
 
@@ -56,10 +59,19 @@ Matches the desktop Tokyo Night theme with digital clock, user avatar synchroniz
 
 | Family | Versions | Quickshell | Compositor |
 | :--- | :--- | :--- | :--- |
-| **Arch** (EndeavourOS, Manjaro, CachyOS, …) | rolling | official repo | swayFX (AUR), or sway with `--no-aur` |
-| **Debian / Ubuntu** (Mint, Pop!_OS, …) | Debian 13+, Ubuntu 25.04+ | built from source | swayFX, built from source with its own wlroots |
-| **Fedora** (Nobara, …) | 40+ | COPR `errornointernet/quickshell`, else source | swayFX |
-| **openSUSE** *(experimental)* | Tumbleweed / Slowroll | repo if present, else source | swayFX if present, else built from source |
+| **Arch** (EndeavourOS, Manjaro, CachyOS, …) | rolling | official repo | swayFX built from source |
+| **Debian / Ubuntu** (Mint, Pop!_OS, …) | Debian 13+, Ubuntu 25.04+ | built from source | swayFX built from source |
+| **Fedora** (Nobara, …) | 40+ | COPR `errornointernet/quickshell`, else source | swayFX built from source |
+| **openSUSE** *(experimental)* | Tumbleweed / Slowroll | repo if present, else source | swayFX built from source |
+
+There is one compositor: ours. A sway or swayfx package already installed
+(the distribution's or the AUR's) is removed once ours is built, so the login
+screen does not offer two Sway sessions — `B1AIR_SWAYFX_FROM_SOURCE=0` takes
+the packaged swayFX instead (the AUR's on Arch), `B1AIR_KEEP_DISTRO_SWAY=1`
+keeps a packaged one beside ours. Should the build fail, plain sway is
+installed so there is a desktop, and the next install.sh run tries again.
+`tools/check-packages.sh`, run in CI for every family, checks that every name
+in `packages/` exists in that family's repositories.
 
 Where swayFX is built from source (`tools/build-swayfx.sh`), it is built the
 way the sway fork scroll ships: swayFX 0.6 with its own copies of wlroots
@@ -209,7 +221,9 @@ b1air-daemon remote status         # JSON status of remote service
 b1air-daemon remote prompt-free on # Enable unattended screencasting
 
 # Session Management
-b1air-daemon lock                  # Lock screen immediately
+b1air-daemon lock                  # Lock screen immediately (b1air-lock); --wait blocks until opened
+b1air-daemon fingerprint status    # The reader and the saved fingers (JSON)
+b1air-daemon fingerprint login on  # Fingerprint at the login screen (as root: edits /etc/pam.d/sddm only)
 b1air-daemon game-mode toggle      # Switch between power-save and low-latency mode
 ```
 
@@ -239,8 +253,9 @@ DotsFiles/
 │   ├── bg/                    # b1air-bg: the wallpaper, per screen and per workspace
 │   ├── clip/                  # b1air-clip: copy, paste and watch the clipboard (no wl-clipboard)
 │   ├── gamma/                 # b1air-gamma: night light, fixed or by hours or sunset/sunrise
-│   ├── lock/                  # b1air-lock: the lock screen when the shell's cannot run (no swaylock)
-│   ├── pam/                   # The lock screens' fingerprint PAM file (pam_fprintd)
+│   ├── lock/                  # b1air-lock: the lock screen (no swaylock)
+│   ├── shot/                  # b1air-shot: the Print overlay — region, record, QR
+│   ├── pam/                   # Fingerprint PAM file for the lock screens; the login screen's helper
 │   ├── compat/                # Quickshell stand-in that lets b1air-settings run on its own
 │   ├── cursors/               # Sources of the b1air cursor theme
 │   └── third_party/           # Vendored SQLite, nlohmann/json, libvterm

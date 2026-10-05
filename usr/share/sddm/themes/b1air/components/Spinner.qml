@@ -4,6 +4,9 @@ import QtQuick.Effects
 
 Item {
     id: spinnerContainer
+    // What is going on, when it is not the usual "Authenticating…" (the
+    // fingerprint reader waiting for a finger).
+    property string label: ""
     width: (spinner.width + Config.spinnerSpacing + spinnerText.width) * Config.generalScale
     height: childrenRect.height * Config.generalScale
 
@@ -78,7 +81,7 @@ Item {
     Text {
         id: spinnerText
         visible: Config.spinnerDisplayText
-        text: Config.spinnerText
+        text: spinnerContainer.label !== "" ? spinnerContainer.label : Config.spinnerText
         color: Config.spinnerColor
         font.pixelSize: Config.spinnerFontSize * Config.generalScale
         font.weight: Config.spinnerFontWeight

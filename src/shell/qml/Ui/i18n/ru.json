@@ -533,5 +533,15 @@
  "of %1 GB  ·  %2% used": "из %1 ГБ  ·  занято %2%",
  "ready": "готово",
  "yesterday": "вчера",
- "…and %1 more": "…и ещё %1"
+ "…and %1 more": "…и ещё %1",
+ "Fingerprint at the login screen": "Отпечаток на экране входа",
+ "Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.": "Оставьте пароль пустым, нажмите Enter и приложите палец. Только экран входа: sudo и системные запросы по-прежнему просят пароль. Хранилище паролей остаётся заблокированным, пока не введён пароль.",
+ "%1 makes a layout the default, %2 removes it. Changes apply immediately.": "%1 делает раскладку основной, %2 убирает её. Изменения применяются сразу.",
+ "default": "основная",
+ "Capture": "Снимок",
+ "Record": "Запись",
+ "Select region to capture": "Выберите область для снимка",
+ "Click Record (Portal handles area selection)": "Нажмите «Запись» (область выбирает портал)",
+ "No Microphones (Install pulseaudio)": "Нет микрофонов (установите pulseaudio)",
+ "No QR code found.": "QR-код не найден."
 }

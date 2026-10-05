@@ -539,7 +539,16 @@ int main(int argc, char* argv[]) {
         if (sub == "enroll" && argc >= 4) return fingerprint::enroll(argv[3]);
         if (sub == "delete" && argc >= 4) return fingerprint::remove(argv[3]);
         if (sub == "verify") return fingerprint::verify();
-        std::cerr << "Usage: " << argv[0] << " fingerprint {status|enroll <finger>|delete <finger>|all|verify}\n";
+        if (sub == "login") {
+            const std::string what = argc >= 4 ? argv[3] : "status";
+            if (what == "status") {
+                std::cout << fingerprint::login_status_json() << "\n";
+                return 0;
+            }
+            if (what == "on" || what == "off") return fingerprint::login_set(what == "on");
+        }
+        std::cerr << "Usage: " << argv[0]
+                  << " fingerprint {status|enroll <finger>|delete <finger>|all|verify|login [status|on|off]}\n";
         return 1;
     } else if (cmd == "lid") {
         // lid close|open, from sway's bindswitch: what Settings → Power says.
@@ -962,7 +971,7 @@ int main(int argc, char* argv[]) {
                 return 2;
             }
         }
-        // "select" opens ScreenshotOverlay.qml — drag-to-select, annotate,
+        // "select" opens b1air-shot — drag-to-select, annotate,
         // QR-scan and GIF recording — instead of an immediate blind capture.
         if (mode == "select") return SystemControl::run_screenshot_overlay(edit) ? 0 : 1;
         return SystemControl::capture(mode, geom, edit, delay) ? 0 : 1;
@@ -1080,12 +1089,10 @@ int main(int argc, char* argv[]) {
         return 0;
     } else if (cmd == "lock") {
         if (DaemonDBus::is_running()) return DaemonDBus::call_lock() ? 0 : 1;
-        // No explicit mode: this is the common path (the lock
-        // keybind) and should return as soon as the lock screen is spawned,
-        // not block until it's dismissed. An explicit mode is a manual
-        // debug override, where waiting for the real result is expected.
-        if (argc < 3) return SystemControl::lock_session_async() ? 0 : 1;
-        return SystemControl::lock_session(argv[2]) ? 0 : 1;
+        // The common path (the lock keybind) returns as soon as the lock
+        // screen is spawned; `lock --wait` blocks until it is opened.
+        if (argc >= 3 && std::string(argv[2]) == "--wait") return SystemControl::lock_session() ? 0 : 1;
+        return SystemControl::lock_session_async() ? 0 : 1;
     } else if (cmd == "polkit" || cmd == "polkit-agent") {
         std::string sub = (argc >= 3) ? argv[2] : "agent";
         if (sub == "dialog") {

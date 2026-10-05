@@ -31,6 +31,22 @@ for prog in $(grep -hoE '\bexec(_always)?[[:space:]]+(--no-startup-id[[:space:]]
         missing=$((missing + 1))
     fi
 done
+# And what the daemon and the shell start themselves, outside the config:
+# the lock screen, the clipboard, the night light, the wallpaper, sounds,
+# the volume's default device, screenshots, opening files in an app.
+for prog in b1air-daemon b1air-lock b1air-shot b1air-clip b1air-gamma b1air-bg quickshell pw-play pactl grim slurp gtk-launch; do
+    checked=$((checked + 1))
+    if ! PATH="$bin:/usr/local/bin:$PATH" command -v "$prog" >/dev/null; then
+        echo "check-install: missing $prog (run by the daemon or the shell)" >&2
+        missing=$((missing + 1))
+    fi
+done
+# The lock screens' fingerprint PAM file and the login screen's helper,
+# where the daemon looks for them (root's, for PAM).
+for f in /usr/share/b1air/pam/b1air-fingerprint /usr/share/b1air/pam/b1air-empty-password; do
+    checked=$((checked + 1))
+    [[ -r "$f" ]] || { echo "check-install: missing $f" >&2; missing=$((missing + 1)); }
+done
 for unit in "$HOME"/.config/systemd/user/b1air-*.service; do
     [[ -f "$unit" ]] || continue
     exe="$(sed -n 's/^ExecStart=\([^ ]*\).*/\1/p' "$unit" | head -1)"

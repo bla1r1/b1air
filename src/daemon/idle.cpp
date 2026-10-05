@@ -436,7 +436,7 @@ void run(const volatile int* running) {
     // "locked" left behind by a lock screen that is not running (it
     // crashed, or the session before this one had it up) would keep the
     // other screens dark on every wake.
-    if (locked() && !proc::running_with("Lock.qml")) {
+    if (locked() && !proc::running("b1air-lock")) {
         const int fd = open(runtime_path("lock-state").c_str(), O_WRONLY | O_TRUNC | O_CLOEXEC);
         if (fd >= 0) {
             (void)!write(fd, "unlocked\n", 9);

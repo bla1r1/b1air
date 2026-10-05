@@ -18,7 +18,7 @@ inline std::string home_dir() {
     return {};
 }
 
-// Resolve a QML entry point by name ("Main.qml", "Lock.qml").
+// Resolve a QML entry point by name ("Main.qml").
 //
 // `make install` deploys the QML to ~/.config/b1air-shell, while older setups
 // kept it in ~/.config/quickshell. Checking only the latter meant a fresh

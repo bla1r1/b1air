@@ -3,8 +3,10 @@
 #include <nlohmann/json.hpp>
 #include <systemd/sd-bus.h>
 
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <poll.h>
@@ -235,6 +237,186 @@ int remove(const std::string& finger) {
     (void)b.call("Release", nullptr);
     std::cout << (ok ? "done deleted" : "done error " + short_error(err)) << std::endl;
     return ok ? 0 : 1;
+}
+
+} // namespace b1air::fingerprint
+
+// ── The login screen ─────────────────────────────────────────────────────────
+
+namespace b1air::fingerprint {
+
+namespace {
+
+constexpr const char* kBegin = "# b1air: fingerprint at the login screen (Settings → User). Begin.";
+constexpr const char* kEnd = "# b1air: end.";
+constexpr const char* kGreeterFlag = "/etc/b1air/fingerprint-login.qml";
+
+std::string sddm_pam_file() {
+    // Tests point it at a copy; pkexec clears the environment, so a real
+    // change is always to the real file.
+    const char* test = std::getenv("B1AIR_TEST_SDDM_PAM");
+    return test && *test ? test : "/etc/pam.d/sddm";
+}
+
+bool root_owned_safe(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0 && st.st_uid == 0 && (st.st_mode & (S_IWGRP | S_IWOTH)) == 0;
+}
+
+// The helper pam_exec runs as root at the login screen: only one that root
+// owns and nobody else can change, in a directory nobody else can change.
+std::string empty_password_helper() {
+    for (const char* dir : {"/usr/share/b1air/pam", "/usr/local/share/b1air/pam"}) {
+        const std::string path = std::string(dir) + "/b1air-empty-password";
+        if (access(path.c_str(), X_OK) == 0 && root_owned_safe(path) && root_owned_safe(dir)) return path;
+    }
+    return {};
+}
+
+bool have_pam_fprintd() {
+    for (const char* dir : {"/usr/lib/security", "/usr/lib64/security", "/lib/security", "/lib64/security",
+                            "/usr/lib/x86_64-linux-gnu/security", "/lib/x86_64-linux-gnu/security",
+                            "/usr/lib/aarch64-linux-gnu/security", "/lib/aarch64-linux-gnu/security"})
+        if (access((std::string(dir) + "/pam_fprintd.so").c_str(), R_OK) == 0) return true;
+    return false;
+}
+
+std::vector<std::string> read_lines(const std::string& path, bool& ok) {
+    std::vector<std::string> out;
+    FILE* f = std::fopen(path.c_str(), "re");
+    ok = f != nullptr;
+    if (!f) return out;
+    char* line = nullptr;
+    size_t cap = 0;
+    ssize_t n;
+    while ((n = getline(&line, &cap, f)) >= 0) {
+        std::string l(line, static_cast<size_t>(n));
+        if (!l.empty() && l.back() == '\n') l.pop_back();
+        out.push_back(l);
+    }
+    free(line);
+    std::fclose(f);
+    return out;
+}
+
+bool has_block(const std::vector<std::string>& lines) {
+    for (const auto& l : lines)
+        if (l == kBegin) return true;
+    return false;
+}
+
+bool write_atomically(const std::string& path, const std::string& text, mode_t mode) {
+    const std::string tmp = path + ".b1air-new";
+    FILE* f = std::fopen(tmp.c_str(), "we");
+    if (!f) return false;
+    const bool wrote = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    const bool closed = std::fclose(f) == 0;
+    if (!wrote || !closed || chmod(tmp.c_str(), mode) != 0 || rename(tmp.c_str(), path.c_str()) != 0) {
+        unlink(tmp.c_str());
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+std::string login_status_json() {
+    nlohmann::json j;
+    bool ok = false;
+    const auto lines = read_lines(sddm_pam_file(), ok);
+    std::string why;
+    if (!ok) why = "no-sddm";
+    else if (!have_pam_fprintd()) why = "no-pam-fprintd";
+    else if (empty_password_helper().empty()) why = "not-installed";
+    j["supported"] = why.empty();
+    j["enabled"] = ok && has_block(lines);
+    if (!why.empty()) j["reason"] = why;
+    return j.dump();
+}
+
+int login_set(bool on) {
+    const std::string path = sddm_pam_file();
+    bool ok = false;
+    auto lines = read_lines(path, ok);
+    if (!ok) {
+        std::cerr << "fingerprint login: " << path << " cannot be read (is SDDM installed?)\n";
+        return 2;
+    }
+    const std::string helper = empty_password_helper();
+    if (on && (helper.empty() || !have_pam_fprintd())) {
+        std::cerr << "fingerprint login: " << (helper.empty() ? "b1air-empty-password is not installed for root"
+                                                               : "pam_fprintd is not installed") << "\n";
+        return 2;
+    }
+
+    // Whatever block is there goes; with "on" a fresh one goes in.
+    std::vector<std::string> out;
+    bool inside = false;
+    for (const auto& l : lines) {
+        if (l == kBegin) inside = true;
+        else if (inside && l == kEnd) inside = false;
+        else if (!inside) out.push_back(l);
+    }
+    if (on) {
+        // Just before the password check — the distribution's auth stack
+        // (`@include common-auth`, `auth include system-login`, `auth
+        // substack password-auth`) or pam_unix itself — and after whatever
+        // comes first: pam_nologin, "not root" and the like must still be
+        // able to refuse, and a `sufficient` line placed above them would
+        // skip them.
+        auto first_auth = out.end();
+        for (auto it = out.begin(); it != out.end(); ++it) {
+            std::vector<std::string> word;
+            for (size_t i = 0; i < it->size();) {
+                const size_t a = it->find_first_not_of(" \t", i);
+                if (a == std::string::npos || (*it)[a] == '#') break;
+                const size_t b = std::min(it->find_first_of(" \t", a), it->size());
+                word.push_back(it->substr(a, b - a));
+                i = b;
+            }
+            if (word.empty()) continue;
+            const bool include_auth = word[0] == "@include" && word.size() > 1 && word[1].find("auth") != std::string::npos;
+            const bool auth = word[0] == "auth" || word[0] == "-auth";
+            const bool stack = auth && word.size() > 2 && (word[1] == "include" || word[1] == "substack");
+            const bool unix_line = auth && word.size() > 2 && word[2].find("pam_unix") != std::string::npos;
+            if (include_auth || stack || unix_line) {
+                first_auth = it;
+                break;
+            }
+        }
+        if (first_auth == out.end()) {
+            std::cerr << "fingerprint login: " << path << " has no password check to go before\n";
+            return 2;
+        }
+        // An empty password: the helper succeeds and the reader is asked;
+        // pam_fprintd matching is enough. A typed one: the helper fails and
+        // the reader's line is skipped. Either way what follows is the
+        // distribution's own stack, unchanged.
+        out.insert(first_auth, {kBegin,
+                                "auth  [success=ignore default=1]  pam_exec.so quiet expose_authtok " + helper,
+                                "auth  sufficient  pam_fprintd.so max-tries=3 timeout=30",
+                                kEnd});
+    }
+    std::string text;
+    for (const auto& l : out) text += l + "\n";
+    struct stat st{};
+    const mode_t mode = stat(path.c_str(), &st) == 0 ? (st.st_mode & 07777) : 0644;
+    if (!write_atomically(path, text, mode)) {
+        std::cerr << "fingerprint login: cannot write " << path << ": " << std::strerror(errno) << "\n";
+        return 1;
+    }
+
+    // For the greeter: present when on (a QML file, as it loads its palette).
+    if (!std::getenv("B1AIR_TEST_SDDM_PAM")) {
+        if (on) {
+            mkdir("/etc/b1air", 0755);
+            (void)write_atomically(kGreeterFlag, "import QtQuick\nQtObject {}\n", 0644);
+        } else {
+            unlink(kGreeterFlag);
+        }
+    }
+    std::cout << (on ? "done enabled" : "done disabled") << std::endl;
+    return 0;
 }
 
 } // namespace b1air::fingerprint

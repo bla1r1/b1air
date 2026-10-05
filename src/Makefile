@@ -66,6 +66,9 @@ install:
 	install -m 755 $(BUILD)/bin/b1air-* $(PREFIX)/
 	mkdir -p $(QMLDIR)
 	rsync -a shell/qml/ $(QMLDIR)/
+	# Gone from the tree, native now: the lock screen (b1air-lock) and the
+	# screenshot overlay (b1air-shot).
+	rm -f $(QMLDIR)/Lock.qml $(QMLDIR)/ScreenshotOverlay.qml
 	# The app windows live beside their backends under apps/, and the search
 	# path expects every window in one directory — so they are copied in here
 	# rather than kept as a second copy in the shell tree. Overwriting, not
@@ -100,6 +103,7 @@ install:
 	# than /etc/pam.d.
 	mkdir -p $(DATADIR)/b1air/pam
 	install -m 644 pam/b1air-fingerprint $(DATADIR)/b1air/pam/
+	install -m 755 pam/b1air-empty-password $(DATADIR)/b1air/pam/
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
 	rm -rf $(DATADIR)/icons/b1air-cursors

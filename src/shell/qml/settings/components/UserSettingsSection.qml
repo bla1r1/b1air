@@ -298,6 +298,20 @@ ColumnLayout {
             checked: Settings.fingerprintUnlock !== false
             onToggled: Settings.set("fingerprintUnlock", !(Settings.fingerprintUnlock !== false))
         }
+
+        // The login screen: a system file (/etc/pam.d/sddm, and only that
+        // one), so it asks for the administrator password.
+        Toggle {
+            visible: section.fp.available && section.fpLogin.supported === true
+            enabled: !fpLoginSet.running
+            label: I18n.tr("Fingerprint at the login screen")
+            subtitle: I18n.tr("Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.")
+            checked: section.fpLogin.enabled === true
+            onToggled: {
+                fpLoginSet.command = ["pkexec", section.daemonCmd, "fingerprint", "login", checked ? "off" : "on"];
+                fpLoginSet.running = true;
+            }
+        }
     }
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
@@ -505,6 +519,20 @@ ColumnLayout {
     // One line a touch ("status …"), then "done …". stdin open: stopping
     // this Process closes it, and the daemon stops the scan and lets the
     // reader go.
+    property var fpLogin: ({ supported: false, enabled: false })
+    Process {
+        id: fpLoginStatus
+        running: true
+        command: [section.daemonCmd, "fingerprint", "login", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: { try { section.fpLogin = JSON.parse(this.text); } catch (e) {} }
+        }
+    }
+    Process {
+        id: fpLoginSet
+        onExited: { fpLoginStatus.running = false; fpLoginStatus.running = true; }
+    }
+
     Process {
         id: fpEnroll
         stdinEnabled: true

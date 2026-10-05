@@ -78,7 +78,7 @@ Singleton {
     //
     // FocusTimePopup in particular cannot: it imports QtCore, which brings its
     // own `Settings` type, and that shadows Services/Settings — `Settings.foo`
-    // there is a type reference and reads `undefined`. Lock.qml hit the same
+    // there is a type reference and reads `undefined`. the old Lock.qml hit the same
     // thing and aliased its import; this way the popup does not have to know.
     readonly property int workMinutes: root._minutes(Settings.focusWorkDuration, 25)
     readonly property int shortBreakMinutes: root._minutes(Settings.focusShortBreak, 5)

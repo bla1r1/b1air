@@ -33,7 +33,7 @@ void run(const volatile int* running);
 void reload();
 
 // The lock screen says it is up ("locked") or gone (anything else); it
-// writes this file itself (Lock.qml).
+// writes this file itself (b1air-lock).
 bool locked();
 
 } // namespace b1air::idle

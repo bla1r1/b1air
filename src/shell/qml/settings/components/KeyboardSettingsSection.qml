@@ -251,7 +251,7 @@ ColumnLayout {
 
                         Badge {
                             visible: chip.first
-                            text: "default"
+                            text: I18n.tr("default")
                             tone: Design.peach
                         }
 
@@ -281,7 +281,7 @@ ColumnLayout {
             role: "caption"
             dim: true
             text: section.layouts.length > 1
-                ? "\u{f005d} makes a layout the default, \u{f0156} removes it. Changes apply immediately."
+                ? I18n.tr("%1 makes a layout the default, %2 removes it. Changes apply immediately.", "\u{f005d}", "\u{f0156}")
                 : I18n.tr("Add a second layout below to switch between them.")
         }
 

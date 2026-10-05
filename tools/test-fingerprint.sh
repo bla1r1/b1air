@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # test-fingerprint.sh — the daemon's fingerprint verbs (src/daemon/fingerprint.cpp)
 # against fprintd driving libfprint's virtual reader: status, enrolling one
-# touch at a time, a finger that does not match and one that does, deleting.
+# touch at a time, a finger that does not match and one that does, deleting;
+# and the login screen's PAM file with fingerprint login on, through PAM
+# itself (tools/pam-try): a typed password works without the reader and is
+# not held up by it, an empty one asks the reader, and off puts the file back
+# as it was.
 #
 #   sudo tools/test-fingerprint.sh [path/to/b1air-daemon]
 #
@@ -80,7 +84,85 @@ grep -q "done cancelled" "$out" && ok "stopping an enrolment lets the reader go"
 
 "$BIN" fingerprint delete all >/dev/null
 [[ -z "$("$BIN" fingerprint status | field enrolled)" ]] && ok "deleting removes it" || fail "delete"
-rm -f "$out"
+
+# ── The login screen ─────────────────────────────────────────────────────────
+here="$(cd "$(dirname "$0")" && pwd)"
+TMP="$(mktemp -d)"
+FPUSER=b1air-fp-test FPPASS='b1air-fp-pass-1'
+if ! command -v cc >/dev/null || ! cc -o "$TMP/pam-try" "$here/pam-try/pam-try.c" -lpam 2>/dev/null; then
+    echo "skip the login screen: tools/pam-try does not build (cc, PAM headers)"
+else
+    # The pam_exec helper, root's, where the daemon looks for it.
+    helper_added=""
+    if [[ ! -x /usr/share/b1air/pam/b1air-empty-password ]]; then
+        install -D -m 755 "$here/../src/pam/b1air-empty-password" /usr/share/b1air/pam/b1air-empty-password
+        helper_added=1
+    fi
+    # A user with a password and a finger.
+    useradd -M -s /bin/sh "$FPUSER" 2>/dev/null
+    echo "$FPUSER:$FPPASS" | chpasswd
+    as_user() { su -s /bin/sh "$FPUSER" -c "$*"; }
+    as_user "'$(command -v "$BIN")' fingerprint enroll right-index-finger" > "$out" &
+    E=$!
+    reader_open
+    for _ in $(seq 1 "$stages"); do send "SCAN finger-a"; sleep 0.3; done
+    wait $E
+    # The PAM files, copied: the test's sddm file is changed, not the system's.
+    CONF="$TMP/pam.d"
+    cp -a /etc/pam.d "$CONF"
+    [[ -f "$CONF/sddm" ]] || cp "$CONF/login" "$CONF/sddm"
+    cp "$CONF/sddm" "$TMP/sddm.orig"
+    export B1AIR_TEST_SDDM_PAM="$CONF/sddm"
+    login_status="$("$BIN" fingerprint login status)"
+    [[ "$(field supported <<<"$login_status")" == True && "$(field enabled <<<"$login_status")" == False ]] \
+        && ok "login: supported, off to begin with" || fail "login status" "$login_status"
+    "$BIN" fingerprint login on >/dev/null
+    grep -q 'pam_fprintd.so' "$CONF/sddm" && [[ "$("$BIN" fingerprint login status | field enabled)" == True ]] \
+        && ok "login on: the block is in the login screen's file" || fail "login on" "$(cat "$CONF/sddm")"
+    try() { "$TMP/pam-try" "$CONF" sddm "$FPUSER" "$1" 2>/dev/null; }
+
+    t0=$SECONDS; try "$FPPASS" >/dev/null; rc=$?
+    [[ $rc -eq 0 && $((SECONDS - t0)) -lt 5 ]] && ok "login: the typed password, no reader in the way" \
+        || fail "login with the password" "rc=$rc in $((SECONDS - t0))s"
+    t0=$SECONDS; try "wrong" >/dev/null; rc=$?
+    [[ $rc -ne 0 && $((SECONDS - t0)) -lt 10 ]] && ok "login: a wrong password is refused without waiting for the reader" \
+        || fail "login with a wrong password" "rc=$rc in $((SECONDS - t0))s"
+    try "" > "$out" & P=$!
+    reader_open; send "SCAN finger-a"; wait $P; rc=$?
+    [[ $rc -eq 0 ]] && ok "login: an empty password and the right finger" || fail "login by finger" "$(cat "$out")"
+    try "" > "$out" & P=$!
+    for _ in 1 2 3; do reader_open; send "SCAN finger-b"; sleep 1; done
+    wait $P; rc=$?
+    [[ $rc -ne 0 ]] && ok "login: an empty password and another finger is refused" || fail "login by a wrong finger"
+
+    "$BIN" fingerprint login off >/dev/null
+    cmp -s "$CONF/sddm" "$TMP/sddm.orig" && ok "login off: the file is as it was" \
+        || fail "login off" "$(diff "$TMP/sddm.orig" "$CONF/sddm")"
+
+    # Where the block goes in each family's sddm file: just before the
+    # password check, after the checks that must still be able to refuse.
+    placed() {   # file, the line expected right after the block
+        "$BIN" fingerprint login on >/dev/null 2>&1 || return 1
+        grep -A1 '^# b1air: end' "$1" | tail -1 | grep -qF -- "$2"
+    }
+    printf '#%%PAM-1.0\nauth requisite pam_nologin.so\nauth required pam_succeed_if.so user != root quiet_success\n@include common-auth\n' > "$CONF/sddm"
+    placed "$CONF/sddm" "@include common-auth" && ok "login: Debian's file, after nologin and not-root" || fail "Debian placement" "$(cat "$CONF/sddm")"
+    printf '#%%PAM-1.0\nauth        include     system-login\n-auth       optional    pam_gnome_keyring.so\n' > "$CONF/sddm"
+    placed "$CONF/sddm" "include     system-login" && ok "login: Arch's file" || fail "Arch placement" "$(cat "$CONF/sddm")"
+    printf 'auth     [success=done ignore=ignore default=bad] pam_selinux_permit.so\nauth        substack      password-auth\nauth        include       postlogin\n' > "$CONF/sddm"
+    placed "$CONF/sddm" "substack      password-auth" && ok "login: Fedora's file" || fail "Fedora placement" "$(cat "$CONF/sddm")"
+    printf '#%%PAM-1.0\nauth     include        common-auth\naccount  include        common-account\n' > "$CONF/sddm"
+    placed "$CONF/sddm" "include        common-auth" && ok "login: openSUSE's file" || fail "openSUSE placement" "$(cat "$CONF/sddm")"
+    printf '#%%PAM-1.0\naccount include common-account\n' > "$CONF/sddm"
+    ! "$BIN" fingerprint login on >/dev/null 2>&1 && ! grep -q b1air "$CONF/sddm" \
+        && ok "login: a file with no password check is left alone" || fail "no-auth file" "$(cat "$CONF/sddm")"
+    unset B1AIR_TEST_SDDM_PAM
+
+    as_user "'$(command -v "$BIN")' fingerprint delete all" >/dev/null
+    userdel "$FPUSER" 2>/dev/null
+    [[ -n "$helper_added" ]] && rm -f /usr/share/b1air/pam/b1air-empty-password
+fi
+rm -rf "$TMP" "$out"
 
 echo "test-fingerprint: $PASS passed, $FAILED failed"
 [[ $FAILED -eq 0 ]]

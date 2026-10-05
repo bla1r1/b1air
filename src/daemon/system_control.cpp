@@ -582,36 +582,47 @@ std::string SystemControl::get_game_mode_status_json() {
 }
 
 // ── Session Control ──────────────────────────────────────────────────────────
-bool SystemControl::run_quickshell_lock() {
-    const std::string qs_lock = b1air::qml_entry("Lock.qml");
-    if (qs_lock.empty()) {
-        return false;
+
+// b1air-lock (src/lock), the session's lock screen: no Quickshell, no QML.
+// It was swaylock, with two dozen colour flags read off its --help to look
+// like the desktop, and then the shell's Lock.qml.
+//
+// Runs it and waits until it is opened. One that dies while locked (a
+// crash, killed) leaves the compositor holding the session locked with
+// nothing on the screen, and a new one is started in its place, a few times
+// at most. One that exits on its own was opened (0) or could not lock at all
+// (1: no display, no ext-session-lock, another lock holds the session), and
+// starting it again would change nothing.
+bool SystemControl::run_lock() {
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        const pid_t child = fork();
+        if (child < 0) return false;
+        if (child == 0) {
+            execlp("b1air-lock", "b1air-lock", static_cast<char*>(nullptr));
+            _exit(127);
+        }
+        int status = 0;
+        while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+        if (WIFEXITED(status)) return WEXITSTATUS(status) == 0;
+        // Killed by a signal: the session is still locked; lock it again.
+        usleep(200 * 1000);
     }
-    // "Dim screen on lock" is the session's idle thread's (idle.cpp): it
-    // sees this lock screen come up and go, as it sees every other.
-    setenv("QML_XHR_ALLOW_FILE_READ", "1", 1);   // theme and language files, as below
-    return run_argv_status({"quickshell", "-p", qs_lock});
+    return false;
 }
 
 bool SystemControl::lock_session_async() {
     // Called from more than one place that can legitimately overlap — a lid
     // bindswitch, the idle thread's lock stage and its before-sleep lock can all fire
     // within the same second of a lid close. Without this, each one spawns
-    // its own Lock.qml, stacking duplicate lock screens on top of each other.
-    bool lock_up = false;
-    proc::for_each([&](const proc::Process& p) {
-        lock_up = (p.exe_name == "quickshell" && p.cmdline.find("Lock.qml") != std::string::npos)
-               || p.exe_name == "b1air-lock";
-        return !lock_up;
-    });
-    if (lock_up) return true;
+    // its own lock screen, stacking duplicates on top of each other.
+    if (proc::running("b1air-lock")) return true;
 
-    // A lock started a moment ago may not be a quickshell process yet (the
+    // A lock started a moment ago may not be a b1air-lock process yet (the
     // fork below has not reached exec), and LockSession comes straight back
     // as logind's Lock signal, which the idle thread answers by locking:
     // a stamp, shared by every process that locks, covers that gap.
     const std::string stamp = runtime_path("lock-spawned");
-    // An unlock since (Lock.qml writes lock-state) ends that cover early.
+    // An unlock since (b1air-lock writes lock-state) ends that cover early.
     struct stat st{}, state{};
     if (stat(stamp.c_str(), &st) == 0 && std::time(nullptr) - st.st_mtime < 3) {
         const bool opened_since = stat(runtime_path("lock-state").c_str(), &state) == 0
@@ -621,16 +632,11 @@ bool SystemControl::lock_session_async() {
     (void)write_private_file(stamp, "");
 
     (void)logind_session_call("LockSession");
-    const std::string qs_lock = b1air::qml_entry("Lock.qml");
 
     // Double-fork so the daemon never has to wait on this: the immediate
     // child exits right away (reaped below) and the grandchild is reparented
-    // to init, instead of sitting around as a zombie under the daemon.
-    //
-    // The grandchild runs the lock screen and waits on it. One that fails —
-    // Quickshell missing, a QML error, a crash — leaves b1air-lock in its
-    // place: the session gets locked either way. Before, a Lock.qml that
-    // could not load left the machine unlocked, with nothing said.
+    // to init, instead of sitting around as a zombie under the daemon. The
+    // grandchild runs the lock screen until it is opened (run_lock).
     pid_t pid = fork();
     if (pid == 0) {
         setsid();
@@ -640,23 +646,8 @@ bool SystemControl::lock_session_async() {
                 dup2(null_fd, STDIN_FILENO); dup2(null_fd, STDOUT_FILENO); dup2(null_fd, STDERR_FILENO);
                 if (null_fd > STDERR_FILENO) close(null_fd);
             }
-            if (!qs_lock.empty()) {
-                const pid_t qs = fork();
-                if (qs == 0) {
-                    // The theme and the language are read with XMLHttpRequest
-                    // from files, which Qt refuses without this; a lock
-                    // started outside the session's environment came up
-                    // English and in the built-in colours.
-                    setenv("QML_XHR_ALLOW_FILE_READ", "1", 1);
-                    execlp("quickshell", "quickshell", "-p", qs_lock.c_str(), static_cast<char*>(nullptr));
-                    _exit(127);
-                }
-                int status = 0;
-                while (qs > 0 && waitpid(qs, &status, 0) < 0 && errno == EINTR) {}
-                if (qs > 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) _exit(0);
-            }
-            execlp("b1air-lock", "b1air-lock", static_cast<char*>(nullptr));
-            _exit(127);
+            (void)run_lock();
+            _exit(0);
         }
         _exit(0);
     }
@@ -664,28 +655,12 @@ bool SystemControl::lock_session_async() {
     return pid > 0;
 }
 
-// The lock screen when Lock.qml cannot be had: b1air-lock (src/lock), which
-// needs no Quickshell and no QML. It was swaylock, with two dozen colour
-// flags read off its --help to look like the desktop. Blocks until opened.
-bool SystemControl::run_fallback_lock() {
-    if (proc::running("b1air-lock")) return true;
-    (void)logind_session_call("LockSession");
-    return run_argv_status({"b1air-lock"});
-}
-
-bool SystemControl::lock_session(const std::string& mode) {
+bool SystemControl::lock_session() {
     // Tell logind first so inhibitors, lock state and suspend coordination use
     // the same session lifecycle as KDE/GNOME.
     (void)logind_session_call("LockSession");
-    if (mode == "fallback" || mode == "swaylock") {
-        return run_fallback_lock();
-    }
-    if (mode == "quickshell") {
-        if (run_quickshell_lock()) return true;
-        return run_fallback_lock();
-    }
-    if (run_quickshell_lock()) return true;
-    return run_fallback_lock();
+    if (proc::running("b1air-lock")) return true;
+    return run_lock();
 }
 
 bool SystemControl::logout_session() {
@@ -1891,7 +1866,7 @@ bool SystemControl::appearance_apply() {
         std::string qml =
             "// Generated by b1air-daemon (appearance apply). Edits are lost.\n"
             "// The active desktop palette, for the SDDM theme: see\n"
-            "// usr/share/sddm/themes/b1air/components/Palette.qml.\n"
+            "// usr/share/sddm/themes/b1air/components/ThemeColors.qml.\n"
             "import QtQuick\n\nQtObject {\n";
         for (const char* key : {"ground", "lowest", "low", "mid", "high", "highest",
                                 "text", "textDim", "outline", "outlineVariant",
@@ -3489,8 +3464,28 @@ std::string SystemControl::weather_get_json(bool force) {
 }
 
 std::string SystemControl::weather_get_current_info(const std::string& field) {
-    std::string json = weather_get_json(false);
+    return weather_current_from(weather_get_json(false), field);
+}
 
+// The newest forecast already on disk, under three hours old: for the lock
+// screen, which must not wait on the network or the secret store to draw.
+std::string SystemControl::weather_cached_info(const std::string& field) {
+    const char* home = std::getenv("HOME");
+    const std::filesystem::path dir = std::string(home ? home : "/tmp") + "/.cache/quickshell/weather";
+    std::filesystem::path newest;
+    std::filesystem::file_time_type when{};
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+        const std::string n = e.path().filename().string();
+        if (n.rfind("weather-", 0) != 0 || e.path().extension() != ".json") continue;
+        const auto t = e.last_write_time(ec);
+        if (!ec && (newest.empty() || t > when)) newest = e.path(), when = t;
+    }
+    if (newest.empty() || std::filesystem::file_time_type::clock::now() - when > std::chrono::hours(3)) return "";
+    return weather_current_from(read_file_string(newest.string()), field);
+}
+
+std::string SystemControl::weather_current_from(const std::string& json, const std::string& field) {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
     struct tm* tm = std::localtime(&in_time_t);
@@ -4737,16 +4732,12 @@ std::vector<std::string> SystemControl::mime_defaults(const std::vector<std::str
 
 // ── Screen Capture, Recording & QR Scanner ───────────────────────────────────
 
-// ScreenshotOverlay.qml is a full interactive selection/edit/record UI — its
-// own capture button already shells out to `b1air-daemon capture --geometry
-// ...`, the same function below. Nothing pointed a keybind at the overlay
-// itself, though, so the whole file sat unreachable; Print instead called
-// capture() directly with a blind, non-interactive slurp selection.
+// Choosing the region: b1air-shot (src/shot), a layer-shell overlay with the
+// selection, the toolbar, recording and QR. It was ScreenshotOverlay.qml,
+// a Quickshell process with its own QML engine started on every Print.
 bool SystemControl::run_screenshot_overlay(bool edit_mode) {
-    const std::string qml = b1air::qml_entry("ScreenshotOverlay.qml");
-    if (qml.empty()) return false;
-    std::vector<std::string> argv = {"quickshell", "-p", qml};
-    if (edit_mode) argv = {"env", "QS_SCREENSHOT_EDIT=true", "quickshell", "-p", qml};
+    std::vector<std::string> argv = {"b1air-shot"};
+    if (edit_mode) argv.push_back("--edit");
     return util::spawn_detached(argv);
 }
 
@@ -5023,11 +5014,26 @@ std::string SystemControl::scan_qr(const std::string& geom) {
             data_text = xml.substr(tag_end + 1, close_tag - (tag_end + 1));
         }
     }
+    // zbar wraps the text in CDATA, which came through as "<![CDATA[…]]>"
+    // (and a link so wrapped was not offered to open); text outside one is
+    // entity-escaped.
+    if (data_text.rfind("<![CDATA[", 0) == 0 && data_text.size() >= 12
+        && data_text.compare(data_text.size() - 3, 3, "]]>") == 0) {
+        data_text = data_text.substr(9, data_text.size() - 12);
+    } else {
+        for (const auto& [entity, ch] : std::vector<std::pair<std::string, std::string>>{
+                 {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}})
+            for (size_t p = data_text.find(entity); p != std::string::npos; p = data_text.find(entity, p + ch.size()))
+                data_text.replace(p, entity.size(), ch);
+    }
 
     int min_x = 99999, min_y = 99999, max_x = 0, max_y = 0;
-    size_t poly_pos = xml.find("points=\"", sym_pos);
-    if (poly_pos != std::string::npos) {
-        size_t q_end = xml.find('"', poly_pos + 8);
+    // points='+540,300 +540,500 …' — zbar quotes with ' (the parser looked for
+    // ", so the code's frame was never found).
+    size_t poly_pos = xml.find("points=", sym_pos);
+    const char quote = poly_pos != std::string::npos && poly_pos + 7 < xml.size() ? xml[poly_pos + 7] : '"';
+    if (poly_pos != std::string::npos && (quote == '"' || quote == '\'')) {
+        size_t q_end = xml.find(quote, poly_pos + 8);
         if (q_end != std::string::npos) {
             std::string pts_str = xml.substr(poly_pos + 8, q_end - (poly_pos + 8));
             std::stringstream pss(pts_str);
