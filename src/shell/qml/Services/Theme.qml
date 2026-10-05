@@ -77,54 +77,78 @@ Singleton {
 
     // ── Built-in themes ──────────────────────────────────────────────────────
 
+    // The four the desktop ships: KDE's Breeze and GNOME's Adwaita, dark and
+    // light. They replaced Catppuccin Mocha and Latte and Tokyo Night, whose
+    // pastels on near-black put the text, the dim text and the borders a few
+    // shades apart — pleasant, and hard to tell apart. These are the colours
+    // the two big desktops settled on for legibility, with the dim text a
+    // step stronger still. Breeze Dark is the default (Design.builtinPalette).
     readonly property var builtins: [
         {
-            name: "Catppuccin Mocha",
-            id: "catppuccin-mocha",
+            name: "Breeze Dark",
+            id: "breeze-dark",
             palette: Design.builtinPalette
         },
         {
-            // Matches conf.d/look-and-feel.conf, the Kvantum theme and the
-            // SDDM greeter, so the whole desktop can be one palette.
-            name: "Tokyo Night",
-            id: "tokyo-night",
+            name: "Breeze Light",
+            id: "breeze-light",
             palette: {
-                ground: "#1a1b26", lowest: "#16161e", low: "#1f2335",
-                mid: "#24283b", high: "#292e42", highest: "#3b4261",
-                text: "#c0caf5", textDim: "#a9b1d6",
-                outline: "#565f89", outlineVariant: "#414868",
-                primary: "#7aa2f7", primaryText: "#16161e",
-                primaryBox: "#3b4261", tertiary: "#bb9af7",
-                error: "#f7768e", errorText: "#16161e",
-                blue: "#7aa2f7", sapphire: "#7dcfff", mauve: "#bb9af7",
-                pink: "#ff9e64", peach: "#ff9e64", yellow: "#e0af68",
-                green: "#9ece6a", teal: "#73daca", red: "#f7768e",
-                maroon: "#db4b4b", lavender: "#b4f9f8"
+                ground: "#eff0f1", lowest: "#dee0e2", low: "#f7f7f8",
+                mid: "#ffffff", high: "#e5e7e9", highest: "#d3d6da",
+                text: "#232629", textDim: "#4d5257",
+                outline: "#7f868d", outlineVariant: "#c8ccd0",
+                primary: "#1f7ac2", primaryText: "#ffffff",
+                primaryBox: "#d2e6f6", tertiary: "#8e44ad",
+                error: "#c62b3b", errorText: "#ffffff",
+                blue: "#1f7ac2", sapphire: "#0f7fa8", mauve: "#8e44ad",
+                pink: "#c2185b", peach: "#d35400", yellow: "#a86b00",
+                green: "#1e8a4b", teal: "#128772", red: "#c62b3b",
+                maroon: "#9b2335", lavender: "#5260d6"
             }
         },
         {
-            // Catppuccin Latte, the light flavour of the default, with one
-            // change: Latte's surfaces darken going up (surface0 is greyer
-            // than base), which on a light desktop makes every card a grey
-            // slab. Here cards are white over the ground and darken only on
-            // hover and press, the way a light interface reads.
-            name: "Catppuccin Latte",
-            id: "catppuccin-latte",
+            name: "Adwaita Dark",
+            id: "adwaita-dark",
             palette: {
-                ground: "#eff1f5", lowest: "#e6e9ef", low: "#f5f6f9",
-                mid: "#ffffff", high: "#e6e9ef", highest: "#dce0e8",
-                text: "#4c4f69", textDim: "#5c5f77",
-                outline: "#7c7f93", outlineVariant: "#ccd0da",
-                primary: "#1e66f5", primaryText: "#ffffff",
-                primaryBox: "#dce0e8", tertiary: "#8839ef",
-                error: "#d20f39", errorText: "#ffffff",
-                blue: "#1e66f5", sapphire: "#209fb5", mauve: "#8839ef",
-                pink: "#ea76cb", peach: "#fe640b", yellow: "#df8e1d",
-                green: "#40a02b", teal: "#179299", red: "#d20f39",
-                maroon: "#e64553", lavender: "#7287fd"
+                ground: "#222226", lowest: "#1a1a1d", low: "#28282c",
+                mid: "#303034", high: "#3a3a3e", highest: "#48484d",
+                text: "#ffffff", textDim: "#c0bfc4",
+                outline: "#77767b", outlineVariant: "#3f3f45",
+                primary: "#3584e4", primaryText: "#ffffff",
+                primaryBox: "#233f63", tertiary: "#c061cb",
+                error: "#ff7b63", errorText: "#1a1a1d",
+                blue: "#62a0ea", sapphire: "#99c1f1", mauve: "#c061cb",
+                pink: "#dc8add", peach: "#ffa348", yellow: "#f6d32d",
+                green: "#57e389", teal: "#33c7de", red: "#f66151",
+                maroon: "#ed333b", lavender: "#9cb6f7"
+            }
+        },
+        {
+            name: "Adwaita Light",
+            id: "adwaita-light",
+            palette: {
+                ground: "#fafafb", lowest: "#ebebed", low: "#f6f6f7",
+                mid: "#ffffff", high: "#ebebed", highest: "#dcdce0",
+                text: "#1e1e22", textDim: "#4f4f55",
+                outline: "#87878c", outlineVariant: "#d6d6da",
+                primary: "#1c71d8", primaryText: "#ffffff",
+                primaryBox: "#d6e6fa", tertiary: "#813d9c",
+                error: "#c01c28", errorText: "#ffffff",
+                blue: "#1c71d8", sapphire: "#1a5fb4", mauve: "#813d9c",
+                pink: "#a8327f", peach: "#c64600", yellow: "#9c6e03",
+                green: "#1b8553", teal: "#0f7b8c", red: "#c01c28",
+                maroon: "#a51d2d", lavender: "#613583"
             }
         }
     ]
+
+    // The built-ins this desktop had before, and what stands in for them, so
+    // a saved choice of one lands on the nearest of the new set.
+    readonly property var retired: ({
+        "catppuccin-mocha": "breeze-dark",
+        "tokyo-night": "breeze-dark",
+        "catppuccin-latte": "breeze-light"
+    })
 
     // ── User themes on disk ──────────────────────────────────────────────────
 
@@ -207,6 +231,7 @@ Singleton {
     property bool _applyByUser: true
 
     function apply(id, byUser) {
+        if (root.retired[id]) id = root.retired[id];
         if (id === "wallpaper")
             return root.applyFromWallpaper(byUser);
 
@@ -407,7 +432,7 @@ Singleton {
         if (root._builtinById(id) || id === "wallpaper") return;
         if (root.editingId === id) root.editingId = "";
         Quickshell.execDetached(["rm", "-f", "--", root.themesDir + "/" + id + ".json"]);
-        if (Settings.themeName === id) root.apply("catppuccin-mocha");
+        if (Settings.themeName === id) root.apply("breeze-dark");
     }
 
     /** Path of the current theme's file, or "" for a built-in. */

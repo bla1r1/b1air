@@ -491,12 +491,29 @@ void run(const volatile int* running) {
         if (r > 0 && (fds[0].revents & (POLLERR | POLLHUP))) break;
         if (wl_display_dispatch_pending(w.display) < 0) break;
 
-        if (logind.bus) while (sd_bus_process(logind.bus, nullptr) > 0) {}
+        // A logind that went away (restarted, the bus closed) leaves its
+        // socket hung up: poll returned at once on every pass and this loop
+        // ran a core at 100% for the rest of the session. Dropped, and
+        // connected again on the five-second check below.
+        if (logind.bus) {
+            int pr;
+            while ((pr = sd_bus_process(logind.bus, nullptr)) > 0) {}
+            const bool hung = r > 0 && fds[2].fd >= 0 && (fds[2].revents & (POLLHUP | POLLERR | POLLNVAL));
+            if (pr < 0 || hung) {
+                std::cerr << "[b1air-idle] lost the system bus; connecting again\n";
+                release_delay(logind);
+                if (logind.keys_fd >= 0) close(logind.keys_fd);
+                logind.keys_fd = -1;
+                sd_bus_flush_close_unref(logind.bus);
+                logind.bus = nullptr;
+            }
+        }
 
         // Plugged in or unplugged: the other profile. Looked at every few
         // seconds — sysfs reads, no process.
         if (std::chrono::steady_clock::now() >= next_power_check) {
             next_power_check = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            if (!logind.bus) open_logind(logind);
             const std::string key = stage_key();
             if (key != last_key) {
                 last_key = key;

@@ -407,29 +407,35 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
         return QColor(color.rgb.red, color.rgb.green, color.rgb.blue);
     }
     if (VTERM_COLOR_IS_INDEXED(&color)) {
-        // Basic 16 colors mapping to Catppuccin Mocha
+        // The 16 colours on a dark background: Konsole's Breeze, the
+        // default theme's own terminal, with two changes for legibility.
+        // Black is a grey that shows on the background (Breeze's equals
+        // it, so text printed in black vanished), and the bright eight are
+        // brighter than the normal eight, which Breeze's red and magenta
+        // were not. They were Catppuccin Mocha's pastels, a few shades from
+        // each other and from the default text.
         static const QColor ansi16[16] = {
-            QColor(69, 71, 90),    // 0: Black (Surface1)
-            MochaRed,              // 1: Red
-            MochaGreen,            // 2: Green
-            MochaYellow,           // 3: Yellow
-            MochaBlue,             // 4: Blue
-            QColor(245, 194, 231), // 5: Magenta (Pink)
-            MochaTeal,             // 6: Cyan (Teal)
-            QColor(186, 194, 222), // 7: White (Subtext1)
-            QColor(88, 91, 112),   // 8: Bright Black (Surface2)
-            MochaRed,              // 9: Bright Red
-            MochaGreen,            // 10: Bright Green
-            MochaYellow,           // 11: Bright Yellow
-            MochaSapphire,         // 12: Bright Blue
-            MochaLavender,         // 13: Bright Magenta
-            MochaTeal,             // 14: Bright Cyan
-            MochaText              // 15: Bright White
+            QColor(0x4d, 0x53, 0x59), // 0: Black (a visible grey)
+            QColor(0xed, 0x4b, 0x5b), // 1: Red
+            QColor(0x2e, 0xcc, 0x71), // 2: Green
+            QColor(0xf6, 0x9a, 0x1f), // 3: Yellow
+            QColor(0x1d, 0x99, 0xf3), // 4: Blue
+            QColor(0xb0, 0x7a, 0xd9), // 5: Magenta
+            QColor(0x1a, 0xbc, 0x9c), // 6: Cyan
+            QColor(0xc8, 0xcc, 0xd0), // 7: White
+            QColor(0x7f, 0x8c, 0x8d), // 8: Bright Black
+            QColor(0xff, 0x6b, 0x6b), // 9: Bright Red
+            QColor(0x5c, 0xf0, 0x9a), // 10: Bright Green
+            QColor(0xfd, 0xd2, 0x4b), // 11: Bright Yellow
+            QColor(0x5f, 0xc3, 0xff), // 12: Bright Blue
+            QColor(0xd2, 0x9b, 0xf5), // 13: Bright Magenta
+            QColor(0x3e, 0xe6, 0xc6), // 14: Bright Cyan
+            QColor(0xff, 0xff, 0xff)  // 15: Bright White
         };
-        // On a light background (Catppuccin Latte, or any light theme) the
-        // Mocha colours are pastels on white, and "white" — what programs use
-        // for plain bright text, fastfetch's values among them — vanished.
-        // Latte's colours instead, with black and white swapped the way light
+        // On a light background (Breeze or Adwaita Light) the set above is
+        // too pale, and "white" — what programs use for plain bright text,
+        // fastfetch's values among them — vanished. Catppuccin Latte's
+        // deeper colours instead, with black and white swapped the way light
         // terminal themes do, so "white" text is the dark one.
         static const QColor latte16[16] = {
             QColor(188, 192, 204), // 0: Black → Surface1 (the light end)

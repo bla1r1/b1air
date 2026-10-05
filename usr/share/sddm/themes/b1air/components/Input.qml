@@ -15,6 +15,9 @@ Item {
     property alias text: textField.text
     property string icon: ""
     property bool enabled: true
+    // A password field gets an eye at its right end: a click shows what was
+    // typed, another hides it again.
+    property bool revealed: false
 
     width: Config.passwordInputWidth * Config.generalScale
     height: Config.passwordInputHeight * Config.generalScale
@@ -24,7 +27,7 @@ Item {
         anchors.fill: parent
         color: Config.passwordInputContentColor
         enabled: input.enabled
-        echoMode: input.isPassword ? TextInput.Password : TextInput.Normal
+        echoMode: input.isPassword && !input.revealed ? TextInput.Password : TextInput.Normal
         passwordCharacter: Config.passwordInputMaskedCharacter
         activeFocusOnTab: true
         selectByMouse: true
@@ -41,8 +44,48 @@ Item {
             bottomRightRadius: input.splitBorderRadius ? Config.passwordInputBorderRadiusRight * Config.generalScale : Config.passwordInputBorderRadiusLeft * Config.generalScale
         }
         leftPadding: placeholderLabel.x
-        rightPadding: 10
+        rightPadding: input.isPassword ? eye.width + 4 : 10
         onAccepted: input.accepted()
+
+        Item {
+            id: eye
+            visible: input.isPassword
+            anchors.right: parent.right
+            anchors.rightMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            height: parent.height
+            width: height
+            z: 2
+
+            Image {
+                id: eyeIcon
+                source: Config.getIcon(input.revealed ? "eye-off" : "eye")
+                anchors.centerIn: parent
+                width: Math.max(1, Config.passwordInputIconSize * Config.generalScale)
+                height: width
+                sourceSize: Qt.size(width, height)
+                fillMode: Image.PreserveAspectFit
+                opacity: eyeArea.containsMouse || input.revealed ? 1.0 : 0.6
+                visible: false
+            }
+            MultiEffect {
+                source: eyeIcon
+                anchors.fill: eyeIcon
+                colorization: 1
+                colorizationColor: textField.color
+                opacity: eyeIcon.opacity
+            }
+            MouseArea {
+                id: eyeArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    input.revealed = !input.revealed;
+                    textField.forceActiveFocus();
+                }
+            }
+        }
 
         Rectangle {
             anchors.fill: parent

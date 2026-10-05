@@ -13,7 +13,7 @@ cmake_minimum_required(VERSION 3.20)
 #
 # Kept in sync by hand with src/daemon/version.hpp's kVersion — that header is
 # what the running binaries report.
-project(b1air VERSION 0.2.0 LANGUAGES CXX C)
+project(b1air VERSION 0.2.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

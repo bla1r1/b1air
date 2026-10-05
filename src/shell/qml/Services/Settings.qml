@@ -523,7 +523,7 @@ Singleton {
         uiLanguage: "auto",
         magicMouseGestures: true,
         notificationsOnMain: false,
-        themeName: "catppuccin-mocha",
+        themeName: "breeze-dark",
         appColorScheme: "auto",
         accentName: "",
         cornerRadius: 10,
@@ -672,7 +672,7 @@ Singleton {
             property string uiLanguage: "auto"
             property bool magicMouseGestures: true
             property bool notificationsOnMain: false
-            property string themeName: "catppuccin-mocha"
+            property string themeName: "breeze-dark"
             property string appColorScheme: "auto"
             property string accentName: ""
             property int cornerRadius: 10

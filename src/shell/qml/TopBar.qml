@@ -986,15 +986,37 @@ PanelWindow {
                         model: SystemTray.items
 
                         delegate: Item {
+                            id: trayItem
                             required property var modelData
                             width: Design.s(16)
                             height: Design.s(16)
                             anchors.verticalCenter: parent.verticalCenter
 
+                            // An applet that names an icon the theme does not
+                            // have got Quickshell's magenta-and-black
+                            // "missing" square, the loudest thing on the bar.
+                            // Asked first, and a plain glyph instead.
+                            readonly property string iconName: {
+                                const src = String(modelData.icon || "");
+                                if (!src.startsWith("image://icon/")) return "";
+                                return decodeURIComponent(src.slice(13).split("?")[0]);
+                            }
+                            readonly property bool missing: String(modelData.icon || "") === ""
+                                || (iconName !== "" && !iconName.startsWith("/") && Quickshell.iconPath(iconName, true) === "")
+
                             IconImage {
                                 anchors.fill: parent
-                                source: parent.modelData.icon
+                                visible: !trayItem.missing
+                                source: trayItem.missing ? "" : trayItem.modelData.icon
                                 asynchronous: true
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: trayItem.missing
+                                text: "\u{f003b}"   // apps
+                                font.family: topBar.fontMain
+                                font.pixelSize: Design.s(14)
+                                color: topBar.colFgDim
                             }
 
                             MouseArea {

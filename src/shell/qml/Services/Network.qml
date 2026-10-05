@@ -151,20 +151,20 @@ Singleton {
         // it asks again.
         const withPsk = psk !== undefined && psk !== "";
         const wasKnown = n.known;
-        const done = () => {
+        function done() {
             n.connectionFailed.disconnect(onFailed);
             n.connectedChanged.disconnect(onConnected);
             root.setBusy(ssid, false);
             root._rebuild();
-        };
-        const onConnected = () => { if (n.connected) done(); };
-        const onFailed = reason => {
+        }
+        function onConnected() { if (n.connected) done(); }
+        function onFailed(reason) {
             done();
             if (withPsk && !wasKnown && n.known) n.forget();
             root.failedSsid = ssid;
             root.failedReason = ConnectionFailReason.toString(reason);
             root.wifiFailed(ssid, root.failedReason);
-        };
+        }
         n.connectionFailed.connect(onFailed);
         n.connectedChanged.connect(onConnected);
 

@@ -17,6 +17,8 @@ REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$REPO_DIR/lib/distro.sh"
 # shellcheck source=lib/fingerprint.sh
 source "$REPO_DIR/lib/fingerprint.sh"
+# shellcheck source=lib/wallpapers.sh
+source "$REPO_DIR/lib/wallpapers.sh"
 BACKUP_ROOT="${HOME}/.dotfiles-backups"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
@@ -303,21 +305,8 @@ sync_configs() {
     done < <(find "$src_root" -type f -print0)
     rm -rf "$rendered"
 
-    # Wallpapers sync (non-destructive)
-    if [[ -d "$REPO_DIR/.wallpapers" ]]; then
-        mkdir -p "$HOME/.wallpapers"
-        while IFS= read -r -d '' wp_file; do
-            local base_wp
-            base_wp="$(basename "$wp_file")"
-            if [[ ! -f "$HOME/.wallpapers/$base_wp" ]]; then
-                if [[ "$DRY_RUN" -eq 1 ]]; then
-                    log "Would add wallpaper: ~/.wallpapers/$base_wp"
-                else
-                    cp -a "$wp_file" "$HOME/.wallpapers/$base_wp"
-                fi
-            fi
-        done < <(find "$REPO_DIR/.wallpapers" -type f -print0)
-    fi
+    # Wallpapers: added, by category (lib/wallpapers.sh).
+    sync_wallpapers "$REPO_DIR" "$DRY_RUN"
 
     # Desktop entries and icons come with the suite (make install, above);
     # what is left is removing per-user copies an older version put in

@@ -31,10 +31,19 @@ ScrollBar {
     // measured against the panel that drew #394E62 on #0A3B4C, a difference
     // nobody notices — which is the same as not being there, for a control
     // whose only job is to be noticed.
+    // Something to take hold of: 4px drawn, but the bar answers the pointer
+    // across its padding as well, and grows while the pointer is on it. At
+    // 4px and nothing around it, dragging it meant finding a 4px target.
+    hoverEnabled: true
+    padding: Design.s(3)
+    minimumSize: 0.08
+
     contentItem: Rectangle {
-        implicitWidth: Design.s(4)
+        implicitWidth: root.hovered || root.pressed ? Design.s(8) : Design.s(4)
+        implicitHeight: implicitWidth
         radius: width / 2
-        color: Design.textFaint
-        opacity: 0.8
+        color: root.pressed ? Design.textDim : Design.textFaint
+        opacity: root.hovered || root.pressed ? 1.0 : 0.8
+        Behavior on implicitWidth { NumberAnimation { duration: Design.duration.fast } }
     }
 }

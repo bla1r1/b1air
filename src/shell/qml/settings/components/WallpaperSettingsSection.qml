@@ -24,6 +24,26 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     property var wallpaperList: []
+    // The category shown: "*" all of them, "" the pictures in no folder.
+    property string category: "*"
+    readonly property var categories: {
+        const seen = [];
+        for (const w of section.wallpaperList)
+            if (seen.indexOf(w.category) < 0) seen.push(w.category);
+        // Named folders in order, the loose pictures last.
+        return seen.filter(c => c !== "").sort().concat(seen.indexOf("") >= 0 ? [""] : []);
+    }
+    readonly property var shownWallpapers: section.category === "*"
+        ? section.wallpaperList
+        : section.wallpaperList.filter(w => w.category === section.category)
+    // The shipped categories in the interface language; one of your own
+    // folders as it is named.
+    function categoryLabel(c) {
+        if (c === "") return I18n.tr("Other");
+        const known = { Mountains: I18n.tr("Mountains"), Water: I18n.tr("Water"), Nature: I18n.tr("Nature"),
+                        Forest: I18n.tr("Forest"), Art: I18n.tr("Art"), City: I18n.tr("City"), Sky: I18n.tr("Sky") };
+        return known[c] || c;
+    }
     property string activeWallpaper: ""
 
     // Scan wallpaper folder for images
@@ -32,11 +52,20 @@ ColumnLayout {
         command: ["find", section.wallpaperDir.replace(/^~/, Quickshell.env("HOME")), "-maxdepth", "2", "-type", "f", "!", "-name", ".*", "-print"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const lines = (this.text || "").trim().split("\n").filter(l => l.trim() !== "");
-                    section.wallpaperList = lines.sort().map(p => ({
-                    path: p,
-                    name: p.split("/").pop().replace(/\.[^/.]+$/, "")
-                }));
+                const root = section.wallpaperDir.replace(/^~/, Quickshell.env("HOME")).replace(/\/+$/, "");
+                const lines = (this.text || "").trim().split("\n")
+                    .filter(l => /\.(jpe?g|png|webp)$/i.test(l.trim()));
+                // The folder a picture is in, under the wallpaper folder, is
+                // its category (Mountains/, Sky/…); loose at the top, none.
+                section.wallpaperList = lines.sort().map(p => {
+                    const rel = p.startsWith(root + "/") ? p.slice(root.length + 1) : p.split("/").pop();
+                    const parts = rel.split("/");
+                    return {
+                        path: p,
+                        category: parts.length > 1 ? parts[0] : "",
+                        name: parts[parts.length - 1].replace(/\.[^/.]+$/, "")
+                    };
+                });
             }
         }
     }
@@ -191,6 +220,27 @@ ColumnLayout {
             }
         }
 
+        // Categories: all of them, or one folder.
+        Flow {
+            visible: section.categories.length > 1
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Pill {
+                label: I18n.tr("All")
+                active: section.category === "*"
+                onClicked: section.category = "*"
+            }
+            Repeater {
+                model: section.categories
+                delegate: Pill {
+                    required property string modelData
+                    label: section.categoryLabel(modelData)
+                    active: section.category === modelData
+                    onClicked: section.category = modelData
+                }
+            }
+        }
+
         // Wallpaper Grid
         GridLayout {
             visible: section.wallpaperList.length > 0
@@ -200,7 +250,7 @@ ColumnLayout {
             rowSpacing: Design.s(Design.space.md)
 
             Repeater {
-                model: section.wallpaperList
+                model: section.shownWallpapers
 
                 Rectangle {
                     id: wallCard

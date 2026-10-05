@@ -13,6 +13,8 @@ REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$REPO_DIR/lib/distro.sh"
 # shellcheck source=lib/fingerprint.sh
 source "$REPO_DIR/lib/fingerprint.sh"
+# shellcheck source=lib/wallpapers.sh
+source "$REPO_DIR/lib/wallpapers.sh"
 
 # The daemon's dotfiles_sync/status/sys look for the repo by guessing among a
 # few hardcoded paths, so a clone anywhere else silently made those features
@@ -688,8 +690,12 @@ deploy_sddm_theme() {
         id sddm >/dev/null 2>&1 && sudo usermod -aG "$wallpaper_group" sddm || true
 
         local seed_wall=""
-        if [[ -d "$REPO_DIR/.wallpapers" ]]; then
-            seed_wall="$(find "$REPO_DIR/.wallpapers" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.png' \) | head -n 1 || true)"
+        # The default the desktop starts on too (wallpaper restore), so the
+        # login screen and the first login match; else any picture.
+        if [[ -f "$REPO_DIR/.wallpapers/Sky/clouds-day.jpg" ]]; then
+            seed_wall="$REPO_DIR/.wallpapers/Sky/clouds-day.jpg"
+        elif [[ -d "$REPO_DIR/.wallpapers" ]]; then
+            seed_wall="$(find "$REPO_DIR/.wallpapers" -maxdepth 2 -type f \( -iname '*.jpg' -o -iname '*.png' \) | head -n 1 || true)"
         fi
         if [[ -n "$seed_wall" && -f "$seed_wall" ]]; then
             sudo install -o root -g "$wallpaper_group" -m 664 "$seed_wall" "$cache_wall"
@@ -817,9 +823,7 @@ deploy_dotfiles() {
     # Sync wallpapers. Added, not replaced: --delete here threw away every
     # wallpaper the user had put in the folder themselves, and the folder is
     # exactly the place they are invited to put them.
-    if [[ -d "$REPO_DIR/.wallpapers" ]]; then
-        rsync -a "$REPO_DIR/.wallpapers/" "$HOME/.wallpapers/"
-    fi
+    sync_wallpapers "$REPO_DIR"
 
     # deploy_sddm_theme was only ever called from the DRY_RUN branch above —
     # a real install never called it at all, so /usr/share/sddm/themes/b1air

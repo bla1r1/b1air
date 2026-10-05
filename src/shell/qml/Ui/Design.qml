@@ -126,7 +126,7 @@ QtObject {
     // =========================================================================
     // COLOUR & PALETTE
     // =========================================================================
-    // Dynamic values arrive from matugen or fallback to Catppuccin Mocha.
+    // Dynamic values arrive from the theme, or fall back to Breeze Dark.
 
     // ── Surfaces ─────────────────────────────────────────────────────────────
     readonly property color ground: _p.ground     // backdrop ground
@@ -282,51 +282,52 @@ QtObject {
 
     // The palette a theme overwrites. Kept as a plain object so applyPalette()
     // can put every role back without re-reading the file that changed them.
+    // Breeze Dark (Services/Theme.qml has the other built-ins).
     readonly property var builtinPalette: ({
-        ground: "#1e1e2e", lowest: "#11111b", low: "#181825",
-        mid: "#313244", high: "#45475a", highest: "#585b70",
-        text: "#cdd6f4", textDim: "#a6adc8", outline: "#6c7086", outlineVariant: "#45475a",
-        primary: "#89b4fa", primaryText: "#11111b", primaryBox: "#45475a", tertiary: "#cba6f7",
-        error: "#f38ba8", errorText: "#11111b",
-        blue: "#89b4fa", sapphire: "#74c7ec", mauve: "#cba6f7", pink: "#f5c2e7",
-        peach: "#fab387", yellow: "#f9e2af", green: "#a6e3a1", teal: "#94e2d5",
-        red: "#f38ba8", maroon: "#eba0ac", lavender: "#b4befe"
+        ground: "#202326", lowest: "#141618", low: "#1b1e20",
+        mid: "#292c30", high: "#31363b", highest: "#3e434a",
+        text: "#fcfcfc", textDim: "#b4bbc2", outline: "#6b737a", outlineVariant: "#3a3f44",
+        primary: "#3daee9", primaryText: "#0d1b24", primaryBox: "#1f4a63", tertiary: "#b07ad9",
+        error: "#ed4b5b", errorText: "#ffffff",
+        blue: "#3daee9", sapphire: "#1d99f3", mauve: "#b07ad9", pink: "#e93a9a",
+        peach: "#f67400", yellow: "#fdbc4b", green: "#2ecc71", teal: "#1abc9c",
+        red: "#ed4b5b", maroon: "#c0392b", lavender: "#8e9bff"
     })
 
     property QtObject _p: QtObject {
         property bool loaded: false
 
-        property color ground: "#1e1e2e"
-        property color lowest: "#11111b"
-        property color low: "#181825"
-        property color mid: "#313244"
-        property color high: "#45475a"
-        property color highest: "#585b70"
+        property color ground: "#202326"
+        property color lowest: "#141618"
+        property color low: "#1b1e20"
+        property color mid: "#292c30"
+        property color high: "#31363b"
+        property color highest: "#3e434a"
 
-        property color text: "#cdd6f4"
-        property color textDim: "#a6adc8"
-        property color outline: "#6c7086"
-        property color outlineVariant: "#45475a"
+        property color text: "#fcfcfc"
+        property color textDim: "#b4bbc2"
+        property color outline: "#6b737a"
+        property color outlineVariant: "#3a3f44"
 
-        property color primary: "#89b4fa"
-        property color primaryText: "#11111b"
-        property color primaryBox: "#45475a"
-        property color tertiary: "#cba6f7"
+        property color primary: "#3daee9"
+        property color primaryText: "#0d1b24"
+        property color primaryBox: "#1f4a63"
+        property color tertiary: "#b07ad9"
 
-        property color error: "#f38ba8"
-        property color errorText: "#11111b"
+        property color error: "#ed4b5b"
+        property color errorText: "#ffffff"
 
-        property color blue: "#89b4fa"
-        property color sapphire: "#74c7ec"
-        property color mauve: "#cba6f7"
-        property color pink: "#f5c2e7"
-        property color peach: "#fab387"
-        property color yellow: "#f9e2af"
-        property color green: "#a6e3a1"
-        property color teal: "#94e2d5"
-        property color red: "#f38ba8"
-        property color maroon: "#eba0ac"
-        property color lavender: "#b4befe"
+        property color blue: "#3daee9"
+        property color sapphire: "#1d99f3"
+        property color mauve: "#b07ad9"
+        property color pink: "#e93a9a"
+        property color peach: "#f67400"
+        property color yellow: "#fdbc4b"
+        property color green: "#2ecc71"
+        property color teal: "#1abc9c"
+        property color red: "#ed4b5b"
+        property color maroon: "#c0392b"
+        property color lavender: "#8e9bff"
     }
 
     /**

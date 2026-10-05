@@ -584,6 +584,59 @@ ApplicationWindow {
         if (co.length === 1) return I18n.tr("%1 and %2", author, co[0]);
         return I18n.trn("%2 and %1 other", "%2 and %1 others", co.length, author);
     }
+    // An author: their GitHub picture when there is one (AvatarCache,
+    // avatar_cache.cpp), the initials in a coloured disc until then and
+    // otherwise. Painted round on a Canvas — the software renderer this
+    // window uses cannot clip an Image to a circle.
+    component AuthorAvatar: Rectangle {
+        id: av
+        property string name: ""
+        property string email: ""
+        property color tone: window.colBlue
+        property int ring: 2
+        readonly property string picture: (Avatars.revision, Avatars.url(av.email))
+        width: Design.s(20); height: width; radius: width / 2
+        color: av.tone
+        border.color: Design.tint(Design.ground, 0.8)
+        border.width: av.ring
+
+        Text {
+            anchors.centerIn: parent
+            visible: !face.ready
+            text: window.initials(av.name)
+            font.family: Design.font.sans
+            font.pixelSize: Math.max(8, Math.round(av.width * 0.45))
+            font.bold: true
+            color: Design.accentText
+        }
+        Canvas {
+            id: face
+            property bool ready: false
+            anchors.fill: parent
+            anchors.margins: av.ring
+            visible: ready
+            onWidthChanged: requestPaint()
+            Component.onCompleted: if (av.picture !== "") loadImage(av.picture)
+            Connections {
+                target: av
+                function onPictureChanged() { if (av.picture !== "") face.loadImage(av.picture); }
+            }
+            onImageLoaded: { face.ready = true; requestPaint(); }
+            onPaint: {
+                const ctx = getContext("2d");
+                ctx.reset();
+                if (!face.ready || av.picture === "") return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(width / 2, height / 2, Math.min(width, height) / 2, 0, 2 * Math.PI);
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(av.picture, 0, 0, width, height);
+                ctx.restore();
+            }
+        }
+    }
+
     function initials(name) {
         const words = (name || "?").split(/[\s._-]+/).filter(w => w.length > 0);
         if (words.length === 0) return "?";
@@ -1044,6 +1097,7 @@ Item {
                                     // Changed Files ListView
                                     ListView {
                                         id: changedList
+                                        ScrollBar.vertical: OverflowBar {}
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         clip: true
@@ -1305,29 +1359,38 @@ Item {
                                                 border.color: descInput.activeFocus ? Design.accent : Design.line
                                                 border.width: 1
 
-                                                TextArea {
-                                                    id: descInput
-                                                    enabled: window.hasRepo
+                                                // In a ScrollView: a bare TextArea grows past its
+                                                // box and cannot be scrolled, so a long
+                                                // description ran out of sight below the field.
+                                                ScrollView {
+                                                    id: descScroll
                                                     anchors.fill: parent
-                                                    leftPadding: Design.s(Design.space.md)
-                                                    rightPadding: Design.s(Design.space.md)
-                                                    topPadding: Design.s(Design.space.sm)
-                                                    bottomPadding: Design.s(Design.space.sm)
-                                                    font.family: Design.font.sans
-                                                    font.pixelSize: Design.s(Design.font.body)
-                                                    color: window.colFg
-                                                    selectByMouse: true
-                                                    background: null
-                                                    wrapMode: TextEdit.Wrap
-
-                                                    Text {
-                                                        x: descInput.leftPadding
-                                                        y: descInput.topPadding
-                                                        text: I18n.tr("Description")
+                                                    clip: true
+                                                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                                                    ScrollBar.vertical: OverflowBar {}
+                                                    TextArea {
+                                                        id: descInput
+                                                        enabled: window.hasRepo
+                                                        leftPadding: Design.s(Design.space.md)
+                                                        rightPadding: Design.s(Design.space.md)
+                                                        topPadding: Design.s(Design.space.sm)
+                                                        bottomPadding: Design.s(Design.space.sm)
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.body)
-                                                        color: window.colDim
-                                                        visible: !descInput.text && !descInput.activeFocus
+                                                        color: window.colFg
+                                                        selectByMouse: true
+                                                        background: null
+                                                        wrapMode: TextEdit.Wrap
+
+                                                        Text {
+                                                            x: descInput.leftPadding
+                                                            y: descInput.topPadding
+                                                            text: I18n.tr("Description")
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(Design.font.body)
+                                                            color: window.colDim
+                                                            visible: !descInput.text && !descInput.activeFocus
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1405,7 +1468,7 @@ Item {
                                     clip: true
                                     model: GitBackend.history
                                     spacing: 1
-                                    ScrollBar.vertical: ScrollBar {}
+                                    ScrollBar.vertical: OverflowBar {}
 
                                     // The rows were hover-only: nothing
                                     // happened on click, so a commit's files
@@ -1455,14 +1518,26 @@ Item {
                                                 }
                                             }
 
-                                            Text {
+                                            RowLayout {
                                                 Layout.fillWidth: true
-                                                elide: Text.ElideRight
-                                                text: window.people(model.author || I18n.tr("User"), model.coAuthors) + " • " + window.relTime(model.time)
-                                                      + (model.sync === "local" ? " • not pushed" : "")
-                                                font.family: Design.font.sans
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colDim
+                                                spacing: Design.s(6)
+                                                AuthorAvatar {
+                                                    Layout.preferredWidth: Design.s(16)
+                                                    Layout.preferredHeight: Design.s(16)
+                                                    width: Design.s(16)
+                                                    ring: 1
+                                                    name: model.author || ""
+                                                    email: model.email || ""
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                    text: window.people(model.author || I18n.tr("User"), model.coAuthors) + " • " + window.relTime(model.time)
+                                                          + (model.sync === "local" ? " • not pushed" : "")
+                                                    font.family: Design.font.sans
+                                                    font.pixelSize: Design.s(Design.font.caption)
+                                                    color: window.colDim
+                                                }
                                             }
                                         }
 
@@ -1623,6 +1698,7 @@ Item {
                             // Diff Lines ListView
                             ListView {
                                 id: diffList
+                                ScrollBar.vertical: OverflowBar {}
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
@@ -1796,6 +1872,11 @@ Item {
                                     anchors.rightMargin: Design.s(14)
                                     spacing: Design.s(4)
 
+                                    // Wrapped, not cut: the header grows
+                                    // with it (implicitHeight above), and a
+                                    // long subject or a list of authors was
+                                    // a line ending in "…" with no way to
+                                    // read the rest.
                                     Text {
                                         Layout.fillWidth: true
                                         text: GitBackend.commitInfo.subject || ""
@@ -1803,7 +1884,7 @@ Item {
                                         font.pixelSize: Design.s(13)
                                         font.bold: true
                                         color: window.colFg
-                                        elide: Text.ElideRight
+                                        wrapMode: Text.Wrap
                                     }
 
                                     RowLayout {
@@ -1822,22 +1903,14 @@ Item {
                                                         .filter(n => n !== GitBackend.commitInfo.author))
                                             Repeater {
                                                 model: peopleRow.names
-                                                delegate: Rectangle {
+                                                delegate: AuthorAvatar {
                                                     required property string modelData
                                                     required property int index
                                                     z: peopleRow.names.length - index
-                                                    width: Design.s(20); height: width; radius: width / 2
-                                                    color: [window.colBlue, window.colPurple, window.colGreen, window.colOrange, window.colCyan][index % 5]
-                                                    border.color: Design.tint(Design.ground, 0.8)
-                                                    border.width: 2
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: window.initials(parent.modelData)
-                                                        font.family: Design.font.sans
-                                                        font.pixelSize: Design.s(Design.font.caption)
-                                                        font.bold: true
-                                                        color: Design.accentText
-                                                    }
+                                                    name: modelData
+                                                    email: index === 0 ? (GitBackend.commitInfo.email || "")
+                                                         : ((GitBackend.commitInfo.coAuthorEmails || {})[modelData] || "")
+                                                    tone: [window.colBlue, window.colPurple, window.colGreen, window.colOrange, window.colCyan][index % 5]
                                                 }
                                             }
                                             // A handler, not a MouseArea: an
@@ -1863,20 +1936,47 @@ Item {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             color: window.colDim
-                                            elide: Text.ElideRight
+                                            wrapMode: Text.Wrap
                                         }
                                     }
 
-                                    Text {
+                                    // Four lines, and all of it on request —
+                                    // scrolling in its own box past a third
+                                    // of the window, so the diff stays.
+                                    ScrollView {
+                                        id: commitBodyBox
                                         Layout.fillWidth: true
-                                        visible: text !== ""
-                                        text: GitBackend.commitInfo.body || ""
+                                        Layout.preferredHeight: Math.min(commitBody.implicitHeight, window.height / 3)
+                                        visible: commitBody.text !== ""
+                                        clip: true
+                                        contentWidth: availableWidth
+                                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                                        ScrollBar.vertical: OverflowBar {}
+                                        Text {
+                                            id: commitBody
+                                            property bool open: false
+                                            width: commitBodyBox.availableWidth
+                                            text: GitBackend.commitInfo.body || ""
+                                            onTextChanged: open = false
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: window.colFg
+                                            wrapMode: Text.Wrap
+                                            maximumLineCount: open ? 100000 : 4
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                    Text {
+                                        visible: commitBodyBox.visible && (commitBody.truncated || commitBody.open)
+                                        text: commitBody.open ? I18n.tr("Show less") : I18n.tr("Show more")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colFg
-                                        wrapMode: Text.Wrap
-                                        maximumLineCount: 4
-                                        elide: Text.ElideRight
+                                        color: window.colBlue
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: commitBody.open = !commitBody.open
+                                        }
                                     }
                                 }
                             }
@@ -1895,7 +1995,7 @@ Item {
                                     clip: true
                                     model: GitBackend.commitFiles
                                     spacing: 1
-                                    ScrollBar.vertical: ScrollBar {}
+                                    ScrollBar.vertical: OverflowBar {}
 
                                     delegate: Rectangle {
                                         id: commitFileRow
@@ -2012,7 +2112,7 @@ Item {
                                         clip: true
                                         model: GitBackend.commitDiff
                                         delegate: diffRowDelegate
-                                        ScrollBar.vertical: ScrollBar {}
+                                        ScrollBar.vertical: OverflowBar {}
 
                                         Text {
                                             anchors.centerIn: parent
@@ -2218,6 +2318,7 @@ Item {
 
                         ListView {
                             id: repoList
+        ScrollBar.vertical: OverflowBar {}
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
@@ -2519,6 +2620,7 @@ Item {
 
                         ListView {
                             id: branchList
+                            ScrollBar.vertical: OverflowBar {}
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true

@@ -2,10 +2,10 @@
 
 <div align="center">
 
-![b1air Desktop Environment](https://raw.githubusercontent.com/bla1r1/DotsFiles/main/.wallpapers/tokyo-night.jpg)
+![b1air desktop in Breeze Dark: terminal and Files side by side under the top bar](docs/screenshots/desktop-breeze-dark.jpg)
 
 **A keyboard-driven Wayland desktop for Linux — Arch, Debian/Ubuntu, Fedora and openSUSE.**  
-*Built with SwayFX, Qt6/QML, a native C++20 core daemon, and Tokyo Night styling.*
+*Built with SwayFX, Qt6/QML and a native C++20 core daemon, in Breeze and Adwaita colours.*
 
 [![Arch Linux](https://img.shields.io/badge/Arch_Linux-Ready-1793d1?style=flat-square&logo=archlinux&logoColor=white)](https://archlinux.org)
 [![Debian / Ubuntu](https://img.shields.io/badge/Debian_13+_/_Ubuntu_25.04+-Supported-a81d33?style=flat-square&logo=debian&logoColor=white)](https://debian.org)
@@ -14,7 +14,7 @@
 [![Compositor: SwayFX](https://img.shields.io/badge/SwayFX-0.6-005577?style=flat-square&logo=wayland&logoColor=white)](https://github.com/WillPower3309/swayfx)
 [![UI: Qt6 / QML](https://img.shields.io/badge/Shell-Qt6_QML-41cd52?style=flat-square&logo=qt&logoColor=white)](https://qt.io)
 [![Core: C++20](https://img.shields.io/badge/Daemon-C++20-00599c?style=flat-square&logo=c%2B%2B&logoColor=white)](https://isocpp.org)
-[![Theme: Tokyo Night](https://img.shields.io/badge/Palette-Tokyo_Night-7aa2f7?style=flat-square)](https://github.com/folke/tokyonight.nvim)
+[![Themes: Breeze · Adwaita](https://img.shields.io/badge/Themes-Breeze_·_Adwaita-3daee9?style=flat-square)](#themes-and-wallpapers)
 [![License: GPL v2.0](https://img.shields.io/badge/License-GPL_v2.0-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -23,16 +23,41 @@
 
 ## Overview
 
-b1air is a unified desktop setup for Linux designed around keyboard efficiency, low latency, and a consistent dark theme across all applications.
+b1air is a unified desktop setup for Linux designed around keyboard efficiency, low latency, and one theme across every application — dark or light.
 
 Key components:
-* **Compositor**: SwayFX with hardware-accelerated rounded corners, soft shadows, and selective blur. Window chrome, the greeter and the Qt/Kvantum application theme use Tokyo Night (`#1a1b26`); the Qt6/QML shell and the native apps share one design system built on a Catppuccin Mocha palette (`Ui/Design.qml`).
+* **Compositor**: SwayFX with hardware-accelerated rounded corners, soft shadows, and selective blur. The theme picked in Settings colours everything from one palette: the shell and the native apps (`Ui/Design.qml`), window borders, GTK and Qt/Kvantum applications, the terminal, the lock screen and the login screen.
 * **Core Daemon (`b1air-daemon`)**: A single compiled C++20 binary that manages window autotiling, focus tracking (SQLite3), audio and microphone controls (PipeWire via `wpctl`), PAM user profiles, and power management without shell script overhead.
 * **Desktop Shell**: Lightweight Qt6/QML overlays providing an application launcher, clipboard history, control center, emoji picker, and a visual Alt+Tab window switcher.
+* **First-run setup**: at the first login, Settings walks through language and keyboard, Wi-Fi, theme, wallpaper, the account and its fingerprint. After an update it shows only the steps that are new, and a step only when the machine has the hardware for it (no reader, no fingerprint step).
 * **Own small tools** in place of the usual helpers, each with its tests: `b1air-lock` (the lock screen, instead of swaylock), idle handling inside the daemon (instead of swayidle), `b1air-clip` (instead of wl-clipboard), `b1air-gamma` (night light with a schedule, instead of wlsunset), `b1air-bg` (wallpaper, instead of swaybg), `b1air-shot` (the Print overlay: region, recording, QR — instead of a QML one started per press).
 * **Lock screen**: `b1air-lock` by default — up in milliseconds, before the machine sleeps: each screen's wallpaper blurred, clock, account picture and name, one password field for every screen, keyboard layout, battery, weather, and a reboot / sleep / shut down menu. It is the only lock screen — no QML; one that dies while locked is replaced by a new one, the session staying locked.
-* **Fingerprint** (fprintd): enrol and test fingers in Settings → User; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
+* **Fingerprint** (fprintd): the installer finds the reader by its USB id and installs the driver libfprint lacks — python-validity for the Validity/Synaptics readers of many ThinkPads (`06cb:009a`), the Goodix builds for others (Arch; `lib/fingerprint.sh`); updates add it when a reader appears. Enrol and test fingers in Settings → User; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
 * **Remote Access**: Built-in headless WayVNC support and unattended screencasting configuration for AnyDesk, RustDesk, and OBS with persistent uinput permissions.
+
+---
+
+## Screenshots
+
+| | |
+| :---: | :---: |
+| ![Control Center over the Lagos coast wallpaper, Breeze Dark](docs/screenshots/control-center.jpg) | ![Settings → Wallpaper with its categories, Breeze Light](docs/screenshots/settings-breeze-light.jpg) |
+| Control Center — Breeze Dark | Settings → Wallpaper — Breeze Light |
+| ![The Git app: history with GitHub avatars and a commit's diff, Adwaita Dark](docs/screenshots/git-adwaita-dark.jpg) | ![Terminal and Files, Breeze Dark](docs/screenshots/desktop-breeze-dark.jpg) |
+| Git — Adwaita Dark | Terminal and Files — Breeze Dark |
+
+### Themes and wallpapers
+
+Four built-in themes, after the two big desktops: **Breeze Dark** (the
+default) and **Breeze Light** from KDE, **Adwaita Dark** and **Adwaita Light**
+from GNOME — chosen for text, dim text and borders that are clearly apart
+rather than a few shades of one tint. A theme can also be made from the
+wallpaper, created, edited and shared as a file (Settings → Themes).
+
+The wallpapers are sorted into folders — Art, Forest, Mountains, Nature, Sky,
+Water — which Settings → Wallpaper offers as categories; a folder of your own
+in `~/.wallpapers` becomes one too. A first login starts on the daytime
+clouds (`Sky/clouds-day.jpg`).
 
 ---
 
@@ -43,7 +68,7 @@ Fuzzy application search, clipboard history, and inline math calculations in a s
 
 ### Settings & Control Center (`Super + I` / `Super + C`)
 Graphical desktop configuration:
-* Wallpaper selection with a live preview grid. (Deriving the shell accent from the wallpaper is not implemented — `Design._applyPalette()` is the seam it will plug into, and nothing calls it yet.)
+* Wallpaper selection by category, per screen or per workspace, and a theme built from the wallpaper (Themes → From the wallpaper).
 * Audio sink selector and per-stream volume controls.
 * Focus time and screen usage analytics stored in SQLite.
 * Toggles for Night Light, Game Mode (disables blur and pins performance governor), and Remote Desktop.
@@ -234,12 +259,12 @@ b1air-daemon game-mode toggle      # Switch between power-save and low-latency m
 ```text
 DotsFiles/
 ├── .config/                   # User configurations (SwayFX, Fish, Kvantum, GTK/Qt, portals)
-│   ├── fish/                  # Fish shell with Tokyo Night theme
+│   ├── fish/                  # Fish shell: prompt, aliases, greeting
 │   ├── sway/                  # SwayFX compositor keybinds, rules, look & feel
 │   ├── systemd/               # Systemd user services for the b1air session
 │   └── xdg-desktop-portal-wlr # Unattended screencast configuration
 ├── .local/share/icons/        # The b1air cursor theme (built from src/cursors)
-├── .wallpapers/               # Wallpapers offered in Settings
+├── .wallpapers/<Category>/    # Wallpapers offered in Settings, a folder per category
 ├── src/                       # Compiled C++20 desktop suite & Qt6 shell
 │   ├── CMakeLists.txt         # One build for the whole suite, into src/build
 │   ├── Makefile               # `make` builds, `make install` installs
@@ -263,10 +288,11 @@ DotsFiles/
 │   ├── bin/b1air-session      # Wayland session launch wrapper
 │   └── share/                 # SDDM greeter, wayland-sessions, and portal configs
 ├── etc/                       # System-wide configurations (SDDM, udev rules, tiny-dfr)
-├── lib/distro.sh              # Distribution detection & package-manager layer
+├── lib/                       # Shared by the scripts: distro.sh (distribution, packages),
+│                              #   fingerprint.sh (reader drivers), wallpapers.sh
 ├── packages/                  # Package lists per distribution family
 ├── tools/                     # Development utilities (smoke tests, controller)
-├── docs/ROADMAP.md            # Milestone roadmap & feature specs
+├── docs/                      # ROADMAP.md (milestones), screenshots/
 ├── bootstrap.sh               # One-line remote installer
 ├── install.sh                 # Installation engine (Arch, Debian/Ubuntu, Fedora, openSUSE)
 ├── install-ui.sh              # Interactive Whiptail TUI installer

@@ -34,8 +34,9 @@ public:
     // repository has no remote to push to, where the question does not apply.
     // CoAuthorsRole: the names from Co-authored-by trailers. The row showed
     // the author alone, so a commit written by two people credited one.
+    // EmailRole: the author's email, for the avatar.
     enum Role { FullHashRole = Qt::UserRole + 1, HashRole, AuthorRole, TimeRole, MessageRole, SyncRole,
-                CoAuthorsRole };
+                CoAuthorsRole, EmailRole };
 
     explicit HistoryModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
 
@@ -62,7 +63,7 @@ signals:
     void countChanged();
 
 private:
-    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; };
+    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; QString email; };
     QList<Commit> readPage(int skip) const;
 
     QString m_repoPath;
