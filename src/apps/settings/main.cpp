@@ -31,13 +31,62 @@
 #include <QQmlContext>
 
 #include <cstdlib>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <set>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <unistd.h>
 
 #include "qml_search.hpp"
 #include "qs_compat.hpp"
 #include "qs_services.hpp"
+
+namespace {
+
+// The setup's steps, in SetupWizard.qml's order, each with whether this
+// machine has what it is about.
+bool has_wifi() {
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator("/sys/class/net", ec))
+        if (e.path().filename().string().rfind("wl", 0) == 0) return true;
+    return false;
+}
+
+bool has_fingerprint_reader() {
+    FILE* p = popen("b1air-daemon fingerprint status 2>/dev/null", "r");
+    if (!p) return false;
+    std::string out;
+    char buf[512];
+    while (fgets(buf, sizeof buf, p)) out += buf;
+    pclose(p);
+    return out.find("\"available\":true") != std::string::npos;
+}
+
+std::string first_run_page() {
+    const char* xdg = getenv("XDG_CONFIG_HOME");
+    const char* home = getenv("HOME");
+    const std::string conf = (xdg && *xdg) ? xdg : std::string(home ? home : "") + "/.config";
+    std::set<std::string> seen;
+    std::ifstream in(conf + "/b1air/setup-done");
+    for (std::string line; std::getline(in, line);)
+        if (!line.empty()) seen.insert(line);
+
+    const std::pair<const char*, bool (*)()> steps[] = {
+        {"keyboard", nullptr}, {"network", has_wifi}, {"theme", nullptr},
+        {"wallpaper", nullptr}, {"user", nullptr}, {"fingerprint", has_fingerprint_reader}};
+    std::string page;
+    for (const auto& [id, available] : steps) {
+        if (seen.count(id)) continue;
+        if (available && !available()) continue;
+        page += std::string(".") + id;
+    }
+    return page.empty() ? "" : "setup" + page;
+}
+
+} // namespace
 
 int main(int argc, char* argv[]) {
     // The software renderer unless the environment names another. Nothing in
@@ -63,10 +112,22 @@ int main(int argc, char* argv[]) {
     const char* page = "";
     bool forceStandalone = false;
     bool forceShell = false;
+    bool firstRun = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--standalone") == 0) forceStandalone = true;
         else if (std::strcmp(argv[i], "--shell") == 0) forceShell = true;
+        else if (std::strcmp(argv[i], "--first-run") == 0) firstRun = true;
         else if (argv[i][0] != '-') page = argv[i];
+    }
+
+    // --first-run (autostart.conf): the setup's steps that are new to this
+    // account — not in ~/.config/b1air/setup-done, which SetupWizard.qml
+    // writes — and that this machine can use. None: nothing opens.
+    std::string setupPage;
+    if (firstRun) {
+        setupPage = first_run_page();
+        if (setupPage.empty()) return 0;
+        page = setupPage.c_str();
     }
 
     const bool shellRunning = b1air::proc::running("quickshell");

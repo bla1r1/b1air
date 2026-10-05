@@ -47,6 +47,14 @@ Singleton {
         return d || null;
     }
 
+    // For the top bar, which is always there: bound to the live objects, so
+    // it follows without the scanner or the two-second sweep — both of which
+    // run only while a network page is open (acquire()).
+    readonly property bool wiredUp: Networking.devices.values.some(x => x.type === DeviceType.Wired && x.connected)
+    readonly property var activeWifi: root.wifiDevice
+        ? (root.wifiDevice.networks.values.find(n => n.connected) || null) : null
+    readonly property int activeWifiSignal: root.activeWifi ? Math.round(root.activeWifi.signalStrength * 100) : 0
+
     property bool hasWifiSys: false
 
     FolderListModel {
@@ -120,12 +128,47 @@ Singleton {
         root._rebuild();
     }
 
+    // The last join that failed, for the page to say so: the ssid and
+    // ConnectionFailReason's name for why. Cleared by the next attempt.
+    property string failedSsid: ""
+    property string failedReason: ""
+    signal wifiFailed(string ssid, string reason)
+
     function connectWifi(ssid, psk) {
         if (!root.wifiDevice) return;
         const n = root.wifiDevice.networks.values.find(x => x.name === ssid);
         if (!n) return;
         root.setBusy(ssid, true);
-        if (psk !== undefined && psk !== "") n.connectWithPsk(psk);
+        if (root.failedSsid === ssid) {
+            root.failedSsid = "";
+            root.failedReason = "";
+        }
+
+        // Nothing listened for the outcome: a wrong passphrase left the row
+        // "Connecting…" for good and said nothing. And the profile NM saved
+        // for it kept the wrong passphrase, so the network came back "Saved",
+        // joined with no prompt and failed again — forgotten here instead, so
+        // it asks again.
+        const withPsk = psk !== undefined && psk !== "";
+        const wasKnown = n.known;
+        const done = () => {
+            n.connectionFailed.disconnect(onFailed);
+            n.connectedChanged.disconnect(onConnected);
+            root.setBusy(ssid, false);
+            root._rebuild();
+        };
+        const onConnected = () => { if (n.connected) done(); };
+        const onFailed = reason => {
+            done();
+            if (withPsk && !wasKnown && n.known) n.forget();
+            root.failedSsid = ssid;
+            root.failedReason = ConnectionFailReason.toString(reason);
+            root.wifiFailed(ssid, root.failedReason);
+        };
+        n.connectionFailed.connect(onFailed);
+        n.connectedChanged.connect(onConnected);
+
+        if (withPsk) n.connectWithPsk(psk);
         else n.connect();
     }
 

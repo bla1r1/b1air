@@ -13,6 +13,10 @@ import "../../Services"
 ColumnLayout {
     id: section
 
+    // First-run setup (SetupWizard) shows the page without the cards for
+    // later: what anyone needs on the first day, not everything there is.
+    property bool essentials: false
+
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -41,6 +45,26 @@ ColumnLayout {
     // "Network & Wi-Fi" and the search sends you to for "wifi".
     property string askingFor: ""
 
+    function ask(ssid) {
+        section.askingFor = ssid;
+        pskField.text = "";
+        pskField.focusInput();
+    }
+
+    // A failed join said nothing at all. NM reports a wrong passphrase as
+    // missing secrets or the supplicant giving up, depending on the driver.
+    function failText(reason) {
+        if (reason === "WifiNetworkLost") return I18n.tr("The network went out of range");
+        if (reason === "Unknown" || reason === "") return I18n.tr("Could not connect");
+        return I18n.tr("Wrong password, or the network refused it");
+    }
+
+    Connections {
+        target: Network
+        // Asked again at once, for the one that just failed.
+        function onWifiFailed(ssid, reason) { section.ask(ssid); }
+    }
+
     property bool showEthConfig: false
     property string ethMethod: "auto"
     property string ethIp: Network.ethernet && Network.ethernet.ip ? Network.ethernet.ip : "192.168.1.100"
@@ -50,6 +74,7 @@ ColumnLayout {
 
     // ── 1. Ethernet Card ─────────────────────────────────────────────────────
     Card {
+        visible: !section.essentials
         title: I18n.tr("Ethernet (Wired)")
         subtitle: Network.ethernet && Network.ethernet.connected
             ? I18n.tr("Connected via %1", Network.ethernet.ifname)
@@ -364,6 +389,37 @@ ColumnLayout {
             text: I18n.tr("Available networks")
         }
 
+        // The passphrase field, outside the list: Services/Network replaces
+        // the list every two seconds (signal strengths change), and the
+        // Repeater builds every row again — a field inside a row lost what
+        // had been typed into it and its focus with it, mid-password.
+        ColumnLayout {
+            visible: section.askingFor !== ""
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+
+            Field {
+                id: pskField
+                Layout.fillWidth: true
+                placeholder: I18n.tr("Passphrase for %1", section.askingFor)
+                echoMode: TextInput.Password
+                onAccepted: psk => {
+                    if (psk.length === 0) return;
+                    Network.connectWifi(section.askingFor, psk);
+                    section.askingFor = "";
+                }
+            }
+
+            Label {
+                visible: Network.failedSsid !== "" && Network.failedSsid === section.askingFor
+                text: section.failText(Network.failedReason)
+                role: "caption"
+                color: Design.danger
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+        }
+
         Repeater {
             model: Network.wifi.power === "on" ? section.inRange : []
 
@@ -402,6 +458,7 @@ ColumnLayout {
                             // Says why one row joins on a click and another asks
                             // for a passphrase, the way the mini view does.
                             text: Network.isBusy(netEntry.modelData.ssid) ? I18n.tr("Connecting…")
+                                : Network.failedSsid === netEntry.modelData.ssid ? section.failText(Network.failedReason)
                                 : (netEntry.modelData.known ? I18n.tr("Saved")
                                 : (netEntry.secured ? I18n.tr("Password required") : I18n.tr("Open network")))
                             role: "caption"
@@ -427,22 +484,11 @@ ColumnLayout {
                                 return;
                             }
                             if (netEntry.secured && !netEntry.modelData.known) {
-                                section.askingFor = netEntry.modelData.ssid;
+                                section.ask(netEntry.modelData.ssid);
                                 return;
                             }
                             Network.connectWifi(netEntry.modelData.ssid);
                         }
-                    }
-                }
-
-                Field {
-                    visible: netEntry.asking
-                    Layout.fillWidth: true
-                    placeholder: I18n.tr("Passphrase for %1", (netEntry.modelData.ssid || ""))
-                    echoMode: TextInput.Password
-                    onAccepted: psk => {
-                        Network.connectWifi(netEntry.modelData.ssid, psk);
-                        section.askingFor = "";
                     }
                 }
             }

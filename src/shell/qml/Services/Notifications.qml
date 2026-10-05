@@ -160,7 +160,7 @@ Singleton {
             body: notif.body || "",
             icon: root._iconSource(notif),
             urgency: notif.urgency,
-            time: new Date().toLocaleTimeString(Qt.locale(), "hh:mm"),
+            time: new Date().toLocaleTimeString(I18n.locale, "hh:mm"),
             obj: notif
         };
 

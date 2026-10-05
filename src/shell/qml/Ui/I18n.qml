@@ -54,6 +54,11 @@ QtObject {
     // A date in the interface's language, whatever the system's is:
     // I18n.date(d, "dddd, MMMM d, yyyy"). The pattern is a key too, so a
     // language can put the day before the month.
+    // The interface language's locale, for anything that names a day, a
+    // month or AM/PM. Qt.locale() with no argument is the system's, so an
+    // English desktop on a Ukrainian system wrote "дп" after the clock.
+    readonly property var locale: Qt.locale(root.language)
+
     function date(d, pattern) {
         return Qt.locale(root.language).toString(d, root.tr(pattern));
     }

@@ -156,6 +156,12 @@ void TerminalItem::updateFontMetrics() {
     m_font = QFont(m_fontFamily, m_fontSize);
     m_font.setStyleHint(QFont::Monospace);
     m_font.setFixedPitch(true);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+    // Text is drawn a run at a time (paint); JetBrains Mono would otherwise
+    // join -> and == into ligatures there, which a cell grid has no room for.
+    m_font.setFeature(QFont::Tag("calt"), 0);
+    m_font.setFeature(QFont::Tag("liga"), 0);
+#endif
 
     QFontMetricsF fm(m_font);
     m_cellWidth = fm.horizontalAdvance('M');
@@ -460,8 +466,42 @@ void TerminalItem::paint(QPainter *painter) {
     // Background fill
     painter->fillRect(boundingRect(), m_background);
 
+    // Plain ASCII is drawn a run at a time: one drawText per cell was the
+    // whole cost of a frame — about 20 ms for a 211x52 screen here, several
+    // times that on a laptop — and a resize repaints everything. sway waits
+    // for that frame before it lays out the windows around this one, so
+    // opening a terminal beside it stalled them all. The font is monospace,
+    // so a run lands on the same grid its cells would have.
+    QString run;
+    qreal runX = 0, runY = 0;
+    QColor runFg;
+    int runStyle = 0, runEnd = -1;
+    const auto styledFont = [this](int style) {
+        QFont f = m_font;
+        if (style & 1) f.setBold(true);
+        if (style & 2) f.setItalic(true);
+        // libvterm reports the underline *style* — single, double, curly —
+        // as a small integer, not a flag. Anything non-zero is a line under
+        // the cell; Qt draws one kind, so that is what all of them get.
+        if (style & 4) f.setUnderline(true);
+        if (style & 8) f.setStrikeOut(true);
+        return f;
+    };
+    const auto drawRun = [&](const QString &text, qreal x, qreal y, const QColor &fg, int style) {
+        if (style) painter->setFont(styledFont(style));
+        painter->setPen(fg);
+        painter->drawText(QPointF(x, y + m_fontAscent), text);
+        if (style) painter->setFont(m_font);
+    };
+    const auto flush = [&]() {
+        if (!run.isEmpty()) drawRun(run, runX, runY, runFg, runStyle);
+        run.clear();
+        runEnd = -1;
+    };
+
     // Draw cells
     for (int row = 0; row < m_rows; ++row) {
+        flush();
         int col = 0;
         while (col < m_cols) {
             VTermPos pos = { row, col };
@@ -538,38 +578,32 @@ void TerminalItem::paint(QPainter *painter) {
             }
 
             // Cell character
-            if (cell.chars[0] != 0 && cell.chars[0] != ' ') {
+            const uint32_t ch = cell.chars[0];
+            const int style = (cell.attrs.bold ? 1 : 0) | (cell.attrs.italic ? 2 : 0)
+                            | (cell.attrs.underline ? 4 : 0) | (cell.attrs.strike ? 8 : 0);
+            const bool ascii = widthInCells == 1 && ch >= ' ' && ch < 0x7f && cell.chars[1] == 0;
+            if (ascii && runEnd == col && fg == runFg && style == runStyle) {
+                run += QChar(ch);
+                runEnd = col + 1;
+            } else if (ascii && ch != ' ') {
+                flush();
+                run = QChar(ch);
+                runX = x; runY = y; runFg = fg; runStyle = style;
+                runEnd = col + 1;
+            } else if (ch != 0 && ch != ' ') {
+                flush();
                 QString text;
                 for (int i = 0; i < VTERM_MAX_CHARS_PER_CELL && cell.chars[i]; ++i) {
                     char32_t cp = static_cast<char32_t>(cell.chars[i]);
                     text += QString::fromUcs4(&cp, 1);
                 }
-
-                const bool styled = cell.attrs.bold || cell.attrs.underline
-                                 || cell.attrs.italic || cell.attrs.strike;
-                if (styled) {
-                    QFont f = m_font;
-                    if (cell.attrs.bold)      f.setBold(true);
-                    if (cell.attrs.italic)    f.setItalic(true);
-                    // libvterm reports the underline *style* — single, double,
-                    // curly — as a small integer, not a flag. Anything non-zero
-                    // is a line under the cell; Qt draws one kind, so that is
-                    // what all of them get.
-                    if (cell.attrs.underline) f.setUnderline(true);
-                    if (cell.attrs.strike)    f.setStrikeOut(true);
-                    painter->setFont(f);
-                }
-
-                painter->setPen(fg);
-                painter->drawText(QPointF(x, y + m_fontAscent), text);
-
-                if (styled)
-                    painter->setFont(m_font);
+                drawRun(text, x, y, fg, style);
             }
 
             col += widthInCells;
         }
     }
+    flush();
 
     // Cursor. Not while scrolled back: it belongs to the live screen, and was
     // drawn at the same cell over whatever history was on show.
@@ -1059,6 +1093,17 @@ int TerminalItem::cbSbPopline(int cols, VTermScreenCell *cells, void *user) {
     term->m_scrollback.pop_back();
     const int count = std::min(cols, static_cast<int>(line.size()));
     std::copy_n(line.begin(), count, cells);
+    // libvterm walks the row it gets back by each cell's width, all `cols`
+    // of them. A line that scrolled off while the window was narrower left
+    // the rest as it found it — zeroed when it last resized — and a width
+    // of 0 never moves on: a window beside the terminal closing, so it grew
+    // taller, hung it at 100% CPU for good. Blank cells, then.
+    VTermScreenCell blank{};
+    blank.width = 1;
+    vterm_state_get_default_colors(vterm_obtain_state(term->m_vt), &blank.fg, &blank.bg);
+    std::fill(cells + count, cells + cols, blank);
+    for (int i = 0; i < count; ++i)
+        if (cells[i].width < 1) cells[i].width = 1;
     return 1;
 }
 

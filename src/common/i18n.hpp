@@ -9,11 +9,13 @@
 //   tr("Capture")              // "Зняти" in Ukrainian
 //   tr("%1 ms", "300")         // %1… filled in
 
+#include <clocale>
 #include <cstdlib>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "runtime.hpp"
 #include "settings_manager.hpp"
@@ -23,8 +25,7 @@ namespace b1air {
 class I18n {
 public:
     I18n() {
-        lang_ = SettingsManager::get_json_string("uiLanguage");
-        if (lang_.empty() || lang_ == "system") lang_ = system_language();
+        lang_ = current_language();
         if (lang_.empty() || lang_ == "en") return;
         const std::string main = qml_entry("Main.qml");
         if (main.empty()) return;
@@ -38,6 +39,34 @@ public:
     }
 
     const std::string& language() const { return lang_; }
+
+    // Day and month names (strftime's %a %A %b) in the interface language.
+    // Nothing set a locale at all, so they came out in C's English under a
+    // Ukrainian desktop — "Mon", "Oct" in the weather forecast beside the
+    // translated text. The system's own locale, when it is the same
+    // language, is preferred: it is the one most likely to be generated.
+    static std::string current_language() {
+        std::string l = SettingsManager::get_json_string("uiLanguage");
+        if (l.empty() || l == "system" || l == "auto") l = system_language();
+        return l;
+    }
+
+    static void use_time_locale() {
+        std::string want = current_language();
+        if (want.empty() || want == "c" || want == "posix") want = "en";
+        std::string up = want;
+        for (auto& c : up) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        std::vector<std::string> tries;
+        for (const char* var : {"LC_ALL", "LC_TIME", "LANG"}) {
+            const char* v = std::getenv(var);
+            if (v && std::string(v).rfind(want, 0) == 0) tries.emplace_back(v);
+        }
+        if (want == "en") tries.insert(tries.end(), {"C.UTF-8", "en_US.UTF-8", "C"});
+        else if (want == "uk") tries.insert(tries.end(), {"uk_UA.UTF-8", "uk_UA.utf8"});
+        else tries.insert(tries.end(), {want + "_" + up + ".UTF-8", want + "_" + up + ".utf8"});
+        for (const auto& l : tries)
+            if (std::setlocale(LC_TIME, l.c_str())) return;
+    }
 
     std::string operator()(const std::string& english, const std::string& a1 = {}, const std::string& a2 = {}) const {
         const auto it = dict_.find(english);

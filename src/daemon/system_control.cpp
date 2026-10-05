@@ -457,6 +457,11 @@ static bool logind_call(const char* method, const char* signature = "", ...) {
                                 "org.freedesktop.login1.Manager", method, &error, &reply,
                                 signature, ap);
     va_end(ap);
+    // Said where it can be read (sway's log, the journal): a refused Suspend
+    // was silent, and a closed lid that did nothing left nothing to go on.
+    if (r < 0)
+        std::cerr << "[b1air-daemon] logind " << method << " refused: "
+                  << (error.message ? error.message : strerror(-r)) << "\n";
     sd_bus_error_free(&error);
     sd_bus_message_unref(reply);
     sd_bus_unref(bus);
@@ -675,7 +680,10 @@ bool SystemControl::suspend_system() {
     // their password first, defeating the entire point of auto-suspend.
     // Settings → Power, "Lock before sleep": on unless switched off.
     if (SettingsManager::get_json_bool("lockOnSleep", true)) lock_session_async();
-    return logind_call("Suspend", "b", true);
+    if (logind_call("Suspend", "b", true)) return true;
+    // systemctl asks polkit through the agent, which the bus call above
+    // cannot when the session's own permission is missing.
+    return run_argv_status({"systemctl", "suspend"});
 }
 
 bool SystemControl::on_ac_power() {

@@ -15,6 +15,8 @@ set -euo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/distro.sh
 source "$REPO_DIR/lib/distro.sh"
+# shellcheck source=lib/fingerprint.sh
+source "$REPO_DIR/lib/fingerprint.sh"
 BACKUP_ROOT="${HOME}/.dotfiles-backups"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
@@ -367,6 +369,97 @@ reload_environment() {
     ok "Environment reloaded successfully."
 }
 
+# ── 4. Compositor & Suite ─────────────────────────────────────────────────────
+#
+# Only what changed. The suite build was already incremental, but every
+# update printed a "Built target" line for each of its hundred-odd targets and
+# copied every binary back over with sudo, so an update that touched one QML
+# file read like a full rebuild — and swayfx, the one part that really is
+# slow, was never rebuilt at all, so a changed patch reached nobody.
+
+SUITE_STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/b1air/suite-installed"
+SUITE_LOG="${XDG_CACHE_HOME:-$HOME/.cache}/b1air/suite-build.log"
+
+# Our swayfx, when this machine runs it: the script keeps a stamp of the
+# versions and patches it built, and rebuilds only when those differ.
+update_compositor() {
+    local script="$REPO_DIR/tools/build-swayfx.sh"
+    [[ -x "$script" && -x /usr/local/bin/swayfx ]] || return 0
+    if "$script" --check; then
+        ok "swayfx is up to date."
+        return 0
+    fi
+    log "swayfx patches or versions changed; rebuilding it (takes a few minutes)..."
+    "$script" >&2 || warn "swayfx rebuild failed; keeping the installed one. See ~/.cache/b1air/swayfx-build.log"
+}
+
+# Nothing under src/ different from what was last installed: no build, no
+# install. Local edits in src/ always count as a change.
+suite_unchanged() {
+    [[ -f "$SUITE_STAMP" && -d "$REPO_DIR/.git" ]] || return 1
+    command -v b1air-daemon >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/b1air-daemon" ]] || return 1
+    local last
+    last="$(cat "$SUITE_STAMP")"
+    git -C "$REPO_DIR" cat-file -e "${last}^{commit}" 2>/dev/null || return 1
+    git -C "$REPO_DIR" diff --quiet "$last" HEAD -- src || return 1
+    [[ -z "$(git -C "$REPO_DIR" status --porcelain -- src)" ]]
+}
+
+update_suite() {
+    if suite_unchanged; then
+        ok "b1air suite: nothing in src/ changed since it was installed."
+        return 0
+    fi
+    if [[ -f "$SUITE_STAMP" ]] && git -C "$REPO_DIR" cat-file -e "$(cat "$SUITE_STAMP")^{commit}" 2>/dev/null; then
+        log "b1air suite: $(git -C "$REPO_DIR" diff --name-only "$(cat "$SUITE_STAMP")" HEAD -- src | wc -l) changed file(s) in src/; rebuilding what depends on them..."
+    else
+        log "Building b1air suite..."
+    fi
+    mkdir -p "$(dirname "$SUITE_LOG")"
+    # What was compiled, not the hundred "Built target" lines around it.
+    if ! make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" > "$SUITE_LOG" 2>&1; then
+        tail -n 30 "$SUITE_LOG" >&2
+        err "Suite rebuild failed. Full log: $SUITE_LOG"
+        exit 1
+    fi
+    local rebuilt
+    rebuilt="$(grep -cE 'Building (CXX|C) object' "$SUITE_LOG" || true)"
+    grep -E 'Building (CXX|C) object|Linking' "$SUITE_LOG" | sed -E 's/^\[ *[0-9]+%\] /        /' | head -n 40 || true
+    ok "Compiled ${rebuilt} file(s)."
+
+    # Install where install.sh put it. A bare `make install` lands in
+    # ~/.local/bin, which is ahead of /usr/local/bin on PATH — so after an
+    # update the session ran a second, per-user copy of the suite while
+    # the system-wide one install.sh had put down went stale.
+    if [[ -x /usr/local/bin/b1air-daemon ]]; then
+        sudo make -C "$REPO_DIR/src" install \
+            PREFIX=/usr/local/bin DATADIR=/usr/share \
+            QMLDIR=/usr/share/b1air-shell/qml COMPATDIR=/usr/share/b1air-shell/qs-compat CONFDIR="$HOME/.config" >/dev/null \
+            || { err "Suite install failed."; exit 1; }
+        sudo chown -R "$USER" "$HOME/.config/environment.d" 2>/dev/null || true
+    else
+        make -C "$REPO_DIR/src" install >/dev/null || { err "Suite install failed."; exit 1; }
+    fi
+    if [[ -d "$REPO_DIR/.git" ]]; then
+        mkdir -p "$(dirname "$SUITE_STAMP")"
+        git -C "$REPO_DIR" rev-parse HEAD > "$SUITE_STAMP"
+    fi
+    ok "b1air suite installed."
+}
+
+# The first-run setup (Settings → setup) shows each account the steps it has
+# not seen. A desktop installed before the setup existed has been set up by
+# hand already, so the steps that came with it count as seen; what an update
+# adds later — the fingerprint step, for one — is still shown at next login.
+SETUP_BASELINE="keyboard network theme wallpaper user"
+mark_setup_baseline() {
+    [[ "$DRY_RUN" -eq 1 ]] && return 0
+    local f="${XDG_CONFIG_HOME:-$HOME/.config}/b1air/setup-done"
+    [[ -e "$f" ]] && return 0
+    mkdir -p "$(dirname "$f")"
+    printf '%s\n' $SETUP_BASELINE > "$f"
+}
+
 main() {
     parse_args "$@"
 
@@ -375,25 +468,18 @@ main() {
     printf "\n${BOLD}${CYAN}=== DotsFiles Smart Environment Updater ===${RESET}\n\n"
     pull_upstream
     check_packages
+    if [[ "$CONFIGS_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
+        local aur=""
+        [[ "$(detect_distro)" == arch ]] && aur="$(command -v yay || command -v paru || true)"
+        fingerprint_setup "$(detect_distro)" "${aur##*/}"
+    fi
     # ponytail: configs without binaries = stale suite after a source change
     if [[ "$CONFIGS_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
-        log "Rebuilding b1air suite..."
-        make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" || { err "Suite rebuild failed."; exit 1; }
-        # Install where install.sh put it. A bare `make install` lands in
-        # ~/.local/bin, which is ahead of /usr/local/bin on PATH — so after an
-        # update the session ran a second, per-user copy of the suite while
-        # the system-wide one install.sh had put down went stale.
-        if [[ -x /usr/local/bin/b1air-daemon ]]; then
-            sudo make -C "$REPO_DIR/src" install \
-                PREFIX=/usr/local/bin DATADIR=/usr/share \
-                QMLDIR=/usr/share/b1air-shell/qml COMPATDIR=/usr/share/b1air-shell/qs-compat CONFDIR="$HOME/.config" >/dev/null \
-                || { err "Suite install failed."; exit 1; }
-            sudo chown -R "$USER" "$HOME/.config/environment.d" 2>/dev/null || true
-        else
-            make -C "$REPO_DIR/src" install || { err "Suite install failed."; exit 1; }
-        fi
+        update_compositor
+        update_suite
     fi
     sync_configs
+    mark_setup_baseline
     reload_environment
     printf "\n${GREEN}${BOLD}✓ Update completed successfully!${RESET}\n\n"
 }

@@ -78,6 +78,8 @@ Window {
             id: settings
             anchors.fill: parent
             framed: false
+            standalone: true
+            onCloseRequested: window.close()
             page: window.initialPage !== "" ? window.initialPage : "monitors"
         }
     }

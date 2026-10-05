@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import Quickshell
 import "../Ui"
 import "../Services"
 import "components" as Sections
@@ -10,6 +11,18 @@ Item {
 
     property bool framed: false
     property string page: "monitors"
+    // Set by the standalone window (SettingsWindow.qml); inside the shell the
+    // panel is closed through b1air-shell instead.
+    property bool standalone: false
+    signal closeRequested()
+
+    // "setup" (or "setup.<step>.<step>…") is the first-run wizard, in place
+    // of the rail and the page.
+    readonly property bool setupMode: app.page === "setup" || app.page.indexOf("setup.") === 0
+    function close() {
+        if (app.standalone) app.closeRequested();
+        else Quickshell.execDetached(["b1air-shell", "close"]);
+    }
     property string searchQuery: ""
 
     Component.onCompleted: if (!app.page) app.page = "monitors"
@@ -122,7 +135,20 @@ Item {
     // page title (the window said "Settings" and nothing said which page),
     // and every card and button stretched across the whole window, so a page
     // with three switches was mostly empty grey.
+    Loader {
+        anchors.fill: parent
+        active: app.setupMode
+        sourceComponent: Component {
+            Sections.SetupWizard {
+                page: app.page
+                onFinished: app.close()
+                onRestarting: if (app.standalone) app.closeRequested()
+            }
+        }
+    }
+
     RowLayout {
+        visible: !app.setupMode
         anchors.fill: parent
         anchors.margins: Design.border
         spacing: 0
