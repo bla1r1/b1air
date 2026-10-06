@@ -777,7 +777,7 @@ PanelWindow {
                     if (mouse.button === Qt.MiddleButton) {
                         topBar.requestCommand("toggle:focustime:", true);
                     } else if (mouse.button === Qt.RightButton) {
-                        topBar.requestCommand("toggle:pollkit:", true);
+                        topBar.requestCommand("toggle:updater:", true);
                     } else {
                         topBar.requestCommand("toggle:calendar:", true);
                     }

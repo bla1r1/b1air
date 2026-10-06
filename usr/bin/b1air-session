@@ -76,10 +76,26 @@ if [ -n "$WLR_RENDERER_ALLOW_SOFTWARE" ] || lspci 2>/dev/null | grep -iE 'qemu|v
     fi
 fi
 
+# The account's language and formats (Settings → Language & Region), in
+# systemd's own file for them: LANG, LANGUAGE and the LC_* it sets. Arch's
+# /etc/profile reads it for login shells, but nothing guaranteed that this
+# session went through one — Debian and Fedora's display managers do not.
+LOCALE_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/locale.conf"
+if [ -r "$LOCALE_CONF" ]; then
+    while IFS='=' read -r key value; do
+        case "$key" in
+            LANG|LANGUAGE|LC_CTYPE|LC_NUMERIC|LC_TIME|LC_COLLATE|LC_MONETARY|LC_MESSAGES|LC_PAPER|LC_NAME|LC_ADDRESS|LC_TELEPHONE|LC_MEASUREMENT)
+                value="${value%\"}"; value="${value#\"}"
+                [ -n "$value" ] && export "$key=$value" ;;
+        esac
+    done < "$LOCALE_CONF"
+fi
+
 # Import environment to systemd user instance & D-Bus
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
     dbus-update-activation-environment --systemd \
-        DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR PATH HOME USER LANG \
+        DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR PATH HOME USER LANG LANGUAGE \
+        LC_NUMERIC LC_TIME LC_MONETARY LC_PAPER LC_MEASUREMENT \
         QT_QPA_PLATFORMTHEME XCURSOR_THEME XCURSOR_SIZE \
         WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP \
         XDG_SESSION_TYPE QT_QPA_PLATFORM QT_QUICK_BACKEND QSG_RHI_BACKEND \

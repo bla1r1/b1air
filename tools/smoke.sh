@@ -53,7 +53,14 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 QML_DIRS=("$REPO/src/shell/qml" "$REPO/src/apps")
 
-QMLLINT="$(command -v qmllint || echo /usr/lib/qt6/bin/qmllint)"
+# Qt 6's qmllint first. /usr/bin/qmllint can be Qt 5's (it says "qmllint
+# 1.0"), which reads Qt 6 QML and reports nothing — an unbalanced brace in
+# SettingsApp.qml passed this check with it while the window would not load.
+QMLLINT=""
+for c in /usr/lib/qt6/bin/qmllint /usr/lib64/qt6/bin/qmllint "$(command -v qmllint6 2>/dev/null)" "$(command -v qmllint 2>/dev/null)"; do
+    [[ -n "$c" && -x "$c" ]] || continue
+    "$c" --version 2>/dev/null | grep -q ' 6\.' && { QMLLINT="$c"; break; }
+done
 
 pass_count=0
 fail_count=0

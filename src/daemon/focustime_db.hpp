@@ -29,6 +29,8 @@ public:
     void close();
 
     bool log_interval(int64_t start_ts, int64_t end_ts, const std::string& app_class, const std::string& title, bool is_locked);
+    /** Every recorded interval gone (Settings → Privacy). */
+    bool forget_all();
     DayStats get_stats_for_date(const std::string& date_str);
     std::string get_stats_json(const std::string& date_str);
 

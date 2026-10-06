@@ -32,7 +32,7 @@ Key components:
 * **First-run setup**: at the first login, Settings walks through language and keyboard, Wi-Fi, theme, wallpaper, the account and its fingerprint. After an update it shows only the steps that are new, and a step only when the machine has the hardware for it (no reader, no fingerprint step).
 * **Own small tools** in place of the usual helpers, each with its tests: `b1air-lock` (the lock screen, instead of swaylock), idle handling inside the daemon (instead of swayidle), `b1air-clip` (instead of wl-clipboard), `b1air-gamma` (night light with a schedule, instead of wlsunset), `b1air-bg` (wallpaper, instead of swaybg), `b1air-shot` (the Print overlay: region, recording, QR — instead of a QML one started per press).
 * **Lock screen**: `b1air-lock` by default — up in milliseconds, before the machine sleeps: each screen's wallpaper blurred, clock, account picture and name, one password field for every screen, keyboard layout, battery, weather, and a reboot / sleep / shut down menu. It is the only lock screen — no QML; one that dies while locked is replaced by a new one, the session staying locked.
-* **Fingerprint** (fprintd): the installer finds the reader by its USB id and installs the driver libfprint lacks — python-validity for the Validity/Synaptics readers of many ThinkPads (`06cb:009a`), the Goodix builds for others (Arch; `lib/fingerprint.sh`); updates add it when a reader appears. Enrol and test fingers in Settings → User; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
+* **Fingerprint** (fprintd): the installer finds the reader by its USB id and installs the driver libfprint lacks — python-validity for the Validity/Synaptics readers of many ThinkPads (`06cb:009a`), the Goodix builds for others (Arch; `lib/fingerprint.sh`); updates add it when a reader appears. Enrol and test fingers in Settings → Lock & Login; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
 * **Remote Access**: Built-in headless WayVNC support and unattended screencasting configuration for AnyDesk, RustDesk, and OBS with persistent uinput permissions.
 
 ---
@@ -52,7 +52,7 @@ Four built-in themes, after the two big desktops: **Breeze Dark** (the
 default) and **Breeze Light** from KDE, **Adwaita Dark** and **Adwaita Light**
 from GNOME — chosen for text, dim text and borders that are clearly apart
 rather than a few shades of one tint. A theme can also be made from the
-wallpaper, created, edited and shared as a file (Settings → Themes).
+wallpaper, created, edited and shared as a file (Settings → Appearance).
 
 The wallpapers are sorted into folders — Art, Forest, Mountains, Nature, Sky,
 Water — which Settings → Wallpaper offers as categories; a folder of your own
@@ -66,15 +66,15 @@ clouds (`Sky/clouds-day.jpg`).
 ### Spotlight Launcher (`Super + Space`)
 Fuzzy application search, clipboard history, and inline math calculations in a single centered overlay.
 
-### Settings & Control Center (`Super + I` / `Super + C`)
+### Settings & Control Center (`Super + Shift + S` / `Super + C`)
 Graphical desktop configuration:
-* Wallpaper selection by category, per screen or per workspace, and a theme built from the wallpaper (Themes → From the wallpaper).
+* Wallpaper selection by category, per screen or per workspace, and a theme built from the wallpaper (Appearance → From the wallpaper).
 * Audio sink selector and per-stream volume controls.
 * Focus time and screen usage analytics stored in SQLite.
 * Toggles for Night Light, Game Mode (disables blur and pins performance governor), and Remote Desktop.
 
 ### SDDM Greeter
-Takes the desktop's live palette (written by `b1air-daemon` to `/var/cache/wallpaper`), with digital clock, user avatar synchronization, session selection, virtual keyboard support, and fingerprint login when it is turned on in Settings → User.
+Takes the desktop's live palette (written by `b1air-daemon` to `/var/cache/wallpaper`), with digital clock, user avatar synchronization, session selection, virtual keyboard support, and fingerprint login when it is turned on in Settings → Lock & Login.
 
 ---
 
@@ -202,6 +202,10 @@ as its shell:
 | `Super + Space` | Application Grid | Launchpad |
 | `Super + K` / `Super + /` | Application Launcher | Spotlight |
 | `Super + E` | File Manager | b1air-files |
+| `Super + I` | Code Editor | Zed |
+| `Super + X` | Text Editor | b1air-text |
+| `Ctrl + Shift + Esc` | System Monitor | b1air-monitor |
+| `Super + Ctrl + C` | Camera | b1air-camera |
 | `Super + Shift + S` | Settings Hub | Settings App |
 | `Super + C` | Control Center | Quick Toggles |
 | `Super + V` | Clipboard History | Clipboard Manager |
@@ -272,7 +276,7 @@ DotsFiles/
 │   ├── daemon/                # b1air-core library; b1air-daemon, polkit agent, secret service
 │   ├── shell/                 # b1air-shell: Qt6/QML desktop (TopBar, launcher, popups, Settings)
 │   ├── apps/<app>/            # One program each: sources, <App>Window.qml, .desktop, icon
-│   │                          #   camera files git monitor notes settings term text view
+│   │                          #   camera files git monitor settings term text view
 │   ├── common/                # Headers shared by several programs (QML search path)
 │   ├── qmlplugin/             # B1air.Daemon QML module
 │   ├── bg/                    # b1air-bg: the wallpaper, per screen and per workspace

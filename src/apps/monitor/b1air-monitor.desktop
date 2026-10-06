@@ -1,10 +1,20 @@
 [Desktop Entry]
-Name=System Monitor
-Comment=View system load, memory, storage, and manage tasks
 Exec=b1air-monitor
 Icon=b1air-monitor
 Terminal=false
 Type=Application
+Name=System Monitor
+Name[uk]=Системний монітор
+Name[ru]=Системный монитор
+GenericName=System Monitor
+GenericName[uk]=Системний монітор
+GenericName[ru]=Системный монитор
+Comment=Processes, memory and disks; end a stuck program
+Comment[uk]=Процеси, пам’ять і диски; завершення завислої програми
+Comment[ru]=Процессы, память и диски; завершение зависшей программы
+Keywords=task;process;cpu;memory;kill;
+Keywords[uk]=процес;завдання;пам’ять;процесор;
+Keywords[ru]=процесс;задача;память;процессор;
 Categories=System;Monitor;
 StartupNotify=true
 StartupWMClass=quickshell

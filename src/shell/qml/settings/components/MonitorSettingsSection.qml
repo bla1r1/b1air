@@ -547,15 +547,30 @@ ColumnLayout {
     // EXTERNAL BRIGHTNESS
     // The daemon has spoken DDC/CI for a long time (it dims external panels
     // on idle) and Monitors.brightness has listed the panels that answer it;
-    // nothing ever showed them. A laptop's own backlight is on Power & Battery.
+    // nothing ever showed them.
     // =========================================================================
+    // The built-in panel too: it was on Power & Battery, so brightness was
+    // on two pages depending on which screen it was for.
     Card {
         title: I18n.tr("Brightness")
-        subtitle: Monitors.hasBrightness
-            ? I18n.tr("External screens that take brightness over DDC/CI")
-            : I18n.tr("No external screen answered over DDC/CI")
+        subtitle: Power.hasBacklight
+            ? (Monitors.hasBrightness ? I18n.tr("The built-in screen, and external ones over DDC/CI")
+                                      : I18n.tr("The built-in screen; no external one answered over DDC/CI"))
+            : (Monitors.hasBrightness ? I18n.tr("External screens that take brightness over DDC/CI")
+                                      : I18n.tr("No external screen answered over DDC/CI"))
         icon: "\u{f00df}"
         accentColor: Design.yellow
+
+        Slider {
+            visible: Power.hasBacklight
+            Layout.fillWidth: true
+            Layout.preferredHeight: Design.s(Design.size.ctl)
+            value: Power.brightness
+            tone: Design.yellow
+            icon: "\u{f00df}"
+            label: I18n.tr("Built-in screen")
+            onMoved: pct => Power.setBrightness(pct)
+        }
 
         Repeater {
             model: Monitors.brightness
@@ -990,5 +1005,53 @@ ColumnLayout {
             Osd.show("display", I18n.tr("Displays updated"), layout.map(r => r.name).join(", "));
         section.dirty = false;
         section.otherEdits = false;
+    }
+
+    // A virtual screen a tablet shows over VNC. It was on Remote Desktop;
+    // it is a screen, and arranged with the others here.
+    Card {
+        title: I18n.tr("A tablet as a second screen")
+        subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
+        icon: "\u{f004b}"
+        accentColor: Design.mauve
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.md)
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                Label {
+                    // Wrapped: on one line it pushed the buttons past the card's edge.
+                    text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
+                    role: "caption"
+                    dim: true
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            ButtonRow {
+                spacing: Design.s(Design.space.sm)
+
+                ActionButton {
+                    label: I18n.tr("Create Display")
+                    icon: "\u{f0079}"
+                    onActivated: {
+                        Daemon.sidecarCreate(1920, 1080);
+                    }
+                }
+
+                ActionButton {
+                    label: I18n.tr("Remove")
+                    icon: "\u{f00d}"
+                    onActivated: {
+                        Daemon.sidecarRemove();
+                    }
+                }
+            }
+        }
     }
 }

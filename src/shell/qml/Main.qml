@@ -234,7 +234,9 @@ Scope {
         function toggleMusic() { masterWindow.handleIpcCommand("toggle:music:", true) }
         function toggleMonitors() { masterWindow.handleIpcCommand("toggle:monitors:", true) }
         function toggleGuide() { masterWindow.handleIpcCommand("toggle:guide:", true) }
-        function togglePollKit() { masterWindow.handleIpcCommand("toggle:pollkit:", true) }
+        function toggleUpdater() { masterWindow.handleIpcCommand("toggle:updater:", true) }
+        // The updater's old name, for scripts that still call it.
+        function togglePollKit() { masterWindow.handleIpcCommand("toggle:updater:", true) }
         function toggleSettings() { masterWindow.handleIpcCommand("toggle:settings:", true) }
         function toggleCalendar() { masterWindow.handleIpcCommand("toggle:calendar:", true) }
         function toggleClipboard() { masterWindow.handleIpcCommand("toggle:clipboard:", true) }
@@ -699,6 +701,8 @@ Scope {
             switchWidget("hidden", "");
         } else if (cmd === "toggle" || cmd === "open") {
             let targetWidget = parts.length > 1 ? parts[1] : "";
+            // The updater was "pollkit" (beside "polkit", the password dialog).
+            if (targetWidget === "pollkit") targetWidget = "updater";
             let arg = parts.length > 2 ? parts.slice(2).join(":") : "";
 
             // Not a panel: a number shown on every screen for a moment.

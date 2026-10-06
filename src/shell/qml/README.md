@@ -109,5 +109,4 @@ Desktop settings suite (`$mod+shift+s`):
 - **`calendar/CalendarPopup.qml`**: Monthly calendar, agenda, and weather.
 - **`music/MusicPopup.qml`**: Expanded music player with 10-band equalizer.
 - **`focustime/FocusTimePopup.qml`**: Pomodoro productivity timer (`$mod+shift+t`).
-- **`pollkit/UpdaterPopup.qml`**: System & dotfiles package update status.
-- **`stewart/stewart.qml`**: Particle and ambient fluid animation demonstration.
+- **`updater/UpdaterPopup.qml`**: System & dotfiles package update status.

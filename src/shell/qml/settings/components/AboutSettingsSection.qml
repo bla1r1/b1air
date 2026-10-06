@@ -226,35 +226,4 @@ ColumnLayout {
         }
     }
 
-    // ── 4. Dotfiles Maintenance ──────────────────────────────────────────────
-    Card {
-        title: I18n.tr("Dotfiles Maintenance & Actions")
-        subtitle: I18n.tr("Quick actions to manage your configuration and check for updates")
-        icon: "\u{f0493}"
-        accentColor: Design.mauve
-
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
-                icon: "\u{f030c}"
-                label: I18n.tr("Shortcuts Sheet")
-                onActivated: section.navigate("shortcuts")
-            }
-
-            ActionButton {
-                icon: "\u{f0446}"
-                label: I18n.tr("Reload Sway & Quickshell")
-                onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
-            }
-
-            ActionButton {
-                icon: "\u{f0450}"
-                label: I18n.tr("Reset Defaults")
-                destructive: true
-                onActivated: Settings.resetDefaults()
-            }
-        }
-    }
 }

@@ -175,10 +175,11 @@ large-text preset in M13 are kept.
 
 ## M6: Desktop Widgets, Personalization, and Smart UI
 
-- [/] Add desktop Sticky Notes and scratchpad memos with Markdown formatting.
-      **Built:** `b1air-notes`, Markdown with a live preview, tags and an
-      Obsidian vault. **Missing:** notes on the desktop itself, and a key —
-      `Super+Shift+N` is the notification centre.
+- [~] Add desktop Sticky Notes and scratchpad memos with Markdown formatting.
+      **Cut (0.2.2):** `b1air-notes` (Markdown, tags, an Obsidian vault, a
+      Notion sync) was removed; Zed is the editor on `Super+I` instead, and a
+      Markdown file opens in it. Existing notes stay in
+      `~/.local/share/b1air-notes`.
 - [~] Add desktop Glance Layer canvas widgets (`Super+G`) for clocks, weather, and circular hardware dials.
       **Cut:** The Control Center and calendar panels are this, and are now arrangeable in place.
 - [x] Add visual GUI Keyboard Shortcuts editor in Settings for modifying keybindings without text editing.
@@ -324,7 +325,7 @@ everywhere.
       drag and drop, volumes, Open With, details panel, archive extraction.
 - [x] Git (`b1air-git`): changes, history, branches, commit and undo, in
       GitHub Desktop's layout.
-- [x] Text (`b1air-text`), View (`b1air-view`), Notes (`b1air-notes`),
+- [x] Text (`b1air-text`), View (`b1air-view`),
       Monitor (`b1air-monitor`), Camera (`b1air-camera`), Term (`b1air-term`).
 - [x] One look across the suite and Settings: same toolbar, sidebar, status
       bar, button and field; contrast guarded against WCAG ratios whatever

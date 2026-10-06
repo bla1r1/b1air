@@ -1,11 +1,20 @@
 [Desktop Entry]
-Name=Image Viewer
-GenericName=Image & Media Viewer
-Comment=Fast Lightweight Image & Media Viewer
 Exec=b1air-view %U
 Icon=b1air-view
 Terminal=false
 Type=Application
+Name=Image Viewer
+Name[uk]=Перегляд зображень
+Name[ru]=Просмотр изображений
+GenericName=Image Viewer
+GenericName[uk]=Перегляд зображень
+GenericName[ru]=Просмотр изображений
+Comment=Look through pictures and short videos
+Comment[uk]=Перегляд зображень і коротких відео
+Comment[ru]=Просмотр изображений и коротких видео
+Keywords=image;picture;photo;viewer;
+Keywords[uk]=зображення;фото;перегляд;
+Keywords[ru]=изображение;фото;просмотр;
 MimeType=image/png;image/jpeg;image/webp;image/gif;image/bmp;image/svg+xml;
 Categories=Graphics;Viewer;
 StartupWMClass=b1air-view

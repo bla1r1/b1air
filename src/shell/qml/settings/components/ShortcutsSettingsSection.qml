@@ -19,7 +19,7 @@ ColumnLayout {
     // Every row below is taken from .config/sway/conf.d/keybinds.conf. It had
     // drifted badly: this page told you Mod+Shift+Q closed the window (it runs
     // the QR scanner — close is Mod+Q), that Mod+B opened Bluetooth (it opens
-    // the battery popup), that Mod+D was a calendar (it launches Discord), that
+    // the battery popup), that Mod+D was a calendar (it was Discord's key then), that
     // Mod+C was a code editor (it is the Control Center) and that Mod+Return
     // opened the terminal (nothing is bound to it — the terminal is Mod+T).
     // Ten of twenty-five rows named the wrong action.
@@ -41,8 +41,10 @@ ColumnLayout {
                 { key: "Mod + E", label: I18n.tr("Files"), desc: I18n.tr("The file manager chosen in Default Apps (b1air-files out of the box)") },
                 { key: "Mod + F", label: I18n.tr("Browser"), desc: I18n.tr("The browser chosen in Default Apps") },
                 { key: "Mod + G", label: I18n.tr("Git"), desc: I18n.tr("Open the Git client (b1air-git)") },
-                { key: "Mod + Ctrl + S", label: I18n.tr("Steam"), desc: I18n.tr("Open the games library") },
-                { key: "Mod + D", label: I18n.tr("Discord"), desc: I18n.tr("Open the chat client") }
+                { key: "Ctrl + Shift + Esc", label: I18n.tr("System Monitor"), desc: I18n.tr("Processes, memory and disks; end a stuck program") },
+                { key: "Mod + I", label: I18n.tr("Code editor"), desc: I18n.tr("Open Zed") },
+                { key: "Mod + X", label: I18n.tr("Text Editor"), desc: I18n.tr("Open the text editor") },
+                { key: "Mod + Ctrl + C", label: I18n.tr("Camera"), desc: I18n.tr("Open the camera") }
             ]
         },
         {

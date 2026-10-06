@@ -11,6 +11,11 @@ import "../../Services"
 
 ColumnLayout {
     id: section
+
+    // "notifications": the Notifications page (per-app filters, quiet
+    // hours); "": Screen Time & Focus (activity, intervals, automation).
+    // They were one page, half of it about something else.
+    property string part: ""
     spacing: Design.s(Design.space.lg)
 
     property int workDuration: Settings.focusWorkDuration || 25
@@ -19,7 +24,6 @@ ColumnLayout {
     property int dailyGoalHours: Settings.dailyScreenTimeGoal || 8
     property bool autoDnd: Settings.focusAutoDnd !== undefined ? Settings.focusAutoDnd : true
     property bool breakReminders: Settings.focusBreakReminders !== undefined ? Settings.focusBreakReminders : true
-    property bool daemonAutoStart: Settings.focusDaemonAutoStart !== undefined ? Settings.focusDaemonAutoStart : true
 
     property var notifRules: Settings.notificationRules || {}
 
@@ -120,6 +124,7 @@ ColumnLayout {
 
     // ── 2. Today's Wellbeing Overview ────────────────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Today's Activity")
         subtitle: I18n.tr("Real-time summary of your computer usage and focus intervals")
         icon: "\u{f051e}"
@@ -209,6 +214,7 @@ ColumnLayout {
 
     // ── 3. Application Notification Filters ──────────────────────────────────
     Card {
+        visible: section.part === "notifications"
         title: I18n.tr("Application Notification Filters")
         subtitle: I18n.tr("Control banner popups and sound alerts for individual apps")
         icon: "\u{f0f3}"
@@ -277,6 +283,7 @@ ColumnLayout {
 
     // ── 4. Pomodoro & Interval Durations ─────────────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Focus & Break Intervals")
         subtitle: I18n.tr("Customize work cycles and rest duration for FocusTime timer")
         icon: "\u{f0520}"
@@ -358,6 +365,7 @@ ColumnLayout {
     }
 
     Card {
+        visible: section.part === "notifications"
         title: I18n.tr("Quiet hours")
         subtitle: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd))
                                            : I18n.tr("Do Not Disturb on a schedule, every day")
@@ -390,8 +398,9 @@ ColumnLayout {
 
     // ── 5. Focus Automation & Distraction Control ────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Focus Automation")
-        subtitle: I18n.tr("Automatic notification suppression and health reminders")
+        subtitle: I18n.tr("Do Not Disturb while focusing, and break reminders. Recording screen time is on Privacy")
         icon: "\u{f009b}"
         accentColor: Design.peach
 
@@ -418,17 +427,6 @@ ColumnLayout {
                     const v = !section.breakReminders;
                     section.breakReminders = v;
                     Settings.set("focusBreakReminders", v);
-                }
-            }
-
-            Toggle {
-                label: I18n.tr("Auto-Start FocusTime Daemon")
-                subtitle: I18n.tr("Launch background activity tracker automatically on login")
-                checked: section.daemonAutoStart
-                onToggled: {
-                    const v = !section.daemonAutoStart;
-                    section.daemonAutoStart = v;
-                    Settings.set("focusDaemonAutoStart", v);
                 }
             }
         }

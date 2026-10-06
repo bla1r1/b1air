@@ -111,6 +111,9 @@ Singleton {
     readonly property alias specialWorkspace: data.specialWorkspace
     readonly property alias workspaceOverview: data.workspaceOverview
     readonly property alias uiLanguage: data.uiLanguage
+    // Dates, numbers and units: a locale name ("de_DE"), or "" to follow
+    // the interface language (Settings → Language & Region).
+    readonly property alias formatsLocale: data.formatsLocale
     readonly property alias magicMouseGestures: data.magicMouseGestures
     readonly property alias notificationsOnMain: data.notificationsOnMain
 
@@ -521,6 +524,7 @@ Singleton {
         specialWorkspace: true,
         workspaceOverview: true,
         uiLanguage: "auto",
+        formatsLocale: "",
         magicMouseGestures: true,
         notificationsOnMain: false,
         themeName: "breeze-dark",
@@ -670,6 +674,7 @@ Singleton {
             property bool specialWorkspace: true
             property bool workspaceOverview: true
             property string uiLanguage: "auto"
+            property string formatsLocale: ""
             property bool magicMouseGestures: true
             property bool notificationsOnMain: false
             property string themeName: "breeze-dark"

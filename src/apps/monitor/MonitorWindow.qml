@@ -773,7 +773,7 @@ Window {
             : I18n.tr("Process %1 is asked to quit (SIGTERM).", pid)
         acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
-        Component.onCompleted: standardButton(Dialog.Ok).text = I18n.tr("End Process")
+        buttonText: ({ [Dialog.Ok]: I18n.tr("End Process") })
         onAccepted: MonitorBackend.killProcess(pid, force)
     }
 

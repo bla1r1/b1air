@@ -1,10 +1,19 @@
 [Desktop Entry]
-Name=Git
-GenericName=Git Repository & Diff Tool
-Comment=Visual Git Status, Diff & Commit Tool
 Exec=b1air-git
 Icon=b1air-git
 Terminal=false
 Type=Application
+Name=Git
+Name[uk]=Git
+Name[ru]=Git
+GenericName=Git Client
+GenericName[uk]=Клієнт Git
+GenericName[ru]=Клиент Git
+Comment=Changes, history and commits of a Git repository
+Comment[uk]=Зміни, історія й коміти репозиторію Git
+Comment[ru]=Изменения, история и коммиты репозитория Git
+Keywords=git;diff;commit;repository;github;
+Keywords[uk]=git;зміни;коміт;репозиторій;
+Keywords[ru]=git;изменения;коммит;репозиторий;
 Categories=Development;RevisionControl;
 StartupWMClass=b1air-git

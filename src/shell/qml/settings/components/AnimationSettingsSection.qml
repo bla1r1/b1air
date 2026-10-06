@@ -133,61 +133,6 @@ ColumnLayout {
         }
     }
 
-    Card {
-        title: I18n.tr("Unfocused windows")
-        subtitle: Settings.inactiveOpacityPercent >= 100
-            ? I18n.tr("Drawn like the focused one")
-            : I18n.tr("Drawn at %1% opacity, so the focused one stands out", Settings.inactiveOpacityPercent)
-        icon: "\u{f0208}"
-        accentColor: Design.blue
-
-        Toggle {
-            label: I18n.tr("Fade unfocused windows")
-            checked: Settings.inactiveOpacityPercent < 100
-            onToggled: Settings.set("inactiveOpacityPercent", Settings.inactiveOpacityPercent < 100 ? 100 : 50)
-        }
-        Slider {
-            Layout.fillWidth: true
-            visible: Settings.inactiveOpacityPercent < 100
-            label: I18n.tr("Opacity")
-            minimum: 20
-            maximum: 95
-            value: Settings.inactiveOpacityPercent
-            tone: Design.blue
-            onMoved: pct => Settings.set("inactiveOpacityPercent", pct)
-        }
-    }
-
-    Card {
-        title: I18n.tr("Special workspace")
-        subtitle: I18n.tr("A workspace of its own, called up over the one in front of you")
-        icon: "\u{f0bc8}"
-        accentColor: Design.peach
-
-        Toggle {
-            label: I18n.tr("Mod+S calls up the special workspace")
-            subtitle: Settings.specialWorkspace
-                ? I18n.tr("Mod+S shows and hides it; Mod+Ctrl+Shift+S sends the focused window there")
-                : I18n.tr("Mod+S shows the scratchpad instead")
-            checked: Settings.specialWorkspace
-            onToggled: Settings.set("specialWorkspace", !Settings.specialWorkspace)
-        }
-    }
-
-    Card {
-        title: I18n.tr("Workspace overview")
-        subtitle: I18n.tr("Every workspace of the screen side by side, live")
-        icon: "\u{f0570}"
-        accentColor: Design.green
-
-        Toggle {
-            label: I18n.tr("Mod+O shows the overview")
-            subtitle: I18n.tr("Click a workspace, or pick one with the arrows and Enter, to go there; Escape leaves. Four fingers up on the touchpad bring it in too")
-            checked: Settings.workspaceOverview
-            onToggled: Settings.set("workspaceOverview", !Settings.workspaceOverview)
-        }
-    }
-
     Label {
         Layout.fillWidth: true
         visible: !Sway.swayfx

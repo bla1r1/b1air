@@ -15,9 +15,10 @@ import "../../Services"
 ColumnLayout {
     id: section
 
-    // First-run setup (SetupWizard) shows a part of the page: "account"
-    // (name, picture, shell) or "fingerprint" (its own step, there only when
-    // a reader is). "" is the whole page, as Settings shows it.
+    // Which part of the section to show. "" or "account": the User page —
+    // name, picture, shell. "lock": the Lock & Login page — the fingerprint
+    // and the login screen. "fingerprint": that card alone (the first-run
+    // setup's step, there only when a reader is).
     property string part: ""
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
@@ -94,7 +95,7 @@ ColumnLayout {
     // login. The UID and the home directory that were the subtitle here are
     // nothing anyone changes from this page.
     Card {
-        visible: section.part !== "fingerprint"
+        visible: section.part === "" || section.part === "account"
         RowLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.lg)
@@ -172,7 +173,9 @@ ColumnLayout {
     }
 
     Card {
-        visible: section.part !== "account"
+        // No reader that fprintd can drive: no card, rather than one saying
+        // what is missing on a machine that has nothing to put a finger on.
+        visible: (section.part === "lock" || section.part === "fingerprint") && section.fp.available
         title: I18n.tr("Fingerprint")
         subtitle: section.fp.available ? section.fp.device : I18n.tr("Open the lock screen with a touch")
         icon: "\u{f0237}"
@@ -187,14 +190,19 @@ ColumnLayout {
                                      : I18n.tr("Install fprintd (and its PAM module) to use a fingerprint reader.")
         }
 
-        // The fingers already saved, each with a way to remove it.
+        // The prints saved, numbered. fprintd files each under a finger's
+        // name, and the page used to ask which finger — ten pills from
+        // "Left thumb" to "Right little finger" — for what is, to whoever
+        // uses it, just "another print". The finger is picked here, the
+        // next free one, and the number is all that shows.
         Repeater {
-            model: section.fp.available ? (section.fp.enrolled || []) : []
+            model: section.fp.available ? section.fpSaved : []
             RowLayout {
                 required property var modelData
+                required property int index
                 Layout.fillWidth: true
                 Icon { text: "\u{f0237}"; color: Design.teal }
-                Label { text: section.fingerNames[modelData] || modelData; Layout.fillWidth: true }
+                Label { text: I18n.tr("Fingerprint %1", index + 1); Layout.fillWidth: true }
                 ActionButton {
                     icon: "\u{f0a7a}"
                     label: I18n.tr("Remove")
@@ -209,26 +217,10 @@ ColumnLayout {
         }
 
         Label {
-            visible: section.fp.available && !section.fpEnrolling
-            text: (section.fp.enrolled || []).length === 0 ? I18n.tr("No finger saved yet. Pick one to add:")
-                                                           : I18n.tr("Add another finger:")
+            visible: section.fp.available && !section.fpEnrolling && section.fpSaved.length === 0
+            text: I18n.tr("No fingerprint saved yet.")
             role: "caption"
             dim: true
-        }
-
-        Flow {
-            visible: section.fp.available && !section.fpEnrolling
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: section.fingerOrder.filter(f => (section.fp.enrolled || []).indexOf(f) < 0)
-                Pill {
-                    required property var modelData
-                    label: section.fingerNames[modelData]
-                    active: section.fpFinger === modelData
-                    onClicked: section.fpFinger = modelData
-                }
-            }
         }
 
         RowLayout {
@@ -238,7 +230,7 @@ ColumnLayout {
             ActionButton {
                 visible: !section.fpEnrolling && section.fpFinger !== ""
                 icon: "\u{f0415}"
-                label: I18n.tr("Add %1", section.fingerNames[section.fpFinger] || "")
+                label: I18n.tr("Add a fingerprint")
                 onActivated: {
                     section.fpDone = 0;
                     section.fpMessage = section.fp.scanType === "swipe" ? I18n.tr("Swipe your finger across the reader")
@@ -323,7 +315,7 @@ ColumnLayout {
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
     Card {
-        visible: section.part !== "fingerprint"
+        visible: section.part === "" || section.part === "account"
         title: I18n.tr("Account Details & Shell")
         subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
@@ -446,7 +438,7 @@ ColumnLayout {
     }
 
     Card {
-        visible: section.part === ""
+        visible: section.part === "lock"
         title: I18n.tr("Session & Login Screen")
         subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"
@@ -479,16 +471,13 @@ ColumnLayout {
     property bool fpMessageBad: false
     property string fpTest: ""          // "", "listening", "match", "no-match"
 
-    readonly property var fingerNames: ({
-        "right-thumb": I18n.tr("Right thumb"), "right-index-finger": I18n.tr("Right index finger"),
-        "right-middle-finger": I18n.tr("Right middle finger"), "right-ring-finger": I18n.tr("Right ring finger"),
-        "right-little-finger": I18n.tr("Right little finger"), "left-thumb": I18n.tr("Left thumb"),
-        "left-index-finger": I18n.tr("Left index finger"), "left-middle-finger": I18n.tr("Left middle finger"),
-        "left-ring-finger": I18n.tr("Left ring finger"), "left-little-finger": I18n.tr("Left little finger")
-    })
     readonly property var fingerOrder: ["right-index-finger", "right-thumb", "right-middle-finger", "right-ring-finger",
         "right-little-finger", "left-index-finger", "left-thumb", "left-middle-finger", "left-ring-finger",
         "left-little-finger"]
+
+    // The saved ones in a fixed order, so "Fingerprint 2" stays the same
+    // print after another is added or removed before it.
+    readonly property var fpSaved: section.fingerOrder.filter(f => (section.fp.enrolled || []).indexOf(f) >= 0)
 
     function fpRefresh() { fpStatus.running = false; fpStatus.running = true; }
 

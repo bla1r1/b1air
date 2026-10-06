@@ -1,10 +1,20 @@
 [Desktop Entry]
-Name=System Settings
-Comment=Configure displays, audio, network, appearance, and maintenance
 Exec=b1air-settings
 Icon=b1air-settings
 Terminal=false
 Type=Application
+Name=Settings
+Name[uk]=Налаштування
+Name[ru]=Настройки
+GenericName=System Settings
+GenericName[uk]=Налаштування системи
+GenericName[ru]=Настройки системы
+Comment=Displays, sound, network, appearance and the rest of the desktop
+Comment[uk]=Екрани, звук, мережа, вигляд та решта стільниці
+Comment[ru]=Экраны, звук, сеть, оформление и остальной рабочий стол
+Keywords=settings;preferences;control;
+Keywords[uk]=налаштування;параметри;
+Keywords[ru]=настройки;параметры;
 Categories=Settings;HardwareSettings;DesktopSettings;
 StartupNotify=true
 StartupWMClass=quickshell

@@ -1,12 +1,20 @@
 [Desktop Entry]
 Type=Application
 Name=Camera
+Name[uk]=Камера
+Name[ru]=Камера
 GenericName=Camera
-Comment=Take photos and record video with the built-in camera
+GenericName[uk]=Камера
+GenericName[ru]=Камера
+Comment=Take photos and record video
+Comment[uk]=Фото й відео з камери
+Comment[ru]=Фото и видео с камеры
+Keywords=camera;photo;webcam;video;
+Keywords[uk]=камера;фото;вебкамера;відео;
+Keywords[ru]=камера;фото;вебкамера;видео;
 Exec=b1air-camera
 Icon=b1air-camera
 Terminal=false
-Categories=AudioVideo;Video;Photography;
-Keywords=camera;photo;webcam;video;selfie;
+Categories=AudioVideo;Video;
 StartupNotify=true
 StartupWMClass=b1air-camera
