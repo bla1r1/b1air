@@ -22,15 +22,27 @@ QtObject {
         readonly property int title: 18     // section / page titles
         readonly property int display: 24   // popup headlines, hero numbers
 
-        readonly property string sans: "Fira Sans"
+        // Inter: the open face closest to the one a desktop like this is
+        // usually set in — wide, even, with figures that can be told to
+        // line up (Design.tabular). Fira Sans where Inter is missing:
+        // fontconfig falls back to it (.config/fontconfig/fonts.conf).
+        readonly property string sans: "Inter"
         readonly property string mono: "JetBrainsMono Nerd Font"
         // The "Mono" cut, deliberately: in the plain Nerd Font the icon glyphs
         // are drawn inside a double-width advance with the ink hugging the left
         // of it, so centring the text box leaves every glyph sitting left of
         // centre. NFM gives each icon a single cell, and the box centre is the
         // glyph centre.
-        readonly property string icon: "JetBrainsMono Nerd Font Mono"
+        //
+        // "b1air Symbols" is that font with its icons redrawn in one style
+        // (tools/build-symbols.py, .local/share/fonts): the same codepoints,
+        // so every "\u{f05a9}" in the source still means Wi-Fi. Without it
+        // fontconfig falls back to the Nerd Font (.config/fontconfig).
+        readonly property string icon: "b1air Symbols"
     }
+
+    // OpenType features for figures that line up (Inter has them).
+    readonly property var tabular: ({ "tnum": 1 })
 
     component WeightScale: QtObject {
         readonly property int regular: Font.Normal     // 400
@@ -249,10 +261,27 @@ QtObject {
     // the standalone apps leave it true, where these sit on their own window.
     property bool translucent: true
 
-    readonly property color glassBg: tint(surface, translucent ? 0.88 : 1.0)
-    readonly property color glassCard: translucent ? tint(raised, 0.65) : raised
-    readonly property color glassTile: translucent ? tint(raised, 0.55) : raised
+    // How much of the wallpaper a glass panel lets through. 0.88 was glass in
+    // name only: with the blur off on the shell's layers it read as a flat
+    // dark panel. Behind a real blur (layer_effects in windowrules.conf) 0.7
+    // keeps text readable over a bright sky and still shows what is behind.
+    readonly property bool darkTheme: _lum(_col(text)) > _lum(_col(ground))
+    readonly property color glassBg: tint(surface, translucent ? (darkTheme ? 0.70 : 0.66) : 1.0)
+    // Cards sit on a glass panel, so their own glass adds to it: at 0.5 a
+    // card on a 0.7 panel came out nearly opaque. A lighter film keeps them
+    // distinct by their edge and a shade, as cards on a desktop's panels are.
+    readonly property color glassCard: translucent ? tint(raised, 0.36) : raised
+    readonly property color glassTile: translucent ? tint(raised, 0.32) : raised
     readonly property color glassBorder: tint(text, 0.12)
+    // The lit top edge of a pane of glass: a hairline lighter than the border.
+    readonly property color glassEdge: translucent ? tint("#ffffff", darkTheme ? 0.10 : 0.55) : "transparent"
+    // An app's sidebar: the desktop through it, blurred, as a desktop's own
+    // sidebars are; the rest of the window stays opaque, for reading.
+    // A recess in a glass panel — a search field, an icon well, a day of the
+    // calendar: a lighter pane of the glass. Design.sunken there was a black
+    // hole cut through it.
+    readonly property color well: translucent ? tint(text, 0.07) : sunken
+    readonly property color glassSidebar: translucent ? tint(sunken, darkTheme ? 0.62 : 0.58) : sunken
     // Hover/active variant. ClipboardPopup has referenced this since it was
     // written; undeclared, it evaluated to an invalid colour, so hovering a
     // clipboard card swapped its border for black instead of brightening it.
@@ -500,7 +529,26 @@ QtObject {
     }
 
     // Without a theme file the built-in palette still goes through the guard.
-    Component.onCompleted: if (!root.loadActiveTheme()) root.applyPalette(root.builtinPalette)
+    Component.onCompleted: {
+        if (!root.loadActiveTheme()) root.applyPalette(root.builtinPalette);
+        root.loadGlassSetting();
+    }
+
+    // The apps follow Settings' "Window Blur" too: without a blur behind it a
+    // see-through sidebar shows the wallpaper sharp, which is worse than an
+    // opaque one. The shell binds `translucent` itself (Main.qml); this is
+    // for the apps, read once, like the theme.
+    function loadGlassSetting() {
+        const xhr = new XMLHttpRequest();
+        try {
+            xhr.open("GET", StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/.config/sway/settings.json", false);
+            xhr.send();
+            if (xhr.responseText) {
+                const s = JSON.parse(xhr.responseText);
+                if (s.blurEnabled === false) root.translucent = false;
+            }
+        } catch (e) {}
+    }
 
     /** Back to the palette compiled into this file. */
     function resetPalette() {

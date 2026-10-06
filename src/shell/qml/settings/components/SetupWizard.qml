@@ -127,8 +127,9 @@ Item {
         wizard.markSeen(wizard.steps.map(s => s.id));
         wizard.finished();
     }
+    // A page the news names: Settings goes there, with a way back to the
+    // news (SettingsApp's returnPage). Nothing is marked seen: that is Finish.
     function finishAt(id) {
-        wizard.markSeen(wizard.steps.map(s => s.id));
         wizard.openPage(id);
     }
 
@@ -145,7 +146,15 @@ Item {
             // Not the news: markSeen would mark it, and it comes after.
             Quickshell.execDetached(["sh", "-c",
                 "d=\"${XDG_CONFIG_HOME:-$HOME/.config}/b1air\"; mkdir -p \"$d\"; echo keyboard@" + wizard.versionOf("keyboard") + " >> \"$d/setup-done\""]);
-            Quickshell.execDetached(["sh", "-c", "sleep 2; exec b1air-settings --first-run"]);
+            // Back once the new shell is up: a fixed two seconds came too soon
+            // as often as not — the setup asked a shell still loading and
+            // nothing opened. Waits for a shell process other than this one,
+            // then for it to load; ten seconds at most.
+            Quickshell.execDetached(["sh", "-c",
+                "old=$(pgrep -xo quickshell); i=0; "
+                + "while [ $i -lt 40 ]; do new=$(pgrep -xo quickshell); "
+                + "[ -n \"$new\" ] && [ \"$new\" != \"$old\" ] && break; sleep 0.25; i=$((i+1)); done; "
+                + "sleep 2.5; exec b1air-settings --first-run"]);
             wizard.restarting();
         }
     }

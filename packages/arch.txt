@@ -43,7 +43,7 @@ qt6-multimedia qt6-multimedia-ffmpeg
 
 # Theming & fonts (adw-gtk-theme provides the adw-gtk3-dark the GTK configs name)
 kvantum adw-gtk-theme
-noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-jetbrains-mono-nerd ttf-fira-sans ttf-liberation
+noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-jetbrains-mono-nerd inter-font ttf-fira-sans ttf-liberation
 papirus-icon-theme
 
 # Tools the shell and daemon call out to
@@ -59,3 +59,11 @@ xdg-user-dirs qt5ct qt6ct cups
 
 # Input method
 fcitx5 fcitx5-qt fcitx5-gtk fcitx5-configtool
+
+# Phones & music players in Files: podsync (third_party/podsync) for iPods,
+# libimobiledevice + ifuse for iPhones, MTP through gvfs for Android, adb for
+# an Android's battery and model when USB debugging is on.
+python python-mutagen python-pycryptodome python-pillow python-pyusb
+libimobiledevice usbmuxd ifuse gvfs-mtp ?android-tools
+# iPhone photos are HEIC: the viewer and the thumbnails read them through this.
+kimageformats libheif

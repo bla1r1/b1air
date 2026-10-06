@@ -152,8 +152,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Smart Borders"); weight: Design.weight.semibold }
-                Label { text: I18n.tr("Automatically hide window borders when only one window is open"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Smart Borders") }
             }
 
             Toggle {
@@ -169,8 +168,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Smart Gaps"); weight: Design.weight.semibold }
-                Label { text: I18n.tr("Remove outer gaps when a workspace has only one window"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Smart Gaps") }
             }
 
             Toggle {
@@ -187,7 +185,7 @@ ColumnLayout {
         subtitle: section.hasSwayfx
                   ? I18n.tr("Rounded corners, blur and shadows")
                   : I18n.tr("Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows")
-        icon: "\u{f02db}"
+        icon: "\u{f0068}"
         accentColor: Design.teal
 
         ColumnLayout {
@@ -260,7 +258,7 @@ ColumnLayout {
     Card {
         title: I18n.tr("Special workspace")
         subtitle: I18n.tr("A workspace of its own, called up over the one in front of you")
-        icon: "\u{f0bc8}"
+        icon: "\u{f0328}"
         accentColor: Design.peach
 
         Toggle {

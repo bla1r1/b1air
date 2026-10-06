@@ -1,4 +1,5 @@
 #include "backend.hpp"
+#include "tags.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <algorithm>
@@ -66,9 +67,11 @@ QString FileManagerBackend::currentPath() const {
 
 void FileManagerBackend::setCurrentPath(const QString& path) {
     QDir dir(path);
-    if (!dir.exists()) return;
+    // "tag:Red" lists every file with that tag (tags.hpp), not a folder.
+    const bool tagView = path.startsWith(QLatin1String("tag:"));
+    if (!tagView && !dir.exists()) return;
 
-    QString cleanPath = QDir::cleanPath(dir.canonicalPath());
+    QString cleanPath = tagView ? path : QDir::cleanPath(dir.canonicalPath());
     if (cleanPath.isEmpty()) cleanPath = path;
 
     if (m_currentPath != cleanPath) {
@@ -88,6 +91,16 @@ void FileManagerBackend::setCurrentPath(const QString& path) {
         refresh();
     }
 }
+
+void FileManagerBackend::toggleTag(const QStringList& paths, const QString& tag) {
+    if (!tags::toggle(paths, tag))
+        emit errorOccurred("Could not tag every item — some file systems do not keep tags");
+    refresh();
+}
+
+QStringList FileManagerBackend::tagsOf(const QString& path) const { return tags::read(path); }
+
+QVariantMap FileManagerBackend::tagCounts() const { return tags::counts(); }
 
 bool FileManagerBackend::canGoBack() const {
     return m_historyIndex > 0;
@@ -118,6 +131,7 @@ void FileManagerBackend::historyForward() {
 }
 
 void FileManagerBackend::goUp() {
+    if (inTagView()) { setCurrentPath(QDir::homePath()); return; }
     QDir dir(m_currentPath);
     if (dir.cdUp()) {
         setCurrentPath(dir.absolutePath());
@@ -185,6 +199,10 @@ void FileManagerBackend::setSortAscending(bool asc) {
 
 QVariantList FileManagerBackend::breadcrumbs() const {
     QVariantList crumbs;
+    if (m_currentPath.startsWith(QLatin1String("tag:"))) {
+        crumbs.append(QVariantMap{{"name", m_currentPath.mid(4)}, {"path", m_currentPath}});
+        return crumbs;
+    }
     QString home = QDir::homePath();
 
     if (m_currentPath.startsWith(home)) {
@@ -249,8 +267,13 @@ QVariantList FileManagerBackend::places() const {
     return list;
 }
 
+QString FileManagerBackend::freeSpaceOf(const QString& path) const {
+    QStorageInfo storage(path);
+    return storage.isValid() ? formatSize(storage.bytesAvailable()) : QStringLiteral("0 B");
+}
+
 QString FileManagerBackend::diskFreeSpace() const {
-    QStorageInfo storage(m_currentPath);
+    QStorageInfo storage(inTagView() ? QDir::homePath() : m_currentPath);
     if (storage.isValid()) {
         return formatSize(storage.bytesAvailable());     // the UI adds "free"
     }
@@ -258,7 +281,7 @@ QString FileManagerBackend::diskFreeSpace() const {
 }
 
 QString FileManagerBackend::diskTotalSpace() const {
-    QStorageInfo storage(m_currentPath);
+    QStorageInfo storage(inTagView() ? QDir::homePath() : m_currentPath);
     if (storage.isValid()) {
         return formatSize(storage.bytesTotal());
     }
@@ -449,7 +472,7 @@ bool FileManagerBackend::extractArchive(const QString& path) {
 }
 
 void FileManagerBackend::openTerminal(const QString& path) {
-    QString target = path.isEmpty() ? m_currentPath : path;
+    QString target = path.isEmpty() ? (inTagView() ? QDir::homePath() : m_currentPath) : path;
     QFileInfo fi(target);
     if (!fi.isDir()) {
         target = fi.absolutePath();
@@ -473,7 +496,7 @@ void FileManagerBackend::setWallpaper(const QString& path) {
 }
 
 bool FileManagerBackend::createFolder(const QString& name) {
-    if (name.isEmpty()) return false;
+    if (name.isEmpty() || inTagView()) return false;
     QDir dir(m_currentPath);
     if (dir.mkdir(name)) {
         refresh();
@@ -679,11 +702,14 @@ void FileManagerBackend::paste() {
     QStringList sources;
     for (const QUrl& u : d->urls())
         if (u.isLocalFile()) sources << u.toLocalFile();
+    if (inTagView()) return;
     transfer(sources, m_currentPath, cut);
 }
 
 void FileManagerBackend::transfer(const QStringList& sources, const QString& destDir, bool move) {
-    if (m_busy || sources.isEmpty() || destDir.isEmpty()) return;
+    // A tag's listing is not a folder: "tag:Red" would be taken for a
+    // relative path and a folder of that name made where the app started.
+    if (m_busy || sources.isEmpty() || destDir.isEmpty() || destDir.startsWith(QLatin1String("tag:"))) return;
     for (const QString& s : sources) {
         const QString clean = QDir::cleanPath(s);
         if (destDir == clean || destDir.startsWith(clean + "/")) {
@@ -750,7 +776,7 @@ void FileManagerBackend::transfer(const QStringList& sources, const QString& des
 }
 
 bool FileManagerBackend::createFile(const QString& name) {
-    if (name.isEmpty() || name.contains('/')) return false;
+    if (name.isEmpty() || name.contains('/') || inTagView()) return false;
     const QString path = QDir(m_currentPath).absoluteFilePath(name);
     if (QFileInfo::exists(path)) return false;
     QFile f(path);
@@ -972,7 +998,7 @@ static bool addToArchive(struct archive* a, const QFileInfo& fi, const QString& 
 }
 
 void FileManagerBackend::compressItems(const QStringList& paths, const QString& name, const QString& format) {
-    if (m_busy || paths.isEmpty() || name.isEmpty() || name.contains('/')) return;
+    if (m_busy || paths.isEmpty() || name.isEmpty() || name.contains('/') || inTagView()) return;
     static const QStringList formats{"zip", "tar.gz", "tar.zst", "7z"};
     if (!formats.contains(format)) return;
     const QString target = freeName(QDir(m_currentPath), name + "." + format);
@@ -1038,6 +1064,8 @@ void FileManagerBackend::updateVolumes() {
         v["device"] = QString::fromUtf8(s.device());
         v["free"] = FileListModel::formatSize(s.bytesAvailable());     // the UI adds "free"
         v["percent"] = s.bytesTotal() > 0 ? 1.0 - double(s.bytesAvailable()) / double(s.bytesTotal()) : 0.0;
+        // Shown as a device (DeviceManager), not as a drive.
+        v["ipod"] = QFileInfo(root + "/iPod_Control").isDir();
         list << v;
     }
     if (list != m_volumes) {

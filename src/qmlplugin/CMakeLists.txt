@@ -6,7 +6,9 @@
 # a module meant to be linked into the consuming executable, and the engine
 # that loads this one is quickshell's, which we do not build.
 add_library(b1air-daemon-qml MODULE plugin.cpp b1airdaemon.cpp b1airdaemon.hpp
-    sway_client.cpp sway_client.hpp sys_util.cpp sys_util.hpp)
+    sway_client.cpp sway_client.hpp sys_util.cpp sys_util.hpp
+    ${PROJECT_SOURCE_DIR}/common/thumbs.cpp ${PROJECT_SOURCE_DIR}/common/thumbs.hpp)
+target_include_directories(b1air-daemon-qml PRIVATE ${PROJECT_SOURCE_DIR}/common)
 set_target_properties(b1air-daemon-qml PROPERTIES
     AUTOMOC ON
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qml/B1air/Daemon

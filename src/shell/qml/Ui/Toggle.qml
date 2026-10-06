@@ -29,9 +29,11 @@ RowLayout {
     HoverHandler { cursorShape: row.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor }
     TapHandler { onTapped: row.toggled() }
 
+    // The icon and the subtitle are kept for the callers and not drawn: a
+    // switch is its label, in the settings of a desktop like this one.
     Icon {
         text: row.icon
-        visible: text.length > 0
+        visible: false
         role: "title"
         color: Design.accent
         Layout.preferredWidth: Design.s(24)
@@ -45,14 +47,13 @@ RowLayout {
 
         Label {
             text: row.label
-            weight: Design.weight.semibold
             Layout.fillWidth: true
             elide: Text.ElideRight
         }
 
         Label {
             text: row.subtitle
-            visible: text.length > 0
+            visible: false
             role: "caption"
             dim: true
             Layout.fillWidth: true

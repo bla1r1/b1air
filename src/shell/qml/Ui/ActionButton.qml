@@ -18,6 +18,28 @@ Rectangle {
     property color iconTone: Design.textDim
     property bool destructive: false
     property string confirmLabel: "Sure?"
+    // Only the icon: for a row that cannot fit every label (the Control
+    // Center's Lock / Sleep / Reboot / Off in Ukrainian or Russian, where the
+    // last one was pushed out of the panel). The label is still read out as
+    // the accessible name.
+    property bool iconOnly: false
+    // Narrower padding: the step before iconOnly, for a row whose labels fit
+    // only just.
+    property bool snug: false
+    readonly property real _pad: Design.s(root.snug ? Design.space.sm : Design.space.lg)
+    // The width the button would take with its label, whatever iconOnly says —
+    // for a row to decide whether its labels fit; snugWidth with the narrow
+    // padding.
+    readonly property real fullWidth: _labelWidth + Design.s(Design.space.lg) * 2
+    readonly property real snugWidth: _labelWidth + Design.s(Design.space.sm) * 2
+    readonly property real _labelWidth: fullText.width + (root.icon !== "" ? Design.s(18) + Design.s(Design.space.xs) : 0)
+    TextMetrics {
+        id: fullText
+        text: root.label
+        font.family: Design.font.sans
+        font.pixelSize: Design.s(Design.font.body)
+    }
+    Accessible.name: root.label
 
     signal activated()
 
@@ -33,7 +55,7 @@ Rectangle {
     // text. That is how "Add Installed App…" ended up sliced off by the edge of
     // its card. Now the button asks for at least the room its content needs;
     // fillWidth still lets it grow past that wherever it is used alone.
-    implicitWidth: content.implicitWidth + Design.s(Design.space.lg) * 2
+    implicitWidth: content.implicitWidth + root._pad * 2
     Layout.minimumWidth: root.implicitWidth
 
     radius: height / 2
@@ -71,14 +93,15 @@ Rectangle {
         Icon {
             id: glyph
             visible: text !== ""
-            text: root._armed ? "\u{f0e60}" : root.icon   // alert glyph while armed
+            text: root._armed ? "\u{f0026}" : root.icon   // alert glyph while armed
             role: "body"
             color: root._armed ? root.tone : root.iconTone
         }
 
         Label {
+            visible: !root.iconOnly
             // A squeezed button shortens its label rather than spilling it.
-            Layout.maximumWidth: Math.max(0, root.width - Design.s(Design.space.lg) * 2
+            Layout.maximumWidth: Math.max(0, root.width - root._pad * 2
                                           - (glyph.visible ? glyph.implicitWidth + content.spacing : 0))
             elide: Text.ElideRight
             text: root._armed ? root.confirmLabel : root.label

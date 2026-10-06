@@ -440,7 +440,7 @@ PopupShell {
             id: innerBg
             anchors.fill: parent
             anchors.margins: Design.s(3)
-            color: Design.surface
+            color: Design.glassCard
             radius: Design.s(10)
 
             // FIX: This forces the entire background to render as a single hardware texture,
@@ -705,7 +705,7 @@ PopupShell {
                             RowLayout {
                                 spacing: Design.s(10)
                                 Rectangle {
-                                    color: Design.raised
+                                    color: Design.glassCard
                                     radius: Design.s(4)
                                     Layout.preferredHeight: Design.s(24)
                                     Layout.preferredWidth: pillContent.width + Design.s(20)
@@ -857,7 +857,7 @@ PopupShell {
                                     // one colour in the palette that says
                                     // "this is a letter, not a control".
                                     radius: Design.s(9)
-                                    color: Design.raised
+                                    color: Design.glassCard
                                     border.width: Math.max(1, Design.s(2))
                                     border.color: Design.accent
                                     scale: progBar.pressed ? 1.3 : 1.0
@@ -1246,7 +1246,7 @@ PopupShell {
                                                 implicitHeight: Design.s(18)
                                                 width: Design.s(18); height: Design.s(18)
                                                 radius: Design.s(9)
-                                                color: Design.raised
+                                                color: Design.glassCard
                                                 border.width: Math.max(1, Design.s(2))
                                                 border.color: Design.accent
 

@@ -1047,6 +1047,12 @@ build_b1air_suite() {
         if [[ "${B1AIR_CLEAN_BUILD:-0}" == "1" ]]; then
             make -C "$REPO_DIR/src" clean >/dev/null 2>&1 || true
         fi
+        # third_party/podsync (the iPod engine Files drives) is a submodule,
+        # which a plain clone leaves empty.
+        if [[ -f "$REPO_DIR/.gitmodules" && -d "$REPO_DIR/.git" ]]; then
+            git -C "$REPO_DIR" submodule update --init --quiet \
+                || warn "Could not fetch the submodules in third_party/; iPods will not show in Files."
+        fi
         make -C "$REPO_DIR/src" -j"$(nproc 2>/dev/null || echo 4)" || {
             err "Failed to build the b1air suite — see the compiler output above."; exit 1; }
 

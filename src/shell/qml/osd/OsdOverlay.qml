@@ -189,7 +189,7 @@ PanelWindow {
                 Layout.preferredWidth: Design.s(36)
                 Layout.preferredHeight: Design.s(36)
                 radius: Design.s(18)
-                color: Design.surface
+                color: Design.glassCard
 
                 Icon {
                     anchors.centerIn: parent
@@ -249,7 +249,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(6)
                     radius: Design.s(3)
-                    color: Design.sunken
+                    color: Design.well
 
                     Rectangle {
                         anchors.left: parent.left

@@ -157,8 +157,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Natural Scrolling"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Content moves in direction of fingers (macOS style)"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Natural Scrolling") }
                 }
 
                 Toggle {
@@ -177,8 +176,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Tap to Click"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Tap touchpad with 1 finger for primary click, 2 for right click"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Tap to Click") }
                 }
 
                 Toggle {
@@ -196,10 +194,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Two-Finger Click for Right Click"); weight: Design.weight.semibold }
-                    Label { text: section.clickfinger ? I18n.tr("Press with two fingers anywhere for a right click, three for middle")
-                                                      : I18n.tr("Right click is the bottom-right corner of the pad")
-                            role: "caption"; dim: true }
+                    Label { text: I18n.tr("Two-Finger Click for Right Click") }
                 }
 
                 Toggle {
@@ -218,8 +213,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Disable While Typing (DWT)"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Avoid accidental cursor moves while typing on keyboard"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Disable While Typing (DWT)") }
                 }
 
                 Toggle {
@@ -248,8 +242,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("3-Finger Workspace Swipe"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Swipe 3 fingers horizontally to smoothly transition between workspaces"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("3-Finger Workspace Swipe") }
                 }
 
                 Toggle {
@@ -267,8 +260,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Natural Gesture Direction"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Invert swipe motion to match direct touch manipulation"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Natural Gesture Direction") }
                 }
 
                 Toggle {
@@ -287,8 +279,9 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("4-Finger Gestures"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("4-Finger Gestures") }
                     Label {
+                        visible: false
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         text: Sway.swayfx && Settings.workspaceOverview
@@ -353,8 +346,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Acceleration Profile"); weight: Design.weight.semibold }
-                    Label { text: section.accelProfile === "flat" ? I18n.tr("Flat: 1:1 linear tracking") : I18n.tr("Adaptive: faster flicks travel further"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Acceleration Profile") }
                 }
 
                 RowLayout {
@@ -384,8 +376,7 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label { text: I18n.tr("Left-Handed Mouse Mode"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Swap left and right mouse buttons"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Left-Handed Mouse Mode") }
                 }
 
                 Toggle {
@@ -410,6 +401,60 @@ ColumnLayout {
             subtitle: I18n.tr("Swipe two fingers sideways for the next workspace; tap twice with two fingers for the workspace overview")
             checked: Settings.magicMouseGestures !== false
             onToggled: Settings.set("magicMouseGestures", Settings.magicMouseGestures === false)
+        }
+    }
+
+    // ── Hot corners ──────────────────────────────────────────────────────────
+    Card {
+        id: cornersCard
+        title: I18n.tr("Hot corners")
+        subtitle: I18n.tr("Push the pointer into a corner of the screen and hold it there a moment")
+        icon: "\u{f0293}"
+        accentColor: Design.blue
+
+        readonly property var actions: [
+            { id: "none", label: I18n.tr("Nothing") },
+            { id: "overview", label: I18n.tr("Workspace overview"), swayfx: true },
+            { id: "launchpad", label: I18n.tr("Launchpad") },
+            { id: "notifications", label: I18n.tr("Notifications") },
+            { id: "control", label: I18n.tr("Control Center") },
+            { id: "lock", label: I18n.tr("Lock Screen") }
+        ]
+
+        Repeater {
+            model: [
+                { key: "hotCornerTopLeft", label: I18n.tr("Top left") },
+                { key: "hotCornerTopRight", label: I18n.tr("Top right") },
+                { key: "hotCornerBottomLeft", label: I18n.tr("Bottom left") },
+                { key: "hotCornerBottomRight", label: I18n.tr("Bottom right") }
+            ]
+            delegate: RowLayout {
+                id: cornerRow
+                required property var modelData
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+                Label { text: cornerRow.modelData.label; Layout.preferredWidth: Design.s(110); dim: true }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: cornersCard.actions.filter(a => !a.swayfx || Sway.swayfx)
+                        delegate: Pill {
+                            required property var modelData
+                            label: modelData.label
+                            active: (Settings[cornerRow.modelData.key] || "none") === modelData.id
+                            onClicked: Settings.set(cornerRow.modelData.key, modelData.id)
+                        }
+                    }
+                }
+            }
+        }
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            role: "caption"
+            dim: true
+            text: I18n.tr("The top corners are also where the top bar's first and last buttons are: a corner set here takes their outermost pixel.")
         }
     }
 

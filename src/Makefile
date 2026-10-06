@@ -69,12 +69,13 @@ install:
 	# Gone from the tree, native now: the lock screen (b1air-lock) and the
 	# screenshot overlay (b1air-shot).
 	rm -f $(QMLDIR)/Lock.qml $(QMLDIR)/ScreenshotOverlay.qml
-	# The app windows live beside their backends under apps/, and the search
+	# The app windows (and their parts, named after the app: FilesDevicePane)
+	# live beside their backends under apps/, and the search
 	# path expects every window in one directory — so they are copied in here
 	# rather than kept as a second copy in the shell tree. Overwriting, not
 	# `cp -n`: a stale file in this directory shadows the installed one for
 	# ever, because it is searched before /usr/share/b1air-shell/qml.
-	find apps -mindepth 2 -maxdepth 2 -name '*Window.qml' \
+	find apps -mindepth 2 -maxdepth 2 -name '*.qml' \
 		-exec install -m 644 {} $(QMLDIR)/ \;
 	# The plugin-free Quickshell module tree the standalone apps import ahead of
 	# the real one. Deliberately not under .config/b1air-shell: the `quickshell`
@@ -106,6 +107,10 @@ install:
 	install -m 755 pam/b1air-empty-password $(DATADIR)/b1air/pam/
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
+	# The icon font (tools/build-symbols.py builds it).
+	mkdir -p $(DATADIR)/fonts/b1air
+	install -m 644 ../.local/share/fonts/b1air-symbols.ttf $(DATADIR)/fonts/b1air/
+	-fc-cache -f $(DATADIR)/fonts/b1air >/dev/null 2>&1
 	rm -rf $(DATADIR)/icons/b1air-cursors
 	cp -a ../.local/share/icons/b1air-cursors $(DATADIR)/icons/
 	# The B1air.Daemon QML module goes on Qt's import path, which only root can
@@ -114,6 +119,16 @@ install:
 	if [ -n "$$qt_qml" ] && [ -w "$$qt_qml" ]; then \
 		cp -r $(BUILD)/qml/B1air "$$qt_qml/" && echo "B1air.Daemon -> $$qt_qml"; \
 	fi
+	# podsync (../third_party/podsync, a submodule): the iPod engine Files
+	# drives through b1air-podsync. Python, so it is copied rather than built;
+	# the wrapper names where, as the desktop entries name the binaries.
+	@if [ -f ../third_party/podsync/podsync/cli.py ]; then \
+		rm -rf $(DATADIR)/b1air/podsync && mkdir -p $(DATADIR)/b1air/podsync && \
+		rsync -a --exclude __pycache__ ../third_party/podsync/podsync $(DATADIR)/b1air/podsync/ && \
+		printf '#!/bin/sh\n# podsync, installed by b1air (src/Makefile)\nPYTHONPATH=%s/b1air/podsync$${PYTHONPATH:+:$$PYTHONPATH} exec python3 -m podsync "$$@"\n' \
+			'$(DATADIR)' > $(PREFIX)/b1air-podsync && chmod 755 $(PREFIX)/b1air-podsync && \
+		echo "podsync -> $(DATADIR)/b1air/podsync"; \
+	else echo "third_party/podsync is empty (git submodule update --init): no iPod support." >&2; fi
 	mkdir -p $(CONFDIR)/environment.d
 	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/
 	# A running shell keeps its old singletons while pages load the new files;

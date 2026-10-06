@@ -187,7 +187,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(40)
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
+            color: Design.well
             border.color: searchInput.activeFocus ? Design.accent : Design.veilStrong
             border.width: 1
 

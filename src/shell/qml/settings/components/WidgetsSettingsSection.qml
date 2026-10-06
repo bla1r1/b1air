@@ -48,8 +48,8 @@ ColumnLayout {
             // width stays that wide, so the description column never took the
             // slack and the picker beside it started wherever each subtitle
             // happened to end.
-            Label { Layout.fillWidth: true; text: row.title; weight: Design.weight.semibold }
-            Label { Layout.fillWidth: true; text: row.subtitle; role: "caption"; dim: true
+            Label { Layout.fillWidth: true; text: row.title }
+            Label { visible: false; Layout.fillWidth: true; text: row.subtitle; role: "caption"; dim: true
                     elide: Text.ElideRight }
         }
 
@@ -62,6 +62,40 @@ ColumnLayout {
 
 
 
+
+    // ── Dock ─────────────────────────────────────────────────────────────────
+    Card {
+        title: I18n.tr("Dock")
+        subtitle: I18n.tr("Pinned and open apps along the bottom of the screen; a dot under the ones running")
+        icon: "\u{f0db}"
+        accentColor: Design.blue
+
+        Toggle {
+            label: I18n.tr("Show the dock")
+            subtitle: I18n.tr("Right-click an app in it to keep it there or let it go")
+            checked: Settings.dockEnabled === true
+            onToggled: Settings.set("dockEnabled", Settings.dockEnabled !== true)
+        }
+        Toggle {
+            visible: Settings.dockEnabled === true
+            label: I18n.tr("Hide it until the pointer reaches the bottom edge")
+            checked: Settings.dockAutohide === true
+            onToggled: Settings.set("dockAutohide", Settings.dockAutohide !== true)
+        }
+        Toggle {
+            visible: Settings.dockEnabled === true
+            label: I18n.tr("Magnify icons under the pointer")
+            checked: Settings.dockMagnify !== false
+            onToggled: Settings.set("dockMagnify", Settings.dockMagnify === false)
+        }
+        Stepper {
+            visible: Settings.dockEnabled === true
+            label: I18n.tr("Icon size")
+            valueText: (Settings.dockIconSize || 48) + " px"
+            onDecrement: Settings.set("dockIconSize", Math.max(32, (Settings.dockIconSize || 48) - 4))
+            onIncrement: Settings.set("dockIconSize", Math.min(72, (Settings.dockIconSize || 48) + 4))
+        }
+    }
 
     // ── Top bar ──────────────────────────────────────────────────────────────
     Card {

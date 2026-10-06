@@ -20,10 +20,9 @@ RowLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.md)
 
+    // Like a switch's label: the row's name, in the text colour.
     Label {
         text: row.label
-        role: "caption"
-        dim: true
         Layout.fillWidth: true
         elide: Text.ElideRight
     }

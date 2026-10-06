@@ -73,6 +73,19 @@ Item {
         border.width: root.framed ? Design.border : 0
         clip: true
 
+        // The lit top edge of the glass.
+        Rectangle {
+            visible: root.framed && Design.translucent
+            anchors.top: parent.top
+            anchors.topMargin: Design.border
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: parent.radius
+            anchors.rightMargin: parent.radius
+            height: 1
+            color: Design.glassEdge
+        }
+
         Item {
             id: body
             anchors.fill: parent

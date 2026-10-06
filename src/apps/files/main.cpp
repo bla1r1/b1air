@@ -13,6 +13,10 @@
 #include <iostream>
 #include "qml_search.hpp"
 #include "backend.hpp"
+#include "devices.hpp"
+#include "thumbs.hpp"
+#include "dir_model.hpp"
+#include <QtQml/qqml.h>
 
 int main(int argc, char* argv[]) {
     // `--purge-trash`: drop trashed items past the age set in Files and exit,
@@ -54,8 +58,15 @@ int main(int argc, char* argv[]) {
     // Old trash goes before the first count, so the sidebar badge is right.
     b1air::FileManagerBackend::purgeTrash(b1air::FileManagerBackend::trashPurgeDays());
     b1air::FileManagerBackend backend;
+    // iPods (and, later, phones): looked for whenever the drives change.
+    b1air::DeviceManager devices;
+    QObject::connect(&backend, &b1air::FileManagerBackend::volumesChanged, &devices, &b1air::DeviceManager::refresh);
+
+    // Models of other folders, for the column view (FilesWindow.qml).
+    qmlRegisterType<b1air::FileListModel>("B1air.Files", 1, 0, "FileListModel");
 
     QQmlApplicationEngine engine;
+    if (!engine.imageProvider("thumb")) engine.addImageProvider("thumb", new b1air::ThumbProvider);   // the engine owns it
     b1air::app::add_import_paths(engine, "files");
 
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, [](const QList<QQmlError>& warnings) {
@@ -86,6 +97,18 @@ int main(int argc, char* argv[]) {
         argc = 1;
     }
 
+    // `--device <mount>`: open on the iPod there, as a device rather than as
+    // its folders.
+    QString startDevice;
+    const int deviceAt = args.indexOf(QStringLiteral("--device"));
+    if (deviceAt >= 0 && deviceAt + 1 < args.size()) {
+        // A mount point, or a phone's id (UDID, mtp://…) as Devices names it.
+        const QString arg = args.at(deviceAt + 1);
+        startDevice = QFileInfo(arg).isDir() ? QFileInfo(arg).absoluteFilePath() : arg;
+        argc = 1;
+    }
+    engine.rootContext()->setContextProperty("startDevice", startDevice);
+
     if (argc > 1) {
         // Desktop entries use %U, so callers (Firefox "Open Containing
         // Folder", xdg-open, etc.) pass a file:// URI, not a bare path.
@@ -93,7 +116,9 @@ int main(int argc, char* argv[]) {
         QString targetPath = url.isLocalFile() ? url.toLocalFile() : url.toString();
 
         QFileInfo fi(targetPath);
-        if (fi.isDir()) {
+        if (targetPath.startsWith(QLatin1String("tag:"))) {
+            backend.setCurrentPath(targetPath);   // every file with that tag
+        } else if (fi.isDir()) {
             backend.setCurrentPath(fi.absoluteFilePath());
         } else if (fi.exists()) {
             // A specific file (e.g. a just-downloaded file) was passed:
@@ -102,6 +127,7 @@ int main(int argc, char* argv[]) {
         }
     }
     engine.rootContext()->setContextProperty("FilesBackend", &backend);
+    engine.rootContext()->setContextProperty("Devices", &devices);
 
     QString qmlPath = b1air::app::find_window_qml("FilesWindow.qml", "files");
 

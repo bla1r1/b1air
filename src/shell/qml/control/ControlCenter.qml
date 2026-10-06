@@ -306,7 +306,9 @@ PopupShell {
         property string glyph: ""
         property string title: ""
         property string detail: ""
-        property color glyphTone: tile.on ? tile.activeTextColor : Design.textDim
+        fillWhenOn: false
+        property color discColor: Design.accent
+        property color glyphTone: tile.on ? Design.accentText : Design.text
         property bool circleToggles: true
         // Only a tile that opens a page shows a chevron. Focus does not.
         property string trailingGlyph: "\u{f0142}"
@@ -382,7 +384,9 @@ PopupShell {
                 Layout.preferredHeight: tile.tall ? Design.s(Design.size.knob) * 1.6
                                                   : Design.s(Design.size.knob)
                 radius: width / 2
-                color: tile.on ? Design.tint(tile.activeTextColor, 0.22) : Design.sunken
+                // On: the accent, solid. Off: a disc of the glass, a shade
+                // lighter, so it still reads as something to press.
+                color: tile.on ? tile.discColor : Design.tint(Design.text, 0.12)
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                 Icon {
@@ -409,8 +413,8 @@ PopupShell {
                 Label {
                     text: tile.title
                     role: tile.tall ? "body" : "caption"
-                    weight: Design.weight.bold
-                    color: tile.on ? tile.activeTextColor : Design.text
+                    weight: Design.weight.semibold
+                    color: Design.text
                     Layout.fillWidth: true
                     horizontalAlignment: tile.tall ? Text.AlignHCenter : Text.AlignLeft
                     elide: Text.ElideRight
@@ -419,7 +423,7 @@ PopupShell {
                 Label {
                     text: tile.detail
                     role: "caption"
-                    color: tile.on ? Design.tint(tile.activeTextColor, 0.85) : Design.textDim
+                    color: Design.textDim
                     Layout.fillWidth: true
                     horizontalAlignment: tile.tall ? Text.AlignHCenter : Text.AlignLeft
                     elide: Text.ElideRight
@@ -432,7 +436,7 @@ PopupShell {
                 visible: tile.trailingGlyph !== "" && !tile.tall
                 text: tile.trailingGlyph
                 role: "caption"
-                color: tile.on ? Design.tint(tile.activeTextColor, 0.6) : Design.textFaint
+                color: Design.textFaint
             }
         }
     }
@@ -573,7 +577,6 @@ PopupShell {
                 glyph: "\u{f0928}"
                 title: I18n.tr("Wi-Fi")
                 on: Network.wifi.power === "on"
-                activeColor: Design.blue
                 detail: Network.wifi.connected ? Network.wifi.connected.ssid
                                                : (on ? I18n.tr("Not connected") : I18n.tr("Off"))
                 onToggled: Network.toggleWifi()
@@ -593,7 +596,6 @@ PopupShell {
                 glyph: "\u{f00af}"
                 title: I18n.tr("Bluetooth")
                 on: Network.bluetooth.power === "on"
-                activeColor: Design.mauve
                 detail: Network.bluetooth.connected ? Network.bluetooth.connected.name
                                                     : (on ? I18n.tr("No device") : I18n.tr("Off"))
                 onToggled: Network.toggleBluetooth()
@@ -610,20 +612,20 @@ PopupShell {
                 Layout.rowSpan: center.placeOf("dnd").rows
                 Layout.preferredHeight: center.tileHeightFor("dnd")
                 visible: center.tileShown("dnd")
-                glyph: Notifications.dnd ? "\u{f009b}" : "\u{f009a}"
+                glyph: Notifications.modeInfo ? Notifications.modeInfo.glyph : "\u{f0594}"
                 // "Focus" meant three things: this tile, the FocusTime
                 // dashboard, and the work phase of the focus timer. It is the
                 // Do Not Disturb switch — its id has said so all along — so it
                 // says so too. And its detail line read "Active" when
                 // notifications were *not* silenced, which is the opposite of
                 // how the word reads next to a tile that is lit when on.
-                title: I18n.tr("Do Not Disturb")
+                // Focus modes: the circle switches the last one on or off,
+                // the rest of the tile lists them.
+                title: Notifications.modeInfo ? Notifications.modeInfo.name : I18n.tr("Focus")
                 on: Notifications.dnd
-                activeColor: Design.peach
-                detail: Notifications.dnd ? I18n.tr("Silenced") : I18n.tr("Off")
-                trailingGlyph: ""
+                detail: Notifications.dnd ? I18n.tr("On") : I18n.tr("Off")
                 onToggled: Notifications.toggleDnd()
-                onActivated: Notifications.toggleDnd()
+                onActivated: masterWindow.handleIpcCommand("toggle:focusmenu:", true)
             }
 
             QuickTile {
@@ -639,8 +641,6 @@ PopupShell {
                 glyph: "\u{f0599}"
                 title: I18n.tr("Night Light")
                 on: Settings.nightLightEnabled
-                activeColor: Design.yellow
-                glyphTone: on ? Design.yellow : Design.textDim
                 detail: on ? I18n.tr("Warm (%1K)", Settings.nightLightTemp) : I18n.tr("Off")
                 // Through the daemon, like the Settings page.
                 onToggled: {
@@ -667,8 +667,6 @@ PopupShell {
                      : (Power.profile === "power-saver" ? "\u{f0084}" : "\u{f0241}")
                 title: I18n.tr("Power Mode")
                 on: false
-                activeColor: powerTile.profileTone
-                glyphTone: powerTile.profileTone
                 detail: Power.profile === "performance" ? I18n.tr("Performance")
                       : (Power.profile === "power-saver" ? I18n.tr("Power Saver") : I18n.tr("Balanced"))
 
@@ -693,8 +691,6 @@ PopupShell {
                 glyph: "\u{f11b}"
                 title: I18n.tr("Game Mode")
                 on: Settings.gameModeEnabled !== undefined ? Settings.gameModeEnabled : false
-                activeColor: Design.red
-                glyphTone: on ? Design.red : Design.textDim
                 detail: on ? I18n.tr("Performance") : I18n.tr("Off")
                 trailingGlyph: ""
                 onToggled: {
@@ -722,8 +718,8 @@ PopupShell {
                 on: Remote.running
                 // Red while someone is actually watching: that is the state
                 // worth noticing, not the server merely listening.
-                activeColor: Remote.clients > 0 ? Design.red : Design.blue
-                glyphTone: on ? activeColor : Design.textDim
+                // Red while someone is connected: that is worth noticing.
+                discColor: Remote.clients > 0 ? Design.danger : Design.accent
                 detail: !on ? I18n.tr("Off")
                       : Remote.clients > 0 ? I18n.trn("%1 viewer connected", "%1 viewers connected", Remote.clients)
                       : I18n.tr("Waiting on port %1", Remote.port)
@@ -755,8 +751,6 @@ PopupShell {
                 // "Sleep Normal" over a machine that would not sleep.
                 property bool active: false
                 on: caffeineTile.active
-                activeColor: Design.teal
-                glyphTone: on ? Design.teal : Design.textDim
                 detail: on ? I18n.tr("Stay Awake") : I18n.tr("Sleep Normal")
                 trailingGlyph: ""
                 function flip() {
@@ -796,8 +790,6 @@ PopupShell {
                 title: I18n.tr("Screenshot")
                 on: false
                 circleToggles: false
-                activeColor: Design.pink
-                glyphTone: Design.pink
                 detail: I18n.tr("Capture area")
                 trailingGlyph: ""
                 onActivated: {
@@ -820,8 +812,6 @@ PopupShell {
                 title: I18n.tr("Color Dropper")
                 on: false
                 circleToggles: false
-                activeColor: Design.sapphire
-                glyphTone: Design.sapphire
                 detail: I18n.tr("Pick from screen")
                 trailingGlyph: ""
                 onActivated: {
@@ -891,7 +881,6 @@ PopupShell {
                     Layout.preferredHeight: Design.s(Design.size.ctl)
                     value: Audio.volumePercent
                     muted: Audio.muted
-                    tone: Design.sapphire
                     icon: Audio.muted ? "\u{f075f}" : "\u{f057f}"
                     label: I18n.tr("Volume")
                     iconClickable: true
@@ -1008,7 +997,7 @@ PopupShell {
                     Layout.preferredWidth: Design.s(Design.size.art)
                     Layout.preferredHeight: Design.s(Design.size.art)
                     radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
+                    color: Design.well
                     clip: true
 
                     Image {
@@ -1119,19 +1108,37 @@ PopupShell {
             anchors.top: parent.top
             spacing: Design.s(Design.space.sm)
 
+            // The four labels or the four icons: in Ukrainian and Russian the
+            // labels are wider than the panel, and the last button went off
+            // its edge.
+            // Full padding, then narrow padding, then icons alone.
+            readonly property bool snug: lockBtn.fullWidth + sleepBtn.fullWidth + rebootBtn.fullWidth
+                                         + offBtn.fullWidth + spacing * 3 > width
+            readonly property bool tight: lockBtn.snugWidth + sleepBtn.snugWidth + rebootBtn.snugWidth
+                                          + offBtn.snugWidth + spacing * 3 > width
+
             ActionButton {
+                id: lockBtn
+                iconOnly: sessionRow.tight
+                snug: sessionRow.snug
                 icon: "\u{f033e}"
                 label: I18n.tr("Lock")
                 onActivated: Daemon.lock()
             }
 
             ActionButton {
+                id: sleepBtn
+                iconOnly: sessionRow.tight
+                snug: sessionRow.snug
                 icon: "\u{f04b2}"
                 label: I18n.tr("Sleep")
                 onActivated: Daemon.power("suspend")
             }
 
             ActionButton {
+                id: rebootBtn
+                iconOnly: sessionRow.tight
+                snug: sessionRow.snug
                 icon: "\u{f0709}"
                 label: I18n.tr("Reboot")
                 iconTone: Design.peach
@@ -1141,6 +1148,9 @@ PopupShell {
             }
 
             ActionButton {
+                id: offBtn
+                iconOnly: sessionRow.tight
+                snug: sessionRow.snug
                 icon: "\u{f0425}"
                 label: I18n.tr("Off")
                 iconTone: Design.danger

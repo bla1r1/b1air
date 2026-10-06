@@ -41,7 +41,9 @@ PanelWindow {
     implicitWidth: Design.s(390)
     implicitHeight: toastColumn.implicitHeight + topOffset + Design.s(20)
 
-    visible: Notifications.activeToasts.count > 0 && !Notifications.dnd
+    // Only toasts that got through are queued (Services/Notifications): a focus
+    // mode lets some apps through, so it cannot hide the layer.
+    visible: Notifications.activeToasts.count > 0
     onVisibleChanged: if (visible) Screens.refresh()
 
     Item {
@@ -115,7 +117,7 @@ PanelWindow {
                             Layout.preferredWidth: Design.s(28)
                             Layout.preferredHeight: Design.s(28)
                             radius: Design.s(6)
-                            color: Design.surface
+                            color: Design.glassCard
 
                             Image {
                                 id: toastIcon
@@ -211,7 +213,7 @@ PanelWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(2)
                         radius: 1
-                        color: Design.sunken
+                        color: Design.well
 
                         Rectangle {
                             anchors.left: parent.left

@@ -19,7 +19,7 @@ struct DesktopSettings {
     // Windows & Compositor
     int gapsInner = 8;
     int gapsOuter = 4;
-    int borderWidth = 2;
+    int borderWidth = 1;
     bool smartBorders = true;
     bool smartGaps = false;
 

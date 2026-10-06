@@ -50,6 +50,46 @@ Singleton {
     // stored a value and no notification path consulted it.
     property bool manualDnd: false
 
+    // ── Focus modes ──────────────────────────────────────────────────────────
+    //
+    // Not one Do Not Disturb but a few, each silencing banners and sounds
+    // except from the apps it lets through (Settings → Notifications): Do Not
+    // Disturb and Personal are picked by hand, Sleep is also on through quiet
+    // hours, Work while the focus timer runs (when that silences), Gaming
+    // while Game Mode does. One at a time: the one picked by hand first.
+    readonly property var modes: [
+        { id: "dnd",      name: I18n.tr("Do Not Disturb"), glyph: "\u{f0594}" },
+        { id: "work",     name: I18n.tr("Work"),           glyph: "\u{f00d6}" },
+        { id: "personal", name: I18n.tr("Personal"),       glyph: "\u{f0004}" },
+        { id: "sleep",    name: I18n.tr("Sleep"),          glyph: "\u{f04b2}" },
+        { id: "game",     name: I18n.tr("Gaming"),         glyph: "\u{f0eb5}" }
+    ]
+    function modeById(id) { return root.modes.find(m => m.id === id) || null; }
+    readonly property string mode: Settings.focusMode !== "" ? Settings.focusMode
+        : root.quietHours ? "sleep"
+        : (Settings.gameModeEnabled === true && Settings.gameModeDND === true) ? "game"
+        : Focus.wantsDnd ? "work" : ""
+    readonly property var modeInfo: root.modeById(root.mode)
+    function setMode(id) {
+        Settings.set("focusMode", id || "");
+        if (id) Settings.set("focusLastMode", id);
+    }
+    // Whether the mode in effect lets this app's banners through.
+    function allowedNow(appName) {
+        if (!root.mode) return true;
+        const allow = (Settings.focusAllow || {})[root.mode] || [];
+        const key = String(appName || "").toLowerCase();
+        return allow.some(a => String(a).toLowerCase() === key);
+    }
+    function toggleAllowed(modeId, appName) {
+        const all = Object.assign({}, Settings.focusAllow || {});
+        const list = (all[modeId] || []).slice();
+        const i = list.findIndex(a => String(a).toLowerCase() === String(appName).toLowerCase());
+        if (i >= 0) list.splice(i, 1); else list.push(appName);
+        all[modeId] = list;
+        Settings.set("focusAllow", all);
+    }
+
     /**
      * Whether a surface showing the notification list is on screen.
      *
@@ -62,15 +102,9 @@ Singleton {
     function acquireList() { root._listViewers++; }
     function releaseList() { if (root._listViewers > 0) root._listViewers--; }
 
-    readonly property bool dnd: root.manualDnd
-        || (Settings.gameModeEnabled === true && Settings.gameModeDND === true)
-        // "Auto-Silence Notifications in Focus Mode" on the Screen Time page,
-        // which had the same shape as the two above: a switch, a stored value
-        // and no reader. Services/Focus decides when it applies — during a
-        // work interval and not during a break, or the notification saying the
-        // break is over would be the one thing suppressed.
-        || Focus.wantsDnd
-        || root.quietHours
+    // Any focus mode in effect (see above). Game Mode's DND, the focus
+    // timer's auto-silence and quiet hours each bring their own mode in.
+    readonly property bool dnd: root.mode !== ""
 
     // Quiet hours (Settings → Screen Time & DND). Re-read every half minute:
     // the boundary is a time of day, and nothing else signals it.
@@ -176,7 +210,7 @@ Singleton {
         // is not already on screen. A toast that repeats a line the user is
         // looking at in the notification centre is noise, and it used to land
         // on top of that very list.
-        if (!root.dnd && !root.isAppMuted(item.appName) && !root.listVisible) {
+        if ((!root.dnd || root.allowedNow(item.appName)) && !root.isAppMuted(item.appName) && !root.listVisible) {
             root.activeToasts.append(item);
         }
     }
@@ -311,9 +345,9 @@ Singleton {
         }
     }
 
+    // The tile's switch: the last mode picked by hand, or off.
     function toggleDnd() {
-        root.manualDnd = !root.manualDnd;
-        Settings.set("notificationsDnd", root.manualDnd);
+        root.setMode(Settings.focusMode !== "" ? "" : (Settings.focusLastMode || "dnd"));
     }
 
     // Restored once Settings has actually read the file; reading it earlier
@@ -321,13 +355,11 @@ Singleton {
     Connections {
         target: Settings
         function onLoadedChanged() {
-            if (Settings.loaded)
-                root.manualDnd = Settings.notificationsDnd === true;
+            // The old single switch, on from before modes: Do Not Disturb.
+            if (Settings.loaded && Settings.notificationsDnd === true) {
+                Settings.set("notificationsDnd", false);
+                if (Settings.focusMode === "") root.setMode("dnd");
+            }
         }
-    }
-
-    Component.onCompleted: {
-        if (Settings.loaded)
-            root.manualDnd = Settings.notificationsDnd === true;
     }
 }

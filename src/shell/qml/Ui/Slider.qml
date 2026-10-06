@@ -64,7 +64,8 @@ Item {
         id: track
         anchors.fill: parent
         radius: Design.s(root.cornerRadius)
-        color: Design.sunken
+        // A groove in the glass rather than a black well cut into it.
+        color: Design.translucent ? Design.tint(Design.text, 0.10) : Design.sunken
         border.color: ma.containsMouse ? Design.glassBorder : Design.tint(Design.line, 0.5)
         border.width: 1
         clip: true

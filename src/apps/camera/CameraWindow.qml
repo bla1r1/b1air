@@ -391,7 +391,7 @@ ApplicationWindow {
                                      : (window.timerSeconds === 3 ? 10 : 0)
                         }
                         BarButton {
-                            glyph: "\u{f11fd}"
+                            glyph: "\u{f10e7}"
                             tip: I18n.tr("Mirror (M)")
                             checked: window.mirrored
                             onClicked: window.mirrored = !window.mirrored

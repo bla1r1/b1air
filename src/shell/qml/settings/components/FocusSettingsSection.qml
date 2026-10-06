@@ -364,6 +364,64 @@ ColumnLayout {
         Settings.set(key, (m + delta + 1440) % 1440);
     }
 
+    // ── Focus modes ──────────────────────────────────────────────────────────
+    Card {
+        id: modesCard
+        visible: section.part === "notifications"
+        title: I18n.tr("Focus modes")
+        subtitle: I18n.tr("Each one holds back banners and sounds, except from the apps you let through. Sleep also comes on with quiet hours, Work with the focus timer, Gaming with Game Mode")
+        icon: "\u{f0594}"
+        accentColor: Design.mauve
+        property string editing: "dnd"
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: Notifications.modes
+                delegate: Pill {
+                    required property var modelData
+                    icon: modelData.glyph
+                    label: modelData.name + (Notifications.mode === modelData.id ? " · " + I18n.tr("on") : "")
+                    active: modesCard.editing === modelData.id
+                    onClicked: modesCard.editing = modelData.id
+                }
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: modesCard.editing !== "game"
+            Label { Layout.fillWidth: true; text: I18n.tr("On now"); dim: true }
+            Switch {
+                checked: Settings.focusMode === modesCard.editing
+                onToggled: Notifications.setMode(Settings.focusMode === modesCard.editing ? "" : modesCard.editing)
+            }
+        }
+        Label { text: I18n.tr("Let through"); role: "caption"; weight: Design.weight.semibold; dim: true }
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Repeater {
+                model: section.activeApps
+                delegate: Pill {
+                    required property var modelData
+                    readonly property bool on: ((Settings.focusAllow || {})[modesCard.editing] || [])
+                        .some(a => String(a).toLowerCase() === String(modelData.name).toLowerCase())
+                    icon: on ? "\u{f012c}" : ""
+                    label: modelData.name
+                    active: on
+                    onClicked: Notifications.toggleAllowed(modesCard.editing, modelData.name)
+                }
+            }
+        }
+        Label {
+            visible: section.activeApps.length === 0
+            text: I18n.tr("Apps appear here once they have sent a notification.")
+            role: "caption"
+            dim: true
+        }
+    }
+
     Card {
         visible: section.part === "notifications"
         title: I18n.tr("Quiet hours")

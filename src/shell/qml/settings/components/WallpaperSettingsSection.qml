@@ -275,7 +275,9 @@ ColumnLayout {
                     Image {
                         anchors.fill: parent
                         anchors.margins: wallCard.isSelected ? 2 : 1
-                        source: Paths.fileUrl(wallCard.modelData.path)
+                        // A cached thumbnail: the picture itself is a 4K file
+                        // read whole for every card each time the page opens.
+                        source: "image://thumb/" + encodeURIComponent(wallCard.modelData.path)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true

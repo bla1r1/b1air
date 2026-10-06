@@ -308,8 +308,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Update Status"); weight: Design.weight.semibold }
-                Label { text: section.statusText; role: "caption"; dim: true }
+                Label { text: I18n.tr("Update Status") }
             }
 
             Pill {
@@ -331,7 +330,7 @@ ColumnLayout {
             // least as much.
             ActionButton {
                 icon: "\u{f0187}"
-                label: section.updateCount > 0 ? ("Upgrade " + section.updateCount + " Packages") : I18n.tr("Run Full System Upgrade")
+                label: section.updateCount > 0 ? I18n.trn("Upgrade %1 Package", "Upgrade %1 Packages", section.updateCount) : I18n.tr("Run Full System Upgrade")
                 tone: section.updateCount > 0 ? Design.peach : Design.green
                 destructive: true
                 confirmLabel: I18n.tr("Start upgrade?")
@@ -439,7 +438,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             ActionButton {
-                icon: "\u{f0446}"
+                icon: "\u{f0709}"
                 label: I18n.tr("Reload Sway & Quickshell")
                 onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
             }

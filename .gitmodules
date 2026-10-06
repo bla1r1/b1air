@@ -1,0 +1,3 @@
+[submodule "third_party/podsync"]
+	path = third_party/podsync
+	url = https://github.com/bla1r1/podsync

@@ -23,6 +23,56 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
+    // ── Light by day, dark by night ─────────────────────────────────────────
+    Card {
+        title: I18n.tr("Light and dark")
+        subtitle: Settings.themeAuto && Services.Theme.nightFrom !== ""
+            ? I18n.tr("Dark from sunset (%1) to sunrise (%2), at the place set for the night light",
+                      Services.Theme.nightFrom, Services.Theme.nightTo)
+            : I18n.tr("One theme all day, or light by day and dark after sunset")
+        icon: "\u{f050e}"
+        accentColor: Design.yellow
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.xs)
+            Pill {
+                label: I18n.tr("Always the theme below")
+                active: !Settings.themeAuto
+                onClicked: Settings.set("themeAuto", false)
+            }
+            Pill {
+                label: I18n.tr("Automatically")
+                active: Settings.themeAuto
+                onClicked: Settings.set("themeAuto", true)
+            }
+        }
+        Repeater {
+            model: Settings.themeAuto ? [{ key: "themeDay", label: I18n.tr("Day") },
+                                         { key: "themeNight", label: I18n.tr("Night") }] : []
+            delegate: RowLayout {
+                id: autoRow
+                required property var modelData
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+                Label { text: autoRow.modelData.label; Layout.preferredWidth: Design.s(80); dim: true }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: Services.Theme.available
+                        delegate: Pill {
+                            required property var modelData
+                            label: modelData.name
+                            active: Settings[autoRow.modelData.key] === modelData.id
+                            onClicked: Settings.set(autoRow.modelData.key, modelData.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Card {
         title: I18n.tr("Theme")
         subtitle: I18n.tr("The whole palette — surfaces, text and accents — in one file")

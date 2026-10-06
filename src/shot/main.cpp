@@ -277,8 +277,8 @@ void load_mics() {
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
 
-constexpr const char* kFont = "Fira Sans";
-constexpr const char* kIconFont = "JetBrainsMono Nerd Font Mono";
+constexpr const char* kFont = "Inter";
+constexpr const char* kIconFont = "b1air Symbols";
 
 void set(cairo_t* cr, const Colour& c, double a = 1.0) { cairo_set_source_rgba(cr, c.r, c.g, c.b, a); }
 

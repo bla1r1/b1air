@@ -90,6 +90,8 @@ public:
     QVariantList places() const;
     QString diskFreeSpace() const;
     QString diskTotalSpace() const;
+    // Free space of the disk `path` is on, for a row that names its own.
+    Q_INVOKABLE QString freeSpaceOf(const QString& path) const;
     bool busy() const { return m_busy; }
     QObject* files() const { return m_files; }
     bool dirsFirst() const { return m_dirsFirst; }
@@ -124,6 +126,14 @@ public slots:
     // appeared, and closing the window threw it away. Kept beside the rest of
     // this suite's per-app state in ~/.config/b1air.
     QVariantList loadBookmarks() const;
+
+    // Colour tags (tags.hpp): on, or off when every one of them has it.
+    void toggleTag(const QStringList& paths, const QString& tag);
+    QStringList tagsOf(const QString& path) const;
+    // {Red: 3, …} for the sidebar's Tags.
+    QVariantMap tagCounts() const;
+    // Listing a tag ("tag:Red"), not a folder: nothing is made or pasted here.
+    Q_INVOKABLE bool inTagView() const { return m_currentPath.startsWith(QLatin1String("tag:")); }
     void saveBookmarks(const QVariantList& bookmarks) const;
 
     // View preferences (hidden files, sort, folders first, view mode), kept

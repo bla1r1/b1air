@@ -101,11 +101,11 @@ PanelWindow {
                     Layout.preferredWidth: Design.s(44)
                     Layout.preferredHeight: Design.s(44)
                     radius: Design.s(22)
-                    color: Design.sunken
+                    color: Design.well
 
                     Icon {
                         anchors.centerIn: parent
-                        text: "\u{f04a4}" // Security Shield lock
+                        text: "\u{f099d}" // a shield with a lock
                         color: Design.sapphire
                         role: "title"
                     }

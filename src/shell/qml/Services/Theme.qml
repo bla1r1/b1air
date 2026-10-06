@@ -194,6 +194,64 @@ Singleton {
 
     readonly property string current: Settings.themeName
 
+    // ── Light by day, dark by night ──────────────────────────────────────────
+    //
+    // Tonight's sunset and tomorrow's sunrise come from b1air-gamma, which
+    // works them out for the night light — so the theme turns at the same
+    // moment the screen warms, from the same place (nightLightLocation, or
+    // the time zone's city). Asked again every half hour, which also carries
+    // it across midnight; checked every minute.
+    property string nightFrom: ""      // "18:33"
+    property string nightTo: ""        // "07:15"
+    readonly property bool isNight: {
+        const now = root._minute;  // re-evaluated each minute
+        if (root.nightFrom === "" || root.nightTo === "") return false;
+        const m = s => { const p = s.split(":"); return parseInt(p[0]) * 60 + parseInt(p[1]); };
+        const a = m(root.nightFrom), b = m(root.nightTo);
+        return a > b ? (now >= a || now < b) : (now >= a && now < b);
+    }
+    property int _minute: 0
+    Timer {
+        interval: 60 * 1000
+        running: Settings.themeAuto
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            const d = new Date();
+            root._minute = d.getHours() * 60 + d.getMinutes();
+            if (++root._ticks % 30 === 1) root.askSun();
+        }
+    }
+    property int _ticks: 0
+    function askSun() {
+        const loc = String(Settings.nightLightLocation || "").split(",").map(x => x.trim());
+        const args = ["b1air-gamma", "--print", "--mode", "sun"];
+        if (loc.length === 2 && loc[0] !== "" && loc[1] !== "")
+            args.push("--lat", loc[0], "--lon", loc[1]);
+        sunProc.command = args;
+        sunProc.running = false;
+        sunProc.running = true;
+    }
+    Process {
+        id: sunProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                for (const line of this.text.split("\n")) {
+                    const m = line.match(/^night=(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);
+                    if (m) { root.nightFrom = m[1]; root.nightTo = m[2]; }
+                }
+            }
+        }
+    }
+    readonly property string autoWanted: !Settings.themeAuto || root.nightFrom === "" ? ""
+        : (root.isNight ? Settings.themeNight : Settings.themeDay)
+    onAutoWantedChanged: if (root.autoWanted !== "" && Settings.loaded && root.autoWanted !== Settings.themeName)
+                             root.apply(root.autoWanted, false)
+    Connections {
+        target: Settings
+        function onThemeAutoChanged() { if (Settings.themeAuto) root.askSun(); }
+    }
+
     function _builtinById(id) {
         for (const t of root.builtins)
             if (t.id === id) return t;
@@ -232,6 +290,11 @@ Singleton {
 
     function apply(id, byUser) {
         if (root.retired[id]) id = root.retired[id];
+        // Picked by hand while light and dark switch on their own: it becomes
+        // the theme for this half of the day, or the switch would take it
+        // back at sunset.
+        if (byUser !== false && Settings.themeAuto)
+            Settings.set(root.isNight ? "themeNight" : "themeDay", id);
         if (id === "wallpaper")
             return root.applyFromWallpaper(byUser);
 

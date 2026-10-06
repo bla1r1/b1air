@@ -175,7 +175,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Design.s(Design.radius.card)
-            color: Design.sunken
+            color: Design.well
             border.color: Design.glassBorder
             border.width: 1
             clip: true

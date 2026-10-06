@@ -51,7 +51,26 @@ C.Dialog {
 
     modal: true
     focus: true
-    anchors.centerIn: C.Overlay.overlay
+
+    // A sheet: it comes down from the window's top edge and hangs there,
+    // centred, rather than appearing in the middle of what it is about —
+    // the way a desktop asks about the window it belongs to.
+    parent: C.Overlay.overlay
+    x: parent ? Math.round((parent.width - width) / 2) : 0
+    y: 0
+
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "y"; from: -root.height; to: 0; duration: Design.duration.fast * 2; easing.type: Easing.OutBack; easing.overshoot: 0.6 }
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Design.duration.fast }
+        }
+    }
+    exit: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "y"; from: 0; to: -root.height; duration: Design.duration.fast; easing.type: Easing.InCubic }
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Design.duration.fast }
+        }
+    }
 
     // Enter takes the dialog's default answer, as every desktop dialog does;
     // Escape already rejects (Popup closes on it). A Shortcut, because Keys
@@ -64,13 +83,46 @@ C.Dialog {
     padding: Design.s(Design.space.lg)
     topPadding: Design.s(Design.space.sm)
 
-    C.Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.45) }
+    // Lighter than it was: a sheet is about the window, not the screen.
+    C.Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.25)
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
+    }
 
-    background: Rectangle {
-        color: Design.surface
-        radius: Design.s(Design.radius.card)
-        border.width: 1
-        border.color: Design.line
+    background: Item {
+        // A soft shadow under the sheet, in rings of fading black: no
+        // effects, so it draws the same with the software renderer.
+        Repeater {
+            model: 6
+            Rectangle {
+                required property int index
+                anchors.fill: parent
+                anchors.margins: -Design.s(2) * (index + 1)
+                anchors.topMargin: 0
+                anchors.bottomMargin: -Design.s(3) * (index + 1)
+                radius: Design.s(Design.radius.card) + Design.s(2) * (index + 1)
+                color: "transparent"
+                border.width: Design.s(2)
+                border.color: Qt.rgba(0, 0, 0, 0.07 - index * 0.011)
+            }
+        }
+        // Rounded at the bottom only: the top is the window's edge it hangs from.
+        Rectangle {
+            anchors.fill: parent
+            color: Design.raised
+            radius: Design.s(Design.radius.card)
+            border.width: 1
+            border.color: Design.line
+        }
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: Design.s(Design.radius.card) + 1
+            color: Design.raised
+            Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
+            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+        }
     }
 
     header: Label {

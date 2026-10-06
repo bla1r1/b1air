@@ -105,7 +105,7 @@ ColumnLayout {
         },
         {
             title: I18n.tr("Capture & Tools"),
-            icon: "\u{f0a0f}",
+            icon: "\u{f0100}",
             color: Design.pink,
             items: [
                 { key: "Print", label: I18n.tr("Region Screenshot"), desc: I18n.tr("Select an area, copy and save it") },
