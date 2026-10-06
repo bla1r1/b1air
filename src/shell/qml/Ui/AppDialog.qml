@@ -17,6 +17,38 @@ C.Dialog {
     // Tone of the accepting button: Design.danger for "Delete", "Clear".
     property color acceptTone: Design.accent
 
+    // The buttons, drawn here from standardButtons rather than by Qt's
+    // DialogButtonBox. Two things went wrong with Qt's: it named them itself,
+    // in the system's language through the platform theme — a German system
+    // had "Abbrechen" in an English or Ukrainian dialog — and
+    // standardButton(Dialog.Ok) handed back a button that was not the one on
+    // screen, so every "standardButton(Dialog.Ok).text = …" rename ("End
+    // Process", "Delete", "Empty Trash") changed nothing and the dialog said
+    // OK. A different name for a button goes in buttonText:
+    //
+    //   buttonText: ({ [Dialog.Ok]: I18n.tr("End Process") })
+    property var buttonText: ({})
+
+    // Left to right, the order Plasma puts them in: the one that does it,
+    // the destructive one, then the one that backs out.
+    readonly property var _order: [
+        [C.Dialog.Ok, "OK", "accept"], [C.Dialog.Save, "Save", "accept"], [C.Dialog.Open, "Open", "accept"],
+        [C.Dialog.Yes, "Yes", "accept"], [C.Dialog.Apply, "Apply", "apply"], [C.Dialog.Retry, "Retry", "accept"],
+        [C.Dialog.Discard, "Discard", "discard"], [C.Dialog.No, "No", "reject"], [C.Dialog.Reset, "Reset", "reset"],
+        [C.Dialog.Ignore, "Ignore", "accept"], [C.Dialog.Abort, "Abort", "reject"],
+        [C.Dialog.Cancel, "Cancel", "reject"], [C.Dialog.Close, "Close", "reject"], [C.Dialog.Help, "Help", "help"]
+    ]
+    readonly property var _shown: root._order.filter(b => (root.standardButtons & b[0]) !== 0)
+
+    function _press(role) {
+        if (role === "accept") root.accept();
+        else if (role === "reject") root.reject();
+        else if (role === "discard") root.discarded();
+        else if (role === "apply") root.applied();
+        else if (role === "reset") root.reset();
+        else if (role === "help") root.helpRequested();
+    }
+
     modal: true
     focus: true
     anchors.centerIn: C.Overlay.overlay
@@ -65,39 +97,48 @@ C.Dialog {
         }
     }
 
-    footer: C.DialogButtonBox {
-        alignment: Qt.AlignRight
-        spacing: Design.s(Design.space.sm)
-        padding: Design.s(Design.space.lg)
-        topPadding: 0
-        background: Item {}
+    footer: Item {
+        implicitHeight: buttonRow.implicitHeight + Design.s(Design.space.lg)
+        implicitWidth: buttonRow.implicitWidth + Design.s(Design.space.lg) * 2
+        visible: root._shown.length > 0
 
-        delegate: C.Button {
-            id: btn
-            readonly property bool accepting: C.DialogButtonBox.buttonRole === C.DialogButtonBox.AcceptRole
-                                              || C.DialogButtonBox.buttonRole === C.DialogButtonBox.YesRole
-            implicitHeight: Design.s(30)
-            implicitWidth: Math.max(Design.s(76), label.implicitWidth + Design.s(28))
-            hoverEnabled: true
-            contentItem: Text {
-                id: label
-                // Cancel, OK, Save…: the standard buttons are named by Qt,
-                // whose own translations the suite does not ship.
-                text: I18n.tr(btn.text)
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(Design.font.body)
-                font.weight: Design.weight.medium
-                color: btn.accepting ? Design.accentText : Design.text
-            }
-            background: Rectangle {
-                radius: Design.s(Design.radius.ctl)
-                color: btn.accepting
-                       ? (btn.hovered ? Qt.lighter(root.acceptTone, 1.12) : root.acceptTone)
-                       : (btn.hovered ? Design.hover : Design.raised)
-                border.width: btn.visualFocus ? 2 : 0
-                border.color: Design.accent
+        Row {
+            id: buttonRow
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: Design.s(Design.space.lg)
+            spacing: Design.s(Design.space.sm)
+
+            Repeater {
+                model: root._shown
+                delegate: C.Button {
+                    id: btn
+                    required property var modelData
+                    readonly property bool accepting: modelData[2] === "accept"
+                    implicitHeight: Design.s(30)
+                    implicitWidth: Math.max(Design.s(76), label.implicitWidth + Design.s(28))
+                    hoverEnabled: true
+                    onClicked: root._press(modelData[2])
+                    contentItem: Text {
+                        id: label
+                        text: root.buttonText[btn.modelData[0]] !== undefined
+                              ? root.buttonText[btn.modelData[0]] : I18n.tr(btn.modelData[1])
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.family: Design.font.sans
+                        font.pixelSize: Design.s(Design.font.body)
+                        font.weight: Design.weight.medium
+                        color: btn.accepting ? Design.accentText : Design.text
+                    }
+                    background: Rectangle {
+                        radius: Design.s(Design.radius.ctl)
+                        color: btn.accepting
+                               ? (btn.hovered ? Qt.lighter(root.acceptTone, 1.12) : root.acceptTone)
+                               : (btn.hovered ? Design.hover : Design.raised)
+                        border.width: btn.visualFocus ? 2 : 0
+                        border.color: Design.accent
+                    }
+                }
             }
         }
     }

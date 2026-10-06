@@ -178,7 +178,16 @@ QtObject {
         default:          return _p.primary;
         }
     }
-    readonly property color accentText: _p.primaryText
+    // The theme's own primary, whatever accent is picked over it.
+    readonly property color themePrimary: _p.primary
+    // Text that reads on a fill: dark on a light one, white on a dark one.
+    // The theme's primaryText suits its primary only — yellow picked as the
+    // accent on a light theme had white text on it.
+    function readableOn(c) {
+        const l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+        return l > 0.55 ? "#111418" : "#ffffff";
+    }
+    readonly property color accentText: (root.accentName || "") === "" ? _p.primaryText : root.readableOn(root.accent)
     readonly property color accentSoft: _p.primaryBox
     readonly property color accentAlt: _p.tertiary
 

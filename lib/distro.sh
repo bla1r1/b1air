@@ -293,3 +293,33 @@ prune_stale_desktop_entries() {
     fi
     echo "$pruned"
 }
+
+# Apps the suite no longer has, removed where an older install put them:
+# the program, its desktop entry, its icon and its window's QML (which
+# would otherwise sit in the shell's search path for ever). The user's own
+# files are left alone — notes stay in ~/.local/share/b1air-notes.
+#   notes: replaced by Zed as the editor on Mod+I.
+B1AIR_RETIRED_APPS="notes"
+
+# retire_old_apps — idempotent; asks for sudo only when there is something
+# system-wide to remove.
+retire_old_apps() {
+    local app name window f sys=()
+    for app in $B1AIR_RETIRED_APPS; do
+        name="b1air-$app"
+        window="${app^}Window.qml"
+        for f in "/usr/local/bin/$name" "/usr/share/applications/$name.desktop" \
+                 "/usr/share/icons/hicolor/scalable/apps/$name.svg" \
+                 "/usr/share/b1air-shell/qml/$window"; do
+            [[ -e "$f" ]] && sys+=("$f")
+        done
+        rm -f "$HOME/.local/bin/$name" "$HOME/.local/share/applications/$name.desktop" \
+              "$HOME/.local/share/icons/hicolor/scalable/apps/$name.svg" \
+              "$HOME/.config/b1air-shell/$window"
+    done
+    if (( ${#sys[@]} > 0 )); then
+        sudo rm -f "${sys[@]}" && echo "${#sys[@]}"
+        update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+    fi
+}
+

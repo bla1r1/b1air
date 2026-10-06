@@ -128,6 +128,16 @@ bool FocusTimeDB::run_migrations() {
     return true;
 }
 
+bool FocusTimeDB::forget_all() {
+    if (!db_) return false;
+    // In the database, not by deleting the file: the tracker holds it open
+    // and would go on writing to one that no longer has a name.
+    char* err = nullptr;
+    const int rc = sqlite3_exec(db_, "DELETE FROM events; VACUUM;", nullptr, nullptr, &err);
+    if (err) sqlite3_free(err);
+    return rc == SQLITE_OK;
+}
+
 bool FocusTimeDB::log_interval(int64_t start_ts, int64_t end_ts, const std::string& app_class, const std::string& title, bool is_locked) {
     if (!db_ || end_ts <= start_ts) return false;
     int64_t dur = end_ts - start_ts;

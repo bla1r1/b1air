@@ -237,30 +237,6 @@ install_packages() {
     install_package_set "$REPO_DIR/packages/${DISTRO}.txt"
 }
 
-enable_multilib_repo() {
-    [[ "$DISTRO" == "arch" ]] || return 0
-    # ponytail: 32-bit repo, needed later for steam/wine; it only exists on x86_64
-    [[ "$(uname -m)" == "x86_64" ]] || { log "Skipping [multilib]: not available on $(uname -m)."; return 0; }
-
-    local conf="/etc/pacman.conf"
-    [[ -f "$conf" ]] || return 0
-    grep -Eq '^[[:space:]]*\[multilib\]' "$conf" && return 0
-
-    log "Enabling pacman [multilib] repository..."
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would enable [multilib] in $conf"
-        return 0
-    fi
-
-    sudo cp -n "$conf" "$conf.dotfiles-bak" 2>/dev/null || true
-    if grep -Eq '^[[:space:]]*#[[:space:]]*\[multilib\]' "$conf"; then
-        sudo sed -i '/^[[:space:]]*#[[:space:]]*\[multilib\]/,+1 s/^[[:space:]]*#[[:space:]]*//' "$conf"
-    else
-        printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' | sudo tee -a "$conf" >/dev/null
-    fi
-    # ponytail: no -Sy here; the packages step syncs databases anyway
-}
-
 # The compositor. Our swayFX — built from source with its own wlroots and our
 # patches (src/swayfx, src/scenefx) — on every family, so that every machine
 # runs the same compositor: the distributions' swayfx packages lack the
@@ -486,6 +462,37 @@ install_nerd_font() {
     rm -rf "$tmp"
 }
 
+# Zed, the code editor (Mod+I), where the distribution has no package of it:
+# its own Linux build, for every account — /opt/zed.app, the command in
+# /usr/local/bin and its desktop entry beside ours. What Zed's install.sh
+# does, but system-wide rather than in one home. Arch has the package.
+install_zed() {
+    command -v zed >/dev/null 2>&1 || command -v zeditor >/dev/null 2>&1 && return 0
+    local arch tmp
+    arch="$(github_arch)" || { warn "No Zed build for $(uname -m); skipping the code editor."; return 0; }
+    if [[ "$DRY_RUN" -eq 1 ]]; then log "Would install Zed to /opt/zed.app"; return 0; fi
+    log "Downloading Zed (the code editor)..."
+    tmp="$(mktemp -d)"
+    if curl -fsSL "https://zed.dev/api/releases/stable/latest/zed-linux-${arch}.tar.gz" -o "$tmp/zed.tar.gz" \
+        && tar -xzf "$tmp/zed.tar.gz" -C "$tmp" && [[ -x "$tmp/zed.app/bin/zed" ]]; then
+        sudo rm -rf /opt/zed.app
+        sudo mv "$tmp/zed.app" /opt/zed.app
+        sudo ln -sf /opt/zed.app/bin/zed /usr/local/bin/zed
+        local desktop
+        desktop="$(find /opt/zed.app/share/applications -name 'dev.zed.Zed.desktop' -o -name 'zed.desktop' | head -n1)"
+        if [[ -n "$desktop" ]]; then
+            sudo install -d /usr/local/share/applications
+            sed -e 's|^Exec=zed|Exec=/opt/zed.app/bin/zed|' \
+                -e 's|^Icon=zed|Icon=/opt/zed.app/share/icons/hicolor/512x512/apps/zed.png|' "$desktop" \
+                | sudo tee /usr/local/share/applications/dev.zed.Zed.desktop >/dev/null
+        fi
+        ok "Installed Zed to /opt/zed.app"
+    else
+        warn "Could not download Zed; Mod+I opens nothing until a code editor is installed."
+    fi
+    rm -rf "$tmp"
+}
+
 install_extras() {
     [[ "$DISTRO" == "arch" ]] && return 0
 
@@ -497,7 +504,7 @@ install_extras() {
     fi
 
     if [[ "$NO_AUR" -eq 1 ]]; then
-        warn "Skipping upstream downloads (--no-aur): Nerd Font, starship, eza."
+        warn "Skipping upstream downloads (--no-aur): Nerd Font, starship, eza, Zed."
         return 0
     fi
 
@@ -511,6 +518,7 @@ install_extras() {
     else
         warn "No prebuilt starship/eza for $(uname -m); skipping."
     fi
+    install_zed
 }
 
 # ── GPU drivers ──────────────────────────────────────────────────────────────
@@ -1076,6 +1084,9 @@ build_b1air_suite() {
         # The one line every keybind, autostart entry and unit resolves the
         # binaries through, written to match where they actually landed, so a
         # fallback install does not leave 39 keybinds pointing at /usr/local.
+        # What an older version installed and this one no longer has.
+        retire_old_apps >/dev/null || true
+
         render_config_tree "$HOME/.config" "$B1AIR_PREFIX"
         ok "sway and the user units resolve the suite through ${B1AIR_PREFIX}"
 
@@ -1145,7 +1156,7 @@ post_install_checks() {
     local commands=(sway sddm quickshell
         b1air-daemon b1air-polkit-agent b1air-secret-service b1air-shell
         b1air-files b1air-settings b1air-monitor b1air-term b1air-text
-        b1air-view b1air-notes b1air-git b1air-camera b1air-bg b1air-clip b1air-gamma b1air-lock pw-play)
+        b1air-view b1air-git b1air-camera b1air-bg b1air-clip b1air-gamma b1air-lock pw-play)
     # The terminal niceties the fish config uses when present. Missing ones
     # cost a prettier prompt, not a working desktop.
     local recommended=(fish starship eza bat fzf)
@@ -1211,7 +1222,6 @@ main() {
 
     if [[ "$SKIP_PACKAGES" -eq 0 ]]; then
         preflight_checks
-        step multilib   enable_multilib_repo
         step packages   install_packages
         # Every run: cheap when our swayfx is up to date, and a build that
         # failed last time is tried again.

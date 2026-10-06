@@ -272,6 +272,6 @@ PopupShell {
         acceptTone: Design.danger
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: Clipboard.clearHistory()
-        Component.onCompleted: standardButton(Dialog.Ok).text = I18n.tr("Clear")
+        buttonText: ({ [Dialog.Ok]: I18n.tr("Clear") })
     }
 }

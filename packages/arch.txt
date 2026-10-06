@@ -17,6 +17,9 @@ fish starship eza bat fzf zoxide fastfetch btop
 
 # Applications (b1air-files/-view replace Thunar/imv; there is no bundled browser)
 firefox
+# The code editor (Mod+I). Arch names its command zeditor; elsewhere
+# install.sh downloads Zed's own build (install_zed).
+zed
 
 # Clipboard & screenshots
 grim slurp satty

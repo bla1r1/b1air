@@ -361,8 +361,8 @@ ColumnLayout {
 
     // ── 3. Welcome & User Guide ──────────────────────────────────────────────
     Card {
-        title: I18n.tr("Session Hints & Welcome Guide")
-        subtitle: I18n.tr("Preferences for onboarding prompts and keybinding guides")
+        title: I18n.tr("Welcome & first-run setup")
+        subtitle: I18n.tr("The shortcut guide at login, and the setup a new account goes through")
         icon: "\u{f02d}"
         accentColor: Design.yellow
 
@@ -387,6 +387,26 @@ ColumnLayout {
                         section.openGuideAtStartup = next;
                         Settings.set("openGuideAtStartup", next);
                     }
+                }
+            }
+
+            // The first-run setup again, every step: language, Wi-Fi, theme,
+            // wallpaper, account, fingerprint (SetupWizard.qml).
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+                Icon { text: "\u{f0493}"; role: "title"; color: Design.yellow }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(2)
+                    Label { text: I18n.tr("First-run setup"); weight: Design.weight.semibold }
+                    Label { text: I18n.tr("Language, Wi-Fi, theme, wallpaper, account and fingerprint, step by step"); role: "caption"; dim: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                }
+                ActionButton {
+                    Layout.fillWidth: false
+                    icon: "\u{f040a}"
+                    label: I18n.tr("Run it again")
+                    onActivated: Quickshell.execDetached(["b1air-settings", "setup"])
                 }
             }
         }

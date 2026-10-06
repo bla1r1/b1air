@@ -11,6 +11,11 @@ import "../../Services"
 ColumnLayout {
     id: section
 
+    // "": the Power & Battery page. "lock": the locking card alone, for the
+    // Lock & Login page — locking was four switches in the middle of "When
+    // idle", on a page about energy.
+    property string part: ""
+
     Layout.fillWidth: true
 
     /**
@@ -41,6 +46,7 @@ ColumnLayout {
 
     // ── 1. Energy Profiles Card ──────────────────────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Energy & performance")
         subtitle: I18n.tr("Tune system performance and power consumption")
         icon: "\u{f0084}"
@@ -81,31 +87,9 @@ ColumnLayout {
         }
     }
 
-    // ── 2. Display brightness ────────────────────────────────────────────────
-    // The page advertises "brightness" in its own search tags and had no
-    // brightness control on it — the only slider lived in the Control Center
-    // mini view, so searching for it landed you on a page without it.
-    Card {
-        visible: Power.hasBacklight
-        title: I18n.tr("Display brightness")
-        subtitle: I18n.tr("Backlight level of the built-in panel")
-        icon: "\u{f00df}"
-        accentColor: Design.yellow
-
-        Slider {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
-            value: Power.brightness
-            tone: Design.yellow
-            icon: "\u{f00df}"
-            label: I18n.tr("Brightness")
-            onMoved: pct => Power.setBrightness(pct)
-        }
-    }
-
     // ── 3. Battery ───────────────────────────────────────────────────────────
     Card {
-        visible: Power.hasBattery
+        visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Battery")
         subtitle: Power.charging ? I18n.tr("Currently charging") : I18n.tr("Running on battery power")
         icon: Power.charging ? "\u{f0084}" : "\u{f0079}"
@@ -203,7 +187,7 @@ ColumnLayout {
     // two sysfs files per pack — and nothing in this desktop exposed either, so
     // the only way to use them was to echo into /sys as root.
     Card {
-        visible: Power.hasChargeLimit || Power.hasChargeBehaviour
+        visible: (section.part === "") && (Power.hasChargeLimit || Power.hasChargeBehaviour)
         title: I18n.tr("Charge control")
         subtitle: I18n.tr("Keep the battery off a full charge, so it ages more slowly")
         icon: "\u{f0084}"
@@ -270,7 +254,7 @@ ColumnLayout {
 
     // ── 3.5 Low battery ──────────────────────────────────────────────────────
     Card {
-        visible: Power.hasBattery
+        visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Low battery")
         subtitle: I18n.tr("What happens as the charge runs out")
         icon: "\u{f0084}"
@@ -376,6 +360,7 @@ ColumnLayout {
     ]
 
     Card {
+        visible: section.part === ""
         title: I18n.tr("When idle")
         subtitle: Power.hasBattery
             ? I18n.tr("Plugged in and on battery each their own; the one in use is marked")
@@ -453,26 +438,7 @@ ColumnLayout {
 
         }
 
-        Toggle {
-            label: I18n.tr("Lock when the screen turns off")
-            subtitle: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
-            checked: Settings.lockWithScreenOff
-            onToggled: Settings.set("lockWithScreenOff", !Settings.lockWithScreenOff)
-        }
 
-        Toggle {
-            label: I18n.tr("Lock before sleep")
-            subtitle: I18n.tr("Waking up shows the lock screen, not the desktop")
-            checked: Settings.lockOnSleep
-            onToggled: Settings.set("lockOnSleep", !Settings.lockOnSleep)
-        }
-
-        Toggle {
-            label: I18n.tr("Dim screen on lock")
-            subtitle: I18n.tr("Lower display brightness immediately when screen is locked")
-            checked: Settings.dimOnLock
-            onToggled: Settings.set("dimOnLock", !Settings.dimOnLock)
-        }
 
         Toggle {
             label: I18n.tr("Other screens off when idle")
@@ -481,12 +447,6 @@ ColumnLayout {
             onToggled: Settings.set("idleSecondaryOff", !Settings.idleSecondaryOff)
         }
 
-        Toggle {
-            label: I18n.tr("Only the main screen while locked")
-            subtitle: I18n.tr("The lock screen shows on the main screen; the others stay off until it is opened")
-            checked: Settings.lockSecondaryOff
-            onToggled: Settings.set("lockSecondaryOff", !Settings.lockSecondaryOff)
-        }
     }
 
     // ── 5. Lid and power button ──────────────────────────────────────────────
@@ -506,7 +466,7 @@ ColumnLayout {
     // The lid and the power button, each its own card: one card with the
     // two read as one setting.
     Card {
-        visible: Power.hasBattery
+        visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Closing the lid")
         subtitle: I18n.tr("Plugged in and on battery each their own")
         icon: "\u{f0322}"
@@ -574,6 +534,7 @@ ColumnLayout {
     }
 
     Card {
+        visible: section.part === ""
         title: I18n.tr("Power button")
         subtitle: I18n.tr("What it does, instead of the system default")
         icon: "\u{f0425}"
@@ -591,6 +552,42 @@ ColumnLayout {
                     onClicked: Settings.set("powerKeyAction", modelData.id)
                 }
             }
+        }
+    }
+
+    Card {
+        visible: section.part === "lock"
+        title: I18n.tr("Locking")
+        subtitle: I18n.tr("When the screen locks, and what the lock screen looks like. How soon after idling is on Power & Battery")
+        icon: "\u{f033e}"
+        accentColor: Design.blue
+
+        Toggle {
+            label: I18n.tr("Lock when the screen turns off")
+            subtitle: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
+            checked: Settings.lockWithScreenOff
+            onToggled: Settings.set("lockWithScreenOff", !Settings.lockWithScreenOff)
+        }
+
+        Toggle {
+            label: I18n.tr("Lock before sleep")
+            subtitle: I18n.tr("Waking up shows the lock screen, not the desktop")
+            checked: Settings.lockOnSleep
+            onToggled: Settings.set("lockOnSleep", !Settings.lockOnSleep)
+        }
+
+        Toggle {
+            label: I18n.tr("Dim screen on lock")
+            subtitle: I18n.tr("Lower display brightness immediately when screen is locked")
+            checked: Settings.dimOnLock
+            onToggled: Settings.set("dimOnLock", !Settings.dimOnLock)
+        }
+
+        Toggle {
+            label: I18n.tr("Only the main screen while locked")
+            subtitle: I18n.tr("The lock screen shows on the main screen; the others stay off until it is opened")
+            checked: Settings.lockSecondaryOff
+            onToggled: Settings.set("lockSecondaryOff", !Settings.lockSecondaryOff)
         }
     }
 }

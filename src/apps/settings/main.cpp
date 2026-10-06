@@ -25,6 +25,11 @@
 
 #include "proc_scan.hpp"
 #include <QGuiApplication>
+#include <map>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QFile>
 #include <QDir>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
@@ -65,25 +70,91 @@ bool has_fingerprint_reader() {
     return out.find("\"available\":true") != std::string::npos;
 }
 
-std::string first_run_page() {
+// The setup's steps and the news, from settings/setup-steps.json beside the
+// shell's QML — the one list SetupWizard.qml reads too.
+struct Step { QString id; int version = 1; int baseline = 0; QString needs; };
+struct Spec { QList<Step> steps; QStringList news; };
+
+Spec load_spec() {
+    Spec spec;
+    QJsonObject root;
+    for (const QString& dir : b1air::app::qml_dirs(QString())) {
+        QFile f(dir + "/settings/setup-steps.json");
+        if (!f.open(QIODevice::ReadOnly)) continue;
+        root = QJsonDocument::fromJson(f.readAll()).object();
+        if (!root.isEmpty()) break;
+    }
+    for (const QJsonValue& v : root.value("steps").toArray()) {
+        const QJsonObject o = v.toObject();
+        spec.steps.append({o.value("id").toString(), o.value("version").toInt(1),
+                           o.value("baseline").toInt(0), o.value("needs").toString()});
+    }
+    for (const QJsonValue& v : root.value("news").toArray())
+        spec.news << v.toObject().value("id").toString();
+    return spec;
+}
+
+std::string marker_path() {
     const char* xdg = getenv("XDG_CONFIG_HOME");
     const char* home = getenv("HOME");
     const std::string conf = (xdg && *xdg) ? xdg : std::string(home ? home : "") + "/.config";
-    std::set<std::string> seen;
-    std::ifstream in(conf + "/b1air/setup-done");
-    for (std::string line; std::getline(in, line);)
-        if (!line.empty()) seen.insert(line);
+    return conf + "/b1air/setup-done";
+}
 
-    const std::pair<const char*, bool (*)()> steps[] = {
-        {"keyboard", nullptr}, {"network", has_wifi}, {"theme", nullptr},
-        {"wallpaper", nullptr}, {"user", nullptr}, {"fingerprint", has_fingerprint_reader}};
-    std::string page;
-    for (const auto& [id, available] : steps) {
-        if (seen.count(id)) continue;
-        if (available && !available()) continue;
-        page += std::string(".") + id;
+// "keyboard" (from before steps had versions: version 1), "keyboard@2",
+// "news@0.2.2".
+struct Seen { std::map<std::string, int> steps; std::set<std::string> news; bool any = false; };
+Seen read_seen() {
+    Seen seen;
+    std::ifstream in(marker_path());
+    for (std::string line; std::getline(in, line);) {
+        if (line.empty()) continue;
+        seen.any = true;
+        const auto at = line.find('@');
+        const std::string id = line.substr(0, at);
+        if (id == "news") { if (at != std::string::npos) seen.news.insert(line.substr(at + 1)); continue; }
+        const int v = at == std::string::npos ? 1 : std::atoi(line.c_str() + at + 1);
+        seen.steps[id] = std::max(seen.steps[id], v);
     }
+    return seen;
+}
+
+bool has_hardware(const QString& needs) {
+    if (needs == "wifi") return has_wifi();
+    if (needs == "fingerprint") return has_fingerprint_reader();
+    return true;
+}
+
+// Steps not seen in their current version, that this machine can use, then
+// "news" when an update brought news this account has not seen. After an
+// install (nothing seen yet) there is no news: everything is new.
+std::string first_run_page() {
+    const Spec spec = load_spec();
+    const Seen seen = read_seen();
+    std::string page;
+    for (const Step& s : spec.steps) {
+        const auto it = seen.steps.find(s.id.toStdString());
+        if (it != seen.steps.end() && it->second >= s.version) continue;
+        if (!has_hardware(s.needs)) continue;
+        page += "." + s.id.toStdString();
+    }
+    if (seen.any)
+        for (const QString& n : spec.news)
+            if (!seen.news.count(n.toStdString())) { page += ".news"; break; }
     return page.empty() ? "" : "setup" + page;
+}
+
+// --setup-baseline (update-dotfiles.sh): an account that predates the setup
+// set these things up by hand, so the steps it had count as seen at their
+// baseline version. Only when there is no marker yet.
+int write_baseline() {
+    const std::string path = marker_path();
+    if (std::filesystem::exists(path)) return 0;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream out(path);
+    for (const Step& s : load_spec().steps)
+        if (s.baseline > 0) out << s.id.toStdString() << "@" << s.baseline << "\n";
+    return out ? 0 : 1;
 }
 
 } // namespace
@@ -113,19 +184,23 @@ int main(int argc, char* argv[]) {
     bool forceStandalone = false;
     bool forceShell = false;
     bool firstRun = false;
+    bool printOnly = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--standalone") == 0) forceStandalone = true;
         else if (std::strcmp(argv[i], "--shell") == 0) forceShell = true;
         else if (std::strcmp(argv[i], "--first-run") == 0) firstRun = true;
+        else if (std::strcmp(argv[i], "--print") == 0) printOnly = true;
+        else if (std::strcmp(argv[i], "--setup-baseline") == 0) return write_baseline();
         else if (argv[i][0] != '-') page = argv[i];
     }
 
     // --first-run (autostart.conf): the setup's steps that are new to this
-    // account — not in ~/.config/b1air/setup-done, which SetupWizard.qml
-    // writes — and that this machine can use. None: nothing opens.
+    // account, and an update's news (first_run_page). None: nothing opens.
+    // With --print, the page is printed instead of opened.
     std::string setupPage;
     if (firstRun) {
         setupPage = first_run_page();
+        if (printOnly) { std::cout << setupPage << "\n"; return 0; }
         if (setupPage.empty()) return 0;
         page = setupPage.c_str();
     }

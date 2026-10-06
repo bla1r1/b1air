@@ -12,7 +12,7 @@ import B1air.Daemon
 //
 // Full control over native WayVNC remote server, unattended screencasting
 // permissions (RustDesk / AnyDesk / OBS), /dev/uinput kernel input emulation,
-// and wireless tablet secondary display (Sidecar).
+// (the tablet as a second screen is on Displays).
 // =============================================================================
 
 ColumnLayout {
@@ -203,52 +203,6 @@ ColumnLayout {
         // RustDesk is not something this desktop installs.
     }
 
-    // ── 3. Wireless Tablet Sidecar Display ────────────────────────────────────
-    Card {
-        title: I18n.tr("Wireless Tablet Sidecar Display")
-        subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
-        icon: "\u{f004b}"
-        accentColor: Design.mauve
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                Label {
-                    // Wrapped: on one line it pushed the buttons past the card's edge.
-                    text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
-                    role: "caption"
-                    dim: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            ButtonRow {
-                spacing: Design.s(Design.space.sm)
-
-                ActionButton {
-                    label: I18n.tr("Create Display")
-                    icon: "\u{f0079}"
-                    onActivated: {
-                        Daemon.sidecarCreate(1920, 1080);
-                    }
-                }
-
-                ActionButton {
-                    label: I18n.tr("Remove")
-                    icon: "\u{f00d}"
-                    onActivated: {
-                        Daemon.sidecarRemove();
-                    }
-                }
-            }
-        }
-    }
 
     Timer {
         id: statusTimer

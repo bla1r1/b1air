@@ -97,4 +97,67 @@ ColumnLayout {
             title: I18n.tr("System Tray"); subtitle: I18n.tr("Icons from applications running in the background")
         }
     }
+
+    // The Control Center's tiles and cards. The panel can already hide them
+    // in its own edit mode (the pencil); this is the same list
+    // (ccHiddenTiles, ccHiddenCards), where Settings is looked for it — the
+    // Widgets page promised it and had only the bar.
+    component CcRow: RowLayout {
+        id: ccRow
+        property string listKey: ""
+        property string list: ""
+        property string itemId: ""
+        property string title: ""
+        readonly property bool shown: !Settings.isWidgetHidden(ccRow.list, ccRow.itemId)
+        Layout.fillWidth: true
+        spacing: Design.s(Design.space.md)
+        Label { Layout.fillWidth: true; text: ccRow.title; weight: Design.weight.semibold }
+        Toggle {
+            checked: ccRow.shown
+            onToggled: Settings.setWidgetHidden(ccRow.listKey, ccRow.itemId, ccRow.shown)
+        }
+    }
+
+    Card {
+        title: I18n.tr("Control Center")
+        subtitle: I18n.tr("Which tiles and cards the panel shows. Their order is changed in the panel itself, with the pencil")
+        icon: "\u{f062e}"
+        accentColor: Design.blue
+
+        Repeater {
+            model: [
+                { id: "wifi",       title: I18n.tr("Wi-Fi") },
+                { id: "bluetooth",  title: I18n.tr("Bluetooth") },
+                { id: "dnd",        title: I18n.tr("Do Not Disturb") },
+                { id: "nightlight", title: I18n.tr("Night Light") },
+                { id: "powermode",  title: I18n.tr("Power Mode") },
+                { id: "gamemode",   title: I18n.tr("Game Mode") },
+                { id: "caffeine",   title: I18n.tr("Caffeine") },
+                { id: "screenshot", title: I18n.tr("Screenshot") },
+                { id: "dropper",    title: I18n.tr("Color Dropper") },
+                { id: "remote",     title: I18n.tr("Remote Desktop") }
+            ]
+            delegate: CcRow {
+                required property var modelData
+                listKey: "ccHiddenTiles"; list: Settings.ccHiddenTiles
+                itemId: modelData.id; title: modelData.title
+            }
+        }
+
+        SectionLabel { text: I18n.tr("Cards") }
+
+        Repeater {
+            model: [
+                { id: "sliders", title: I18n.tr("Volume and brightness") },
+                { id: "weather", title: I18n.tr("Weather") },
+                { id: "media",   title: I18n.tr("Media player") },
+                { id: "session", title: I18n.tr("Lock, sleep, reboot and power off") }
+            ]
+            delegate: CcRow {
+                required property var modelData
+                listKey: "ccHiddenCards"; list: Settings.ccHiddenCards
+                itemId: modelData.id; title: modelData.title
+            }
+        }
+    }
 }

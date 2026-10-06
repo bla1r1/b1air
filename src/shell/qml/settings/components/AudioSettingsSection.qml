@@ -246,76 +246,12 @@ ColumnLayout {
         }
     }
 
+    // The volume keys in one place: how far a press moves, the popup and
+    // the click. They were split over "Audio Feedback & Sound Effects" and
+    // "Audio preferences", both partly about the same keys.
     Card {
-        title: I18n.tr("Audio Feedback & Sound Effects")
-        subtitle: I18n.tr("Acoustic feedback for volume changes, screenshot capture, and peripheral plug events")
-        icon: "\u{f0028}"
-        accentColor: Design.cyan
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Volume Step Feedback Click"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Play a subtle audio tick when adjusting volume level with keys"); role: "caption"; dim: true }
-                }
-
-                Toggle {
-                    checked: Settings.soundVolumeFeedback !== undefined ? Settings.soundVolumeFeedback : true
-                    onToggled: Settings.set("soundVolumeFeedback", !Settings.soundVolumeFeedback)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Screenshot Shutter Sound"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Play a camera shutter sound when saving or copying a screenshot"); role: "caption"; dim: true }
-                }
-
-                Toggle {
-                    checked: Settings.soundScreenshotFeedback !== undefined ? Settings.soundScreenshotFeedback : true
-                    onToggled: Settings.set("soundScreenshotFeedback", !Settings.soundScreenshotFeedback)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Peripheral & Device Connect Chime"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Play a chime when a headset, USB audio interface, dock or Bluetooth audio device connects"); role: "caption"; dim: true }
-                }
-
-                Toggle {
-                    checked: Settings.soundDeviceFeedback !== undefined ? Settings.soundDeviceFeedback : true
-                    onToggled: Settings.set("soundDeviceFeedback", !Settings.soundDeviceFeedback)
-                }
-            }
-        }
-    }
-
-    Card {
-        title: I18n.tr("Audio preferences")
-        subtitle: I18n.tr("Key step size and volume change feedback")
+        title: I18n.tr("Volume keys")
+        subtitle: I18n.tr("What a press of the volume keys does")
         icon: "\u{f04c3}"
         accentColor: Design.peach
 
@@ -331,6 +267,34 @@ ColumnLayout {
             subtitle: I18n.tr("Show the volume popup when media keys are pressed")
             checked: Settings.audioNotifications
             onToggled: Settings.set("audioNotifications", !Settings.audioNotifications)
+        }
+
+        Toggle {
+            label: I18n.tr("Volume Step Feedback Click")
+            subtitle: I18n.tr("Play a subtle audio tick when adjusting volume level with keys")
+            checked: Settings.soundVolumeFeedback !== false
+            onToggled: Settings.set("soundVolumeFeedback", !(Settings.soundVolumeFeedback !== false))
+        }
+    }
+
+    Card {
+        title: I18n.tr("System sounds")
+        subtitle: I18n.tr("Sounds the desktop itself plays")
+        icon: "\u{f0028}"
+        accentColor: Design.cyan
+
+        Toggle {
+            label: I18n.tr("Screenshot Shutter Sound")
+            subtitle: I18n.tr("Play a camera shutter sound when saving or copying a screenshot")
+            checked: Settings.soundScreenshotFeedback !== false
+            onToggled: Settings.set("soundScreenshotFeedback", !(Settings.soundScreenshotFeedback !== false))
+        }
+
+        Toggle {
+            label: I18n.tr("Peripheral & Device Connect Chime")
+            subtitle: I18n.tr("Play a chime when a headset, USB audio interface, dock or Bluetooth audio device connects")
+            checked: Settings.soundDeviceFeedback !== false
+            onToggled: Settings.set("soundDeviceFeedback", !(Settings.soundDeviceFeedback !== false))
         }
     }
 }

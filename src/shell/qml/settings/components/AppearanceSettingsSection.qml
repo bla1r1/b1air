@@ -27,10 +27,6 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
-    readonly property int cornerRadius: Settings.cornerRadius
-    readonly property bool blurEnabled: Settings.blurEnabled
-    readonly property bool shadowsEnabled: Settings.shadowsEnabled
-    readonly property bool dimInactive: Settings.dimInactive
 
 
 
@@ -38,42 +34,15 @@ ColumnLayout {
     // swaymsg changes this session; SwayConfig writes conf.d/custom_look.conf
     // so the change is still there after a logout. All four of these were
     // applied and then forgotten — see Services/SwayConfig.
-    function setCornerRadius(val) {
-        Settings.set("cornerRadius", val);
-        Sway.command("corner_radius " + Number(val));
-        SwayConfig.writeLook();
-    }
-
-    function toggleBlur(enabled) {
-        Settings.set("blurEnabled", enabled);
-        Sway.command("blur " + (enabled ? "enable" : "disable"));
-        SwayConfig.writeLook();
-    }
-
-    function toggleShadows(enabled) {
-        Settings.set("shadowsEnabled", enabled);
-        Sway.command("shadows " + (enabled ? "enable" : "disable"));
-        SwayConfig.writeLook();
-    }
-
-    function toggleDimInactive(enabled) {
-        Settings.set("dimInactive", enabled);
-        Sway.command("default_dim_inactive " + (enabled ? "0.20" : "0.0"));
-        SwayConfig.writeLook();
-    }
-
-    // ── 1. Color Scheme & Accents ────────────────────────────────────────────
     Card {
-        title: I18n.tr("Accent & Theme")
-        subtitle: I18n.tr("Customize the primary accent color across Quickshell and Sway")
+        title: I18n.tr("Accent colour")
+        subtitle: I18n.tr("Buttons, selection and focus. The theme's own, or one of its other colours")
         icon: "\u{f0376}"
         accentColor: Design.mauve
 
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.md)
-
-            Label { text: I18n.tr("Accent Color"); role: "caption"; dim: true }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -84,7 +53,10 @@ ColumnLayout {
                     // rather than a copy of that role's current hex. The copies
                     // happened to match today, so a palette edit would have
                     // shown one colour in the picker and applied another.
+                    // The first, "", is the theme's own primary: picking a
+                    // colour once used to leave no way back to it.
                     model: [
+                        { name: "",         color: Design.themePrimary },
                         { name: "Sapphire", color: Design.sapphire },
                         { name: "Mauve",    color: Design.mauve },
                         { name: "Teal",     color: Design.teal },
@@ -103,18 +75,18 @@ ColumnLayout {
                         height: width
                         radius: width / 2
                         color: accentDot.modelData.color
-                        border.color: (Settings.accentName === accentDot.modelData.name) ? "#ffffff" : "transparent"
+                        border.color: (Settings.accentName || "") === accentDot.modelData.name ? Design.text : "transparent"
                         border.width: 2
 
                         Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
                         scale: accentDotMa.pressed ? 0.9 : (accentDotMa.containsMouse ? 1.15 : 1.0)
 
                         Icon {
-                            visible: (Settings.accentName === accentDot.modelData.name)
+                            visible: (Settings.accentName || "") === accentDot.modelData.name
                             anchors.centerIn: parent
                             text: "\u{f012c}"
                             role: "caption"
-                            color: "#11111b"
+                            color: Design.readableOn(accentDot.modelData.color)
                         }
 
                         Clickable {
@@ -176,56 +148,4 @@ ColumnLayout {
     // switches moved and nothing on screen changed. Ask the running
     // compositor (its binary, not whichever `sway` is first on PATH: swayfx
     // installs itself as `sway`).
-    readonly property bool hasSwayfx: Sway.swayfx
-
-    Card {
-        title: I18n.tr("Compositor Effects")
-        subtitle: section.hasSwayfx
-                  ? I18n.tr("Corner rounding, blur, shadows, and inactive window dimming")
-                  : I18n.tr("Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows")
-        icon: "\u{f02db}"
-        accentColor: Design.teal
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            enabled: section.hasSwayfx
-            opacity: section.hasSwayfx ? 1.0 : 0.5
-
-
-            Stepper {
-                label: I18n.tr("Corner Radius")
-                valueText: section.cornerRadius + " px"
-                onDecrement: section.setCornerRadius(Math.max(0, section.cornerRadius - 2))
-                onIncrement: section.setCornerRadius(Math.min(24, section.cornerRadius + 2))
-            }
-
-            // Ui/Toggle, not a hand-built row around a bare Ui/Switch. Ten other
-            // settings pages use the shared row; these three built their own and
-            // came out visibly different — a smaller switch sitting right against
-            // the label instead of at the end of the row, so the same control
-            // looked like two different controls depending on which page you
-            // were on.
-            Toggle {
-                label: I18n.tr("Window Blur")
-                subtitle: I18n.tr("Frosted glass behind translucent windows and panels")
-                checked: section.blurEnabled
-                onToggled: section.toggleBlur(!section.blurEnabled)
-            }
-
-            Toggle {
-                label: I18n.tr("Window Shadows")
-                subtitle: I18n.tr("A soft shadow under every window")
-                checked: section.shadowsEnabled
-                onToggled: section.toggleShadows(!section.shadowsEnabled)
-            }
-
-            Toggle {
-                label: I18n.tr("Dim Inactive Windows")
-                subtitle: I18n.tr("Darken the windows you are not using by 20%")
-                checked: section.dimInactive
-                onToggled: section.toggleDimInactive(!section.dimInactive)
-            }
-        }
-    }
 }

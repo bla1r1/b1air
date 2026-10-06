@@ -15,8 +15,8 @@ import QtQuick.Controls
 Rectangle {
     id: root
 
-    default property alias content: view.contentData
-    readonly property real availableWidth: view.availableWidth
+    default property alias content: scrollView.contentData
+    readonly property real availableWidth: scrollView.availableWidth
 
     property bool framed: true
 
@@ -27,7 +27,7 @@ Rectangle {
     clip: true
 
     ScrollView {
-        id: view
+        id: scrollView
         anchors.fill: parent
         anchors.margins: Design.s(Design.space.lg)
         clip: true
@@ -35,6 +35,6 @@ Rectangle {
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         // The suite's one bar (OverflowBar): this one was 3px at half
         // opacity, there to be seen and hard to take hold of.
-        ScrollBar.vertical: OverflowBar {}
+        ScrollBar.vertical: OverflowBar { view: scrollView }
     }
 }

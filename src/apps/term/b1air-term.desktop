@@ -1,12 +1,20 @@
 [Desktop Entry]
 Type=Application
 Name=Terminal
-GenericName=Terminal Emulator
-Comment=Native Wayland Desktop Terminal Emulator
+Name[uk]=Термінал
+Name[ru]=Терминал
+GenericName=Terminal
+GenericName[uk]=Термінал
+GenericName[ru]=Терминал
+Comment=A command line
+Comment[uk]=Командний рядок
+Comment[ru]=Командная строка
+Keywords=terminal;shell;console;command;
+Keywords[uk]=термінал;консоль;командний рядок;
+Keywords[ru]=терминал;консоль;командная строка;
 Exec=b1air-term %U
 Icon=b1air-term
 Terminal=false
-Categories=System;TerminalEmulator;Utility;
-Keywords=terminal;shell;prompt;command;commandline;cmd;
+Categories=System;TerminalEmulator;
 StartupNotify=true
 StartupWMClass=b1air-term

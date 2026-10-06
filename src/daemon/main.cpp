@@ -14,6 +14,7 @@
 #include "proc_util.hpp"
 
 #include <cctype>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 using namespace b1air;
 
@@ -251,6 +253,14 @@ int main(int argc, char* argv[]) {
         return run_focus_tracker();
     } else if (cmd == "gamepad-inhibit" || cmd == "joystick-inhibit") {
         return SystemControl::run_gamepad_inhibit();
+    } else if (cmd == "stats" && argc >= 3 && std::string(argv[2]) == "forget") {
+        // Screen time history, all of it (Settings → Privacy).
+        FocusTimeDB db;
+        if (!db.open() || !db.forget_all()) {
+            std::cerr << "Could not clear the screen time history\n";
+            return 1;
+        }
+        return 0;
     } else if (cmd == "stats") {
         std::string date_arg = (argc >= 3) ? argv[2] : "";
         if (DaemonDBus::is_running()) {
@@ -551,6 +561,55 @@ int main(int argc, char* argv[]) {
         }
         std::cerr << "Usage: " << argv[0]
                   << " fingerprint {status|enroll <finger>|delete <finger>|all|verify|login [status|on|off]}\n";
+        return 1;
+    } else if (cmd == "locale" && argc >= 4 && std::string(argv[2]) == "generate") {
+        // locale generate xx_YY, as root (pkexec, Settings → Language &
+        // Region): a language the system can run in. Only a locale that is
+        // generated can be LANG; most systems have one or two.
+        const std::string name = argv[3];
+        bool ok = name.size() >= 5 && name.size() <= 6;
+        for (size_t i = 0; ok && i < name.size(); ++i) {
+            const char c = name[i];
+            const size_t us = name.find('_');
+            ok = (i < us) ? (c >= 'a' && c <= 'z') : (i == us ? c == '_' : (c >= 'A' && c <= 'Z'));
+        }
+        if (!ok || name.find('_') == std::string::npos) {
+            std::cerr << "Usage: " << argv[0] << " locale generate xx_YY\n";
+            return 2;
+        }
+        if (geteuid() != 0) {
+            std::cerr << "locale generate needs root (pkexec)\n";
+            return 1;
+        }
+        const std::string line = name + ".UTF-8 UTF-8";
+        if (access("/etc/locale.gen", F_OK) == 0) {
+            // Arch, Debian: the line uncommented (or added), then locale-gen.
+            std::ifstream in("/etc/locale.gen");
+            std::string text, l;
+            bool found = false;
+            while (std::getline(in, l)) {
+                std::string bare = l;
+                while (!bare.empty() && (bare[0] == '#' || bare[0] == ' ')) bare.erase(0, 1);
+                if (bare == line) { l = line; found = true; }
+                text += l + "\n";
+            }
+            if (!found) text += line + "\n";
+            std::ofstream out("/etc/locale.gen", std::ios::trunc);
+            out << text;
+            if (!out) { std::cerr << "Could not write /etc/locale.gen\n"; return 1; }
+            out.close();
+            return std::system("locale-gen") == 0 ? 0 : 1;
+        }
+        // Fedora: a language pack per language.
+        if (access("/usr/bin/dnf", X_OK) == 0) {
+            const std::string pkg = "glibc-langpack-" + name.substr(0, name.find('_'));
+            const pid_t pid = fork();
+            if (pid == 0) { execl("/usr/bin/dnf", "dnf", "-y", "install", pkg.c_str(), (char*)nullptr); _exit(127); }
+            int st = 0;
+            waitpid(pid, &st, 0);
+            return WIFEXITED(st) && WEXITSTATUS(st) == 0 ? 0 : 1;
+        }
+        std::cerr << "Do not know how to add a locale on this system\n";
         return 1;
     } else if (cmd == "lid") {
         // lid close|open, from sway's bindswitch: what Settings → Power says.

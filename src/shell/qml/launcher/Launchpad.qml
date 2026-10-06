@@ -92,7 +92,6 @@ PopupShell {
     readonly property var baseApps: [
         { name: "Files", desc: I18n.tr("Native File Manager & Gallery"), icon: "b1air-files", app_id: "system-file-manager", cmd: "b1air-files", cat: "Utilities" },
         { name: "Terminal", desc: I18n.tr("Multi-tab Native Terminal"), icon: "b1air-term", app_id: "utilities-terminal", cmd: "b1air-term", cat: "System" },
-        { name: "Notes", desc: I18n.tr("Markdown Notes with Obsidian & Notion Sync"), icon: "b1air-notes", app_id: "accessories-text-editor", cmd: "b1air-notes", cat: "Office" },
         { name: "Git", desc: I18n.tr("GitHub Desktop Style Git Client"), icon: "b1air-git", app_id: "git", cmd: "b1air-git", cat: "Development" },
         { name: "System Monitor", desc: I18n.tr("Process & Hardware Monitor"), icon: "b1air-monitor", app_id: "utilities-system-monitor", cmd: "b1air-monitor", cat: "System" },
         { name: "Image Viewer", desc: I18n.tr("Lightweight Image & Media Viewer"), icon: "b1air-view", app_id: "image-x-generic", cmd: "b1air-view", cat: "Graphics" },
@@ -195,7 +194,7 @@ PopupShell {
         // compositor's shell environment.  External desktop entries still use
         // Sway's launcher path below, after the strict character allowlist.
         const nativeApps = [
-            "b1air-files", "b1air-term", "b1air-notes", "b1air-git",
+            "b1air-files", "b1air-term", "b1air-git",
             "b1air-monitor", "b1air-view", "b1air-text"
         ];
         if (nativeApps.includes(value)) {

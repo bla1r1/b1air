@@ -1231,8 +1231,7 @@ C.ApplicationWindow {
              : mode === "newfolder" ? I18n.tr("New folder")
              : mode === "newfile" ? I18n.tr("New file") : I18n.tr("Go to folder")
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = Qt.binding(() =>
-            mode === "rename" ? I18n.tr("Rename") : mode === "goto" ? I18n.tr("Go") : I18n.tr("Create"))
+        buttonText: ({ [C.Dialog.Ok]: mode === "rename" ? I18n.tr("Rename") : mode === "goto" ? I18n.tr("Go") : I18n.tr("Create") })
         onOpened: {
             nameField.focusInput();
             // A rename selects the name without its extension, as everywhere.
@@ -1270,7 +1269,7 @@ C.ApplicationWindow {
         message: I18n.tr("This cannot be undone. Nothing goes to the trash.")
         acceptTone: Design.danger
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Delete")
+        buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: FilesBackend.deletePermanently(paths)
     }
 
@@ -1333,7 +1332,7 @@ C.ApplicationWindow {
         }
         title: I18n.trn("Rename %1 item", "Rename %1 items", paths.length)
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Rename")
+        buttonText: ({ [C.Dialog.Ok]: I18n.tr("Rename") })
         onOpened: (mode === "pattern" ? patternField : findField).focusInput()
         onAccepted: {
             const why = FilesBackend.renameMany(paths, names);
@@ -1441,7 +1440,7 @@ C.ApplicationWindow {
         title: paths.length === 1 ? I18n.tr("Compress “%1”", String(paths[0]).split("/").pop())
                                   : I18n.trn("Compress %1 item", "Compress %1 items", paths.length)
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Compress")
+        buttonText: ({ [C.Dialog.Ok]: I18n.tr("Compress") })
         onOpened: archiveName.focusInput()
         onAccepted: if (archiveName.text.trim() !== "") FilesBackend.compressItems(paths, archiveName.text.trim(), format)
         onRejected: window.currentView().forceActiveFocus()
@@ -1500,7 +1499,7 @@ C.ApplicationWindow {
         message: I18n.trn("%1 item is deleted for good.", "%1 items are deleted for good.", FilesBackend.trashCount)
         acceptTone: Design.danger
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
-        Component.onCompleted: standardButton(C.Dialog.Ok).text = I18n.tr("Empty Trash")
+        buttonText: ({ [C.Dialog.Ok]: I18n.tr("Empty Trash") })
         onAccepted: FilesBackend.emptyTrash()
     }
 

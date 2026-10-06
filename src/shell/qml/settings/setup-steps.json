@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "The first-run setup's steps and the news shown after an update, in one place.",
+    "Read by SetupWizard.qml (what it shows) and by b1air-settings (--first-run:",
+    "whether to open it; --setup-baseline: what an account set up by hand has seen).",
+    "",
+    "steps[].version: raise it when a step gains something worth showing again;",
+    "  everyone who saw an older version sees the step once more.",
+    "steps[].needs: hardware the step is about ('wifi', 'fingerprint'); no such",
+    "  hardware, no step.",
+    "steps[].baseline: the version an account that predates the setup counts as",
+    "  seen (it set those things up by hand); absent: not seen, shown at next login.",
+    "news[]: what an update added outside the setup's steps, by release; each item",
+    "  names a Settings page to open. Shown once, after an update, never after an",
+    "  install. The text is English and translated through Ui/i18n like the rest."
+  ],
+  "steps": [
+    { "id": "keyboard",    "version": 2, "baseline": 1 },
+    { "id": "network",     "version": 1, "baseline": 1, "needs": "wifi" },
+    { "id": "theme",       "version": 1, "baseline": 1 },
+    { "id": "wallpaper",   "version": 1, "baseline": 1 },
+    { "id": "user",        "version": 1, "baseline": 1 },
+    { "id": "fingerprint", "version": 1, "needs": "fingerprint" }
+  ],
+  "news": [
+    {
+      "id": "0.2.2",
+      "items": [
+        { "page": "region",   "text": "Language & Region: the language other programs use, and the formats of dates and numbers apart from the language" },
+        { "page": "lock",     "text": "Lock & Login: locking, the fingerprint and the login screen on one page" },
+        { "page": "privacy",  "text": "Privacy: screen time, clipboard history, the trash and stored locations, and wiping them" },
+        { "page": "bar",      "text": "Top Bar: which tiles the Control Center shows, and the weather" },
+        { "page": "updates",  "text": "Updates and Storage & Backup are two pages now" },
+        { "page": "shortcuts","text": "Zed opens on Super+I in place of Notes; the monitor, text editor and camera have keys" }
+      ]
+    }
+  ]
+}

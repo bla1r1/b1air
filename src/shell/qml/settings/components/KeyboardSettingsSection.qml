@@ -37,6 +37,9 @@ ColumnLayout {
     // First-run setup (SetupWizard) shows the page without the cards for
     // later: what anyone needs on the first day, not everything there is.
     property bool essentials: false
+    // The Shortcuts page shows this section for its editor (the card below,
+    // "Desktop shortcuts") and nothing else; the Keyboard page everything but.
+    property bool shortcutsOnly: false
 
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
@@ -171,45 +174,10 @@ ColumnLayout {
     }
 
     // ── Layouts ──────────────────────────────────────────────────────────────
-    // The language of the desktop and its apps (Ui/I18n.qml). Read when a
-    // program starts, so the shell restarts to show it.
+    // The interface language moved to Language & Region, with the system
+    // language and the formats.
     Card {
-        title: I18n.tr("Interface language")
-        subtitle: I18n.tr("Menus, settings and apps; the shell restarts to switch")
-        icon: "\u{f05ca}"
-        accentColor: Design.blue
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: [
-                    { id: "auto", label: I18n.tr("Like the system") },
-                    { id: "en",   label: "English" },
-                    { id: "uk",   label: "Українська" },
-                    { id: "ru",   label: "Русский" }
-                ]
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: (Settings.uiLanguage || "auto") === modelData.id
-                    onClicked: {
-                        if ((Settings.uiLanguage || "auto") === modelData.id) return;
-                        Settings.set("uiLanguage", modelData.id);
-                        restartSoon.restart();
-                    }
-                }
-            }
-        }
-        Timer {
-            id: restartSoon
-            // After settings.json is written.
-            interval: 600
-            onTriggered: Quickshell.execDetached(["b1air-shell", "forceReload"])
-        }
-    }
-
-    Card {
+        visible: !section.shortcutsOnly
         title: I18n.tr("Input layouts")
         subtitle: I18n.tr("The first one is what every login starts in")
         icon: "\u{f030c}"
@@ -371,6 +339,7 @@ ColumnLayout {
     }
 
     Card {
+        visible: !section.shortcutsOnly
         title: I18n.tr("Switching layouts")
         subtitle: section.layouts.length > 1
             ? I18n.tr("The key that cycles through the layouts above")
@@ -419,9 +388,9 @@ ColumnLayout {
 
     Card {
         id: bindCard
-        visible: !section.essentials
+        visible: section.shortcutsOnly
         title: I18n.tr("Desktop shortcuts")
-        subtitle: I18n.tr("Change the key for any of these. The full list is on the Shortcuts page.")
+        subtitle: I18n.tr("Change the key for any of these. Every binding is listed below.")
         icon: "\u{f11c}"
         accentColor: Design.sapphire
 
@@ -449,6 +418,10 @@ ColumnLayout {
             { id: "menu",       cat: "Apps",    keys: "$mod+space",      desc: I18n.tr("Launchpad"),               cmd: "exec $menu" },
             { id: "spotlight",  cat: "Apps",    keys: "$mod+k",          desc: I18n.tr("Spotlight search"),        cmd: "exec $spotlight" },
             { id: "github",     cat: "Apps",    keys: "$mod+g",          desc: I18n.tr("Git"),                     cmd: "exec b1air-git" },
+            { id: "monitor",    cat: "Apps",    keys: "ctrl+shift+Escape", desc: I18n.tr("System Monitor"),        cmd: "exec b1air-monitor" },
+            { id: "code",       cat: "Apps",    keys: "$mod+i",          desc: I18n.tr("Code editor"),             cmd: "exec $codeEditor" },
+            { id: "text",       cat: "Apps",    keys: "$mod+x",          desc: I18n.tr("Text Editor"),             cmd: "exec b1air-text" },
+            { id: "camera",     cat: "Apps",    keys: "$mod+ctrl+c",     desc: I18n.tr("Camera"),                  cmd: "exec b1air-camera" },
             { id: "dropdown",   cat: "Apps",    keys: "$mod+grave",      desc: I18n.tr("Drop-down terminal"),      cmd: "exec swaymsg '[app_id=\"b1air-dropdown\"] scratchpad show' || b1air-term --dropdown" },
             { id: "settings",   cat: "System",  keys: "$mod+shift+s",    desc: I18n.tr("Settings"),                cmd: "exec b1air-shell toggle settings" },
             { id: "control",    cat: "System",  keys: "$mod+c",          desc: I18n.tr("Control Center"),          cmd: "exec b1air-shell toggle control" },

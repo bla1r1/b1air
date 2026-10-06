@@ -1367,7 +1367,7 @@ Item {
                                                     anchors.fill: parent
                                                     clip: true
                                                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                                                    ScrollBar.vertical: OverflowBar {}
+                                                    ScrollBar.vertical: OverflowBar { view: descScroll }
                                                     TextArea {
                                                         id: descInput
                                                         enabled: window.hasRepo
@@ -1951,7 +1951,7 @@ Item {
                                         clip: true
                                         contentWidth: availableWidth
                                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                                        ScrollBar.vertical: OverflowBar {}
+                                        ScrollBar.vertical: OverflowBar { view: commitBodyBox }
                                         Text {
                                             id: commitBody
                                             property bool open: false

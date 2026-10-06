@@ -15,12 +15,25 @@ import QtQuick.Controls
 //
 //   ListView   { ScrollBar.vertical: OverflowBar {} }
 //   Flickable  { ScrollBar.vertical: OverflowBar {} }
+//   ScrollView { id: sv; ScrollBar.vertical: OverflowBar { view: sv } }
+//
+// A ScrollView does not place a bar it is given (a ListView does): without
+// `view` it sat at the view's top-left corner, a sliver drawn over the
+// first card, nowhere near the right edge where it could be dragged.
 // =============================================================================
 
 ScrollBar {
     id: root
 
     active: true
+
+    // The ScrollView this bar belongs to, for it to stand at its right edge.
+    property Item view: null
+    Binding { when: root.view !== null; target: root; property: "parent"; value: root.view }
+    Binding { when: root.view !== null; target: root; property: "x"
+              value: root.view ? (root.view.mirrored ? 0 : root.view.width - root.width) : 0 }
+    Binding { when: root.view !== null; target: root; property: "y"; value: root.view ? root.view.topPadding : 0 }
+    Binding { when: root.view !== null; target: root; property: "height"; value: root.view ? root.view.availableHeight : 0 }
 
     // `size` is the fraction of the content currently on screen, so anything
     // below 1 means there is more of it. Works the same for a ListView, a

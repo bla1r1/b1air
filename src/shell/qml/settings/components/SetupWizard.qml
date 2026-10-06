@@ -15,12 +15,17 @@ import "../../Services"
 // settings page itself (the part that matters on day one), so there is one
 // place that sets a thing, and what is chosen here is what Settings shows.
 //
-// ~/.config/b1air/setup-done lists the steps already seen, one id a line.
+// ../setup-steps.json is the list of steps, each with a version, and the news
+// of each release; b1air-settings reads the same file. ~/.config/b1air/
+// setup-done holds what this account has seen, a line each: "keyboard@2",
+// "news@0.2.2" ("keyboard" alone, from before versions, is version 1).
 // `b1air-settings --first-run` (autostart.conf) opens "setup.<id>.<id>…" with
-// only the steps that are new and that this machine has the hardware for —
-// so an update that adds a step shows that step, and the fingerprint step
-// waits until there is a reader. Plain "setup" is all of them, by hand.
-// update-dotfiles.sh marks the steps that came before this as seen.
+// only the steps that are new or newer than the one seen, and that this
+// machine has the hardware for, and ".news" after an update with news — so an
+// update shows what it changed, and the fingerprint step waits until there is
+// a reader. Plain "setup" is every step, by hand.
+// `b1air-settings --setup-baseline` (update-dotfiles.sh) marks the steps an
+// account set up by hand before there was a setup.
 // =============================================================================
 
 Item {
@@ -30,10 +35,12 @@ Item {
     property string page: "setup"
     // Emitted on Finish or Skip, after the marker is written.
     signal finished()
+    // A page named by the news: the setup is done, Settings goes there.
+    signal openPage(string id)
 
     readonly property var catalog: [
         { id: "keyboard",    icon: "\u{f05ca}", title: I18n.tr("Language & keyboard"),
-          hint: I18n.tr("The language of the desktop, and the layouts you type in") },
+          hint: I18n.tr("The language of the desktop and of other programs, the formats, and the layouts you type in") },
         { id: "network",     icon: "\u{f0928}", title: I18n.tr("Wi-Fi"),
           hint: I18n.tr("Join a network now, or later from the top bar"), when: Network.hasWifi },
         { id: "theme",       icon: "\u{f0765}", title: I18n.tr("Theme"),
@@ -43,8 +50,42 @@ Item {
         { id: "user",        icon: "\u{f007}",  title: I18n.tr("Your account"),
           hint: I18n.tr("Name, picture and the shell you log in with") },
         { id: "fingerprint", icon: "\u{f0237}", title: I18n.tr("Fingerprint"),
-          hint: I18n.tr("Unlock the screen with a touch"), when: wizard.fpAvailable }
+          hint: I18n.tr("Unlock the screen with a touch"), when: wizard.fpAvailable },
+        // Only when named: --first-run adds it after an update.
+        { id: "news",        icon: "\u{f0394}", title: I18n.tr("What's new"),
+          hint: I18n.tr("This update added these; each opens where it is set"), when: false }
     ]
+
+    // ── setup-steps.json and setup-done ─────────────────────────────────────
+    property var spec: ({ steps: [], news: [] })
+    FileView {
+        path: String(Qt.resolvedUrl("../setup-steps.json")).replace(/^file:\/\//, "")
+        printErrors: false
+        onLoaded: {
+            try { wizard.spec = JSON.parse(text()); } catch (e) {}
+        }
+    }
+    readonly property string markerPath: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/b1air/setup-done"
+    property var seenNews: []
+    FileView {
+        path: wizard.markerPath
+        printErrors: false
+        onLoaded: wizard.seenNews = String(text() || "").split("\n")
+            .filter(l => l.indexOf("news@") === 0).map(l => l.slice(5))
+    }
+    function versionOf(id) {
+        const s = (wizard.spec.steps || []).find(x => x.id === id);
+        return s && s.version ? s.version : 1;
+    }
+    // The news not seen yet, newest release first, items flattened.
+    readonly property var news: {
+        const out = [];
+        for (const n of (wizard.spec.news || []).slice().reverse()) {
+            if (wizard.seenNews.indexOf(n.id) >= 0) continue;
+            for (const it of (n.items || [])) out.push(it);
+        }
+        return out;
+    }
 
     readonly property var only: wizard.page.indexOf(".") > 0 ? wizard.page.split(".").slice(1) : []
     // Named steps were already checked for hardware by --first-run.
@@ -69,9 +110,14 @@ Item {
         }
     }
 
-    // Adds ids to the marker, each once.
+    // Adds lines to the marker, each once: steps at their version, and the
+    // news. Finishing marks all news seen — after an install too, where
+    // everything is new and none of it news.
     function markSeen(ids) {
-        const list = ids.filter(i => /^[a-z]+$/.test(i)).join(" ");
+        const lines = ids.filter(i => /^[a-z]+$/.test(i) && i !== "news").map(i => i + "@" + wizard.versionOf(i));
+        for (const n of (wizard.spec.news || []))
+            if (/^[0-9A-Za-z.-]+$/.test(n.id)) lines.push("news@" + n.id);
+        const list = lines.join(" ");
         Quickshell.execDetached(["sh", "-c",
             "d=\"${XDG_CONFIG_HOME:-$HOME/.config}/b1air\"; mkdir -p \"$d\"; f=\"$d/setup-done\"; "
             + "for i in " + list + "; do grep -qx \"$i\" \"$f\" 2>/dev/null || echo \"$i\" >> \"$f\"; done"]);
@@ -80,6 +126,10 @@ Item {
     function finish() {
         wizard.markSeen(wizard.steps.map(s => s.id));
         wizard.finished();
+    }
+    function finishAt(id) {
+        wizard.markSeen(wizard.steps.map(s => s.id));
+        wizard.openPage(id);
     }
 
     onIndexChanged: if (scroll.contentItem) scroll.contentItem.contentY = 0
@@ -92,7 +142,9 @@ Item {
     Connections {
         target: Settings
         function onUiLanguageChanged() {
-            wizard.markSeen(["keyboard"]);
+            // Not the news: markSeen would mark it, and it comes after.
+            Quickshell.execDetached(["sh", "-c",
+                "d=\"${XDG_CONFIG_HOME:-$HOME/.config}/b1air\"; mkdir -p \"$d\"; echo keyboard@" + wizard.versionOf("keyboard") + " >> \"$d/setup-done\""]);
             Quickshell.execDetached(["sh", "-c", "sleep 2; exec b1air-settings --first-run"]);
             wizard.restarting();
         }
@@ -163,13 +215,22 @@ Item {
             Layout.fillHeight: true
             clip: true
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-            ScrollBar.vertical: OverflowBar {}
+            ScrollBar.vertical: OverflowBar { view: scroll }
 
             ColumnLayout {
                 width: scroll.availableWidth
                 spacing: Design.s(Design.space.lg)
 
                 // One step built at a time, as SettingsApp does with pages.
+                // The languages and formats, then the keyboard: two loaders,
+                // as every other step's section is, rather than one layout
+                // holding both.
+                Loader {
+                    Layout.fillWidth: true
+                    active: wizard.step.id === "keyboard"
+                    visible: active
+                    sourceComponent: Component { RegionSettingsSection { width: parent ? parent.width : 0 } }
+                }
                 Loader {
                     Layout.fillWidth: true
                     active: wizard.step.id === "keyboard"
@@ -205,6 +266,38 @@ Item {
                     active: wizard.step.id === "fingerprint"
                     visible: active
                     sourceComponent: Component { UserSettingsSection { part: "fingerprint"; width: parent ? parent.width : 0 } }
+                }
+                Loader {
+                    Layout.fillWidth: true
+                    active: wizard.step.id === "news"
+                    visible: active
+                    sourceComponent: Component {
+                        Card {
+                            width: parent ? parent.width : 0
+                            title: I18n.tr("In Settings")
+                            icon: "\u{f0394}"
+                            accentColor: Design.accent
+                            Repeater {
+                                model: wizard.news
+                                delegate: RowLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: Design.s(Design.space.md)
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: I18n.tr(modelData.text)
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Pill {
+                                        visible: !!modelData.page
+                                        label: I18n.tr("Open")
+                                        icon: "\u{f0054}"
+                                        onClicked: wizard.finishAt(modelData.page)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

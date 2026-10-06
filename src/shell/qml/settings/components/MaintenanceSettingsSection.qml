@@ -13,6 +13,10 @@ import B1air.Daemon
 ColumnLayout {
     id: section
 
+    // "updates": the Updates page (this desktop's and the system's).
+    // "": Storage & Backup (backups, cleanup, restore points, vaults, reset).
+    property string part: ""
+
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -156,6 +160,7 @@ ColumnLayout {
     // the check found once it has, lists what an update would bring, and the
     // button pulls (and says why it cannot, when it cannot).
     Card {
+        visible: section.part === "updates"
         title: I18n.tr("Desktop Updates")
         subtitle: section.dotRemote ? I18n.tr("This desktop's own code and configuration, from %1", section.dotRemote)
                                      : I18n.tr("This desktop's own code and configuration")
@@ -245,6 +250,7 @@ ColumnLayout {
 
     // ── Moving this configuration to another machine ─────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Settings Backup & Transfer")
         subtitle: I18n.tr("One file holding this desktop's settings, themes, pinned apps and bookmarks")
         icon: "\u{f0193}"
@@ -289,6 +295,7 @@ ColumnLayout {
 
     // ── 2. System Packages Updates ───────────────────────────────────────────
     Card {
+        visible: section.part === "updates"
         title: I18n.tr("System Packages")
         subtitle: I18n.tr("Kernel, drivers and applications, managed by %1", section.managerName)
         icon: "\u{f0187}"
@@ -335,6 +342,7 @@ ColumnLayout {
 
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Disk Sweeper & Storage Maintenance")
         subtitle: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
         icon: "\u{f014}"
@@ -371,6 +379,7 @@ ColumnLayout {
                                          : Sys.commandExists("snapper") ? "snapper" : ""
 
     Card {
+        visible: section.part === ""
         title: I18n.tr("Restore Points")
         subtitle: section.snapshotTool !== ""
                   ? I18n.tr("Snapshot the system with %1 before a big update", section.snapshotTool)
@@ -394,6 +403,7 @@ ColumnLayout {
 
     // ── 5. Encrypted Vaults Manager (M4) ──────────────────────────────────────
     Card {
+        visible: section.part === ""
         title: I18n.tr("Encrypted Security Vaults")
         subtitle: I18n.tr("Mount and secure confidential directories using client-side encryption")
         icon: "\u{f023}"
@@ -411,6 +421,34 @@ ColumnLayout {
                     Sys.makeDir("~/.vaults");
                     Quickshell.execDetached(["xdg-open", Quickshell.env("HOME") + "/.vaults"]);
                 }
+            }
+        }
+    }
+
+    // The desktop itself: reload it, or put every setting back. These were
+    // on About, a page otherwise only about what this computer is.
+    Card {
+        visible: section.part === ""
+        title: I18n.tr("Desktop")
+        subtitle: I18n.tr("Reload the desktop, or put every setting back to its default")
+        icon: "\u{f0493}"
+        accentColor: Design.mauve
+
+        ButtonRow {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+
+            ActionButton {
+                icon: "\u{f0446}"
+                label: I18n.tr("Reload Sway & Quickshell")
+                onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
+            }
+
+            ActionButton {
+                icon: "\u{f0450}"
+                label: I18n.tr("Reset Defaults")
+                destructive: true
+                onActivated: Settings.resetDefaults()
             }
         }
     }

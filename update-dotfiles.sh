@@ -433,6 +433,7 @@ update_suite() {
         mkdir -p "$(dirname "$SUITE_STAMP")"
         git -C "$REPO_DIR" rev-parse HEAD > "$SUITE_STAMP"
     fi
+    retire_old_apps >/dev/null || true
     ok "b1air suite installed."
 }
 
@@ -440,13 +441,13 @@ update_suite() {
 # not seen. A desktop installed before the setup existed has been set up by
 # hand already, so the steps that came with it count as seen; what an update
 # adds later — the fingerprint step, for one — is still shown at next login.
-SETUP_BASELINE="keyboard network theme wallpaper user"
+# Which steps those are is in src/shell/qml/settings/setup-steps.json
+# ("baseline"), read by b1air-settings itself; it does nothing when the
+# account has a marker already.
 mark_setup_baseline() {
     [[ "$DRY_RUN" -eq 1 ]] && return 0
-    local f="${XDG_CONFIG_HOME:-$HOME/.config}/b1air/setup-done"
-    [[ -e "$f" ]] && return 0
-    mkdir -p "$(dirname "$f")"
-    printf '%s\n' $SETUP_BASELINE > "$f"
+    command -v b1air-settings >/dev/null 2>&1 || return 0
+    b1air-settings --setup-baseline || warn "Could not mark the setup's steps as seen."
 }
 
 main() {
