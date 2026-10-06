@@ -24,6 +24,19 @@ Scope {
     // Translucent panels only where the compositor blurs behind them: swayFX
     // with blur on. Plain sway shows the wallpaper sharp through a
     // translucent panel, and over a busy picture the text is unreadable.
+    // A reload as a fresh start: under the session's supervisor (b1air-daemon
+    // session) the shell exits with 75 and is started again at once. An
+    // in-place Quickshell.reload() crashed about one time in two — a timer of
+    // the old generation firing into a destroyed object. Run by hand, with no
+    // one to start it again, it still reloads in place.
+    // No reloading by itself when a QML file changes — every update changes
+    // them all, and an in-place reload is what crashed. An update asks for a
+    // restart instead (src/Makefile's install, update-dotfiles.sh).
+    function restartShell() {
+        if (Quickshell.env("B1AIR_SHELL_SUPERVISED") === "1") Qt.exit(75);
+        else Quickshell.reload(true);
+    }
+
     readonly property bool compositorBlurs: Sway.swayfx
     Binding {
         target: Design
@@ -49,6 +62,11 @@ Scope {
     // on every login — the picked theme survived in settings.json and was
     // undone on disk a moment later.
     Component.onCompleted: {
+        // No reloading by itself when a QML file changes — every update
+        // changes them all, and an in-place reload is what crashed. An update
+        // asks for a restart instead (src/Makefile's install).
+        Quickshell.watchFiles = false;
+
         if (Settings.loaded && Settings.themeName)
             Theme.apply(Settings.themeName, false);
 
@@ -125,7 +143,7 @@ Scope {
                 masterWindow.handleIpcCommand("close", true);
                 break;
             case "forceReload":
-                Quickshell.reload(true);
+                rootScope.restartShell();
                 break;
             }
         }
@@ -199,6 +217,12 @@ Scope {
         }
     }
 
+    Dock {}
+
+    HotCorners {
+        onRequestCommand: cmd => masterWindow.handleIpcCommand(cmd, true)
+    }
+
     PanelWindow {
         id: masterWindow
         color: "transparent"
@@ -208,7 +232,7 @@ Scope {
         target: "main"
     
         function forceReload() {
-            Quickshell.reload(true) 
+            rootScope.restartShell();
         }
 
         function close() {
@@ -517,17 +541,21 @@ Scope {
                     function onContentWidthChanged() { masterWindow.refitHeight(); }
                 }
 
+                // A panel opens on a small spring — it grows from 94% and
+                // settles a hair past full size — and goes faster than it
+                // came, shrinking a little as it fades. 98% over 120 ms was too
+                // small a change to read as anything opening.
                 replaceEnter: Transition {
                     ParallelAnimation {
-                        NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120; easing.type: Easing.OutExpo }
-                        NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: Design.duration.fast + 40; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "scale"; from: 0.94; to: 1.0; duration: Design.duration.fast * 2 + 20; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
                     }
                 }
                 replaceExit: Transition {
                     ParallelAnimation {
                         // Uses the dynamically set exitDuration
                         NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: masterWindow.exitDuration; easing.type: Easing.InCubic }
-                        NumberAnimation { property: "scale"; from: 1.0; to: 1.01; duration: masterWindow.exitDuration; easing.type: Easing.InCubic }
+                        NumberAnimation { property: "scale"; from: 1.0; to: 0.97; duration: masterWindow.exitDuration; easing.type: Easing.InCubic }
                     }
                 }
             }
@@ -592,6 +620,10 @@ Scope {
     // Which page inside a multi-page surface a widget name means. Used both when
     // the surface is created and when it is already on screen.
     function pageFor(w, a) {
+        if (w === "wifimenu") return "wifi";
+        if (w === "soundmenu") return "sound";
+        if (w === "batterymenu") return "battery";
+        if (w === "focusmenu") return "focus";
         if (w === "wifi") return "wifi";
         if (w === "bluetooth") return "bluetooth";
         if (w === "sound" || w === "volume") return "sound";

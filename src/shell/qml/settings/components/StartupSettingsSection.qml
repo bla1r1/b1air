@@ -373,12 +373,11 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
-                Icon { text: "󰋖"; role: "title"; color: Design.yellow }
+                Icon { visible: false; text: "󰋖"; role: "title"; color: Design.yellow }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: I18n.tr("Open Guide on Login"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Displays the keybinding and tips modal after desktop loads"); role: "caption"; dim: true }
+                    Label { text: I18n.tr("Open Guide on Login") }
                 }
                 Toggle {
                     checked: section.openGuideAtStartup
@@ -395,12 +394,11 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
-                Icon { text: "\u{f0493}"; role: "title"; color: Design.yellow }
+                Icon { visible: false; text: "\u{f0493}"; role: "title"; color: Design.yellow }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
-                    Label { text: I18n.tr("First-run setup"); weight: Design.weight.semibold }
-                    Label { text: I18n.tr("Language, Wi-Fi, theme, wallpaper, account and fingerprint, step by step"); role: "caption"; dim: true; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Label { text: I18n.tr("First-run setup") }
                 }
                 ActionButton {
                     Layout.fillWidth: false

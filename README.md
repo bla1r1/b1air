@@ -33,6 +33,7 @@ Key components:
 * **Own small tools** in place of the usual helpers, each with its tests: `b1air-lock` (the lock screen, instead of swaylock), idle handling inside the daemon (instead of swayidle), `b1air-clip` (instead of wl-clipboard), `b1air-gamma` (night light with a schedule, instead of wlsunset), `b1air-bg` (wallpaper, instead of swaybg), `b1air-shot` (the Print overlay: region, recording, QR — instead of a QML one started per press).
 * **Lock screen**: `b1air-lock` by default — up in milliseconds, before the machine sleeps: each screen's wallpaper blurred, clock, account picture and name, one password field for every screen, keyboard layout, battery, weather, and a reboot / sleep / shut down menu. It is the only lock screen — no QML; one that dies while locked is replaced by a new one, the session staying locked.
 * **Fingerprint** (fprintd): the installer finds the reader by its USB id and installs the driver libfprint lacks — python-validity for the Validity/Synaptics readers of many ThinkPads (`06cb:009a`), the Goodix builds for others (Arch; `lib/fingerprint.sh`); updates add it when a reader appears. Enrol and test fingers in Settings → Lock & Login; a touch opens either lock screen. Optionally at the login screen too (an empty password and Enter, then the reader) — only SDDM's PAM file is changed; sudo, polkit and the console keep asking for the password.
+* **Phones and iPods in Files**, as Finder shows them: an iPod's music and playlists with their covers — drag songs or albums on, FLAC and Ogg are converted on the way — through [podsync](https://github.com/bla1r1/podsync) (`third_party/podsync`); an iPhone's photos (imported into Pictures), the files its apps share, and a full backup (libimobiledevice); an Android phone's storage and photos over MTP, with its battery when USB debugging is on.
 * **Remote Access**: Built-in headless WayVNC support and unattended screencasting configuration for AnyDesk, RustDesk, and OBS with persistent uinput permissions.
 
 ---
@@ -138,7 +139,7 @@ DOTFILES_COMMIT=<40-character commit hash> \
 ### Option 2: Manual Clone
 
 ```bash
-git clone https://github.com/bla1r1/DotsFiles.git ~/DotsFiles
+git clone --recurse-submodules https://github.com/bla1r1/DotsFiles.git ~/DotsFiles
 cd ~/DotsFiles
 ./install.sh
 ```

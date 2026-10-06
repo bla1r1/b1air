@@ -39,8 +39,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Save Folder"); weight: Design.weight.semibold }
-                Label { text: section.screenshotDir; role: "caption"; dim: true }
+                Label { text: I18n.tr("Save Folder") }
             }
 
             Pill {
@@ -57,8 +56,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Image Format"); weight: Design.weight.semibold }
-                Label { text: I18n.tr("File encoding type for saved captures"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Image Format") }
             }
 
             RowLayout {
@@ -84,8 +82,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Save File to Disk"); weight: Design.weight.semibold }
-                Label { text: I18n.tr("Automatically write image file to the screenshots directory"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Save File to Disk") }
             }
 
             Toggle {
@@ -105,8 +102,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Copy to Clipboard"); weight: Design.weight.semibold }
-                Label { text: I18n.tr("Copy image directly into Wayland clipboard buffer"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Copy to Clipboard") }
             }
 
             Toggle {

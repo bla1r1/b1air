@@ -9,6 +9,10 @@ Rectangle {
     id: root
     property string label: ""
     property string glyph: ""
+    // The glyph's colour when not active: a tag's colour, say.
+    property color glyphColor: Design.textDim
+    // Keep glyphColor when active too (a tag's colour is what it is).
+    property bool keepGlyphColor: false
     property string detail: ""
     property string badge: ""
     property bool active: false
@@ -45,7 +49,7 @@ Rectangle {
             text: root.glyph
             font.family: Design.font.icon
             font.pixelSize: Design.s(17)
-            color: root.active ? Design.accent : Design.textDim
+            color: root.active && !root.keepGlyphColor ? Design.accent : root.glyphColor
             horizontalAlignment: Text.AlignHCenter
         }
         ColumnLayout {

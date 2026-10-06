@@ -661,6 +661,15 @@ int SessionManager::run_session() {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
 
+            // Tells the shell a supervisor is here: asked to reload (a new
+            // language, new formats) it exits with kRestartCode and is started
+            // afresh, rather than reloading in place — Quickshell.reload()
+            // tears the old QML generation down while its timers can still
+            // fire, and about one reload in two crashed (a timer delivered to
+            // a destroyed object).
+            constexpr int kRestartCode = 75;
+            setenv("B1AIR_SHELL_SUPERVISED", "1", 1);
+
             while (g_session_running) {
                 // Everything the child needs, prepared before the spawn.
                 const char* argv[] = {"quickshell", "-p", qs_main.c_str(), nullptr};
@@ -685,6 +694,12 @@ int SessionManager::run_session() {
                 int status = 0;
                 while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
                 if (!g_session_running) break;
+
+                // Asked for, not a failure: straight back up.
+                if (WIFEXITED(status) && WEXITSTATUS(status) == kRestartCode) {
+                    std::cerr << "[b1air-session] the shell asked to be restarted\n";
+                    continue;
+                }
 
                 const auto now = std::chrono::steady_clock::now();
                 const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(

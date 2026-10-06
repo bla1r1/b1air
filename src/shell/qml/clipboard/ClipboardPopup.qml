@@ -124,9 +124,11 @@ PopupShell {
                 width: ListView.view ? ListView.view.width : 0
                 implicitHeight: cardCol.implicitHeight + Design.s(Design.space.sm)
                 radius: Design.s(Design.radius.card)
-                color: clipCard.pinned ? Design.tint(Design.accent, 0.12)
-                     : (cardHoverMa.containsMouse ? Design.raised : Design.glassCard)
-                border.color: clipCard.pinned ? Design.accent
+                // Pinned: a hint of the accent. A full accent frame on every
+                // template made a list of them read as a list of warnings.
+                color: clipCard.pinned ? Design.tint(Design.accent, 0.08)
+                     : (cardHoverMa.containsMouse ? Design.glassHover : Design.glassCard)
+                border.color: clipCard.pinned ? Design.tint(Design.accent, 0.40)
                             : (cardHoverMa.containsMouse ? Design.glassBorderStrong : Design.glassBorder)
                 border.width: 1
 

@@ -85,6 +85,7 @@ if [[ -n "$PINNED_COMMIT" ]]; then
         exit 1
     }
     git -C "$TARGET_DIR" checkout --detach --quiet "$PINNED_COMMIT"
+    git -C "$TARGET_DIR" submodule update --init --quiet
 else
     echo "[ERROR] Refusing to execute an unpinned repository. Set DOTFILES_COMMIT to a verified 40-character commit hash."
     exit 1

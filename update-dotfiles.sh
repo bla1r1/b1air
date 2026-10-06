@@ -176,6 +176,12 @@ check_packages() {
         while IFS= read -r pkg; do
             # swayfx and sway are alternatives; a --no-aur install chose sway.
             [[ "$pkg" == "swayfx" ]] && pkg_installed arch sway && continue
+            # Ours, built from source into /usr/local (tools/build-swayfx.sh,
+            # kept current by update_compositor): the AUR one is only for
+            # B1AIR_SWAYFX_FROM_SOURCE=0, as in install.sh. Without this
+            # every update had yay build the AUR swayfx all over again, since
+            # pacman does not know ours.
+            [[ "$pkg" == "swayfx" && ( -x /usr/local/bin/swayfx || "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ) ]] && continue
             pkg_installed arch "$pkg" || missing_aur+=("$pkg")
         done < <(read_package_list "$REPO_DIR/packages/arch-aur.txt" required)
     fi
@@ -390,8 +396,16 @@ suite_unchanged() {
     local last
     last="$(cat "$SUITE_STAMP")"
     git -C "$REPO_DIR" cat-file -e "${last}^{commit}" 2>/dev/null || return 1
-    git -C "$REPO_DIR" diff --quiet "$last" HEAD -- src || return 1
-    [[ -z "$(git -C "$REPO_DIR" status --porcelain -- src)" ]]
+    git -C "$REPO_DIR" diff --quiet "$last" HEAD -- src third_party || return 1
+    [[ -z "$(git -C "$REPO_DIR" status --porcelain -- src third_party)" ]]
+}
+
+# third_party/ holds submodules (podsync, the iPod engine Files uses). A pull
+# moves the recorded commit; this checks it out, and fetches it the first time.
+sync_submodules() {
+    [[ "$DRY_RUN" -eq 1 || ! -f "$REPO_DIR/.gitmodules" ]] && return 0
+    GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" submodule update --init --quiet \
+        || warn "Could not fetch the submodules in third_party/; iPods will not show in Files."
 }
 
 update_suite() {
@@ -457,6 +471,7 @@ main() {
 
     printf "\n${BOLD}${CYAN}=== DotsFiles Smart Environment Updater ===${RESET}\n\n"
     pull_upstream
+    sync_submodules
     check_packages
     if [[ "$CONFIGS_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
         local aur=""

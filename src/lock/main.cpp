@@ -414,8 +414,8 @@ void rounded(cairo_t* cr, double x, double y, double w, double h, double r) {
 }
 
 // The desktop's: Design.qml's sans for words, its Nerd Font for icons.
-constexpr const char* kFont = "Fira Sans";
-constexpr const char* kIconFont = "JetBrainsMono Nerd Font Mono";
+constexpr const char* kFont = "Inter";
+constexpr const char* kIconFont = "b1air Symbols";
 
 void font(cairo_t* cr, double size, bool bold, bool icon = false) {
     cairo_select_font_face(cr, icon ? kIconFont : kFont, CAIRO_FONT_SLANT_NORMAL,

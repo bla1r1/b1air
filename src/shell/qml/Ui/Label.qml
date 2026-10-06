@@ -32,12 +32,16 @@ Text {
         }
     }
 
-    // isMono: false uses Fira Sans for clean, modern UI; true uses JetBrainsMono Nerd Font for numbers/stats/code
+    // isMono: false uses Inter for clean, modern UI; true uses JetBrainsMono Nerd Font for numbers/stats/code
     property bool isMono: false
 
     property int weight: Design.weight.regular
+    // Figures of one width, for numbers that change in place — a clock, a
+    // percentage, a counter — so the text beside them does not shuffle.
+    property bool tabular: false
 
     font.weight: root.weight
+    font.features: root.tabular ? Design.tabular : ({})
     font.family: root.isMono ? Design.font.mono : Design.font.sans
     font.pixelSize: Design.s(root._size)
     color: root.dim ? Design.textDim : Design.text

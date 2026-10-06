@@ -87,6 +87,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
 
             Rectangle {
+                visible: false   // no glyph on a tile: the row is its name and state
                 width: Design.s(36)
                 height: width
                 radius: width / 2

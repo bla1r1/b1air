@@ -416,8 +416,6 @@ ColumnLayout {
                         Label {
                             Layout.fillWidth: true
                             text: idleRow.modelData.label
-                            role: "caption"
-                            dim: true
                             elide: Text.ElideRight
                         }
                         Repeater {

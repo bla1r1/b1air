@@ -183,7 +183,9 @@ PopupShell {
         window.totalSeconds = data.total || 0;
         window.averageSeconds = data.average || 0;
         window.yesterdaySeconds = data.yesterday || 0;
-        window.weekRangeStr = data.week_range || "";
+        // The daemon's range is strftime in the C locale ("5 Oct – 11 Oct");
+        // the week is worked out here, in the interface's language.
+        window.weekRangeStr = data.week_range ? window.weekRangeOf(window.activeDate) : "";
         window.liveActiveApp = data.current || "Unknown";
 
         if (window.isFirstLoad) firstLoadTimer.start();
@@ -310,6 +312,20 @@ PopupShell {
         return (new Date(d - z)).toISOString().slice(0, 10);
     }
 
+    // The daemon names days in English ("Mon"); shown in the interface's.
+    function dayShort(en) {
+        const i = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(en);
+        return i < 0 ? en : I18n.locale.dayName(i, Locale.ShortFormat);
+    }
+
+    function weekRangeOf(d) {
+        const start = new Date(d);
+        start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return I18n.date(start, "d MMM") + " – " + I18n.date(end, "d MMM");
+    }
+
     function getFancyDate(d) {
         let monthName = window.monthNames[d.getMonth()];
         let dateNum = d.getDate();
@@ -411,13 +427,13 @@ PopupShell {
             let w = window.weekData[i];
             if (i < weekListModel.count) {
                 weekListModel.setProperty(i, "dateStr", w.date);
-                weekListModel.setProperty(i, "dayName", w.day);
+                weekListModel.setProperty(i, "dayName", window.dayShort(w.day));
                 weekListModel.setProperty(i, "total", w.total);
                 weekListModel.setProperty(i, "isTarget", w.is_target);
             } else {
                 weekListModel.append({
                     dateStr: w.date,
-                    dayName: w.day,
+                    dayName: window.dayShort(w.day),
                     total: w.total,
                     isTarget: w.is_target
                 });
@@ -457,15 +473,15 @@ PopupShell {
     function formatTimeLarge(secs) {
         let h = Math.floor(secs / 3600);
         let m = Math.floor((secs % 3600) / 60);
-        if (h > 0) return h + "h " + m + "m";
-        return m + "m";
+        if (h > 0) return I18n.tr("%1h %2m", h, m);
+        return I18n.tr("%1m", m);
     }
 
     function formatTimeList(secs) {
         let h = Math.floor(secs / 3600);
         let m = Math.floor((secs % 3600) / 60);
-        if (h > 0) return h + "h " + m.toString().padStart(2, '0') + "m";
-        return m + "m";
+        if (h > 0) return I18n.tr("%1h %2m", h, m.toString().padStart(2, '0'));
+        return I18n.tr("%1m", m);
     }
 
     // -------------------------------------------------------------------------
@@ -688,7 +704,7 @@ PopupShell {
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(200)
                                 radius: Design.s(14)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Qt.alpha(Design.hover, 0.3)
                                 border.width: 1
 
@@ -724,7 +740,7 @@ PopupShell {
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(300)
                                 radius: Design.s(14)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Qt.alpha(Design.hover, 0.3)
                                 border.width: 1
 
@@ -762,7 +778,7 @@ PopupShell {
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(200)
                                 radius: Design.s(14)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Qt.alpha(Design.hover, 0.3)
                                 border.width: 1
 
@@ -825,7 +841,7 @@ PopupShell {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(72)
                             radius: Design.s(14)
-                            color: Design.surface
+                            color: Design.glassCard
                             border.color: Qt.alpha(pomoRing.tone, window.focusTimer.active ? 0.45 : 0.2)
                             border.width: 1
 
@@ -940,7 +956,9 @@ PopupShell {
                         RowLayout {
                             id: middleSection
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(160)
+                            // As tall as the month needs, so the calendar grid does
+                            // not hang into the card below.
+                            Layout.preferredHeight: Math.max(Design.s(160), heatCol.implicitHeight + Design.s(12) * 2)
                             Layout.fillHeight: false
                             spacing: Design.s(16)
 
@@ -950,7 +968,7 @@ PopupShell {
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(400) 
                                 radius: Design.s(14)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Qt.alpha(Design.hover, 0.3)
                                 border.width: 1
 
@@ -961,7 +979,7 @@ PopupShell {
                                     anchors.centerIn: parent
                                     width: parent.width - Design.s(32)
                                     visible: weekListModel.count === 0
-                                    icon: "\u{f0c7a}"
+                                    icon: "\u{f0128}"
                                     title: I18n.tr("No week to show yet")
                                 }
 
@@ -1000,7 +1018,7 @@ PopupShell {
                                                 Rectangle {
                                                     anchors.fill: parent
                                                     radius: Design.s(4) 
-                                                    color: Design.raised
+                                                    color: Design.glassCard
                                                     visible: !model.isTarget
                                                     opacity: barMa.containsMouse ? 0.7 : 1.0
                                                     Behavior on color { ColorAnimation { duration: Design.duration.slow; easing.type: Easing.OutCubic } }
@@ -1038,8 +1056,12 @@ PopupShell {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(300)
+                                // At least its month: six rows of days did not fit the
+                                // height the week chart beside it set, and the last
+                                // ones hung below the card.
+                                Layout.minimumHeight: heatCol.implicitHeight + Design.s(12) * 2
                                 radius: Design.s(14)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Qt.alpha(Design.hover, 0.3)
                                 border.width: 1
 
@@ -1047,6 +1069,7 @@ PopupShell {
                                 transform: Translate { x: Design.s(30) * (1 - introMidRight) }
 
                                 ColumnLayout {
+                                    id: heatCol
                                     anchors.fill: parent
                                     anchors.margins: Design.s(12)
                                     spacing: Design.s(8)
@@ -1067,7 +1090,8 @@ PopupShell {
                                         spacing: Design.s(6)
 
                                         Repeater {
-                                            model: ["M", "T", "W", "T", "F", "S", "S"]
+                                            // In the interface's language, Monday first.
+                                            model: [1, 2, 3, 4, 5, 6, 0].map(d => I18n.locale.dayName(d, Locale.NarrowFormat))
                                             delegate: Label {
                                                 required property var modelData
                                                 width: Design.s(18)
@@ -1134,7 +1158,7 @@ PopupShell {
                             Layout.fillWidth: true
                             Layout.fillHeight: true 
                             radius: Design.s(14)
-                            color: Design.surface
+                            color: Design.glassCard
                             border.color: Qt.alpha(Design.hover, 0.3)
                             border.width: 1
 
@@ -1357,7 +1381,7 @@ PopupShell {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(260)
                             radius: Design.s(14)
-                            color: Design.surface
+                            color: Design.glassCard
                             border.color: Qt.alpha(Design.hover, 0.3)
                             border.width: 1
 
@@ -1475,7 +1499,7 @@ PopupShell {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Design.s(10)
-                                        color: Design.raised
+                                        color: Design.glassCard
 
                                         ColumnLayout {
                                             anchors.centerIn: parent
@@ -1501,7 +1525,7 @@ PopupShell {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Design.s(10)
-                                        color: Design.raised
+                                        color: Design.glassCard
 
                                         ColumnLayout {
                                             anchors.centerIn: parent
@@ -1529,7 +1553,7 @@ PopupShell {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             radius: Design.s(14)
-                            color: Design.surface
+                            color: Design.glassCard
                             border.color: Qt.alpha(Design.hover, 0.3)
                             border.width: 1
 

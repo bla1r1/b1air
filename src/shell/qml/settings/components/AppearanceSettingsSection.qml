@@ -110,7 +110,7 @@ ColumnLayout {
     Card {
         title: I18n.tr("Other Applications")
         subtitle: I18n.tr("Browsers, GTK and Qt programs: follow the theme, or stay dark or light")
-        icon: "\u{f0d73}"
+        icon: "\u{f08c6}"
         accentColor: Design.sapphire
 
         RowLayout {

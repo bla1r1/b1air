@@ -49,7 +49,7 @@ sddm-qt6 ?xorg-x11-server
 
 # Theming & fonts
 kvantum-qt6 ?adw-gtk3 papirus-icon-theme
-noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?fira-sans-fonts ?mozilla-fira-fonts liberation-fonts
+noto-sans-fonts noto-coloremoji-fonts noto-sans-cjk-fonts ?google-inter-fonts ?fira-sans-fonts ?mozilla-fira-fonts liberation-fonts
 ?jetbrains-mono-fonts fontconfig
 
 # Tools the shell and daemon call out to
@@ -65,3 +65,7 @@ xdg-user-dirs ?qt5ct ?qt6ct cups desktop-file-utils gtk3-tools newt
 
 # Input method
 fcitx5 fcitx5-qt6 fcitx5-gtk3 ?fcitx5-configtool
+
+# Phones & music players in Files (see packages/arch.txt)
+python3 ?python3-mutagen ?python3-pycryptodome ?python3-Pillow ?python3-pyusb
+?libimobiledevice-tools ?usbmuxd ?ifuse ?gvfs-backends ?android-tools ?kf6-kimageformats ?libheif1

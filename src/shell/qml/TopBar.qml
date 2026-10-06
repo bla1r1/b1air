@@ -492,8 +492,8 @@ PanelWindow {
                 width: appRow.implicitWidth + Design.s(20)
                 height: Design.s(30)
                 radius: Design.s(10)
-                color: appMenuArea.containsMouse ? Design.tint(Design.accent, 0.25) : topBar.colBg
-                border.color: appMenuArea.containsMouse ? topBar.colBlue : topBar.colBorder
+                color: appMenuArea.containsMouse ? Design.glassHover : topBar.colBg
+                border.color: appMenuArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
                 border.width: 1
 
                 Behavior on color { ColorAnimation { duration: 150 } }
@@ -507,7 +507,7 @@ PanelWindow {
                         text: "󰍜"
                         font.family: Design.font.mono
                         font.pixelSize: Design.s(13)
-                        color: topBar.colBlue
+                        color: topBar.colFg
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
@@ -515,7 +515,7 @@ PanelWindow {
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(12)
                         font.bold: true
-                        color: appMenuArea.containsMouse ? "#ffffff" : topBar.colBlue
+                        color: topBar.colFg
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
@@ -753,7 +753,11 @@ PanelWindow {
             width: clockText.implicitWidth + Design.s(36)
             height: Design.s(28)
             radius: 999
-            color: clockArea.containsMouse ? Qt.lighter(topBar.colBlue, 1.25) : topBar.colBlue
+            // Glass like the islands beside it: a solid accent pill was the
+            // loudest thing on the screen, for the one thing glanced at most.
+            color: clockArea.containsMouse ? Design.glassHover : topBar.colBg
+            border.color: clockArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
+            border.width: 1
 
             Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -761,9 +765,10 @@ PanelWindow {
                 id: clockText
                 anchors.centerIn: parent
                 text: topBar.clockTime
+                font.features: Design.tabular
                 font.family: topBar.fontMain
                 font.pixelSize: Design.s(13)
-                font.bold: true
+                font.weight: Design.weight.semibold
                 color: topBar.colFg
             }
 
@@ -889,7 +894,7 @@ PanelWindow {
                         text: Media.playing ? "\u{f040a}" : "\u{f03e4}"
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
-                        color: topBar.colBlue
+                        color: topBar.colFgDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
@@ -936,7 +941,7 @@ PanelWindow {
                         text: Weather.icon
                         font.family: Design.font.icon
                         font.pixelSize: Design.s(12)
-                        color: topBar.colCyan
+                        color: topBar.colFgDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
@@ -1047,8 +1052,8 @@ PanelWindow {
                 width: statsRow.implicitWidth + Design.s(20)
                 visible: Settings.barShowStats && !topBar.reduced
                 radius: Design.s(10)
-                color: statsArea.containsMouse ? Design.tint(Design.accent, 0.15) : topBar.colBg
-                border.color: statsArea.containsMouse ? Design.tint(Design.accent, 0.35) : topBar.colBorder
+                color: statsArea.containsMouse ? Design.glassHover : topBar.colBg
+                border.color: statsArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
                 border.width: 1
 
                 Row {
@@ -1058,14 +1063,14 @@ PanelWindow {
 
                     Row {
                         spacing: Design.s(4)
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colCyan }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colFgDim }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
                     }
 
                     Row {
                         spacing: Design.s(4)
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colPurple }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colFgDim }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
                     }
                 }
 
@@ -1235,7 +1240,7 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: topBar.requestCommand("toggle:wifi:", true)
+                            onClicked: topBar.requestCommand("toggle:wifimenu:", true)
                         }
                     }
 
@@ -1272,7 +1277,7 @@ PanelWindow {
                             // Control Center's front page, which was the only
                             // way into the Control Center from the bar at all;
                             // that has its own button now, beside the bell.
-                            onClicked: topBar.requestCommand("toggle:sound:", true)
+                            onClicked: topBar.requestCommand("toggle:soundmenu:", true)
                             onWheel: (wheel) => {
                                 if (wheel.angleDelta.y > 0) {
                                     Daemon.volumeUp(5);
@@ -1313,7 +1318,7 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: topBar.requestCommand("toggle:battery:", true)
+                            onClicked: topBar.requestCommand("toggle:batterymenu:", true)
                         }
                     }
 
@@ -1358,9 +1363,10 @@ PanelWindow {
                         color: bellArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
                         Text {
                             anchors.centerIn: parent
-                            text: Notifications.dnd ? "󰂛"
+                            // A focus mode on: its own glyph (the moon, the bed…).
+                            text: Notifications.modeInfo ? Notifications.modeInfo.glyph
                                 : (Notifications.unreadCount > 0 ? "󰂞" : "󰂚")
-                            font.family: topBar.fontMain
+                            font.family: Design.font.icon
                             font.pixelSize: Design.s(13)
                             color: Notifications.dnd ? topBar.colFgDim
                                  : (Notifications.unreadCount > 0 ? topBar.colBlue : topBar.colFgDim)

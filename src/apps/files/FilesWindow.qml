@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls as C
 import "Ui"
+import B1air.Files
 
 // b1air-files.
 //
@@ -35,24 +36,29 @@ C.ApplicationWindow {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
 
-    title: I18n.tr("%1 — Files", FilesBackend.inTrash ? I18n.tr("Trash") : window.folderName)
+    title: I18n.tr("%1 — Files", window.device ? (window.device.name || "iPod")
+                               : FilesBackend.inTrash ? I18n.tr("Trash") : window.folderName)
     width: Design.s(1120)
     height: Design.s(720)
     minimumWidth: 760
     minimumHeight: 480
     visible: true
-    color: Design.surface
+    // Transparent, so the sidebar can be glass (the compositor blurs what is
+    // behind it); the rest of the window paints its own opaque surface below.
+    color: Design.translucent ? "transparent" : Design.surface
 
     readonly property var fm: FilesBackend.files
     readonly property string homeDir: FilesBackend.homePath
     readonly property string currentPath: FilesBackend.currentPath
-    readonly property string folderName: currentPath === homeDir ? I18n.tr("Home")
+    readonly property bool tagView: currentPath.startsWith("tag:")
+    readonly property string folderName: tagView ? I18n.tr(currentPath.slice(4))
+                                       : currentPath === homeDir ? I18n.tr("Home")
                                        : currentPath === "/" ? I18n.tr("File System")
                                        : currentPath.substring(currentPath.lastIndexOf("/") + 1)
 
     // ── Preferences, kept between runs ───────────────────────────────────────
     readonly property var prefs: FilesBackend.loadPrefs()
-    property string viewMode: prefs.viewMode === "list" ? "list" : "grid"
+    property string viewMode: ["list", "columns", "gallery"].indexOf(prefs.viewMode) >= 0 ? prefs.viewMode : "grid"
     property int iconSize: prefs.iconSize || 88
     property bool showInfo: prefs.showInfo !== false
     // Trash older than this many days is deleted when Files opens and at
@@ -64,6 +70,7 @@ C.ApplicationWindow {
         FilesBackend.sortField = prefs.sortBy || "name";
         FilesBackend.sortAscending = prefs.sortDescending !== true;
         currentView().forceActiveFocus();
+        window.openPendingDevice();
     }
     function savePrefs() {
         FilesBackend.savePrefs({
@@ -95,6 +102,58 @@ C.ApplicationWindow {
     property string statusNote: ""
     function note(text) { statusNote = text; noteTimer.restart(); }
     Timer { id: noteTimer; interval: 4000; onTriggered: window.statusNote = "" }
+
+    // ── Tags (tags.hpp): seven colours, kept on the files ────────────────────
+    readonly property var tagNames: ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"]
+    function tagColor(t) {
+        switch (t) {
+        case "Red": return Design.red;
+        case "Orange": return Design.peach;
+        case "Yellow": return Design.yellow;
+        case "Green": return Design.green;
+        case "Blue": return Design.blue;
+        case "Purple": return Design.mauve;
+        case "Gray": return Design.textFaint;
+        default: return Design.accent;
+        }
+    }
+    // Bumped after a tag changes, so the sidebar counts read again.
+    property int tagStamp: 0
+    function toggleTag(paths, tag) {
+        FilesBackend.toggleTag(paths, tag);
+        window.tagStamp++;
+    }
+
+    // The phone a path is on, by its mount, or null.
+    function phoneAt(path) {
+        const m = /\/b1air-devices\/([^/]+)\//.exec(String(path) + "/");
+        if (!m) return null;
+        return (Devices.devices || []).find(d => String(d.id).replace(/[^A-Za-z0-9._-]/g, "_") === m[1]) || null;
+    }
+    // On a phone, what the phone says is free: an iPhone's mount reports only
+    // what is free without iOS clearing anything, a tenth of the real figure.
+    readonly property string freeText: {
+        const dev = window.phoneAt(FilesBackend.currentPath);
+        if (!dev || !dev.free_bytes) return FilesBackend.diskFreeSpace;
+        const u = ["B", "KB", "MB", "GB", "TB"];
+        let v = Number(dev.free_bytes), i = 0;
+        while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+        return (i === 0 ? v.toFixed(0) : v.toFixed(v < 10 ? 1 : 0)) + " " + u[i];
+    }
+
+    // A phone's mount, $XDG_RUNTIME_DIR/b1air-devices/<id>/<media|app>, by
+    // the phone's name: the run-time folders above it say nothing to anyone.
+    function deviceCrumbs(list) {
+        const at = list.findIndex(c => c.name === "b1air-devices");
+        if (at < 0 || at + 2 >= list.length) return list;
+        const dev = window.phoneAt(list[at + 2].path);
+        const name = dev ? dev.name : I18n.tr("Phone");
+        const sub = list[at + 2];
+        const head = { name: sub.name === "media" ? name : name + " · " + sub.name, path: sub.path };
+        return [head].concat(list.slice(at + 3));
+    }
+
+    function thumbUrl(path) { return "image://thumb/" + encodeURIComponent(path); }
 
     // ── Kinds of file: one glyph and one colour each ─────────────────────────
     function glyphFor(category) {
@@ -172,11 +231,42 @@ C.ApplicationWindow {
     }
 
     // ── Navigation ───────────────────────────────────────────────────────────
+    // ── A device (FilesDevicePane): an iPod, shown in place of the folder ───
+    property var device: null
+    function openDevice(d) { window.device = d; window.pendingDevice = ""; }
+    // --device: phones are found a moment after the window opens, so it waits.
+    property string pendingDevice: startDevice
+    function openPendingDevice() {
+        if (!window.pendingDevice) return;
+        const d = Devices.devices.find(x => x.id === window.pendingDevice || x.path === window.pendingDevice);
+        if (d) window.openDevice(d);
+    }
+    function bytesText(bytes) {
+        const u = ["B", "KB", "MB", "GB", "TB"];
+        let v = Number(bytes) || 0, i = 0;
+        while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+        return (i === 0 ? v.toFixed(0) : v.toFixed(v < 10 ? 1 : 0)) + " " + u[i];
+    }
+    Connections {
+        target: Devices
+        // Unplugged or ejected: back to the folder.
+        function onDevicesChanged() {
+            window.openPendingDevice();
+            if (!window.device) return;
+            const now = Devices.devices.find(d => d.id === window.device.id);
+            window.device = now || null;
+        }
+    }
+
     function navigateTo(path) {
+        window.device = null;
         if (!path || path === currentPath) return;
         FilesBackend.currentPath = path;
     }
-    function currentView() { return viewMode === "grid" ? gridView : listView; }
+    function currentView() {
+        return viewMode === "list" ? listView : viewMode === "columns" ? columnsView
+             : viewMode === "gallery" ? galleryView : gridView;
+    }
 
     // ── What the actions work on ─────────────────────────────────────────────
     // The selection, or the item under the cursor when nothing is selected.
@@ -332,6 +422,12 @@ C.ApplicationWindow {
             if (s.startsWith("file://")) paths.push(decodeURIComponent(s.substring(7)));
         }
         if (paths.length === 0) return;
+        // Dropped on a tag in the sidebar: tagged, not moved.
+        if (dest.startsWith("tag:")) {
+            window.toggleTag(paths, dest.slice(4));
+            drop.accept(Qt.LinkAction);
+            return;
+        }
         // Ctrl during the drag proposes a copy.
         const copy = drop.proposedAction === Qt.CopyAction;
         if (dest === FilesBackend.trashPath && !copy) FilesBackend.trashItems(paths);
@@ -360,6 +456,8 @@ C.ApplicationWindow {
     Shortcut { sequence: "Ctrl+I"; onActivated: window.showInfo = !window.showInfo }
     Shortcut { sequence: "Ctrl+1"; onActivated: window.viewMode = "grid" }
     Shortcut { sequence: "Ctrl+2"; onActivated: window.viewMode = "list" }
+    Shortcut { sequence: "Ctrl+3"; onActivated: window.viewMode = "columns" }
+    Shortcut { sequence: "Ctrl+4"; onActivated: window.viewMode = "gallery" }
     Shortcut { sequences: ["Ctrl+=", "Ctrl++"]; onActivated: window.iconSize = Math.min(176, window.iconSize + 16) }
     Shortcut { sequence: "Ctrl+-"; onActivated: window.iconSize = Math.max(56, window.iconSize - 16) }
     // Ctrl+T is a new tab, as in every browser and file manager; the
@@ -382,6 +480,24 @@ C.ApplicationWindow {
         }
     }
 
+    // Everything right of the sidebar, opaque: reading wants a solid page.
+    Rectangle {
+        x: sidebar.width
+        width: parent.width - x
+        height: parent.height
+        color: Design.surface
+        visible: Design.translucent
+    }
+
+    // The mouse's back and forward buttons, as in every file manager.
+    TapHandler {
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        onTapped: (point, button) => {
+            if (button === Qt.BackButton) FilesBackend.historyBack();
+            else FilesBackend.historyForward();
+        }
+    }
+
     // ═════════════════════════════════════════════════════════════════════════
     RowLayout {
         anchors.fill: parent
@@ -389,9 +505,10 @@ C.ApplicationWindow {
 
         // ── Sidebar ──────────────────────────────────────────────────────────
         Rectangle {
+            id: sidebar
             Layout.fillHeight: true
             Layout.preferredWidth: Design.s(224)
-            color: Design.sunken
+            color: Design.glassSidebar
 
             Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
 
@@ -436,17 +553,66 @@ C.ApplicationWindow {
                     }
 
                     SideHeading { text: I18n.tr("Devices") }
-                    SideRow { label: I18n.tr("File System"); glyph: "\u{f02ca}"; path: "/"; detail: I18n.tr("%1 free", FilesBackend.diskFreeSpace) }
+                    // The system disk's own free space: diskFreeSpace is the
+                    // folder's, so this read a phone's or a stick's while in it.
+                    SideRow {
+                        label: I18n.tr("File System"); glyph: "\u{f02ca}"; path: "/"
+                        detail: I18n.tr("%1 free", (FilesBackend.diskFreeSpace, FilesBackend.freeSpaceOf("/")))
+                    }
                     Repeater {
                         model: FilesBackend.volumes
                         delegate: SideRow {
                             required property var modelData
+                            // An iPod is listed below, as itself.
+                            visible: !(modelData.ipod && Devices.ipodSupport)
                             label: modelData.name
                             glyph: "\u{f02cb}"
                             path: modelData.path
                             detail: I18n.tr("%1 free", modelData.free)
                             ejectable: true
                             onEject: FilesBackend.unmount(modelData.path)
+                        }
+                    }
+
+                    Repeater {
+                        model: Devices.devices
+                        delegate: SidebarItem {
+                            id: devRow
+                            required property var modelData
+                            readonly property bool phone: modelData.kind !== "ipod"
+                            label: modelData.name || "iPod"
+                            glyph: phone ? "\u{f011c}" : "\u{f075a}"
+                            detail: phone && (modelData.battery ?? -1) >= 0 ? I18n.tr("Battery %1%", modelData.battery)
+                                  : phone && modelData.state !== "ready" ? I18n.tr("Not trusted yet")
+                                  : modelData.free_bytes ? I18n.tr("%1 free", window.bytesText(modelData.free_bytes))
+                                  : (modelData.model || "")
+                            active: !!window.device && window.device.id === modelData.id
+                            highlight: devDrop.containsDrag
+                            onClicked: window.openDevice(modelData)
+                            overlay: [
+                                DropArea {
+                                    id: devDrop
+                                    anchors.fill: parent
+                                    keys: ["text/uri-list"]
+                                    enabled: !devRow.phone
+                                    onDropped: drop => {
+                                        const paths = [];
+                                        for (const u of drop.urls) {
+                                            const s = String(u);
+                                            if (s.startsWith("file://")) paths.push(decodeURIComponent(s.substring(7)));
+                                        }
+                                        if (devRow.phone) return;
+                                        Devices.addFiles(devRow.modelData.path, paths);
+                                        window.openDevice(devRow.modelData);
+                                        drop.accept(Qt.CopyAction);
+                                    }
+                                }
+                            ]
+                            BarButton {
+                                visible: !devRow.phone || !!devRow.modelData.mountPath
+                                glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Eject")
+                                onClicked: Devices.eject(devRow.modelData.id)
+                            }
                         }
                     }
 
@@ -491,14 +657,58 @@ C.ApplicationWindow {
                             drop.accept(Qt.LinkAction);
                         }
                     }
+
+                    SideHeading { text: I18n.tr("Tags") }
+                    Repeater {
+                        model: window.tagNames
+                        delegate: SideRow {
+                            required property string modelData
+                            readonly property int n: (window.tagStamp, FilesBackend.tagCounts()[modelData] || 0)
+                            label: I18n.tr(modelData)
+                            glyph: "\u25CF"
+                            glyphColor: window.tagColor(modelData)
+                            keepGlyphColor: true
+                            path: "tag:" + modelData
+                            badge: n > 0 ? String(n) : ""
+                        }
+                    }
+
                 }
             }
         }
 
+        // ── A device in place of the folder ──────────────────────────────────
+        Loader {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            active: !!window.device
+            visible: active
+            sourceComponent: window.device && window.device.kind !== "ipod" ? phonePane : ipodPane
+            Component {
+                id: ipodPane
+                FilesDevicePane {
+                    device: window.device
+                    statusNote: window.statusNote
+                    onNote: text => window.note(text)
+                    onClosed: window.device = null
+                }
+            }
+            Component {
+                id: phonePane
+                FilesPhonePane {
+                    device: window.device
+                    statusNote: window.statusNote
+                    onNote: text => window.note(text)
+                    // Its photos or an app's files, mounted: browsed as a folder.
+                    onOpenFolder: path => window.navigateTo(path)
+                }
+            }
+        }
         // ── Main column ──────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: !window.device
             spacing: 0
 
             // Folder chooser bar, in --pick-folder mode.
@@ -560,7 +770,7 @@ C.ApplicationWindow {
                             orientation: ListView.Horizontal
                             interactive: false
                             spacing: 0
-                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : FilesBackend.breadcrumbs
+                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : window.deviceCrumbs(FilesBackend.breadcrumbs)
                             // Always the end of the path in view: the folder
                             // you are in, not the root you came from.
                             onCountChanged: Qt.callLater(positionViewAtEnd)
@@ -641,6 +851,8 @@ C.ApplicationWindow {
                     BarGroup {
                         BarButton { glyph: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
                         BarButton { glyph: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
+                        BarButton { glyph: "\u{f056d}"; tip: I18n.tr("Columns (Ctrl+3)"); checked: window.viewMode === "columns"; onClicked: window.viewMode = "columns" }
+                        BarButton { glyph: "\u{f056c}"; tip: I18n.tr("Gallery (Ctrl+4)"); checked: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
                     }
                     BarGroup {
                         BarButton { glyph: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
@@ -733,6 +945,7 @@ C.ApplicationWindow {
                         required property bool symlink
                         required property string category
                         required property string sizeText
+                        required property var tags
                         width: gridView.cellWidth
                         height: gridView.cellHeight
 
@@ -759,8 +972,9 @@ C.ApplicationWindow {
                                 Image {
                                     id: thumb
                                     anchors.fill: parent
-                                    visible: tile.isImage && status === Image.Ready
-                                    source: tile.isImage ? Paths.fileUrl(tile.path) : ""
+                                    // Made and cached in the background (thumbs.cpp), videos too.
+                                    visible: (tile.isImage || tile.category === "video") && status === Image.Ready
+                                    source: tile.isImage || tile.category === "video" ? window.thumbUrl(tile.path) : ""
                                     sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
                                     fillMode: Image.PreserveAspectFit
                                     asynchronous: true
@@ -793,12 +1007,29 @@ C.ApplicationWindow {
                                 anchors.rightMargin: Design.s(Design.space.xs)
                                 text: tile.name
                                 horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WrapAnywhere
+                                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
                                 color: Design.text
+                            }
+                            // Its tags, as overlapping dots at the thumbnail's corner.
+                            Row {
+                                visible: tile.tags.length > 0
+                                anchors.right: thumbBox.right
+                                anchors.bottom: thumbBox.bottom
+                                spacing: -Design.s(3)
+                                Repeater {
+                                    model: tile.tags
+                                    Rectangle {
+                                        required property string modelData
+                                        width: Design.s(11); height: width; radius: width / 2
+                                        color: window.tagColor(modelData)
+                                        border.color: Design.surface
+                                        border.width: Design.s(1.5)
+                                    }
+                                }
                             }
                         }
 
@@ -873,6 +1104,7 @@ C.ApplicationWindow {
                             required property string sizeText
                             required property string kind
                             required property string modifiedText
+                            required property var tags
                             width: listView.width
                             height: Design.s(36)
 
@@ -904,6 +1136,20 @@ C.ApplicationWindow {
                                             horizontalAlignment: Text.AlignHCenter
                                         }
                                         Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
+                                        Row {
+                                            visible: row.tags.length > 0
+                                            spacing: -Design.s(3)
+                                            Repeater {
+                                                model: row.tags
+                                                Rectangle {
+                                                    required property string modelData
+                                                    width: Design.s(10); height: width; radius: width / 2
+                                                    color: window.tagColor(modelData)
+                                                    border.color: Design.surface
+                                                    border.width: Design.s(1.5)
+                                                }
+                                            }
+                                        }
                                     }
                                     Label { Layout.preferredWidth: Design.s(110); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
                                     Label { Layout.preferredWidth: Design.s(170); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
@@ -935,6 +1181,268 @@ C.ApplicationWindow {
                     }
                 }
 
+                // ── Columns: every folder from Home down, side by side ───────
+                //
+                // As a desktop's column view: each folder on the way to this one
+                // in a column of its own, the one gone into lit, and what is
+                // selected previewed in a last column. A click on a folder goes
+                // into it; Left and Right walk out and in.
+                ListView {
+                    id: columnsView
+                    anchors.fill: parent
+                    visible: window.viewMode === "columns"
+                    orientation: ListView.Horizontal
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
+                    // Home and everything under it, or / and everything under that.
+                    readonly property var dirs: {
+                        const cur = window.currentPath;
+                        if (window.tagView || cur === "") return [];
+                        const base = cur === window.homeDir || cur.startsWith(window.homeDir + "/") ? window.homeDir : "/";
+                        const out = [base];
+                        const rest = cur.slice(base.length).split("/").filter(s => s !== "");
+                        let acc = base === "/" ? "" : base;
+                        for (const part of rest) { acc += "/" + part; out.push(acc); }
+                        return out;
+                    }
+                    model: columnsView.dirs.length + 1
+                    onCountChanged: Qt.callLater(() => columnsView.positionViewAtEnd())
+                    // The current folder's column takes the keys.
+                    function positionViewAtIndex(i, mode) { if (lastColumn) lastColumn.positionViewAtIndex(i, ListView.Contain); }
+                    function positionViewAtBeginning() { if (lastColumn) lastColumn.positionViewAtBeginning(); }
+                    property ListView lastColumn: null
+                    onActiveFocusChanged: if (activeFocus && lastColumn) lastColumn.forceActiveFocus()
+
+                    delegate: Loader {
+                        id: col
+                        required property int index
+                        readonly property bool isPreview: col.index === columnsView.dirs.length
+                        readonly property bool isLast: col.index === columnsView.dirs.length - 1
+                        readonly property string dir: col.isPreview ? "" : columnsView.dirs[col.index]
+                        // The next folder on the way, lit in this column.
+                        readonly property string onPath: col.index + 1 < columnsView.dirs.length ? columnsView.dirs[col.index + 1] : ""
+                        width: col.isPreview ? Math.max(Design.s(260), columnsView.width - columnsView.dirs.length * Design.s(220)) : Design.s(220)
+                        height: columnsView.height
+                        sourceComponent: col.isPreview ? previewColumn : folderColumn
+
+                        Component {
+                            id: folderColumn
+                            Item {
+                                Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+                                FileListModel { id: other }
+                                Component.onCompleted: if (!col.isLast) other.open(col.dir, FilesBackend.showHidden)
+                                ListView {
+                                    id: colList
+                                    anchors.fill: parent
+                                    anchors.margins: Design.s(Design.space.xs)
+                                    anchors.rightMargin: Design.s(Design.space.xs) + 1
+                                    model: col.isLast ? fm : other
+                                    clip: true
+                                    focus: col.isLast
+                                    boundsBehavior: Flickable.StopAtBounds
+                                    C.ScrollBar.vertical: OverflowBar {}
+                                    Component.onCompleted: if (col.isLast) columnsView.lastColumn = colList
+                                    Keys.onPressed: event => {
+                                        if (event.key === Qt.Key_Right) {
+                                            const it = fm.get(fm.currentIndex);
+                                            if (it.isDir) { window.navigateTo(it.path); event.accepted = true; }
+                                        } else if (event.key === Qt.Key_Left) {
+                                            const from = window.currentPath;
+                                            if (columnsView.dirs.length > 1) {
+                                                window.navigateTo(columnsView.dirs[columnsView.dirs.length - 2]);
+                                                fm.selectPaths([from]);
+                                            }
+                                            event.accepted = true;
+                                        } else {
+                                            window.handleKey(event, 1);
+                                        }
+                                    }
+                                    delegate: Rectangle {
+                                        id: crow
+                                        required property int index
+                                        required property string name
+                                        required property string path
+                                        required property bool isDir
+                                        required property bool selected
+                                        required property string category
+                                        required property var tags
+                                        readonly property bool lit: col.isLast ? crow.selected : crow.path === col.onPath
+                                        width: colList.width
+                                        height: Design.s(28)
+                                        radius: Design.s(Design.radius.sm)
+                                        color: crow.lit ? (col.isLast || col.index === columnsView.dirs.length - 2
+                                                           ? Design.accent : Design.tint(Design.text, 0.12))
+                                             : crowMa.containsMouse ? Design.hover : "transparent"
+                                        readonly property color ink: crow.lit && (col.isLast || col.index === columnsView.dirs.length - 2)
+                                                                     ? Design.accentText : Design.text
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.xs)
+                                            spacing: Design.s(Design.space.sm)
+                                            Text {
+                                                text: window.glyphFor(crow.category)
+                                                font.family: Design.font.icon
+                                                font.pixelSize: Design.s(15)
+                                                color: crow.lit ? crow.ink : window.toneFor(crow.category)
+                                            }
+                                            Label { Layout.fillWidth: true; text: crow.name; color: crow.ink; elide: Text.ElideMiddle }
+                                            Repeater {
+                                                model: crow.tags
+                                                Rectangle {
+                                                    required property string modelData
+                                                    width: Design.s(8); height: width; radius: width / 2
+                                                    color: window.tagColor(modelData)
+                                                }
+                                            }
+                                            Text {
+                                                visible: crow.isDir
+                                                text: "\u{f0142}"
+                                                font.family: Design.font.icon
+                                                font.pixelSize: Design.s(13)
+                                                color: crow.lit ? crow.ink : Design.textFaint
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: crowMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                            onPressed: mouse => {
+                                                if (col.isLast) { window.itemPressed(crow.index, mouse); return; }
+                                                // An earlier column: go there first, then as in the last.
+                                                if (crow.isDir && mouse.button === Qt.LeftButton) { window.navigateTo(crow.path); return; }
+                                                window.navigateTo(col.dir);
+                                                fm.selectPaths([crow.path]);
+                                                if (mouse.button === Qt.RightButton) window.openItemMenu();
+                                            }
+                                            onReleased: mouse => {
+                                                if (!col.isLast) return;
+                                                window.itemReleased(crow.index, mouse, false);
+                                                // A folder opens into the next column on a plain click.
+                                                if (crow.isDir && mouse.button === Qt.LeftButton && window.clickMode(mouse.modifiers) === 0)
+                                                    window.navigateTo(crow.path);
+                                            }
+                                            onDoubleClicked: mouse => { if (col.isLast && !crow.isDir && mouse.button === Qt.LeftButton) window.openRow(crow.index); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Component {
+                            id: previewColumn
+                            FilesPreview {
+                                item: fm.selectionCount === 1 ? fm.get(fm.indexOfPath(fm.selectedPaths()[0])) : ({})
+                                glyph: window.glyphFor(item.category || "file")
+                                tone: window.toneFor(item.category || "file")
+                            }
+                        }
+                    }
+                }
+
+                // ── Gallery: one large, the rest in a strip under it ─────────
+                ColumnLayout {
+                    id: galleryView
+                    anchors.fill: parent
+                    visible: window.viewMode === "gallery"
+                    spacing: 0
+                    function positionViewAtIndex(i, mode) { strip.positionViewAtIndex(i, ListView.Contain); }
+                    function positionViewAtBeginning() { strip.positionViewAtBeginning(); }
+                    onActiveFocusChanged: if (activeFocus) strip.forceActiveFocus()
+                    // Something is always shown: the first file (else the first
+                    // item) when nothing is picked.
+                    function pickFirst() {
+                        if (!galleryView.visible || fm.currentIndex >= 0 || fm.count === 0) return;
+                        for (let i = 0; i < fm.count; i++)
+                            if (!fm.get(i).isDir) { fm.select(i, 0); return; }
+                        fm.select(0, 0);
+                    }
+                    onVisibleChanged: pickFirst()
+                    Component.onCompleted: Qt.callLater(pickFirst)
+                    Connections { target: fm; function onReloaded() { Qt.callLater(galleryView.pickFirst); } }
+
+                    FilesPreview {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        large: true
+                        item: fm.currentIndex >= 0 ? fm.get(fm.currentIndex) : ({})
+                        glyph: window.glyphFor(item.category || "file")
+                        tone: window.toneFor(item.category || "file")
+                    }
+                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+                    ListView {
+                        id: strip
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Design.s(92)
+                        orientation: ListView.Horizontal
+                        model: fm
+                        clip: true
+                        focus: galleryView.visible
+                        spacing: Design.s(Design.space.xs)
+                        leftMargin: Design.s(Design.space.md)
+                        rightMargin: Design.s(Design.space.md)
+                        currentIndex: fm.currentIndex
+                        highlightFollowsCurrentItem: false
+                        boundsBehavior: Flickable.StopAtBounds
+                        C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
+                        Keys.onPressed: event => {
+                            // Left and Right step; Up and Down too, as there is one row.
+                            if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+                                fm.select(Math.max(0, fm.currentIndex - 1), 0);
+                                strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
+                                fm.select(Math.min(fm.count - 1, fm.currentIndex + 1), 0);
+                                strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
+                                event.accepted = true;
+                            } else {
+                                window.handleKey(event, 1);
+                            }
+                        }
+                        delegate: Rectangle {
+                            id: gthumb
+                            required property int index
+                            required property string path
+                            required property bool isImage
+                            required property bool selected
+                            required property string category
+                            y: Design.s(10)
+                            width: Design.s(72)
+                            height: Design.s(72)
+                            radius: Design.s(Design.radius.sm)
+                            color: gthumb.selected ? Design.tint(Design.accent, 0.2) : Design.well
+                            border.color: gthumb.selected ? Design.accent : "transparent"
+                            border.width: Design.s(2)
+                            Image {
+                                id: gimg
+                                anchors.fill: parent
+                                anchors.margins: Design.s(4)
+                                visible: (gthumb.isImage || gthumb.category === "video") && status === Image.Ready
+                                source: gthumb.isImage || gthumb.category === "video" ? window.thumbUrl(gthumb.path) : ""
+                                sourceSize: Qt.size(Design.s(144), Design.s(144))
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: !gimg.visible
+                                text: window.glyphFor(gthumb.category)
+                                font.family: Design.font.icon
+                                font.pixelSize: Design.s(30)
+                                color: window.toneFor(gthumb.category)
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                onPressed: mouse => window.itemPressed(gthumb.index, mouse)
+                                onReleased: mouse => window.itemReleased(gthumb.index, mouse, false)
+                                onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(gthumb.index); }
+                            }
+                        }
+                    }
+                }
+
                 // ── Nothing to show ──────────────────────────────────────────
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -956,7 +1464,9 @@ C.ApplicationWindow {
                         weight: Design.weight.semibold
                         text: fm.error ? I18n.tr("Can't open this folder")
                             : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
-                            : FilesBackend.inTrash ? I18n.tr("Trash is empty") : I18n.tr("This folder is empty")
+                            : FilesBackend.inTrash ? I18n.tr("Trash is empty")
+                            : window.tagView ? I18n.tr("Nothing tagged %1", window.folderName)
+                            : I18n.tr("This folder is empty")
                     }
                     Label {
                         Layout.fillWidth: true
@@ -966,6 +1476,11 @@ C.ApplicationWindow {
                         text: fm.error ? fm.error
                             : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
                             : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
+                            : window.tagView ? I18n.tr("Right-click a file and pick a colour, or drop files on the tag in the sidebar.")
+                            // An iPhone's camera folder with nothing in it: the
+                            // photos are in iCloud, the phone keeps only previews.
+                            : /\/b1air-devices\/[^/]+\/media\/DCIM\//.test(FilesBackend.currentPath)
+                              ? I18n.tr("Photos kept only in iCloud are not on the phone itself. Turn off Optimize iPhone Storage in the phone's Photos settings to keep them here.")
                             : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
                     }
                 }
@@ -983,7 +1498,7 @@ C.ApplicationWindow {
                           || (FilesBackend.busy ? I18n.tr("Copying…")
                           : fm.selectionCount > 0 ? window.selectionText() : window.folderSummary())
                 }
-                Label { role: "caption"; color: Design.textFaint; text: I18n.tr("%1 free", FilesBackend.diskFreeSpace); visible: !FilesBackend.inTrash }
+                Label { role: "caption"; color: Design.textFaint; text: I18n.tr("%1 free", window.freeText); visible: !FilesBackend.inTrash }
                 // Icon size, for the icon view.
                 RowLayout {
                     visible: window.viewMode === "grid"
@@ -998,7 +1513,10 @@ C.ApplicationWindow {
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: Design.s(270)
-            visible: window.showInfo && window.width > 980
+            // Not beside the column view or the gallery: they preview it themselves.
+            clip: true   // nothing it shows may reach into the folder beside it
+            visible: window.showInfo && window.width > 980 && !window.device
+                     && window.viewMode !== "columns" && window.viewMode !== "gallery"
             color: Design.sunken
             Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
 
@@ -1185,6 +1703,59 @@ C.ApplicationWindow {
                       enabled: !itemMenu.trash && !FilesBackend.busy; onTriggered: compressDialog.ask(itemMenu.paths, itemMenu.first) }
         AppMenuItem { text: I18n.tr("Set as Wallpaper"); glyph: "\u{f02e9}"; enabled: itemMenu.one && itemMenu.first.category === "image" && !itemMenu.trash
                       onTriggered: { FilesBackend.setWallpaper(itemMenu.paths[0]); window.note(I18n.tr("Wallpaper set")); } }
+        // Tags: a row of colour dots, as a desktop's file manager has them; a
+        // dot with a ring is a tag every selected item has.
+        Item {
+            id: tagRow
+            visible: !itemMenu.trash
+            width: parent ? parent.width : 0
+            height: visible ? Design.s(34) : 0
+            readonly property var common: {
+                const s = window.tagStamp;   // re-read after a change
+                if (itemMenu.paths.length === 0) return [];
+                let common = FilesBackend.tagsOf(itemMenu.paths[0]);
+                for (const p of itemMenu.paths.slice(1)) {
+                    const t = FilesBackend.tagsOf(p);
+                    common = common.filter(x => t.indexOf(x) >= 0);
+                }
+                return common;
+            }
+            Row {
+                anchors.left: parent.left
+                anchors.leftMargin: Design.s(Design.space.md)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Design.s(8)
+                Repeater {
+                    model: window.tagNames
+                    Rectangle {
+                        id: dot
+                        required property string modelData
+                        readonly property bool on: tagRow.common.indexOf(modelData) >= 0
+                        width: Design.s(18); height: width; radius: width / 2
+                        color: window.tagColor(modelData)
+                        border.color: dot.on ? Design.text : "transparent"
+                        border.width: Design.s(2)
+                        scale: dotMa.containsMouse ? 1.15 : 1.0
+                        Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: dot.on
+                            text: "\u{f012c}"
+                            font.family: Design.font.icon
+                            font.pixelSize: Design.s(11)
+                            color: Design.readableOn(dot.color)
+                        }
+                        MouseArea {
+                            id: dotMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { window.toggleTag(itemMenu.paths, dot.modelData); itemMenu.close(); }
+                        }
+                    }
+                }
+            }
+        }
         AppMenuItem { text: I18n.tr("Add to Bookmarks"); glyph: "\u{f00c0}"; keys: "Ctrl+D"; enabled: itemMenu.one && !!itemMenu.first.isDir && !itemMenu.trash; onTriggered: window.addBookmark(itemMenu.paths[0]) }
         AppMenuItem { text: I18n.tr("Copy Path"); glyph: "\u{f0219}"; keys: "Ctrl+Shift+C"; onTriggered: { FilesBackend.copyText(itemMenu.paths.join("\n")); window.note(I18n.tr("Path copied")); } }
         AppMenuItem { text: I18n.tr("Properties"); glyph: "\u{f02fd}"; keys: "Ctrl+I"; onTriggered: window.showInfo = true }
@@ -1529,7 +2100,7 @@ C.ApplicationWindow {
         property bool ejectable: false
         signal remove()
         signal eject()
-        active: path === window.currentPath
+        active: path === window.currentPath && !window.device
         highlight: srDrop.containsDrag
         onClicked: { window.navigateTo(sr.path); window.currentView().forceActiveFocus(); }
         overlay: [

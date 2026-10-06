@@ -33,6 +33,17 @@
         { "page": "updates",  "text": "Updates and Storage & Backup are two pages now" },
         { "page": "shortcuts","text": "Zed opens on Super+I in place of Notes; the monitor, text editor and camera have keys" }
       ]
+    },
+    {
+      "id": "0.3.0",
+      "items": [
+        { "page": "bar", "text": "A dock at the bottom of the screen: turn it on in Top Bar → Dock" },
+        { "page": "notifications", "text": "Focus modes in place of Do Not Disturb: Work, Personal, Sleep and Gaming, each with the apps it lets through" },
+        { "page": "input", "text": "Hot corners: hold the pointer in a corner for the overview, the Launchpad or the Control Center" },
+        { "page": "appearance", "text": "Light by day and dark by night, turning with the sunset" },
+        { "text": "Files: colour tags, column and gallery views, thumbnails of photos and videos" },
+        { "text": "Files shows an iPod, an iPhone or an Android phone as a device: an iPod's music and playlists, a phone's photos, shared files and backup" }
+      ]
     }
   ]
 }

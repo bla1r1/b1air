@@ -1,4 +1,5 @@
 #include "dir_model.hpp"
+#include "tags.hpp"
 
 #include <QCollator>
 #include <QDir>
@@ -34,7 +35,7 @@ QHash<int, QByteArray> FileListModel::roleNames() const {
         {ModifiedTextRole, "modifiedText"}, {KindRole, "kind"},
         {CategoryRole, "category"}, {IsImageRole, "isImage"},
         {HiddenRole, "hidden"},   {SymlinkRole, "symlink"},
-        {SelectedRole, "selected"},
+        {SelectedRole, "selected"}, {TagsRole, "tags"},
     };
 }
 
@@ -105,6 +106,7 @@ QVariant FileListModel::data(const QModelIndex& index, int role) const {
     case HiddenRole: return e.hidden;
     case SymlinkRole: return e.symlink;
     case SelectedRole: return m_selected.contains(e.path);
+    case TagsRole: return e.tags;
     }
     return {};
 }
@@ -123,6 +125,12 @@ void FileListModel::load(const QString& dir, const Options& opts) {
     reload();
 }
 
+void FileListModel::open(const QString& dir, bool showHidden) {
+    Options o;
+    o.showHidden = showHidden;
+    load(dir, o);
+}
+
 void FileListModel::reload() {
     static QMimeDatabase mimeDb;
     beginResetModel();
@@ -130,15 +138,24 @@ void FileListModel::reload() {
     m_error.clear();
 
     QDir d(m_dir);
-    if (!d.exists()) {
+    // "tag:Red": every file with that tag, wherever it is (tags.hpp).
+    const bool tagView = m_dir.startsWith(QLatin1String("tag:"));
+    if (tagView) {
+        // Listed below from the index rather than from a folder.
+    } else if (!d.exists()) {
         m_error = "This folder no longer exists.";
     } else if (!QFileInfo(m_dir).isReadable()) {
         m_error = "You do not have permission to see what is in this folder.";
-    } else {
+    }
+    if (m_error.isEmpty()) {
         QDir::Filters f = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::System;
         if (m_opts.showHidden) f |= QDir::Hidden;
         const QString needle = m_opts.filter.trimmed();
-        const QFileInfoList infos = d.entryInfoList(f, QDir::NoSort);
+        QFileInfoList infos;
+        if (tagView)
+            for (const QString& p : tags::pathsWith(m_dir.mid(4))) infos << QFileInfo(p);
+        else
+            infos = d.entryInfoList(f, QDir::NoSort);
         m_entries.reserve(size_t(infos.size()));
         for (const QFileInfo& fi : infos) {
             if (!needle.isEmpty() && !fi.fileName().contains(needle, Qt::CaseInsensitive)) continue;
@@ -150,6 +167,7 @@ void FileListModel::reload() {
             e.modified = fi.lastModified();
             e.hidden = fi.isHidden();
             e.symlink = fi.isSymLink();
+            e.tags = tags::read(e.path);
             if (e.isDir) {
                 e.kind = "Folder";
                 e.category = "folder";

@@ -53,7 +53,8 @@ Rectangle {
     implicitWidth: Design.s(120)
 
     radius: Design.s(Design.radius.ctl)
-    color: Design.sunken
+    // On glass a field is a lighter pane of it, not a black well cut in.
+    color: Design.well
     border.width: Design.border
     border.color: input.activeFocus ? Design.accent : (area.containsMouse ? Design.veilStrong : Design.line)
 

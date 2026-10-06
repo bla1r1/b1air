@@ -24,7 +24,7 @@ PopupShell {
     id: window
 
     padding: Design.space.md
-    background: Design.tint(Design.ground, 0.94)
+    background: Design.glassBg
     borderColor: Design.glassBorder
     cornerRadius: Design.radius.panel
 
@@ -327,7 +327,7 @@ PopupShell {
     component EditToggle: Rectangle {
         width: Design.s(26); height: Design.s(26)
         radius: Design.s(Design.radius.ctl)
-        color: toggleMa.containsMouse ? Design.glassHover : Design.surface
+        color: toggleMa.containsMouse ? Design.glassHover : Design.glassCard
         border.color: window.editing ? Design.accent : Design.line
         border.width: 1
 
@@ -413,7 +413,7 @@ PopupShell {
                         visible: !window.editing
                         width: Design.s(26); height: Design.s(26)
                         radius: Design.s(Design.radius.ctl)
-                        color: prevMa.containsMouse ? Design.glassHover : Design.surface
+                        color: prevMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
 
                         Icon {
@@ -433,7 +433,7 @@ PopupShell {
                         visible: !window.editing
                         width: Design.s(26); height: Design.s(26)
                         radius: Design.s(Design.radius.ctl)
-                        color: todayMa.containsMouse ? Design.glassHover : Design.surface
+                        color: todayMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
 
                         Icon {
@@ -453,7 +453,7 @@ PopupShell {
                         visible: !window.editing
                         width: Design.s(26); height: Design.s(26)
                         radius: Design.s(Design.radius.ctl)
-                        color: nextMa.containsMouse ? Design.glassHover : Design.surface
+                        color: nextMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
 
                         Icon {
@@ -555,7 +555,7 @@ PopupShell {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(28)
                     radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
+                    color: Design.well
 
                     RowLayout {
                         anchors.fill: parent
@@ -663,7 +663,7 @@ PopupShell {
                         Layout.preferredWidth: Design.s(240)
                         Layout.preferredHeight: Design.s(68)
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         border.color: Design.glassBorder; border.width: 1
 
                         RowLayout {
@@ -767,7 +767,7 @@ PopupShell {
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
@@ -787,7 +787,7 @@ PopupShell {
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
@@ -808,7 +808,7 @@ PopupShell {
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
@@ -829,7 +829,7 @@ PopupShell {
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
@@ -877,7 +877,7 @@ PopupShell {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(68)
                             radius: Design.s(Design.radius.ctl)
-                            color: Design.sunken
+                            color: Design.well
                             border.color: Design.glassBorder; border.width: 1
 
                             ColumnLayout {

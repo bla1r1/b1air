@@ -49,7 +49,7 @@ PopupShell {
     id: window
 
     padding: Design.space.lg
-    background: Design.tint(Design.ground, 0.94)
+    background: Design.glassBg
     borderColor: Design.glassBorder
     cornerRadius: Design.radius.panel
 
@@ -111,35 +111,7 @@ PopupShell {
         return "Utilities";
     }
 
-    function iconSource(icon) {
-        const value = (icon || "application-x-executable").trim();
-        if (value.startsWith("/") || value.startsWith("file://")) return Paths.fileUrl(value);
-        // The suite's own icons, by file, from the copy `make install` puts
-        // beside this QML. They used to be read from ~/.local/share/icons,
-        // where a system-wide install never put them.
-        if (value.startsWith("b1air-")) return Qt.resolvedUrl("../icons/apps/" + value + ".svg");
-        const legacy = {
-            "utilities-terminal": "utilities-terminal.png",
-            "system-file-manager": "system-file-manager.png",
-            "utilities-system-monitor": "utilities-system-monitor.png",
-            "preferences-system": "preferences-system.png",
-            "text-editor": "accessories-text-editor.png",
-            // Notes asks for this name directly and had no entry, so it fell
-            // through to image://icon/ and drew the missing-image checkerboard.
-            "accessories-text-editor": "accessories-text-editor.png",
-            "image-x-generic": "../mimetypes/image-x-generic.png",
-            "x-office-calendar": "../mimetypes/x-office-calendar.png",
-            "git": "applications-development.png",
-            "web-browser": "web-browser.png",
-            "edit-paste": "edit-paste.png",
-            "system-lock-screen": "system-lock-screen.png",
-            "system-shutdown": "system-shutdown.png",
-            "system-search": "system-search.png",
-            "color-picker": "insert-image.png"
-        };
-        if (legacy[value]) return "file:///usr/share/icons/AdwaitaLegacy/48x48/legacy/" + legacy[value];
-        return "image://icon/" + value;
-    }
+    function iconSource(icon) { return Services.Apps.iconSource(icon); }
 
     function categoryColor(category) {
         switch (categoryName(category)) {
@@ -318,7 +290,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(44)
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
+            color: Design.well
             border.color: launchSearchInput.activeFocus ? Design.accent : Design.glassBorder
             border.width: Design.border
 

@@ -54,6 +54,7 @@ public:
         HiddenRole,
         SymlinkRole,
         SelectedRole,
+        TagsRole,
     };
     Q_ENUM(Roles)
 
@@ -67,6 +68,7 @@ public:
         QString category;   // folder|image|video|audio|code|text|archive|pdf|document|executable|file
         bool hidden = false;
         bool symlink = false;
+        QStringList tags;   // colour tags (tags.hpp)
     };
 
     explicit FileListModel(QObject* parent = nullptr);
@@ -96,6 +98,8 @@ public:
     };
     /** List `dir` with these options. Keeps the selection for paths still present. */
     void load(const QString& dir, const Options& opts);
+    /** For a model made in QML (the column view's other columns): `dir`, names first, folders first. */
+    Q_INVOKABLE void open(const QString& dir, bool showHidden = false);
     void reload();
     QString directory() const { return m_dir; }
 

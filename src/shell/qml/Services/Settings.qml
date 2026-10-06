@@ -115,11 +115,22 @@ Singleton {
     // the interface language (Settings → Language & Region).
     readonly property alias formatsLocale: data.formatsLocale
     readonly property alias magicMouseGestures: data.magicMouseGestures
+    // Hot corners (HotCorners.qml): none | overview | launchpad |
+    // notifications | control | lock.
+    readonly property alias hotCornerTopLeft: data.hotCornerTopLeft
+    readonly property alias hotCornerTopRight: data.hotCornerTopRight
+    readonly property alias hotCornerBottomLeft: data.hotCornerBottomLeft
+    readonly property alias hotCornerBottomRight: data.hotCornerBottomRight
     readonly property alias notificationsOnMain: data.notificationsOnMain
 
     // Appearance & compositor effects. Defaults mirror conf.d/look-and-feel.conf
     // so the UI shows what the session actually booted with.
     readonly property alias themeName: data.themeName
+    // Light by day, dark by night: themeDay from sunrise, themeNight from
+    // sunset, at nightLightLocation (Services/Theme follows it).
+    readonly property alias themeAuto: data.themeAuto
+    readonly property alias themeDay: data.themeDay
+    readonly property alias themeNight: data.themeNight
     // How other applications (GTK, Qt) are coloured: "auto" follows the
     // theme, "dark" and "light" pin them. Applied by `b1air-daemon appearance`.
     readonly property alias appColorScheme: data.appColorScheme
@@ -154,6 +165,11 @@ Singleton {
     readonly property alias barClock24h: data.barClock24h
     readonly property alias barShowApps: data.barShowApps
     readonly property alias barShowPinned: data.barShowPinned
+    // The dock (Dock.qml): off until turned on.
+    readonly property alias dockEnabled: data.dockEnabled
+    readonly property alias dockAutohide: data.dockAutohide
+    readonly property alias dockMagnify: data.dockMagnify
+    readonly property alias dockIconSize: data.dockIconSize
     readonly property alias barShowWorkspaces: data.barShowWorkspaces
     readonly property alias barShowStats: data.barShowStats
 
@@ -218,6 +234,11 @@ Singleton {
     readonly property alias autostartCustom: data.autostartCustom
     readonly property alias notificationRules: data.notificationRules
     readonly property alias notificationsDnd: data.notificationsDnd
+    // Focus modes (Services/Notifications): the one chosen by hand ("" none),
+    // the last one, for the tile's switch, and the apps each lets through.
+    readonly property alias focusMode: data.focusMode
+    readonly property alias focusLastMode: data.focusLastMode
+    readonly property alias focusAllow: data.focusAllow
 
     // Night Light. These two were declared in the adapter but had no public
     // alias, so Settings.nightLightEnabled / .nightLightTemp read back as
@@ -512,7 +533,7 @@ Singleton {
         weatherUnit: "metric",
         gapsInner: 5,
         gapsOuter: 10,
-        borderWidth: 2,
+        borderWidth: 1,
         smartBorders: true,
         smartGaps: false,
         autotiling: true,
@@ -526,8 +547,15 @@ Singleton {
         uiLanguage: "auto",
         formatsLocale: "",
         magicMouseGestures: true,
+        hotCornerTopLeft: "none",
+        hotCornerTopRight: "none",
+        hotCornerBottomLeft: "none",
+        hotCornerBottomRight: "none",
         notificationsOnMain: false,
         themeName: "breeze-dark",
+        themeAuto: false,
+        themeDay: "breeze-light",
+        themeNight: "breeze-dark",
         appColorScheme: "auto",
         accentName: "",
         cornerRadius: 10,
@@ -550,6 +578,10 @@ Singleton {
         barClock24h: true,
         barShowApps: true,
         barShowPinned: true,
+        dockEnabled: false,
+        dockAutohide: false,
+        dockMagnify: true,
+        dockIconSize: 48,
         barShowWorkspaces: true,
         barShowStats: true,
         barPrimaryOutput: "",
@@ -583,6 +615,9 @@ Singleton {
         autostartCustom: [],
         notificationRules: {},
         notificationsDnd: false,
+        focusMode: "",
+        focusLastMode: "dnd",
+        focusAllow: {},
         focusWorkDuration: 25,
         focusShortBreak: 5,
         focusLongBreak: 15,
@@ -662,7 +697,7 @@ Singleton {
 
             property int gapsInner: 5
             property int gapsOuter: 10
-            property int borderWidth: 2
+            property int borderWidth: 1
             property bool smartBorders: true
             property bool smartGaps: false
             property bool autotiling: true
@@ -676,8 +711,15 @@ Singleton {
             property string uiLanguage: "auto"
             property string formatsLocale: ""
             property bool magicMouseGestures: true
+            property string hotCornerTopLeft: "none"
+            property string hotCornerTopRight: "none"
+            property string hotCornerBottomLeft: "none"
+            property string hotCornerBottomRight: "none"
             property bool notificationsOnMain: false
             property string themeName: "breeze-dark"
+            property bool themeAuto: false
+            property string themeDay: "breeze-light"
+            property string themeNight: "breeze-dark"
             property string appColorScheme: "auto"
             property string accentName: ""
             property int cornerRadius: 10
@@ -703,6 +745,10 @@ Singleton {
             property bool barClock24h: true
             property bool barShowApps: true
             property bool barShowPinned: true
+            property bool dockEnabled: false
+            property bool dockAutohide: false
+            property bool dockMagnify: true
+            property int dockIconSize: 48
             property bool barShowWorkspaces: true
             property bool barShowStats: true
             property string barPrimaryOutput: ""
@@ -740,6 +786,9 @@ Singleton {
             property var autostartCustom: []
             property var notificationRules: ({})
             property bool notificationsDnd: false
+            property string focusMode: ""
+            property string focusLastMode: "dnd"
+            property var focusAllow: ({})
             property int focusWorkDuration: 25
             property int focusShortBreak: 5
             property int focusLongBreak: 15

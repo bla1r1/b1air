@@ -194,7 +194,9 @@ ColumnLayout {
     }
 
     // ── Camera and microphone ────────────────────────────────────────────────
+    // Only words, nothing to set: not drawn (the dots in the bar say it).
     Card {
+        visible: false
         title: I18n.tr("Camera and microphone")
         subtitle: I18n.tr("The top bar shows a red dot while the microphone records and an orange one while the camera does — always, so it cannot be missed")
         icon: "\u{f036c}"

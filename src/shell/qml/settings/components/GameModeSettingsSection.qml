@@ -43,8 +43,7 @@ ColumnLayout {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(2)
-                Label { text: I18n.tr("Enable Game Mode"); weight: Design.weight.semibold }
-                Label { text: section.gameModeEnabled ? I18n.tr("Active — CPU governor set to performance, compositor blur & shadows disabled") : I18n.tr("Performance governor, no blur or shadows, and the extras below while you play"); role: "caption"; dim: true }
+                Label { text: I18n.tr("Enable Game Mode") }
             }
 
             Toggle {

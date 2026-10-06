@@ -65,6 +65,12 @@ function getLayout(name, mx, my, mw, mh, userScale, barAtBottom) {
         "battery":   { w: s(390, scale), h: s(700, scale), rx: mw - s(410, scale), ry: barEdge, comp: "control/ControlCenter.qml" },
         "volume":    { w: s(390, scale), h: s(700, scale), rx: mw - s(410, scale), ry: barEdge, comp: "control/ControlCenter.qml" },
         "network":   { w: s(390, scale), h: s(700, scale), rx: mw - s(410, scale), ry: barEdge, comp: "control/ControlCenter.qml" },
+        // The short menus under the bar's status icons (control/MenuExtra.qml):
+        // fitted to what they hold, under the icons at the right end.
+        "wifimenu":    { w: s(300, scale), h: s(520, scale), rx: mw - s(420, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
+        "soundmenu":   { w: s(300, scale), h: s(420, scale), rx: mw - s(380, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
+        "focusmenu":   { w: s(280, scale), h: s(400, scale), rx: mw - s(410, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
+        "batterymenu": { w: s(280, scale), h: s(360, scale), rx: mw - s(330, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
         "calendar":  { w: s(860, scale), h: s(480, scale), rx: Math.floor((mw/2)-(s(860, scale)/2)), ry: barAtBottom ? s(28, scale) : s(75, scale), comp: "calendar/CalendarPopup.qml" },
         // 760: the cover block, the transport row, the ten EQ bands and the preset
         // buttons need about 730px, and at 620 the preset row was sliced in half
@@ -88,7 +94,7 @@ function getLayout(name, mx, my, mw, mh, userScale, barAtBottom) {
         "updater":   { w: s(520, scale), h: s(400, scale), rx: Math.floor((mw/2)-(s(520, scale)/2)), ry: Math.floor((mh/2)-(s(400, scale)/2)), comp: "updater/UpdaterPopup.qml" },
         "session":   { w: s(680, scale), h: s(280, scale), rx: Math.floor((mw/2)-(s(680, scale)/2)), ry: Math.floor((mh/2)-(s(280, scale)/2)), comp: "session/SessionMenu.qml" },
         "keyboard":  { w: s(250, scale), h: s(170, scale), rx: mw - s(330, scale), ry: barEdge, comp: "keyboard/KeyboardPopup.qml" },
-        "spotlight": { w: s(660, scale), h: s(460, scale), rx: Math.floor((mw/2)-(s(660, scale)/2)), ry: Math.floor((mh/2)-(s(460, scale)/2)), comp: "launcher/SpotlightLauncher.qml" },
+        "spotlight": { w: s(780, scale), h: s(480, scale), rx: Math.floor((mw/2)-(s(780, scale)/2)), ry: Math.floor(mh * 0.22), comp: "launcher/SpotlightLauncher.qml" },
         "launchpad": { w: s(980, scale), h: s(640, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: Math.floor((mh/2)-(s(640, scale)/2)), comp: "launcher/Launchpad.qml" },
         "launcher":  { w: s(980, scale), h: s(640, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: Math.floor((mh/2)-(s(640, scale)/2)), comp: "launcher/Launchpad.qml" },
         "menu":      { w: s(980, scale), h: s(640, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: Math.floor((mh/2)-(s(640, scale)/2)), comp: "launcher/Launchpad.qml" },

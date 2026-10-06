@@ -5,12 +5,14 @@
 // other programs. The shell's QML is hosted by quickshell, so this module has
 // to be loadable from disk by an engine we do not build.
 
+#include <QQmlEngine>
 #include <QQmlExtensionPlugin>
 #include <qqml.h>
 
 #include "b1airdaemon.hpp"
 #include "sway_client.hpp"
 #include "sys_util.hpp"
+#include "thumbs.hpp"
 
 class B1airDaemonPlugin : public QQmlExtensionPlugin {
     Q_OBJECT
@@ -39,6 +41,12 @@ public:
         qmlRegisterSingletonType<SysUtil>(
             uri, 1, 0, "Sys",
             [](QQmlEngine*, QJSEngine*) -> QObject* { return new SysUtil(); });
+    }
+
+    // image://thumb/<path>, cached thumbnails (common/thumbs.hpp).
+    void initializeEngine(QQmlEngine* engine, const char*) override {
+        if (!engine->imageProvider(QStringLiteral("thumb")))
+            engine->addImageProvider(QStringLiteral("thumb"), new b1air::ThumbProvider);
     }
 };
 

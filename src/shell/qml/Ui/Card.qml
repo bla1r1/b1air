@@ -18,6 +18,10 @@ Rectangle {
     id: card
 
     property string title: ""
+    // Kept for the callers, not drawn: a card is its title and its rows, as
+    // a desktop's settings draw a group. The line of explanation under every
+    // title and the glyph on a tinted tile beside it said again what the rows
+    // say, and made every page read as a brochure.
     property string subtitle: ""
     property string icon: ""
     property color accentColor: "transparent"
@@ -43,25 +47,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.md)
-            visible: card.title.length > 0 || card.subtitle.length > 0
-
-            // The icon on a soft tile of its colour, as the system settings of
-            // macOS and GNOME draw a section. It was a bare glyph beside a
-            // coloured bar down the card's edge.
-            Rectangle {
-                visible: card.icon !== ""
-                Layout.preferredWidth: Design.s(32)
-                Layout.preferredHeight: Design.s(32)
-                radius: Design.s(9)
-                color: Design.tint(card.tone, 0.16)
-
-                Icon {
-                    anchors.centerIn: parent
-                    text: card.icon
-                    role: "body"
-                    color: card.tone
-                }
-            }
+            visible: card.title.length > 0
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -76,14 +62,7 @@ Rectangle {
                     elide: Text.ElideRight
                 }
 
-                Label {
-                    text: card.subtitle
-                    visible: text.length > 0
-                    role: "caption"
-                    dim: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
+
             }
         }
 
