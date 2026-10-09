@@ -2,6 +2,7 @@
 #include <nlohmann/json.hpp>
 #include "settings_manager.hpp"
 #include "magic_mouse.hpp"
+#include "file_index.hpp"
 #include "idle.hpp"
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
@@ -581,6 +582,10 @@ int SessionManager::run_session() {
     });
     gamepad_th.detach();
 
+    // The names of the files in the home folder, for Spotlight (file_index.hpp).
+    std::thread file_index_th([] { file_index::run(&g_session_running); });
+    file_index_th.detach();
+
     // Two-finger swipes and taps on a Magic Mouse (magic_mouse.hpp).
     std::thread magic_mouse_th([] { magic_mouse::run(&g_session_running); });
     magic_mouse_th.detach();
@@ -594,6 +599,12 @@ int SessionManager::run_session() {
     // 7. Launch Polkit Agent
     if (!is_process_running("b1air-daemon polkit") && !is_process_running("polkit-gnome")) {
         spawn_argv_detached({"b1air-polkit-agent"});
+    }
+
+    // 8. The phone as a security key (src/passkey). Always started: it reads
+    //    its switch (passkeyPhone) itself and holds no device while it is off.
+    if (!is_process_running("b1air-passkey")) {
+        spawn_argv_detached({"b1air-passkey"});
     }
 
     // 9. Idle: dimming, locking, screens off and sleep, in this process

@@ -53,6 +53,11 @@ xdg-utils file glib2 gtk3 snapper
 
 # Storage & archives (libarchive powers extraction in b1air-files)
 udisks2 gvfs ntfs-3g libarchive
+# The phone as a security key (src/passkey): Rust, and libwebauthn's
+# D-Bus (BlueZ) and udev.
+?rust
+# Network shares in Files (Connect to Server): Samba through gvfs.
+?gvfs-smb
 
 # Desktop plumbing
 xdg-user-dirs qt5ct qt6ct cups
@@ -65,5 +70,6 @@ fcitx5 fcitx5-qt fcitx5-gtk fcitx5-configtool
 # an Android's battery and model when USB debugging is on.
 python python-mutagen python-pycryptodome python-pillow python-pyusb
 libimobiledevice usbmuxd ifuse gvfs-mtp ?android-tools
-# iPhone photos are HEIC: the viewer and the thumbnails read them through this.
-kimageformats libheif
+# iPhone photos are HEIC: the viewer and the thumbnails read them through this;
+# WebP, TIFF, AVIF, JPEG XL, RAW and the rest come from the two plugin sets.
+qt6-imageformats kimageformats libheif libavif libjxl libraw

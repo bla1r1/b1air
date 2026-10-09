@@ -8,6 +8,7 @@
 #include <QVariantMap>
 #include <QList>
 #include <QMap>
+#include <QFileSystemWatcher>
 #include <QTimer>
 #include <functional>
 
@@ -149,7 +150,11 @@ private:
     QStringList m_ipodPaths;
     QMap<QString, QVariantMap> m_phones;
     QTimer m_phoneTimer;
+    QFileSystemWatcher m_usbWatcher;
     bool m_scanning = false;
+    void watchUsb();
+    void usbChanged();
+    void schedulePhoneScan();
     QMap<QString, QProcess*> m_taskProcs;
     QVariantMap m_tasks;
 

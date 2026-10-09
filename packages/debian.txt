@@ -69,6 +69,11 @@ xdg-utils file libglib2.0-bin libgtk-3-bin openssl ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g libarchive-tools
+# The phone as a security key (src/passkey): Rust 1.88+ (Debian 13 has
+# 1.85: it is left out there), and libwebauthn's D-Bus (BlueZ) and udev headers.
+?cargo ?rustc ?libdbus-1-dev ?libudev-dev
+# Network shares in Files (Connect to Server): Samba through gvfs, seen as folders through gvfs-fuse.
+?gvfs-backends ?gvfs-fuse
 
 # Desktop plumbing
 xdg-user-dirs qt5ct qt6ct cups desktop-file-utils gtk-update-icon-cache whiptail
@@ -78,4 +83,4 @@ fcitx5 fcitx5-frontend-qt6 fcitx5-frontend-gtk3 ?fcitx5-config-qt
 
 # Phones & music players in Files (see packages/arch.txt)
 python3 ?python3-mutagen ?python3-pycryptodome ?python3-pil ?python3-usb
-?libimobiledevice-utils ?usbmuxd ?ifuse ?gvfs-backends ?adb ?kimageformat6-plugins ?libheif1
+?libimobiledevice-utils ?usbmuxd ?ifuse ?gvfs-backends ?adb ?kimageformat6-plugins ?libheif1 ?qt6-image-formats-plugins

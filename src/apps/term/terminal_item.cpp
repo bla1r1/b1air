@@ -9,6 +9,10 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QStyleHints>
+#include <QCursor>
+#include <QDesktopServices>
+#include <QRegularExpression>
+#include <QUrl>
 #include <pty.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -463,6 +467,31 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
     return defaultColor;
 }
 
+void TerminalItem::viewCell(int row, int col, VTermScreenCell *cell) const {
+    if (m_viewOffset == 0) {
+        vterm_screen_get_cell(m_vts, {row, col}, cell);
+        return;
+    }
+    const int total = static_cast<int>(m_scrollback.size()) + m_rows;
+    const int sourceRow = total - m_rows - m_viewOffset + row;
+    if (sourceRow < 0 || sourceRow >= total) {
+        std::memset(cell, 0, sizeof(*cell));
+        cell->width = 1;
+    } else if (sourceRow < static_cast<int>(m_scrollback.size())) {
+        // A line is as wide as the window was when it scrolled off. Widen
+        // the window since and this read past the end of it.
+        const auto &line = m_scrollback[static_cast<size_t>(sourceRow)];
+        if (col < static_cast<int>(line.size())) {
+            *cell = line[static_cast<size_t>(col)];
+        } else {
+            std::memset(cell, 0, sizeof(*cell));
+            cell->width = 1;
+        }
+    } else {
+        vterm_screen_get_cell(m_vts, {sourceRow - static_cast<int>(m_scrollback.size()), col}, cell);
+    }
+}
+
 void TerminalItem::paint(QPainter *painter) {
     if (!m_vts || width() <= 0 || height() <= 0) return;
 
@@ -510,31 +539,8 @@ void TerminalItem::paint(QPainter *painter) {
         flush();
         int col = 0;
         while (col < m_cols) {
-            VTermPos pos = { row, col };
             VTermScreenCell cell;
-            if (m_viewOffset == 0) {
-                vterm_screen_get_cell(m_vts, pos, &cell);
-            } else {
-                const int total = static_cast<int>(m_scrollback.size()) + m_rows;
-                const int sourceRow = total - m_rows - m_viewOffset + row;
-                if (sourceRow < 0 || sourceRow >= total) {
-                    std::memset(&cell, 0, sizeof(cell));
-                    cell.width = 1;
-                } else if (sourceRow < static_cast<int>(m_scrollback.size())) {
-                    // A line is as wide as the window was when it scrolled
-                    // off. Widen the window since and this read past the end
-                    // of it.
-                    const auto &line = m_scrollback[static_cast<size_t>(sourceRow)];
-                    if (col < static_cast<int>(line.size())) {
-                        cell = line[static_cast<size_t>(col)];
-                    } else {
-                        std::memset(&cell, 0, sizeof(cell));
-                        cell.width = 1;
-                    }
-                } else {
-                    vterm_screen_get_cell(m_vts, {sourceRow - static_cast<int>(m_scrollback.size()), col}, &cell);
-                }
-            }
+            viewCell(row, col, &cell);
 
             int widthInCells = cell.width > 0 ? cell.width : 1;
 
@@ -610,6 +616,19 @@ void TerminalItem::paint(QPainter *painter) {
         }
     }
     flush();
+
+    // The link under the pointer while Ctrl is held: underlined, in the
+    // text's colour, over every row it wraps across.
+    if (m_hoverLink.valid()) {
+        const qreal h = std::max<qreal>(1.0, std::round(m_cellHeight / 16.0));
+        const qreal underY = std::min(m_fontAscent + h + 1.0, m_cellHeight - h);
+        for (int r = m_hoverLink.start.row; r <= m_hoverLink.end.row; ++r) {
+            const int c1 = r == m_hoverLink.start.row ? m_hoverLink.start.col : 0;
+            const int c2 = r == m_hoverLink.end.row ? m_hoverLink.end.col : m_cols - 1;
+            painter->fillRect(QRectF(c1 * m_cellWidth, r * m_cellHeight + underY,
+                                     (c2 - c1 + 1) * m_cellWidth, h), m_foreground);
+        }
+    }
 
     // Cursor. Not while scrolled back: it belongs to the live screen, and was
     // drawn at the same cell over whatever history was on show.
@@ -689,26 +708,43 @@ void TerminalItem::showNotice(const QString &text) {
 }
 
 void TerminalItem::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Control) {
+        updateHoverLink(event->modifiers() | Qt::ControlModifier);
+        return;
+    }
     if (m_masterFd < 0) {
         if (m_finished) emit keyAfterExit();
         return;
     }
+    // A modifier on its own types nothing: it neither wakes the cursor nor
+    // leaves the history. Shift, pressed on the way to Ctrl+Shift+C, jumped
+    // the view back to the bottom, so text selected in the scrollback could
+    // not be copied — the copy read what was now on screen instead.
+    switch (event->key()) {
+    case Qt::Key_Shift: case Qt::Key_Alt: case Qt::Key_Meta: case Qt::Key_Super_L: case Qt::Key_Super_R:
+    case Qt::Key_AltGr: case Qt::Key_CapsLock:
+        return;
+    default:
+        break;
+    }
     restartBlink();
+
+    // Shortcuts: Copy & Paste — copying is done where the view is.
+    if ((event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)
+        && event->key() == Qt::Key_C) {
+        copySelection();
+        return;
+    }
 
     if (m_viewOffset > 0) {
         m_viewOffset = 0;
         update();
     }
 
-    // Shortcuts: Copy & Paste
-    if ((event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)) {
-        if (event->key() == Qt::Key_C) {
-            copySelection();
-            return;
-        } else if (event->key() == Qt::Key_V) {
-            pasteClipboard();
-            return;
-        }
+    if ((event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)
+        && event->key() == Qt::Key_V) {
+        pasteClipboard();
+        return;
     }
 
     // Shortcuts: Zoom
@@ -818,6 +854,14 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
 
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier)) {
+        const Link link = linkAt({static_cast<int>(event->position().y() / m_cellHeight),
+                                  static_cast<int>(event->position().x() / m_cellWidth)});
+        if (link.valid()) {
+            QDesktopServices::openUrl(QUrl(link.url));
+            return;
+        }
+    }
     if (event->button() == Qt::LeftButton) {
         int col = (int)(event->pos().x() / m_cellWidth);
         int row = (int)(event->pos().y() / m_cellHeight);
@@ -949,6 +993,109 @@ void TerminalItem::wheelEvent(QWheelEvent *event) {
     update();
 }
 
+// ── Links ───────────────────────────────────────────────────────────────────
+
+TerminalItem::Link TerminalItem::linkAt(VTermPos pos) const {
+    if (!m_vts || pos.row < 0 || pos.row >= m_rows || pos.col < 0 || pos.col >= m_cols) return {};
+
+    // A row whose last cell is written on goes on in the next one: that is
+    // how a long address wraps. The rows around `pos` joined that way are
+    // read as one line.
+    const auto full = [this](int row) {
+        VTermScreenCell cell;
+        viewCell(row, m_cols - 1, &cell);
+        return cell.chars[0] != 0 && cell.chars[0] != ' ';
+    };
+    int top = pos.row, bottom = pos.row;
+    while (top > 0 && pos.row - top < 8 && full(top - 1)) --top;
+    while (bottom < m_rows - 1 && bottom - pos.row < 8 && full(bottom)) ++bottom;
+
+    // The text, and for each of its UTF-16 units the cell it came from.
+    QString text;
+    std::vector<VTermPos> at;
+    int index = -1;
+    for (int r = top; r <= bottom; ++r) {
+        for (int c = 0; c < m_cols;) {
+            VTermScreenCell cell;
+            viewCell(r, c, &cell);
+            const int width = cell.width > 0 ? cell.width : 1;
+            if (r == pos.row && pos.col >= c && pos.col < c + width) index = static_cast<int>(text.size());
+            if (!cell.chars[0]) {
+                text += ' ';
+                at.push_back({r, c});
+            } else {
+                for (int i = 0; i < VTERM_MAX_CHARS_PER_CELL && cell.chars[i]; ++i) {
+                    const char32_t cp = static_cast<char32_t>(cell.chars[i]);
+                    const QString part = QString::fromUcs4(&cp, 1);
+                    text += part;
+                    for (int k = 0; k < part.size(); ++k) at.push_back({r, c + width - 1});
+                }
+            }
+            c += width;
+        }
+    }
+    if (index < 0) return {};
+
+    static const QRegularExpression re(
+        QStringLiteral(R"((?:https?|ftp|file)://[^\s<>"'`]+|www\.[^\s<>"'`]+)"),
+        QRegularExpression::CaseInsensitiveOption);
+    for (auto it = re.globalMatch(text); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        int begin = static_cast<int>(m.capturedStart());
+        int end = static_cast<int>(m.capturedEnd());     // exclusive
+        if (index < begin || index >= end) continue;
+        // What ends a sentence is not part of the address, nor is a closing
+        // bracket the address did not open: "(see https://x.org/a)."
+        QString url = text.mid(begin, end - begin);
+        while (!url.isEmpty()) {
+            const QChar last = url.back();
+            bool drop = QStringLiteral(".,;:!?'\"").contains(last);
+            for (const auto &[open, close] : {std::pair{'(', ')'}, std::pair{'[', ']'}, std::pair{'{', '}'}})
+                if (last == QLatin1Char(close) && url.count(QLatin1Char(open)) < url.count(QLatin1Char(close))) drop = true;
+            if (!drop) break;
+            url.chop(1);
+            --end;
+        }
+        if (index >= end || url.size() < 8) return {};
+        if (url.startsWith(QLatin1String("www."), Qt::CaseInsensitive)) url.prepend(QLatin1String("https://"));
+        Link link;
+        link.url = url;
+        link.start = at[static_cast<size_t>(begin)];
+        link.end = at[static_cast<size_t>(end - 1)];
+        return link;
+    }
+    return {};
+}
+
+void TerminalItem::updateHoverLink(Qt::KeyboardModifiers mods) {
+    Link link;
+    if ((mods & Qt::ControlModifier) && m_hoverPoint.x() >= 0)
+        link = linkAt({static_cast<int>(m_hoverPoint.y() / m_cellHeight),
+                       static_cast<int>(m_hoverPoint.x() / m_cellWidth)});
+    const bool same = link.url == m_hoverLink.url && link.start.row == m_hoverLink.start.row
+                      && link.start.col == m_hoverLink.start.col;
+    if (same) return;
+    m_hoverLink = link;
+    if (link.valid()) setCursor(Qt::PointingHandCursor);
+    else unsetCursor();
+    update();
+}
+
+void TerminalItem::hoverMoveEvent(QHoverEvent *event) {
+    m_hoverPoint = event->position();
+    updateHoverLink(event->modifiers());
+}
+
+void TerminalItem::hoverLeaveEvent(QHoverEvent *event) {
+    m_hoverPoint = {-1, -1};
+    updateHoverLink(event->modifiers());
+}
+
+void TerminalItem::keyReleaseEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Control) updateHoverLink(event->modifiers() & ~Qt::ControlModifier);
+    QQuickPaintedItem::keyReleaseEvent(event);
+}
+
 void TerminalItem::copySelection() {
     if (!m_hasSelection || !m_vts) return;
 
@@ -960,15 +1107,18 @@ void TerminalItem::copySelection() {
         int c1 = (r == r1) ? ((m_selStart.row <= m_selEnd.row) ? m_selStart.col : m_selEnd.col) : 0;
         int c2 = (r == r2) ? ((m_selStart.row <= m_selEnd.row) ? m_selEnd.col : m_selStart.col) : m_cols - 1;
 
+        // What is shown, history included: this read the live screen, so a
+        // selection made scrolled up copied the lines at the bottom instead.
         QString line;
         for (int c = c1; c <= c2 && c < m_cols; ++c) {
             VTermScreenCell cell;
-            vterm_screen_get_cell(m_vts, { r, c }, &cell);
+            viewCell(r, c, &cell);
             if (cell.chars[0]) {
                 for (int i = 0; i < VTERM_MAX_CHARS_PER_CELL && cell.chars[i]; ++i) {
                     char32_t cp = static_cast<char32_t>(cell.chars[i]);
                     line += QString::fromUcs4(&cp, 1);
                 }
+                if (cell.width > 1) c += cell.width - 1;   // a wide glyph's second cell is empty, not a space
             } else {
                 line += ' ';
             }

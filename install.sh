@@ -752,6 +752,23 @@ deploy_session_files() {
     fi
 }
 
+# The phone as a security key: the root helper that makes its FIDO device
+# (src/fido). Enabled always; it makes the device only while b1air-passkey is
+# connected, which is only while Settings → Lock & Login has it on. Only with
+# a system install: a root service runs nothing from a home directory.
+enable_passkey_helper() {
+    [[ -x /usr/local/bin/b1air-fido-uhid ]] || return 0
+    sudo install -m 644 "$REPO_DIR/usr/lib/systemd/system/b1air-fido-uhid.service" \
+        /etc/systemd/system/b1air-fido-uhid.service
+    sudo systemctl daemon-reload
+    if sudo systemctl enable b1air-fido-uhid.service >/dev/null 2>&1 \
+            && sudo systemctl restart b1air-fido-uhid.service >/dev/null 2>&1; then
+        ok "Enabled b1air-fido-uhid.service (phone passkeys)"
+    else
+        warn "Could not start b1air-fido-uhid.service: no phone passkeys"
+    fi
+}
+
 deploy_dotfiles() {
     log "Deploying user dotfiles..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -1105,6 +1122,7 @@ build_b1air_suite() {
         # The same defaults for every other account on the machine.
         if [[ "$B1AIR_PREFIX" == /usr/local/bin ]]; then
             install_system_defaults
+            enable_passkey_helper
         fi
 
         # Entries an older install left in ~/.local/share/applications, which

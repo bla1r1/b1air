@@ -437,6 +437,21 @@ ColumnLayout {
         return theme || I18n.tr("SDDM default");
     }
 
+    // The phone as a security key (src/passkey): websites that ask for a
+    // passkey get a QR code, and the phone that scans it signs in. On by
+    // default, as on other desktops; only where there is Bluetooth, which
+    // the phone needs to show it is nearby.
+    Card {
+        visible: section.part === "lock" && !!Network.adapter
+        title: I18n.tr("Passkeys")
+        Toggle {
+            label: I18n.tr("Sign in to websites with your phone")
+            subtitle: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
+            checked: Settings.passkeyPhone !== false
+            onToggled: Settings.set("passkeyPhone", Settings.passkeyPhone === false)
+        }
+    }
+
     Card {
         visible: section.part === "lock"
         title: I18n.tr("Session & Login Screen")

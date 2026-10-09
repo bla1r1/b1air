@@ -1,0 +1,36 @@
+# The root half of the phone as a security key (src/fido): it makes the FIDO
+# HID device b1air-passkey answers as, and nothing else. Locked down to what
+# that takes: /dev/uhid, its socket in /run/b1air-fido, and logind's seat
+# files to know whose session is active.
+[Unit]
+Description=b1air phone passkey: the virtual FIDO device
+After=systemd-logind.service
+
+[Service]
+ExecStart=/usr/local/bin/b1air-fido-uhid
+Restart=on-failure
+RuntimeDirectory=b1air-fido
+RuntimeDirectoryMode=0755
+DevicePolicy=closed
+DeviceAllow=/dev/uhid rw
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

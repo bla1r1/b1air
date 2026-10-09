@@ -100,24 +100,39 @@ PopupShell {
     }
 
     // ── Files ────────────────────────────────────────────────────────────────
-    // Names in the home folder, five levels deep, hidden ones left out — a
-    // second after typing stops, and at most a second and a half of looking.
+    // Names in the home folder, from the daemon's index (daemon/file_index):
+    // any part of a name, in milliseconds, best first. Until the index is
+    // made (exit 3, the first minutes of a new account) a `find` five levels
+    // deep stands in, as it did for every query before.
     property var fileHits: []
     Timer {
         id: fileDelay
-        interval: 220
+        interval: 120
         onTriggered: {
             const q = window.query.trim();
             if (q.length < 2 || window.calcResult !== "") { window.fileHits = []; return; }
             fileFind.running = false;
-            fileFind.command = ["sh", "-c",
-                "cd \"$HOME\" && timeout 1.5 find . -maxdepth 5 -not -path '*/.*' -iname \"*$1*\" -print 2>/dev/null | head -n 24",
-                "sh", q];
+            fileFind.query = q;
+            fileFind.command = ["b1air-daemon", "files", "search", q, "24"];
             fileFind.running = true;
         }
     }
     Process {
         id: fileFind
+        property string query: ""
+        stdout: StdioCollector {
+            onStreamFinished: window.fileHits = this.text.split("\n").filter(l => l.length > 1)
+        }
+        onExited: code => {
+            if (code !== 3) return;
+            findFallback.command = ["sh", "-c",
+                "cd \"$HOME\" && timeout 1.5 find . -maxdepth 5 -not -path '*/.*' -iname \"*$1*\" -print 2>/dev/null | head -n 24",
+                "sh", fileFind.query];
+            findFallback.running = true;
+        }
+    }
+    Process {
+        id: findFallback
         stdout: StdioCollector {
             onStreamFinished: {
                 const home = Quickshell.env("HOME");

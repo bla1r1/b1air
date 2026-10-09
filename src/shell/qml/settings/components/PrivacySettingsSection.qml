@@ -127,6 +127,18 @@ ColumnLayout {
         section.setTrashDays(steps[Math.max(0, Math.min(steps.length - 1, i + dir))]);
     }
 
+    // The names of the files in the home folder, for Spotlight
+    // (daemon/file_index): kept in ~/.cache/b1air/files-index.db.
+    Card {
+        title: I18n.tr("File search")
+        Toggle {
+            label: I18n.tr("Index file names for Spotlight")
+            subtitle: I18n.tr("Names only, not what is in the files; hidden folders and network drives are left out")
+            checked: Settings.fileIndex !== false
+            onToggled: Settings.set("fileIndex", !(Settings.fileIndex !== false))
+        }
+    }
+
     Card {
         title: I18n.tr("Trash")
         subtitle: I18n.tr("Deleted files are kept this long, then removed for good at login")

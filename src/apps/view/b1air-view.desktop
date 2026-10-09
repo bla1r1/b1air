@@ -1,5 +1,5 @@
 [Desktop Entry]
-Exec=b1air-view %U
+Exec=b1air-view %F
 Icon=b1air-view
 Terminal=false
 Type=Application
@@ -9,12 +9,12 @@ Name[ru]=Просмотр изображений
 GenericName=Image Viewer
 GenericName[uk]=Перегляд зображень
 GenericName[ru]=Просмотр изображений
-Comment=Look through pictures and short videos
-Comment[uk]=Перегляд зображень і коротких відео
-Comment[ru]=Просмотр изображений и коротких видео
-Keywords=image;picture;photo;viewer;
-Keywords[uk]=зображення;фото;перегляд;
-Keywords[ru]=изображение;фото;просмотр;
-MimeType=image/png;image/jpeg;image/webp;image/gif;image/bmp;image/svg+xml;
-Categories=Graphics;Viewer;
+Comment=Look through pictures, play films and music
+Comment[uk]=Перегляд зображень, відео й музики
+Comment[ru]=Просмотр изображений, видео и музыки
+Keywords=image;picture;photo;viewer;video;movie;music;audio;player;
+Keywords[uk]=зображення;фото;перегляд;відео;фільм;музика;програвач;
+Keywords[ru]=изображение;фото;просмотр;видео;фильм;музыка;плеер;
+MimeType=image/png;image/jpeg;image/webp;image/gif;image/bmp;image/svg+xml;image/tiff;image/heif;image/heic;image/avif;image/jxl;image/x-icon;image/x-tga;image/x-portable-pixmap;image/vnd.adobe.photoshop;image/x-exr;image/x-xcf;image/qoi;video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;video/ogg;video/x-flv;video/mp2t;video/3gpp;video/3gpp2;video/x-ms-wmv;video/x-ms-asf;video/x-m4v;video/dv;video/vnd.avi;application/vnd.rn-realmedia;audio/mpeg;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-opus+ogg;audio/mp4;audio/x-m4a;audio/wav;audio/x-wav;audio/aac;audio/x-aac;audio/x-aiff;audio/x-ape;audio/x-wavpack;audio/x-ms-wma;audio/x-matroska;audio/ac3;audio/x-tta;audio/x-musepack;audio/x-dsf;audio/x-speex;audio/amr;audio/webm;
+Categories=Graphics;Viewer;AudioVideo;Player;
 StartupWMClass=b1air-view

@@ -45,6 +45,14 @@ class FileManagerBackend : public QObject {
     Q_PROPERTY(int trashCount READ trashCount NOTIFY trashChanged)
     // Mounted drives other than the system one: [{name, path, free, total, percent, removable}]
     Q_PROPERTY(QVariantList volumes READ volumes NOTIFY volumesChanged)
+    // Network shares mounted through gvfs (smb://, sftp://, …), as folders
+    // under $XDG_RUNTIME_DIR/gvfs: [{name, server, path, uri}]
+    Q_PROPERTY(QVariantList shares READ shares NOTIFY sharesChanged)
+    // Servers connected to before, newest first: [{uri, user, domain}] —
+    // never a password.
+    Q_PROPERTY(QVariantList recentServers READ recentServers NOTIFY recentServersChanged)
+    // A connection is being made.
+    Q_PROPERTY(bool connecting READ connecting NOTIFY connectingChanged)
     // What Ctrl+Z would undo: "Move 3 items", "Rename", "Move to Trash" — or "".
     Q_PROPERTY(QString undoLabel READ undoLabel NOTIFY undoChanged)
     // A paste is copying in the background.
@@ -100,6 +108,9 @@ public:
     bool inTrash() const { return m_currentPath == trashPath(); }
     int trashCount() const { return m_trashCount; }
     QVariantList volumes() const { return m_volumes; }
+    QVariantList shares() const { return m_shares; }
+    QVariantList recentServers() const { return m_recentServers; }
+    bool connecting() const { return m_connecting; }
     QString undoLabel() const { return m_undo.isEmpty() ? QString() : m_undo.last().label; }
 
 public slots:
@@ -179,6 +190,17 @@ public slots:
     void transfer(const QStringList& sources, const QString& destDir, bool move);
     // Mounted drives.
     bool unmount(const QString& path);
+    // Connect to a share — "smb://nas/media", "\\nas\media", "nas/media" —
+    // through gvfs (gio mount), and go there; serverConnected reports. An
+    // empty user is a guest. The password goes to gio on its stdin, never
+    // on a command line.
+    void connectServer(const QString& address, const QString& user,
+                       const QString& domain, const QString& password);
+    void forgetServer(const QString& uri);
+    // "smb://nas/media" for what was typed, or "" when it is no address.
+    Q_INVOKABLE QString serverUri(const QString& address) const;
+    // Where gvfs shows its mounts as folders: $XDG_RUNTIME_DIR/gvfs.
+    static QString gvfsRoot();
     // Applications that open this file: [{id, name, isDefault}]
     QVariantList openWithApps(const QString& path) const;
     void openWith(const QString& desktopId, const QStringList& paths);
@@ -200,6 +222,12 @@ signals:
     void trashChanged();
     void undoChanged();
     void volumesChanged();
+    void sharesChanged();
+    void recentServersChanged();
+    void connectingChanged();
+    void serverConnected(bool ok, const QString& path, const QString& message);
+    // An address that named a server and no share: what it shares, to pick.
+    void sharesListed(const QString& uri, const QStringList& names);
     void folderSizeReady(const QString& path, const QString& sizeText, int fileCount);
 
 private:
@@ -217,10 +245,21 @@ private:
     bool restoreOriginals(const QStringList& originals);
     int m_trashCount = 0;
     QVariantList m_volumes;
+    QVariantList m_shares;
+    QVariantList m_recentServers;
+    bool m_connecting = false;
+    void updateShares();
+    void rememberServer(const QString& uri, const QString& user, const QString& domain);
+    void openShare(const QString& target, const QString& uri, const QString& user, const QString& domain,
+                   const QString& failure = {});
+    void listShares(const QString& target, const QString& uri, const QString& failure = {});
     QTimer m_volumeTimer;
     FileListModel* m_files = nullptr;
-    void loadFiles();
+    void loadFiles(bool relist = true);
     void updateTrashCount();
+    void updateDiskInfo();
+    QString m_freeText, m_totalText;
+    int m_diskGen = 0;
     void updateVolumes();
     QString formatSize(qint64 bytes) const;
     void openWithDefaultApp(const QString& path);

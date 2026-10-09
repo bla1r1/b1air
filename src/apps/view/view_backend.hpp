@@ -20,6 +20,15 @@ class ViewBackend : public QObject {
     Q_PROPERTY(bool hasPrevious READ hasPrevious NOTIFY fileChanged)
     Q_PROPERTY(bool hasNext READ hasNext NOTIFY fileChanged)
     Q_PROPERTY(QVariantList filesInDir READ filesInDir NOTIFY directoryChanged)
+    // What is open: "image", "video" or "audio". Pictures are shown, the
+    // other two played, in the same window.
+    Q_PROPERTY(QString kind READ kind NOTIFY fileChanged)
+    // A picture with more than one frame (GIF, animated WebP): shown with
+    // AnimatedImage, which plays it; Image shows the first frame only.
+    Q_PROPERTY(bool animated READ animated NOTIFY fileChanged)
+    // A picture's own size, turned as the camera held it: the window shows
+    // it no larger than this.
+    Q_PROPERTY(QSize imageSize READ imageSize NOTIFY fileChanged)
 
 public:
     explicit ViewBackend(QObject* parent = nullptr);
@@ -33,6 +42,15 @@ public:
     bool hasPrevious() const { return m_currentIndex > 0; }
     bool hasNext() const { return m_currentIndex >= 0 && m_currentIndex < m_imageList.size() - 1; }
     QVariantList filesInDir() const { return m_filesInDir; }
+    QString kind() const { return m_kind; }
+    bool animated() const { return m_animated; }
+    QSize imageSize() const { return m_imageSize; }
+    /** "image", "video", "audio", or "" for a file the window can neither show nor play. */
+    static QString kindOf(const QFileInfo& fi, bool sniff = false);
+    /** Whether a film is in the folder opened: main.cpp draws on the GPU then. */
+    bool folderHasVideo() const { return m_kinds.contains(QStringLiteral("video")); }
+    /** The next one of the same kind — the next song after a song ends. "" at the end. */
+    Q_INVOKABLE QString nextOfKind() const;
 
     Q_INVOKABLE void openFile(const QString& filePath);
     Q_INVOKABLE void next();
@@ -54,6 +72,10 @@ private:
     QString m_fileSize;
     QString m_resolution;
     int m_currentIndex = -1;
+    QString m_kind;
+    bool m_animated = false;
+    QSize m_imageSize;
     QStringList m_imageList;
+    QStringList m_kinds;      // kindOf each of m_imageList, in step
     QVariantList m_filesInDir;
 };

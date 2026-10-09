@@ -15,7 +15,8 @@ namespace b1air {
  * freedesktop thumbnail cache (~/.cache/thumbnails/large, the file's mtime in
  * it) so a folder opened again is there at once and other file managers share
  * them. Pictures through QImageReader (turned the way the camera held them),
- * videos as a frame from ffmpeg when it is installed.
+ * videos as a frame from ffmpeg when it is installed, songs as their album
+ * cover (tagged in, or a cover.jpg beside them).
  *
  * Registered by b1air-files on its engine and by the B1air.Daemon plugin on
  * every engine that imports it (the shell, Settings): the wallpaper picker
@@ -27,7 +28,8 @@ public:
     QQuickImageResponse* requestImageResponse(const QString& id, const QSize& requestedSize) override;
 
 private:
-    QThreadPool m_pool;
+    QThreadPool m_pool;   // files on this machine's disks
+    QThreadPool m_slow;   // network shares, phones, USB sticks
 };
 
 } // namespace b1air

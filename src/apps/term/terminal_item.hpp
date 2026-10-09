@@ -81,6 +81,9 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void hoverMoveEvent(QHoverEvent *event) override;
+    void hoverLeaveEvent(QHoverEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
@@ -163,6 +166,25 @@ private:
 
     std::deque<std::vector<VTermScreenCell>> m_scrollback;
     int m_viewOffset = 0;
+
+    // The cell shown at (row, col) of the window: the live screen, or the
+    // history when scrolled back. What paint draws and what links are read
+    // from, so the two agree.
+    void viewCell(int row, int col, VTermScreenCell *cell) const;
+
+    // Links: an address in the text (http, https, ftp, file, www.), across
+    // the rows it wraps over. Ctrl shows the one under the pointer, underlined,
+    // and Ctrl+click opens it, as in Konsole and GNOME Terminal.
+    struct Link {
+        QString url;
+        VTermPos start = {-1, -1};
+        VTermPos end = {-1, -1};     // the last cell, inclusive
+        bool valid() const { return !url.isEmpty(); }
+    };
+    Link linkAt(VTermPos pos) const;
+    void updateHoverLink(Qt::KeyboardModifiers mods);
+    Link m_hoverLink;
+    QPointF m_hoverPoint{-1, -1};
 
     // What the running program asked for, so the wheel can do what it expects.
     int m_mouseMode = 0;        // VTERM_PROP_MOUSE_*: nonzero = it wants mouse events

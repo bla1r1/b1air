@@ -19,10 +19,20 @@
 #include <QSet>
 #include <QDateTime>
 #include <thread>
+#include <atomic>
+#include <unistd.h>
 #include <archive.h>
 #include <archive_entry.h>
 
 namespace b1air {
+
+static bool onNetworkDrive(const QString& path);
+
+static QString serversPath() {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/b1air";
+    QDir().mkpath(dir);
+    return dir + "/files_servers.json";
+}
 
 FileManagerBackend::FileManagerBackend(QObject* parent)
     : QObject(parent),
@@ -40,25 +50,29 @@ FileManagerBackend::FileManagerBackend(QObject* parent)
     connect(&m_volumeTimer, &QTimer::timeout, this, &FileManagerBackend::updateVolumes);
     m_volumeTimer.start();
     updateVolumes();
+    QFile servers(serversPath());
+    if (servers.open(QIODevice::ReadOnly))
+        m_recentServers = QJsonDocument::fromJson(servers.readAll()).array().toVariantList();
     QString home = QDir::homePath();
     setCurrentPath(home);
 }
 
-void FileManagerBackend::loadFiles() {
+void FileManagerBackend::loadFiles(bool relist) {
     FileListModel::Options o;
+    o.background = onNetworkDrive(m_currentPath);
     o.showHidden = m_showHidden;
     o.dirsFirst = m_dirsFirst;
     o.sortField = m_sortField;
     o.ascending = m_sortAscending;
     o.filter = m_filterQuery;
-    m_files->load(m_currentPath, o);
+    m_files->load(m_currentPath, o, relist);
 }
 
 void FileManagerBackend::setDirsFirst(bool v) {
     if (m_dirsFirst == v) return;
     m_dirsFirst = v;
     emit sortChanged();
-    refresh();
+    loadFiles(false);   // the same folder, filtered or sorted anew
 }
 
 QString FileManagerBackend::currentPath() const {
@@ -146,7 +160,7 @@ void FileManagerBackend::setShowHidden(bool show) {
     if (m_showHidden != show) {
         m_showHidden = show;
         emit showHiddenChanged();
-        refresh();
+        loadFiles(false);   // the same folder, filtered or sorted anew
     }
 }
 
@@ -158,7 +172,7 @@ void FileManagerBackend::setFilterQuery(const QString& query) {
     if (m_filterQuery != query) {
         m_filterQuery = query;
         emit filterQueryChanged();
-        refresh();
+        loadFiles(false);   // the same folder, filtered or sorted anew
     }
 }
 
@@ -181,7 +195,7 @@ void FileManagerBackend::setSortField(const QString& field) {
     if (m_sortField != field) {
         m_sortField = field;
         emit sortChanged();
-        refresh();
+        loadFiles(false);   // the same folder, filtered or sorted anew
     }
 }
 
@@ -193,7 +207,7 @@ void FileManagerBackend::setSortAscending(bool asc) {
     if (m_sortAscending != asc) {
         m_sortAscending = asc;
         emit sortChanged();
-        refresh();
+        loadFiles(false);   // the same folder, filtered or sorted anew
     }
 }
 
@@ -272,21 +286,9 @@ QString FileManagerBackend::freeSpaceOf(const QString& path) const {
     return storage.isValid() ? formatSize(storage.bytesAvailable()) : QStringLiteral("0 B");
 }
 
-QString FileManagerBackend::diskFreeSpace() const {
-    QStorageInfo storage(inTagView() ? QDir::homePath() : m_currentPath);
-    if (storage.isValid()) {
-        return formatSize(storage.bytesAvailable());     // the UI adds "free"
-    }
-    return "0 B";
-}
+QString FileManagerBackend::diskFreeSpace() const { return m_freeText; }
 
-QString FileManagerBackend::diskTotalSpace() const {
-    QStorageInfo storage(inTagView() ? QDir::homePath() : m_currentPath);
-    if (storage.isValid()) {
-        return formatSize(storage.bytesTotal());
-    }
-    return "0 B";
-}
+QString FileManagerBackend::diskTotalSpace() const { return m_totalText; }
 
 QString FileManagerBackend::formatSize(qint64 bytes) const {
     if (bytes < 1024) return QString("%1 B").arg(bytes);
@@ -298,7 +300,33 @@ QString FileManagerBackend::formatSize(qint64 bytes) const {
 void FileManagerBackend::refresh() {
     loadFiles();
     updateTrashCount();
-    emit diskInfoChanged();
+    updateDiskInfo();
+}
+
+// The free and total space of the disk the folder is on. statvfs on a
+// network share is a round trip — 700 ms on a router's — and the status bar
+// asked for it twice on every folder opened, on the GUI thread; there it is
+// asked on a worker and shown when it comes.
+void FileManagerBackend::updateDiskInfo() {
+    const QString path = inTagView() ? QDir::homePath() : m_currentPath;
+    const int gen = ++m_diskGen;
+    const auto apply = [](FileManagerBackend* self, int gen, const QStorageInfo& s) {
+        if (gen != self->m_diskGen) return;
+        self->m_freeText = s.isValid() ? self->formatSize(s.bytesAvailable()) : QStringLiteral("0 B");
+        self->m_totalText = s.isValid() ? self->formatSize(s.bytesTotal()) : QStringLiteral("0 B");
+        emit self->diskInfoChanged();
+    };
+    if (!onNetworkDrive(path)) {
+        apply(this, gen, QStorageInfo(path));
+        return;
+    }
+    QPointer<FileManagerBackend> self(this);
+    std::thread([self, path, gen, apply]() {
+        const QStorageInfo s(path);
+        QMetaObject::invokeMethod(qApp, [self, gen, s, apply]() {
+            if (self) apply(self, gen, s);
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 void FileManagerBackend::openItem(const QString& path) {
@@ -337,6 +365,13 @@ void FileManagerBackend::openWithDefaultApp(const QString& path) {
         proc->deleteLater();
         QProcess::startDetached("xdg-open", {path});
     });
+    // gio's output to nowhere, not to a pipe of ours: the app it starts
+    // inherits gio's stdout and stderr, and once gio had exited and this
+    // QProcess was deleted, the pipe's reading end was gone — the first line
+    // the app wrote (ffmpeg and libvdpau write one as b1air-view starts) killed
+    // it with SIGPIPE. A double-click opened a window for a moment, or none.
+    proc->setStandardOutputFile(QProcess::nullDevice());
+    proc->setStandardErrorFile(QProcess::nullDevice());
     proc->start("gio", {"open", path});
 }
 
@@ -1072,6 +1107,7 @@ void FileManagerBackend::updateVolumes() {
         m_volumes = list;
         emit volumesChanged();
     }
+    updateShares();
 }
 
 bool FileManagerBackend::unmount(const QString& path) {
@@ -1083,9 +1119,235 @@ bool FileManagerBackend::unmount(const QString& path) {
     bool ok = QProcess::execute("gio", {"mount", "-u", path}) == 0;
     if (!ok && !device.isEmpty()) ok = QProcess::execute("udisksctl", {"unmount", "-b", device}) == 0;
     updateVolumes();
-    emit errorOccurred(ok ? "It is safe to remove " + QFileInfo(path).fileName()
-                          : "Could not unmount " + QFileInfo(path).fileName() + " — something may still be using it");
+    QString name = QFileInfo(path).fileName();
+    bool share = false;
+    for (const QVariant& v : std::as_const(m_shares))
+        if (v.toMap().value("path").toString() == path) { name = v.toMap().value("name").toString(); share = true; }
+    if (share)
+        emit errorOccurred(ok ? "Disconnected from " + name : "Could not disconnect from " + name + " — something may still be using it");
+    else
+        emit errorOccurred(ok ? "It is safe to remove " + name
+                              : "Could not unmount " + name + " — something may still be using it");
     return ok;
+}
+
+// ── Network shares ──────────────────────────────────────────────────────────
+//
+// gvfs does the talking (gvfs-smb, as Nautilus and Thunar use it) and shows
+// each mount as a folder under $XDG_RUNTIME_DIR/gvfs through its FUSE
+// daemon, so a share is browsed, copied to and opened like any folder here.
+
+// gio in English: what it says is read here — "already mounted", "local
+// path:" — and in the system's language it said "Ort ist bereits
+// eingehängt", which was taken for a failure.
+static void gioInEnglish(QProcess* proc) {
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("LC_ALL", "C.UTF-8");
+    env.remove("LANGUAGE");
+    proc->setProcessEnvironment(env);
+}
+
+QString FileManagerBackend::gvfsRoot() {
+    const QString run = qEnvironmentVariable("XDG_RUNTIME_DIR");
+    return (run.isEmpty() ? "/run/user/" + QString::number(getuid()) : run) + "/gvfs";
+}
+
+void FileManagerBackend::updateShares() {
+    QVariantList list;
+    const QDir root(gvfsRoot());
+    // "smb-share:server=nas.local,share=media,user=bob" — the kind, then its
+    // keys, each value %-escaped. Phones (mtp, afc, gphoto2) are Devices'.
+    for (const QString& entry : root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+        const QString kind = entry.section(':', 0, 0);
+        QMap<QString, QString> keys;
+        for (const QString& kv : entry.section(':', 1).split(',', Qt::SkipEmptyParts))
+            keys[kv.section('=', 0, 0)] = QUrl::fromPercentEncoding(kv.section('=', 1).toUtf8());
+        QVariantMap s;
+        if (kind == "smb-share") {
+            s["name"] = keys.value("share");
+            s["server"] = keys.value("server");
+            s["uri"] = "smb://" + keys.value("server") + "/" + keys.value("share");
+        } else if (kind == "sftp" || kind == "ftp" || kind == "dav" || kind == "davs" || kind == "nfs") {
+            const QString host = keys.value("host", keys.value("server"));
+            s["name"] = host;
+            s["server"] = keys.contains("user") ? keys.value("user") + "@" + host : host;
+            s["uri"] = kind + "://" + host + keys.value("prefix");
+        } else {
+            continue;
+        }
+        s["path"] = root.filePath(entry);
+        list << s;
+    }
+    if (list != m_shares) {
+        m_shares = list;
+        emit sharesChanged();
+    }
+}
+
+QString FileManagerBackend::serverUri(const QString& address) const {
+    QString a = address.trimmed();
+    if (a.isEmpty()) return {};
+    // A Windows path, \\nas\media, as it would be copied from Explorer.
+    if (a.startsWith("\\\\")) a = "smb:" + QString(a).replace('\\', '/');
+    else if (!a.contains("://")) a = "smb://" + a;
+    while (a.endsWith('/') && !a.endsWith("://")) a.chop(1);
+    const QUrl url(a);
+    if (!url.isValid() || url.host().isEmpty()) return {};
+    return a;
+}
+
+void FileManagerBackend::connectServer(const QString& address, const QString& user,
+                                       const QString& domain, const QString& password) {
+    const QString uri = serverUri(address);
+    if (uri.isEmpty()) {
+        emit serverConnected(false, {}, "Not an address: " + address.trimmed());
+        return;
+    }
+    if (m_connecting) return;
+    const QString scheme = uri.section("://", 0, 0);
+    const bool smb = scheme == "smb";
+    // Without its backend gio only says the location cannot be mounted.
+    if (smb && !QFileInfo::exists("/usr/share/gvfs/mounts/smb.mount")) {
+        emit serverConnected(false, {}, "Samba support for gvfs is not installed (gvfs-smb)");
+        return;
+    }
+    // The account goes in the address, so gio asks for the password alone
+    // and the one line written to it answers that. A Samba server asks for
+    // the domain too unless it is given; WORKGROUP is what it is by default.
+    QString target = uri;
+    QStringList args{"mount"};
+    if (user.trimmed().isEmpty()) {
+        args << "-a";                       // as a guest, if the server asks
+    } else if (QUrl(uri).userName().isEmpty()) {
+        QString info = QString::fromUtf8(QUrl::toPercentEncoding(user.trimmed()));
+        if (smb) {
+            const QString d = domain.trimmed().isEmpty() ? QStringLiteral("WORKGROUP") : domain.trimmed();
+            info = QString::fromUtf8(QUrl::toPercentEncoding(d)) + ";" + info;
+        }
+        target = scheme + "://" + info + "@" + uri.section("://", 1);
+    }
+    args << target;
+
+    m_connecting = true;
+    emit connectingChanged();
+    auto* proc = new QProcess(this);
+    proc->setProcessChannelMode(QProcess::SeparateChannels);
+    // An address nobody answers at can keep gio waiting for minutes.
+    auto* timeout = new QTimer(proc);
+    timeout->setSingleShot(true);
+    connect(timeout, &QTimer::timeout, proc, [proc] { proc->kill(); });
+    connect(proc, &QProcess::finished, this, [this, proc, uri, target, user, domain, timeout, smb](int code, QProcess::ExitStatus status) {
+        const bool timedOut = !timeout->isActive();
+        proc->deleteLater();
+        QString err = QString::fromUtf8(proc->readAllStandardError()).trimmed();
+        // "gio: smb://nas/media/: Failed to mount Windows share: …" — the
+        // reason is the part worth showing.
+        err = err.section('\n', -1).section(": ", -1);
+        if (timedOut) {
+            m_connecting = false;
+            emit connectingChanged();
+            emit serverConnected(false, {}, "The server did not answer");
+            return;
+        }
+        if (err.isEmpty() || status != QProcess::NormalExit) err = "Could not connect";
+        // Mounted or not, it is looked at next. A failure is not taken from
+        // gio's words: "already mounted" comes from the gvfs daemon in the
+        // session's language ("Ort ist bereits eingehängt") and was read as
+        // an error. What is there decides; `err` is said only if nothing is.
+        const QString failure = (status == QProcess::NormalExit && code == 0) ? QString() : err;
+        // smb://nas with no share is gvfs's browsing of the server, which
+        // has no folder of its own: what it shares is listed instead.
+        if (smb && QUrl(uri).path().section('/', 1, 1).isEmpty()) listShares(target, uri, failure);
+        else openShare(target, uri, user, domain, failure);
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        proc->deleteLater();
+        m_connecting = false;
+        emit connectingChanged();
+        emit serverConnected(false, {}, "gio is not installed (it comes with glib and gvfs)");
+    });
+    gioInEnglish(proc);
+    proc->start("gio", args);
+    proc->write((password + "\n").toUtf8());
+    proc->closeWriteChannel();
+    timeout->start(45000);
+}
+
+// Where gvfs put it: `gio info` names the local (FUSE) path of a location.
+// Asked by `target`, the address with its account: gvfs finds a mount by both.
+void FileManagerBackend::openShare(const QString& target, const QString& uri, const QString& user,
+                                   const QString& domain, const QString& failure) {
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [this, proc, uri, user, domain, failure](int, QProcess::ExitStatus) {
+        proc->deleteLater();
+        QString path;
+        for (const QString& line : QString::fromUtf8(proc->readAllStandardOutput()).split('\n'))
+            if (line.startsWith("local path: ")) path = line.mid(12).trimmed();
+        m_connecting = false;
+        emit connectingChanged();
+        updateShares();
+        if (path.isEmpty() || !QFileInfo(path).isDir()) {
+            emit serverConnected(false, {}, !failure.isEmpty() ? failure
+                                 : "Connected, but gvfs shows no folder for it — is gvfs-fuse running?");
+            return;
+        }
+        rememberServer(uri, user, domain);
+        setCurrentPath(path);
+        emit serverConnected(true, path, "Connected to " + uri);
+    });
+    gioInEnglish(proc);
+    proc->start("gio", {"info", "-a", "standard::name", target});
+}
+
+void FileManagerBackend::listShares(const QString& target, const QString& uri, const QString& failure) {
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [this, proc, uri, failure](int code, QProcess::ExitStatus) {
+        proc->deleteLater();
+        m_connecting = false;
+        emit connectingChanged();
+        QStringList names;
+        for (const QString& line : QString::fromUtf8(proc->readAllStandardOutput()).split('\n')) {
+            const QString name = line.trimmed();
+            // IPC$, ADMIN$, C$: the server's own, not for people.
+            if (!name.isEmpty() && !name.endsWith('$')) names << name;
+        }
+        names.sort(Qt::CaseInsensitive);
+        if (names.isEmpty()) {
+            const QString err = QString::fromUtf8(proc->readAllStandardError()).trimmed().section(": ", -1);
+            emit serverConnected(false, {}, !failure.isEmpty() ? failure
+                                 : code == 0 ? "The server shares nothing this account can see" : err);
+            return;
+        }
+        emit sharesListed(uri, names);
+    });
+    gioInEnglish(proc);
+    proc->start("gio", {"list", target});
+}
+
+void FileManagerBackend::rememberServer(const QString& uri, const QString& user, const QString& domain) {
+    QVariantList list{QVariantMap{{"uri", uri}, {"user", user.trimmed()}, {"domain", domain.trimmed()}}};
+    for (const QVariant& v : std::as_const(m_recentServers))
+        if (v.toMap().value("uri").toString() != uri && list.size() < 8) list << v;
+    m_recentServers = list;
+    emit recentServersChanged();
+    QSaveFile f(serversPath());
+    if (!f.open(QIODevice::WriteOnly)) return;
+    f.write(QJsonDocument(QJsonArray::fromVariantList(m_recentServers)).toJson(QJsonDocument::Indented));
+    f.commit();
+}
+
+void FileManagerBackend::forgetServer(const QString& uri) {
+    QVariantList list;
+    for (const QVariant& v : std::as_const(m_recentServers))
+        if (v.toMap().value("uri").toString() != uri) list << v;
+    if (list.size() == m_recentServers.size()) return;
+    m_recentServers = list;
+    emit recentServersChanged();
+    QSaveFile f(serversPath());
+    if (!f.open(QIODevice::WriteOnly)) return;
+    f.write(QJsonDocument(QJsonArray::fromVariantList(m_recentServers)).toJson(QJsonDocument::Indented));
+    f.commit();
 }
 
 // ── Open With ───────────────────────────────────────────────────────────────
@@ -1144,11 +1406,39 @@ void FileManagerBackend::openWith(const QString& desktopId, const QStringList& p
 
 // ── Properties ──────────────────────────────────────────────────────────────
 
+// On a network drive — a gvfs share, a CIFS or NFS mount, sshfs — where
+// every folder looked at is a round trip to another machine.
+static bool onNetworkDrive(const QString& path) {
+    if (path.startsWith(FileManagerBackend::gvfsRoot() + "/")) return true;
+    static const QSet<QString> kNetwork{"cifs", "smb3", "smbfs", "nfs", "nfs4", "9p", "davfs",
+                                        "fuse.sshfs", "fuse.gvfsd-fuse", "fuse.rclone", "fuse.davfs2"};
+    QFile mounts("/proc/self/mounts");
+    if (!mounts.open(QIODevice::ReadOnly)) return false;
+    QString best, type;
+    for (const QByteArray& line : mounts.readAll().split('\n')) {
+        const QList<QByteArray> f = line.split(' ');
+        if (f.size() < 3) continue;
+        // Spaces in mount points are written \040.
+        const QString point = QString::fromUtf8(f[1]).replace("\\040", " ");
+        if ((path == point || path.startsWith(point.endsWith('/') ? point : point + "/")) && point.size() > best.size()) {
+            best = point;
+            type = QString::fromUtf8(f[2]);
+        }
+    }
+    return kNetwork.contains(type);
+}
+
+// Bumped for every folder whose size is asked for: a walk still going for
+// the one before stops, rather than going on through it in the background.
+static std::atomic<int> g_sizeWalk{0};
+
 QVariantMap FileManagerBackend::itemInfo(const QString& path) {
     QVariantMap m;
     const QFileInfo fi(path);
     if (!fi.exists() && !fi.isSymLink()) return m;
-    const QMimeType mt = QMimeDatabase().mimeTypeForFile(fi);
+    // By name on a network drive: by content is a read of the file over it.
+    const QMimeType mt = QMimeDatabase().mimeTypeForFile(
+        fi, onNetworkDrive(fi.absoluteFilePath()) ? QMimeDatabase::MatchExtension : QMimeDatabase::MatchDefault);
     const QLocale loc;
     m["name"] = fi.fileName().isEmpty() ? path : fi.fileName();
     m["path"] = fi.absoluteFilePath();
@@ -1170,17 +1460,28 @@ QVariantMap FileManagerBackend::itemInfo(const QString& path) {
                      + trip(QFile::ReadOther, QFile::WriteOther, QFile::ExeOther);
     m["writable"] = fi.isWritable();
     if (fi.isDir()) {
-        const int items = int(QDir(path).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System).size());
-        m["items"] = items;
+        const int walk = ++g_sizeWalk;
+        // Not on a network drive: walking a share's whole tree is minutes of
+        // round trips, and while it went on every folder opened there waited
+        // behind it — Files hung going from one to the next. Nor is the
+        // folder listed a second time to count it: the one open is counted
+        // already, and another is a round trip on the GUI thread.
+        if (onNetworkDrive(path)) {
+            if (QDir::cleanPath(path) == m_currentPath) m["items"] = m_files->rowCount();
+            m["sizeText"] = QStringLiteral("—");
+            return m;
+        }
+        m["items"] = int(QDir(path).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System).size());
         m["sizeText"] = QStringLiteral("Calculating…");
         // The total, walked on a worker thread: a home directory takes seconds.
         QPointer<FileManagerBackend> self(this);
-        std::thread([self, path]() {
+        std::thread([self, path, walk]() {
             qint64 bytes = 0;
             int files = 0;
             QDirIterator it(path, QDir::Files | QDir::Hidden | QDir::System | QDir::NoSymLinks,
                             QDirIterator::Subdirectories);
             while (it.hasNext()) {
+                if (g_sizeWalk.load() != walk) return;
                 it.next();
                 bytes += it.fileInfo().size();
                 ++files;

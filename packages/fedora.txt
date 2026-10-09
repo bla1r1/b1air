@@ -60,6 +60,11 @@ xdg-utils file glib2 gtk3 openssl ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g bsdtar
+# The phone as a security key (src/passkey): Rust 1.88+, and libwebauthn's
+# D-Bus (BlueZ) and udev headers.
+?cargo ?rust ?dbus-devel ?systemd-devel
+# Network shares in Files (Connect to Server): Samba through gvfs, seen as folders through gvfs-fuse.
+?gvfs-smb ?gvfs-fuse
 
 # Desktop plumbing
 xdg-user-dirs qt5ct qt6ct cups desktop-file-utils gtk-update-icon-cache newt
@@ -71,4 +76,4 @@ fcitx5 fcitx5-qt fcitx5-gtk ?fcitx5-configtool
 # pycryptodome only as pycryptodomex: iPods that sign with AES (nano 5G) stay
 # read-only there.
 python3 ?python3-mutagen ?python3-pillow ?python3-pyusb
-?libimobiledevice-utils ?usbmuxd ?ifuse ?gvfs-mtp ?android-tools ?kf6-kimageformats ?libheif
+?libimobiledevice-utils ?usbmuxd ?ifuse ?gvfs-mtp ?android-tools ?kf6-kimageformats ?libheif ?qt6-qtimageformats
