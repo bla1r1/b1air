@@ -65,7 +65,11 @@ install:
 	# Whatever CMake built, so a new app needs no edit here.
 	install -m 755 $(BUILD)/bin/b1air-* $(PREFIX)/
 	mkdir -p $(QMLDIR)
-	rsync -a shell/qml/ $(QMLDIR)/
+	# -rlpt, not -a: run as root, -a kept the checkout's owner, and the
+	# system QML tree every account loads — the polkit dialog among it —
+	# belonged to whoever had cloned the repository. The polkit agent will
+	# not show a dialog it does not trust (not root's), so it showed none.
+	rsync -rlpt shell/qml/ $(QMLDIR)/
 	# Gone from the tree, native now: the lock screen (b1air-lock) and the
 	# screenshot overlay (b1air-shot).
 	rm -f $(QMLDIR)/Lock.qml $(QMLDIR)/ScreenshotOverlay.qml
@@ -81,7 +85,11 @@ install:
 	# the real one. Deliberately not under .config/b1air-shell: the `quickshell`
 	# process searches there, and it must keep finding the real module.
 	mkdir -p $(COMPATDIR)
-	rsync -a compat/qml/ $(COMPATDIR)/
+	rsync -rlpt compat/qml/ $(COMPATDIR)/
+	# What an earlier -a install left owned by a user. System trees only: a
+	# `sudo make install` into someone's home must not hand it to root.
+	@if [ "$$(id -u)" = 0 ]; then for d in $(QMLDIR) $(COMPATDIR); do \
+		case "$$d" in /usr/*) chown -R root:root "$$d" ;; esac; done; fi
 	# Desktop entries, with the binary's full path. They said `Exec=b1air-term`
 	# and relied on ~/.local/bin being on PATH, which is true inside the sway
 	# session and false in KDE or GNOME — where the apps did not start from the
@@ -124,7 +132,7 @@ install:
 	# the wrapper names where, as the desktop entries name the binaries.
 	@if [ -f ../third_party/podsync/podsync/cli.py ]; then \
 		rm -rf $(DATADIR)/b1air/podsync && mkdir -p $(DATADIR)/b1air/podsync && \
-		rsync -a --exclude __pycache__ ../third_party/podsync/podsync $(DATADIR)/b1air/podsync/ && \
+		rsync -rlpt --exclude __pycache__ ../third_party/podsync/podsync $(DATADIR)/b1air/podsync/ && \
 		printf '#!/bin/sh\n# podsync, installed by b1air (src/Makefile)\nPYTHONPATH=%s/b1air/podsync$${PYTHONPATH:+:$$PYTHONPATH} exec python3 -m podsync "$$@"\n' \
 			'$(DATADIR)' > $(PREFIX)/b1air-podsync && chmod 755 $(PREFIX)/b1air-podsync && \
 		echo "podsync -> $(DATADIR)/b1air/podsync"; \

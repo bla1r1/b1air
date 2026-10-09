@@ -26,16 +26,43 @@ image/png=b1air-view.desktop;org.gnome.Loupe.desktop;
 image/gif=b1air-view.desktop;org.gnome.Loupe.desktop;
 image/webp=b1air-view.desktop;org.gnome.Loupe.desktop;
 image/svg+xml=b1air-view.desktop;org.gnome.Loupe.desktop;
+image/tiff=b1air-view.desktop;org.gnome.Loupe.desktop;
+image/heif=b1air-view.desktop;org.gnome.Loupe.desktop;
+image/heic=b1air-view.desktop;org.gnome.Loupe.desktop;
+image/avif=b1air-view.desktop;org.gnome.Loupe.desktop;
+image/jxl=b1air-view.desktop;org.gnome.Loupe.desktop;
 
 # Audio & Video
-audio/mpeg=mpv.desktop;
-audio/flac=mpv.desktop;
-audio/ogg=mpv.desktop;
-audio/wav=mpv.desktop;
-video/mp4=mpv.desktop;
-video/mkv=mpv.desktop;
-video/webm=mpv.desktop;
-video/x-matroska=mpv.desktop;
+audio/mpeg=b1air-view.desktop;mpv.desktop;
+audio/flac=b1air-view.desktop;mpv.desktop;
+audio/ogg=b1air-view.desktop;mpv.desktop;
+audio/wav=b1air-view.desktop;mpv.desktop;
+video/mp4=b1air-view.desktop;mpv.desktop;
+video/mkv=b1air-view.desktop;mpv.desktop;
+video/webm=b1air-view.desktop;mpv.desktop;
+video/x-matroska=b1air-view.desktop;mpv.desktop;
+audio/mp4=b1air-view.desktop;mpv.desktop;
+audio/x-m4a=b1air-view.desktop;mpv.desktop;
+audio/opus=b1air-view.desktop;mpv.desktop;
+video/quicktime=b1air-view.desktop;mpv.desktop;
+audio/x-flac=b1air-view.desktop;mpv.desktop;
+audio/x-vorbis+ogg=b1air-view.desktop;mpv.desktop;
+audio/x-opus+ogg=b1air-view.desktop;mpv.desktop;
+audio/x-wav=b1air-view.desktop;mpv.desktop;
+audio/aac=b1air-view.desktop;mpv.desktop;
+audio/x-aiff=b1air-view.desktop;mpv.desktop;
+audio/x-ape=b1air-view.desktop;mpv.desktop;
+audio/x-wavpack=b1air-view.desktop;mpv.desktop;
+audio/x-ms-wma=b1air-view.desktop;mpv.desktop;
+audio/x-matroska=b1air-view.desktop;mpv.desktop;
+video/x-msvideo=b1air-view.desktop;mpv.desktop;
+video/mpeg=b1air-view.desktop;mpv.desktop;
+video/ogg=b1air-view.desktop;mpv.desktop;
+video/x-flv=b1air-view.desktop;mpv.desktop;
+video/mp2t=b1air-view.desktop;mpv.desktop;
+video/3gpp=b1air-view.desktop;mpv.desktop;
+video/x-ms-wmv=b1air-view.desktop;mpv.desktop;
+video/x-m4v=b1air-view.desktop;mpv.desktop;
 
 # Archives — extraction is built into b1air-files itself (libarchive), no
 # separate archive-manager app needed.

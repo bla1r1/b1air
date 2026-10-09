@@ -91,7 +91,7 @@ ColumnLayout {
     Card {
         visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Battery")
-        subtitle: Power.charging ? I18n.tr("Currently charging") : I18n.tr("Running on battery power")
+        subtitle: Power.charging ? I18n.tr("Currently charging") : Power.pluggedIn ? I18n.tr("Plugged in, not charging") : I18n.tr("Running on battery power")
         icon: Power.charging ? "\u{f0084}" : "\u{f0079}"
         accentColor: Power.charging ? Design.ok : Design.accent
 
@@ -382,7 +382,7 @@ ColumnLayout {
                     RowLayout {
                         id: colHead
                         required property bool modelData
-                        readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
+                        readonly property bool now: modelData === (Power.hasBattery && !Power.pluggedIn)
                         Layout.fillWidth: false
                         Layout.preferredWidth: Design.s(170)
                         spacing: Design.s(Design.space.xs)

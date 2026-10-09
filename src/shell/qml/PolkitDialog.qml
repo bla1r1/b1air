@@ -4,8 +4,8 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
-import "../Ui"
-import "../Services"
+import "Ui"
+import "Services"
 
 // =============================================================================
 // Native Polkit Authentication Dialog
@@ -27,8 +27,7 @@ PanelWindow {
     // A password prompt belongs on the screen being used, not always on the
     // first one.
     screen: Screens.focused
-    width: Screen.width
-    height: Screen.height
+    anchors { top: true; bottom: true; left: true; right: true }
 
     property string actionId: Quickshell.env("POLKIT_ACTION") || "org.freedesktop.policykit.exec"
     property string actionMessage: Quickshell.env("POLKIT_MESSAGE") || I18n.tr("Authentication is required to perform this action.")

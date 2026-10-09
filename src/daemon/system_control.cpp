@@ -5108,9 +5108,13 @@ std::string SystemControl::polkit_prompt_dialog(const std::string& action_id, co
                                                 const std::string& user, const std::string& cookie) {
     // Authentication UI must not be loaded from a user-writable QML tree:
     // replacing it would turn the Polkit agent into a password stealer.
+    // At the top of the tree, beside Main.qml: `quickshell -p` on a file in a
+    // subdirectory (it was polkit/PolkitDialog.qml) fails to load the Ui
+    // components it imports from "../Ui" — "IconButton is not a type" — and
+    // the dialog never opened.
     const std::string qml_candidates[] = {
-        "/usr/local/share/b1air-shell/qml/polkit/PolkitDialog.qml",
-        "/usr/share/b1air-shell/qml/polkit/PolkitDialog.qml"
+        "/usr/local/share/b1air-shell/qml/PolkitDialog.qml",
+        "/usr/share/b1air-shell/qml/PolkitDialog.qml"
     };
     std::string qml_path;
     for (const auto& candidate : qml_candidates) {

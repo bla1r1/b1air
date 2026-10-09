@@ -24,6 +24,7 @@ add_library(b1air-core STATIC
     ${IDLE_GEN}/ext-idle-notify-v1-protocol.c
     idle.cpp
     fingerprint.cpp
+    file_index.cpp
     backlight.cpp
     daemon_dbus.cpp
     focustime_db.cpp

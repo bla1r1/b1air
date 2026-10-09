@@ -38,6 +38,8 @@ class FileListModel : public QAbstractListModel {
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
     /** Set when the directory could not be read (permissions, gone). */
     Q_PROPERTY(QString error READ error NOTIFY countChanged)
+    /** A folder on a network drive being read in the background. */
+    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
 
 public:
     enum Roles {
@@ -88,6 +90,7 @@ public:
     int currentIndex() const { return m_current; }
     void setCurrentIndex(int i);
     QString error() const { return m_error; }
+    bool loading() const { return m_loading; }
 
     struct Options {
         bool showHidden = false;
@@ -95,9 +98,16 @@ public:
         QString sortField = "name";   // name | size | time | type
         bool ascending = true;
         QString filter;
+        // Read on a worker thread (a network drive): the window shows the
+        // folder at once and its contents when they come.
+        bool background = false;
     };
-    /** List `dir` with these options. Keeps the selection for paths still present. */
-    void load(const QString& dir, const Options& opts);
+    /**
+     * List `dir` with these options. Keeps the selection for paths still
+     * present. `relist` false, for the same folder, only filters and sorts
+     * again what was read — a change of sort or search, not of the folder.
+     */
+    void load(const QString& dir, const Options& opts, bool relist = true);
     /** For a model made in QML (the column view's other columns): `dir`, names first, folders first. */
     Q_INVOKABLE void open(const QString& dir, bool showHidden = false);
     void reload();
@@ -125,10 +135,27 @@ signals:
     void currentIndexChanged();
     /** The directory was re-read because it changed on disk. */
     void reloaded();
+    void loadingChanged();
 
 private:
     void sortEntries();
     void emitSelectionRows();
+    // Everything in `dir`, hidden files too, unfiltered: what a worker reads.
+    static std::vector<Entry> list(const QString& dir, QString* error);
+    // list(), and what it found kept for the next time (network folders).
+    static std::vector<Entry> readAndKeep(const QString& dir, QString* error);
+    // The folders inside `dir`, read ahead in the background.
+    static void readAheadOf(const QString& dir, const std::vector<Entry>& entries);
+    // `m_raw` through the options into the rows shown.
+    void refilter();
+    void setLoading(bool on);
+
+    std::vector<Entry> m_raw;     // the folder as read, before filter and sort
+    QString m_rawDir;             // which folder m_raw is
+    bool m_loading = false;
+    int m_generation = 0;         // a read that comes back late is dropped
+    QStringList m_pendingSelection;
+    bool m_hasPendingSelection = false;
 
     std::vector<Entry> m_entries;
     QSet<QString> m_selected;

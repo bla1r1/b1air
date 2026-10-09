@@ -143,6 +143,50 @@ C.ApplicationWindow {
 
     // A phone's mount, $XDG_RUNTIME_DIR/b1air-devices/<id>/<media|app>, by
     // the phone's name: the run-time folders above it say nothing to anyone.
+    // A share's folder under $XDG_RUNTIME_DIR/gvfs is named by gvfs
+    // ("smb-share:server=nas,share=media"): the path reads from the share,
+    // "media on nas", and what follows it.
+    function shareAt(path) {
+        return (FilesBackend.shares || []).find(s => path === s.path || path.startsWith(s.path + "/")) || null;
+    }
+    function shareCrumbs(list) {
+        const share = window.shareAt(window.currentPath);
+        if (!share) return list;
+        const at = list.findIndex(c => c.path === share.path);
+        if (at < 0) return list;
+        return [{ name: I18n.tr("%1 on %2", share.name, share.server), path: share.path }].concat(list.slice(at + 1));
+    }
+    // What the path bar shows when typed in: the share's own address inside
+    // a share, so it can be copied and given to another machine.
+    function addressOf(path) {
+        const share = window.shareAt(path);
+        return share ? share.uri + path.substring(share.path.length) : path;
+    }
+    // What was typed in the path bar: a folder, or a server's address.
+    function goToAddress(text) {
+        const v = String(text || "").trim();
+        if (v === "") return;
+        if (/^(\\\\|[a-z]+:\/\/)/i.test(v)) {
+            const uri = FilesBackend.serverUri(v);
+            // Mounted already: straight there, a folder inside it too.
+            const share = (FilesBackend.shares || []).find(s => uri === s.uri || uri.startsWith(s.uri + "/"));
+            if (share) {
+                window.navigateTo(share.path + uri.substring(share.uri.length));
+                return;
+            }
+            // As a guest first; a server that wants a password says so and
+            // the dialog opens with the address in it.
+            serverAddress.text = v;
+            window.note(I18n.tr("Connecting to %1…", uri));
+            sharePicker.remember("", "", "");
+            FilesBackend.connectServer(v, "", "", "");
+            return;
+        }
+        const path = v.startsWith("~") ? window.homeDir + v.substring(1) : v;
+        FilesBackend.currentPath = path;
+        if (FilesBackend.currentPath !== path.replace(/\/+$/, "") && path !== "/") window.note(I18n.tr("No folder at %1", v));
+    }
+
     function deviceCrumbs(list) {
         const at = list.findIndex(c => c.name === "b1air-devices");
         if (at < 0 || at + 2 >= list.length) return list;
@@ -382,6 +426,10 @@ C.ApplicationWindow {
         } else if (mode === "newfile") {
             if (!FilesBackend.createFile(v)) { note(I18n.tr("Could not create %1", v)); return; }
             fm.selectPaths([currentPath.replace(/\/$/, "") + "/" + v]);
+        } else if (mode === "goto" && /^(\\\\|[a-z]+:\/\/)/i.test(v)) {
+            nameDialog.close();
+            serverDialog.ask(v);
+            return;
         } else if (mode === "goto") {
             const path = v.startsWith("~") ? homeDir + v.substring(1) : v;
             FilesBackend.currentPath = path;
@@ -450,8 +498,8 @@ C.ApplicationWindow {
     Shortcut { sequence: "Shift+Delete"; onActivated: { const t = window.targets(); if (t.length) confirmDelete.ask(t); } }
     Shortcut { sequence: "F2"; onActivated: window.renameSelection() }
     Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.askName("newfolder", "", I18n.tr("New Folder")) }
-    Shortcut { sequence: "Ctrl+L"; onActivated: window.askName("goto", "", window.currentPath) }
-    Shortcut { sequence: "Ctrl+F"; onActivated: searchField.focusInput() }
+    Shortcut { sequence: "Ctrl+L"; onActivated: pathBar.edit() }
+    Shortcut { sequence: "Ctrl+F"; onActivated: toolbar.openSearch() }
     Shortcut { sequence: "Ctrl+H"; onActivated: FilesBackend.showHidden = !FilesBackend.showHidden }
     Shortcut { sequence: "Ctrl+I"; onActivated: window.showInfo = !window.showInfo }
     Shortcut { sequence: "Ctrl+1"; onActivated: window.viewMode = "grid" }
@@ -474,7 +522,8 @@ C.ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (searchField.text !== "") { searchField.text = ""; FilesBackend.filterQuery = ""; }
+            if (searchField.text !== "") { searchField.text = ""; FilesBackend.filterQuery = ""; toolbar.searchOpen = false; }
+            else if (toolbar.searchOpen) toolbar.searchOpen = false;
             else fm.clearSelection();
             window.currentView().forceActiveFocus();
         }
@@ -617,6 +666,31 @@ C.ApplicationWindow {
                     }
 
                     SideHeading {
+                        text: I18n.tr("Network")
+                        action: "\u{f0415}"
+                        actionTip: I18n.tr("Connect to Server…")
+                        onActionClicked: serverDialog.ask("")
+                    }
+                    Repeater {
+                        model: FilesBackend.shares
+                        delegate: SideRow {
+                            required property var modelData
+                            label: modelData.name
+                            glyph: "\u{f0200}"
+                            path: modelData.path
+                            detail: modelData.server
+                            ejectable: true
+                            onEject: FilesBackend.unmount(modelData.path)
+                        }
+                    }
+                    SidebarItem {
+                        visible: FilesBackend.shares.length === 0
+                        label: I18n.tr("Connect to Server…")
+                        glyph: "\u{f0200}"
+                        onClicked: serverDialog.ask("")
+                    }
+
+                    SideHeading {
                         text: I18n.tr("Bookmarks")
                         action: "\u{f0415}"
                         actionTip: I18n.tr("Bookmark this folder (Ctrl+D)")
@@ -736,7 +810,19 @@ C.ApplicationWindow {
 
             // ── Toolbar ──────────────────────────────────────────────────────
             AppToolbar {
+                id: toolbar
                 Layout.fillWidth: true
+                // Smart about its width: the search field becomes a button
+                // that opens it, and the four views one button with a menu,
+                // before the path is squeezed.
+                readonly property bool compactSearch: width < Design.s(880)
+                readonly property bool compactViews: width < Design.s(720)
+                property bool searchOpen: false
+                readonly property bool searchShown: !compactSearch || searchOpen || FilesBackend.filterQuery !== ""
+                function openSearch() {
+                    searchOpen = true;
+                    Qt.callLater(searchField.focusInput);
+                }
 
                     BarGroup {
                         BarButton { glyph: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
@@ -745,37 +831,126 @@ C.ApplicationWindow {
                     }
 
                     // Path: clickable segments; a click on the empty part of the
-                    // bar, or Ctrl+L, types one instead.
+                    // bar, or Ctrl+L, turns it into a field to type a path in —
+                    // or a server's address, smb://nas/media.
                     Rectangle {
+                        id: pathBar
+                        property bool editing: false
+                        function edit() {
+                            pathInput.text = window.addressOf(window.currentPath);
+                            editing = true;
+                            pathInput.forceActiveFocus();
+                            pathInput.selectAll();
+                        }
+                        function done() {
+                            editing = false;
+                            window.currentView().forceActiveFocus();
+                        }
                         Layout.fillWidth: true
                         Layout.minimumWidth: Design.s(140)
                         Layout.horizontalStretchFactor: 3
                         Layout.preferredHeight: Design.s(36)
                         radius: height / 2
                         color: Design.raised
-                        border.color: Design.tint(Design.text, 0.06)
+                        border.color: editing ? Design.accent : Design.tint(Design.text, 0.06)
                         border.width: 1
                         clip: true
 
                         MouseArea {
                             anchors.fill: parent
+                            visible: !pathBar.editing
                             cursorShape: Qt.IBeamCursor
-                            onClicked: window.askName("goto", "", window.currentPath)
+                            onClicked: pathBar.edit()
                         }
+
+                        TextInput {
+                            id: pathInput
+                            visible: pathBar.editing
+                            anchors.fill: parent
+                            anchors.leftMargin: Design.s(Design.space.md)
+                            anchors.rightMargin: Design.s(Design.space.md)
+                            verticalAlignment: TextInput.AlignVCenter
+                            font.family: Design.font.sans
+                            font.pixelSize: Design.s(Design.font.body)
+                            color: Design.text
+                            selectionColor: Design.tint(Design.accent, 0.35)
+                            selectedTextColor: Design.text
+                            clip: true
+                            onAccepted: { const v = text; pathBar.done(); window.goToAddress(v); }
+                            Keys.onEscapePressed: pathBar.done()
+                            onActiveFocusChanged: if (!activeFocus && pathBar.editing) pathBar.editing = false
+                        }
+
+                        // Where the path starts — home, a share, a phone, the
+                        // trash, the disk — at the head of the bar, so a short
+                        // path is not a lone word adrift in it.
+                        Icon {
+                            id: placeIcon
+                            visible: !pathBar.editing
+                            anchors.left: parent.left
+                            anchors.leftMargin: Design.s(Design.space.md)
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Design.textDim
+                            text: FilesBackend.inTrash ? "\u{f0a79}"
+                                : window.shareAt(window.currentPath) ? "\u{f0200}"
+                                : window.currentPath.indexOf("/b1air-devices/") >= 0 ? "\u{f011c}"
+                                : window.currentPath.startsWith(window.homeDir) ? "\u{f02dc}"
+                                : "\u{f02ca}"
+                        }
+
+                        // The start of a path too long for the bar: one button
+                        // in place of the folders cut off, listing them.
+                        BarButton {
+                            id: crumbMore
+                            visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(64) + 1
+                            anchors.left: placeIcon.right
+                            anchors.leftMargin: Design.s(Design.space.xs)
+                            anchors.verticalCenter: parent.verticalCenter
+                            small: true
+                            label: "…"
+                            tip: I18n.tr("Whole path")
+                            onClicked: crumbMenu.popup()
+                        }
+                        AppMenu {
+                            id: crumbMenu
+                            Instantiator {
+                                model: crumbs.model
+                                delegate: AppMenuItem {
+                                    required property var modelData
+                                    text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
+                                    onTriggered: window.navigateTo(modelData.path)
+                                }
+                                onObjectAdded: (i, o) => crumbMenu.insertItem(i, o)
+                                onObjectRemoved: (i, o) => crumbMenu.removeItem(o)
+                            }
+                        }
+
                         ListView {
                             id: crumbs
+                            visible: !pathBar.editing
                             anchors.fill: parent
-                            anchors.leftMargin: Design.s(Design.space.sm)
+                            anchors.leftMargin: (crumbMore.visible ? crumbMore.x + crumbMore.width : placeIcon.x + placeIcon.width)
+                                                + Design.s(Design.space.xs)
                             anchors.rightMargin: Design.s(Design.space.sm)
                             orientation: ListView.Horizontal
                             interactive: false
+                            clip: true
                             spacing: 0
-                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : window.deviceCrumbs(FilesBackend.breadcrumbs)
+                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : window.shareCrumbs(window.deviceCrumbs(FilesBackend.breadcrumbs))
                             // Always the end of the path in view: the folder
-                            // you are in, not the root you came from.
-                            onCountChanged: Qt.callLater(positionViewAtEnd)
-                            onWidthChanged: Qt.callLater(positionViewAtEnd)
-                            onContentWidthChanged: Qt.callLater(positionViewAtEnd)
+                            // you are in, not the root you came from — and
+                            // starting at a whole folder, not the tail of one
+                            // cut off under the "…".
+                            function showEnd() {
+                                positionViewAtEnd();
+                                const i = indexAt(contentX + 1, height / 2);
+                                const item = itemAtIndex(i);
+                                const next = itemAtIndex(i + 1);
+                                if (item && next && item.x < contentX) contentX = next.x;
+                            }
+                            onCountChanged: Qt.callLater(showEnd)
+                            onWidthChanged: Qt.callLater(showEnd)
+                            onContentWidthChanged: Qt.callLater(showEnd)
                             delegate: Row {
                                 required property var modelData
                                 required property int index
@@ -791,13 +966,26 @@ C.ApplicationWindow {
                                 Rectangle {
                                     readonly property bool last: index === crumbs.count - 1
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: crumbText.implicitWidth + Design.s(16)
+                                    width: crumbText.width + Design.s(16)
                                     height: Design.s(26)
-                                    radius: height / 2
-                                    color: crumbMa.containsMouse ? Design.hover : (last ? Design.tint(Design.accent, 0.18) : "transparent")
+                                    // No capsule of its own inside the bar's: the
+                                    // folder you are in is the bold one, and the
+                                    // others light up only under the pointer.
+                                    radius: Design.s(Design.radius.ctl) / 2
+                                    color: crumbMa.containsMouse && !last ? Design.hover : "transparent"
                                     Text {
                                         id: crumbText
                                         anchors.centerIn: parent
+                                        // A long name is cut in the middle, so
+                                        // one folder cannot fill the bar alone.
+                                        // Never wider than the bar, however narrow
+                                        // the window: one folder alone did not fit.
+                                        // Not the list's own width (it waits on the
+                                        // "…", which waits on this): the bar's,
+                                        // less that button and a separator.
+                                        width: Math.min(implicitWidth, Design.s(parent.last ? 260 : 160),
+                                                        pathBar.width - Design.s(crumbs.count > 1 ? 104 : 64))
+                                        elide: Text.ElideMiddle
                                         text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.body)
@@ -823,6 +1011,7 @@ C.ApplicationWindow {
 
                     Field {
                         id: searchField
+                        visible: toolbar.searchShown
                         // Narrows before the path does: the path is what
                         // says where you are.
                         Layout.fillWidth: true
@@ -834,6 +1023,12 @@ C.ApplicationWindow {
                         placeholder: I18n.tr("Search (Ctrl+F)")
                         onEdited: value => FilesBackend.filterQuery = value
                         onAccepted: window.currentView().forceActiveFocus()
+                        // Opened from the button: shut again once left empty.
+                        onFocusedChanged: if (!focused && text === "") toolbar.searchOpen = false
+                    }
+                    BarGroup {
+                        visible: !toolbar.searchShown
+                        BarButton { glyph: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
                     }
 
                     BarButton {
@@ -844,15 +1039,22 @@ C.ApplicationWindow {
                         enabled: FilesBackend.trashCount > 0
                         onClicked: confirmEmpty.open()
                     }
+                    // New folder lives in the right-click menu and on
+                    // Ctrl+Shift+N, not on the bar.
                     BarGroup {
-                        visible: !FilesBackend.inTrash
-                        BarButton { glyph: "\u{f0b9d}"; tip: I18n.tr("New folder (Ctrl+Shift+N)"); onClicked: window.askName("newfolder", "", I18n.tr("New Folder")) }
-                    }
-                    BarGroup {
+                        visible: !toolbar.compactViews
                         BarButton { glyph: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
                         BarButton { glyph: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
                         BarButton { glyph: "\u{f056d}"; tip: I18n.tr("Columns (Ctrl+3)"); checked: window.viewMode === "columns"; onClicked: window.viewMode = "columns" }
                         BarButton { glyph: "\u{f056c}"; tip: I18n.tr("Gallery (Ctrl+4)"); checked: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
+                    }
+                    BarGroup {
+                        visible: toolbar.compactViews
+                        BarButton {
+                            glyph: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
+                            tip: I18n.tr("View (Ctrl+1 … Ctrl+4)")
+                            onClicked: viewModeMenu.popup()
+                        }
                     }
                     BarGroup {
                         BarButton { glyph: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
@@ -921,8 +1123,13 @@ C.ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
                     visible: window.viewMode === "grid"
-                    model: fm
+                    model: window.viewMode === "grid" ? fm : null
                     clip: true
+                    // Tiles scrolled away are refilled, not destroyed and made
+                    // again; and a screen below the view is laid out ahead, so
+                    // its thumbnails are being made before they scroll in.
+                    reuseItems: true
+                    cacheBuffer: Math.max(0, height)
                     focus: visible
                     boundsBehavior: Flickable.StopAtBounds
                     readonly property int columns: Math.max(1, Math.floor(width / cellWidth))
@@ -973,8 +1180,8 @@ C.ApplicationWindow {
                                     id: thumb
                                     anchors.fill: parent
                                     // Made and cached in the background (thumbs.cpp), videos too.
-                                    visible: (tile.isImage || tile.category === "video") && status === Image.Ready
-                                    source: tile.isImage || tile.category === "video" ? window.thumbUrl(tile.path) : ""
+                                    visible: (tile.isImage || tile.category === "video" || tile.category === "audio") && status === Image.Ready
+                                    source: tile.isImage || tile.category === "video" || tile.category === "audio" ? window.thumbUrl(tile.path) : ""
                                     sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
                                     fillMode: Image.PreserveAspectFit
                                     asynchronous: true
@@ -1083,8 +1290,10 @@ C.ApplicationWindow {
                         id: listView
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: fm
+                        model: window.viewMode === "list" ? fm : null
                         clip: true
+                        reuseItems: true   // as the grid
+                        cacheBuffer: Math.max(0, height)
                         focus: visible
                         boundsBehavior: Flickable.StopAtBounds
                         currentIndex: fm.currentIndex
@@ -1206,7 +1415,9 @@ C.ApplicationWindow {
                         for (const part of rest) { acc += "/" + part; out.push(acc); }
                         return out;
                     }
-                    model: columnsView.dirs.length + 1
+                    // Only while shown: hidden, it still opened every folder above this one
+                    // on each move — on a network share a listing each, on the GUI thread.
+                    model: window.viewMode === "columns" ? columnsView.dirs.length + 1 : 0
                     onCountChanged: Qt.callLater(() => columnsView.positionViewAtEnd())
                     // The current folder's column takes the keys.
                     function positionViewAtIndex(i, mode) { if (lastColumn) lastColumn.positionViewAtIndex(i, ListView.Contain); }
@@ -1376,7 +1587,7 @@ C.ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(92)
                         orientation: ListView.Horizontal
-                        model: fm
+                        model: window.viewMode === "gallery" ? fm : null
                         clip: true
                         focus: galleryView.visible
                         spacing: Design.s(Design.space.xs)
@@ -1418,8 +1629,8 @@ C.ApplicationWindow {
                                 id: gimg
                                 anchors.fill: parent
                                 anchors.margins: Design.s(4)
-                                visible: (gthumb.isImage || gthumb.category === "video") && status === Image.Ready
-                                source: gthumb.isImage || gthumb.category === "video" ? window.thumbUrl(gthumb.path) : ""
+                                visible: (gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio") && status === Image.Ready
+                                source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path) : ""
                                 sourceSize: Qt.size(Design.s(144), Design.s(144))
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
@@ -1443,11 +1654,19 @@ C.ApplicationWindow {
                     }
                 }
 
+                // ── Still being read (a network drive) ───────────────────────
+                Label {
+                    anchors.centerIn: parent
+                    visible: fm.loading && fm.count === 0
+                    text: I18n.tr("Loading…")
+                    dim: true
+                }
+
                 // ── Nothing to show ──────────────────────────────────────────
                 ColumnLayout {
                     anchors.centerIn: parent
                     width: Math.min(parent.width - Design.s(48), Design.s(360))
-                    visible: fm.count === 0
+                    visible: fm.count === 0 && !fm.loading
                     spacing: Design.s(Design.space.sm)
                     Text {
                         Layout.alignment: Qt.AlignHCenter
@@ -1528,12 +1747,20 @@ C.ApplicationWindow {
             }
             property var info: ({})
             property string folderSize: ""
-            onSubjectChanged: refreshInfo()
-            Component.onCompleted: refreshInfo()
-            Connections { target: fm; function onReloaded() { infoPanel.refreshInfo(); } }
+            // Once per turn of the event loop, after the folder is drawn: a
+            // move changes the subject and reloads the list, and each asked
+            // for the details again — twice the stat calls, on a network
+            // share each a round trip, before the folder appeared.
+            onSubjectChanged: Qt.callLater(refreshInfo)
+            Component.onCompleted: Qt.callLater(refreshInfo)
+            Connections { target: fm; function onReloaded() { Qt.callLater(infoPanel.refreshInfo); } }
             id: infoPanel
             function refreshInfo() {
                 infoPanel.folderSize = "";
+                // Not while a network folder is being read: gvfs answers one
+                // request at a time, so the details waited behind the listing
+                // — a second with the window frozen. Asked again when it is in.
+                if (fm.loading) return;
                 infoPanel.info = infoPanel.subject ? FilesBackend.itemInfo(infoPanel.subject) : ({});
             }
             Connections {
@@ -1614,7 +1841,7 @@ C.ApplicationWindow {
                         Rectangle { Layout.fillWidth: true; height: 1; color: Design.line }
 
                         InfoRow { label: I18n.tr("Size"); value: infoPanel.info.isDir ? (infoPanel.folderSize || infoPanel.info.sizeText) : (infoPanel.info.sizeText || "") }
-                        InfoRow { label: I18n.tr("Contains"); value: infoPanel.info.isDir ? I18n.trn("%1 item", "%1 items", infoPanel.info.items) : "" }
+                        InfoRow { label: I18n.tr("Contains"); value: infoPanel.info.isDir && infoPanel.info.items !== undefined ? I18n.trn("%1 item", "%1 items", infoPanel.info.items) : "" }
                         InfoRow { label: I18n.tr("Modified"); value: infoPanel.info.modified || "" }
                         InfoRow { label: I18n.tr("Created"); value: infoPanel.info.created || "" }
                         InfoRow { label: I18n.tr("Where"); value: infoPanel.info.location || ""; mono: true }
@@ -1781,6 +2008,15 @@ C.ApplicationWindow {
         AppMenuItem { text: I18n.tr("Refresh"); glyph: "\u{f0450}"; keys: "F5"; onTriggered: FilesBackend.refresh() }
     }
 
+    // The four views, from the one button a narrow bar keeps of them.
+    AppMenu {
+        id: viewModeMenu
+        AppMenuItem { text: I18n.tr("Icons"); glyph: "\u{f0570}"; keys: "Ctrl+1"; checkable: true; checked: window.viewMode === "grid"; onTriggered: window.viewMode = "grid" }
+        AppMenuItem { text: I18n.tr("List"); glyph: "\u{f0279}"; keys: "Ctrl+2"; checkable: true; checked: window.viewMode === "list"; onTriggered: window.viewMode = "list" }
+        AppMenuItem { text: I18n.tr("Columns"); glyph: "\u{f056d}"; keys: "Ctrl+3"; checkable: true; checked: window.viewMode === "columns"; onTriggered: window.viewMode = "columns" }
+        AppMenuItem { text: I18n.tr("Gallery"); glyph: "\u{f056c}"; keys: "Ctrl+4"; checkable: true; checked: window.viewMode === "gallery"; onTriggered: window.viewMode = "gallery" }
+    }
+
     AppMenu {
         id: viewMenu
         AppMenuItem { text: I18n.tr("Show Hidden Files"); checkable: true; checked: FilesBackend.showHidden; keys: "Ctrl+H"; onTriggered: FilesBackend.showHidden = !FilesBackend.showHidden }
@@ -1827,6 +2063,182 @@ C.ApplicationWindow {
                     dim: true
                 }
                 Field { id: nameField; Layout.fillWidth: true }
+            }
+        }
+    }
+
+    // Connect to Server: a Samba share (or sftp://, ftp://, dav://) mounted
+    // through gvfs and opened as a folder. Opens again with the reason when
+    // the server says no, what was typed still in it.
+    AppDialog {
+        id: serverDialog
+        property string error: ""
+        function ask(address) {
+            error = "";
+            if (address !== "") serverAddress.text = address;
+            serverPassword.text = "";
+            open();
+        }
+        function fill(server) {
+            serverAddress.text = server.uri;
+            serverUser.text = server.user || "";
+            serverDomain.text = server.domain || "";
+            serverPassword.focusInput();
+        }
+        readonly property bool smb: !/^[a-z]+:\/\//i.test(serverAddress.text.trim())
+                                    || /^smb:\/\//i.test(serverAddress.text.trim())
+        title: I18n.tr("Connect to Server")
+        standardButtons: C.Dialog.Cancel | C.Dialog.Ok
+        buttonText: ({ [C.Dialog.Ok]: I18n.tr("Connect") })
+        onOpened: serverAddress.text === "" ? serverAddress.focusInput()
+                : serverUser.text !== "" ? serverPassword.focusInput() : serverAddress.focusInput()
+        onAccepted: {
+            if (FilesBackend.serverUri(serverAddress.text) === "") {
+                window.note(I18n.tr("Not an address: %1", serverAddress.text));
+                Qt.callLater(serverDialog.open);
+                return;
+            }
+            window.note(I18n.tr("Connecting to %1…", FilesBackend.serverUri(serverAddress.text)));
+            sharePicker.remember(serverUser.text, serverDomain.text, serverPassword.text);
+            FilesBackend.connectServer(serverAddress.text, serverUser.text, serverDomain.text, serverPassword.text);
+            serverPassword.text = "";
+        }
+        onRejected: window.currentView().forceActiveFocus()
+        Connections {
+            target: FilesBackend
+            function onServerConnected(ok, path, message) {
+                if (ok) { window.note(message); window.currentView().forceActiveFocus(); return; }
+                serverDialog.error = message;
+                serverDialog.open();
+            }
+        }
+        contentItem: Item {
+            implicitWidth: Design.s(440)
+            implicitHeight: serverBody.implicitHeight
+            ColumnLayout {
+                id: serverBody
+                width: parent.width
+                spacing: Design.s(Design.space.sm)
+                Label { text: I18n.tr("Address"); role: "caption"; dim: true }
+                Field {
+                    id: serverAddress
+                    Layout.fillWidth: true
+                    placeholder: "smb://nas/media"
+                    onAccepted: serverDialog.accept()
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: I18n.tr("smb://server/share or \\\\server\\share; sftp://, ftp:// and dav:// work too")
+                    role: "caption"
+                    color: Design.textFaint
+                    wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.xs)
+                        Label { text: I18n.tr("User (empty for a guest)"); role: "caption"; dim: true }
+                        Field { id: serverUser; Layout.fillWidth: true; onAccepted: serverDialog.accept() }
+                    }
+                    ColumnLayout {
+                        visible: serverDialog.smb
+                        Layout.preferredWidth: Design.s(140)
+                        spacing: Design.s(Design.space.xs)
+                        Label { text: I18n.tr("Domain"); role: "caption"; dim: true }
+                        Field { id: serverDomain; Layout.fillWidth: true; placeholder: "WORKGROUP"; onAccepted: serverDialog.accept() }
+                    }
+                }
+                Label { text: I18n.tr("Password"); role: "caption"; dim: true; visible: serverUser.text.trim() !== "" }
+                Field {
+                    id: serverPassword
+                    visible: serverUser.text.trim() !== ""
+                    Layout.fillWidth: true
+                    echoMode: TextInput.Password
+                    onAccepted: serverDialog.accept()
+                }
+                Label {
+                    visible: serverDialog.error !== ""
+                    Layout.fillWidth: true
+                    text: serverDialog.error
+                    color: Design.dangerText
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    visible: FilesBackend.recentServers.length > 0
+                    Layout.topMargin: Design.s(Design.space.sm)
+                    text: I18n.tr("Recent")
+                    role: "caption"
+                    dim: true
+                }
+                Repeater {
+                    model: FilesBackend.recentServers
+                    delegate: SidebarItem {
+                        id: recentRow
+                        required property var modelData
+                        Layout.fillWidth: true
+                        label: modelData.uri
+                        glyph: "\u{f0200}"
+                        detail: modelData.user || I18n.tr("Guest")
+                        onClicked: serverDialog.fill(modelData)
+                        BarButton {
+                            visible: recentRow.hovered || hovered
+                            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Forget")
+                            onClicked: FilesBackend.forgetServer(recentRow.modelData.uri)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // A server's shares, when its address named no share (smb://nas): one
+    // click connects to that one, with the account the server took.
+    AppDialog {
+        id: sharePicker
+        property string uri: ""
+        property var names: []
+        // Kept only until a share is picked or the list is closed.
+        property string user: ""
+        property string domain: ""
+        property string password: ""
+        function remember(u, d, p) { user = u; domain = d; password = p; }
+        function pick(name) {
+            const target = uri.replace(/\/+$/, "") + "/" + name;
+            serverAddress.text = target;
+            FilesBackend.connectServer(target, user, domain, password);
+            password = "";
+            close();
+        }
+        title: I18n.tr("Shares on %1", uri.replace(/^[a-z]+:\/\//i, "").replace(/\/+$/, ""))
+        standardButtons: C.Dialog.Cancel
+        onRejected: { password = ""; window.currentView().forceActiveFocus(); }
+        Connections {
+            target: FilesBackend
+            function onSharesListed(uri, names) {
+                sharePicker.uri = uri;
+                sharePicker.names = names;
+                sharePicker.open();
+            }
+        }
+        contentItem: Item {
+            implicitWidth: Design.s(360)
+            implicitHeight: shareList.implicitHeight
+            ColumnLayout {
+                id: shareList
+                width: parent.width
+                spacing: Design.s(2)
+                Repeater {
+                    model: sharePicker.names
+                    delegate: SidebarItem {
+                        required property string modelData
+                        Layout.fillWidth: true
+                        label: modelData
+                        glyph: "\u{f0200}"
+                        onClicked: sharePicker.pick(modelData)
+                    }
+                }
             }
         }
     }

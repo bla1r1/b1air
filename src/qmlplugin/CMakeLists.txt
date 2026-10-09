@@ -13,7 +13,7 @@ set_target_properties(b1air-daemon-qml PROPERTIES
     AUTOMOC ON
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qml/B1air/Daemon
     PREFIX "lib")
-target_link_libraries(b1air-daemon-qml PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus Qt6::Network)
+target_link_libraries(b1air-daemon-qml PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus Qt6::Network b1air-thumbs-deps)
 add_custom_command(TARGET b1air-daemon-qml POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_CURRENT_SOURCE_DIR}/qmldir

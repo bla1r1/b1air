@@ -59,6 +59,11 @@ xdg-utils file glib2-tools openssl ?snapper
 
 # Storage & archives
 udisks2 gvfs ntfs-3g bsdtar
+# The phone as a security key (src/passkey): Rust 1.88+, and libwebauthn's
+# D-Bus (BlueZ) and udev headers.
+?cargo ?rust ?dbus-1-devel ?libudev-devel
+# Network shares in Files (Connect to Server): Samba through gvfs, seen as folders through gvfs-fuse.
+?gvfs-backend-samba ?gvfs-fuse
 
 # Desktop plumbing
 xdg-user-dirs ?qt5ct ?qt6ct cups desktop-file-utils gtk3-tools newt
@@ -68,4 +73,4 @@ fcitx5 fcitx5-qt6 fcitx5-gtk3 ?fcitx5-configtool
 
 # Phones & music players in Files (see packages/arch.txt)
 python3 ?python3-mutagen ?python3-pycryptodome ?python3-Pillow ?python3-pyusb
-?libimobiledevice-tools ?usbmuxd ?ifuse ?gvfs-backends ?android-tools ?kf6-kimageformats ?libheif1
+?libimobiledevice-tools ?usbmuxd ?ifuse ?gvfs-backends ?android-tools ?kf6-kimageformats ?libheif1 ?qt6-imageformats

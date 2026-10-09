@@ -125,6 +125,10 @@ Singleton {
         ? (root._bat.state === UPowerDeviceState.Charging
            || root._bat.state === UPowerDeviceState.FullyCharged)
         : false
+    // On the charger, charging or not. A pack held below a charge limit, or
+    // the second of two waiting for the first, reports pending-charge while
+    // the cable is in, which `charging` does not count.
+    readonly property bool pluggedIn: root.charging || UPower.onBattery === false
     // ── Low battery ──────────────────────────────────────────────────────────
     //
     // Nothing in this desktop looked at the charge. Not a threshold, not
@@ -147,18 +151,18 @@ Singleton {
 
     // Latched so a battery hovering on the threshold does not notify on every
     // UPower update. Cleared once the charge recovers past the threshold, or
-    // as soon as the cable goes in.
+    // as soon as the cable goes in. Nothing is said while it is in.
     property bool _warnedLow: false
     property bool _warnedCritical: false
 
     onCapacityChanged: root._checkCharge()
-    onChargingChanged: root._checkCharge()
+    onPluggedInChanged: root._checkCharge()
 
     function _checkCharge() {
         if (!root.hasBattery)
             return;
 
-        if (root.charging) {
+        if (root.pluggedIn) {
             root._warnedLow = false;
             root._warnedCritical = false;
             return;
@@ -203,7 +207,7 @@ Singleton {
             // Checked again: five seconds is long enough for someone to plug
             // in after reading the notification, and suspending anyway would
             // be the wrong answer to that.
-            if (!root.charging)
+            if (!root.pluggedIn)
                 Quickshell.execDetached(["b1air-daemon", "power", "suspend"]);
         }
     }

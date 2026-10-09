@@ -69,6 +69,11 @@ Singleton {
     // A touch on the fingerprint reader opens the lock (fprintd, an
     // enrolled finger; Settings → Users).
     readonly property alias fingerprintUnlock: data.fingerprintUnlock
+    // Websites' passkeys from the phone, over a QR code (src/passkey). On
+    // unless turned off; the key exists only where there is Bluetooth.
+    readonly property alias passkeyPhone: data.passkeyPhone
+    // File names indexed for Spotlight (daemon/file_index).
+    readonly property alias fileIndex: data.fileIndex
     readonly property alias dimTimeout: data.dimTimeout
     readonly property alias lockTimeout: data.lockTimeout
     readonly property alias dpmsTimeout: data.dpmsTimeout
@@ -513,6 +518,8 @@ Singleton {
         idleSecondaryOff: true,
         lockSecondaryOff: true,
         fingerprintUnlock: true,
+        passkeyPhone: true,
+        fileIndex: true,
         dimTimeout: 240,
         lockTimeout: 300,
         dpmsTimeout: 600,
@@ -675,6 +682,8 @@ Singleton {
             property bool idleSecondaryOff: true
             property bool lockSecondaryOff: true
             property bool fingerprintUnlock: true
+            property bool passkeyPhone: true
+            property bool fileIndex: true
             property int dimTimeout: 240
             property int lockTimeout: 300
             property int dpmsTimeout: 600

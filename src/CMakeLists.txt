@@ -10,6 +10,8 @@ cmake_minimum_required(VERSION 3.20)
 #                its own process — nothing here links one app into another.
 #   common/      headers more than one program includes
 #   compat/      the Quickshell stand-in the standalone Settings app hosts
+#   fido/, passkey/  the phone as a security key: a root helper making the
+#                HID device, and the Rust program answering as it
 #
 # Kept in sync by hand with src/daemon/version.hpp's kVersion — that header is
 # what the running binaries report.
@@ -52,6 +54,15 @@ pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
 # security regression. Through pkg-config, so a machine without the headers
 # fails at configure with a name to search for.
 pkg_check_modules(LIBCRYPTO REQUIRED IMPORTED_TARGET libcrypto)
+# libav, if there: common/thumbs.cpp reads a song's cover straight from its
+# tags and decodes a film's frame with it. Without it the ffmpeg command does
+# the same, slower.
+pkg_check_modules(LIBAV IMPORTED_TARGET libavformat libavcodec libavutil libswscale)
+add_library(b1air-thumbs-deps INTERFACE)
+if(LIBAV_FOUND)
+    target_link_libraries(b1air-thumbs-deps INTERFACE PkgConfig::LIBAV)
+    target_compile_definitions(b1air-thumbs-deps INTERFACE B1AIR_HAVE_LIBAV)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(B1airApp)
@@ -73,6 +84,8 @@ target_compile_definitions(b1air-sqlite PRIVATE
     SQLITE_DEFAULT_MEMSTATUS=0
     SQLITE_LIKE_DOESNT_MATCH_BLOBS
     SQLITE_MAX_EXPR_DEPTH=0
+    # Full-text search, for the file index's trigram table (daemon/file_index).
+    SQLITE_ENABLE_FTS5
 )
 target_link_libraries(b1air-sqlite PUBLIC Threads::Threads m)
 
@@ -85,3 +98,5 @@ add_subdirectory(clip)
 add_subdirectory(gamma)
 add_subdirectory(lock)
 add_subdirectory(shot)
+add_subdirectory(fido)
+add_subdirectory(passkey)

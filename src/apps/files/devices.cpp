@@ -44,12 +44,46 @@ DeviceManager::DeviceManager(QObject* parent) : QObject(parent) {
     const QString over = qEnvironmentVariable("B1AIR_PODSYNC");
     m_podsync = !over.isEmpty() ? over : QStandardPaths::findExecutable("b1air-podsync");
     refresh();
-    // Phones are not drives until mounted: they are asked for, every few
-    // seconds, by the tools that know them.
-    m_phoneTimer.setInterval(3000);
+    // Phones are not drives until mounted: the tools that know them
+    // (idevice_id, gio) are asked. They were asked every three seconds for as
+    // long as the window was open, phone or none — two processes started
+    // every three seconds all day. Now a USB device coming or going asks
+    // (its node appears in /dev/bus/usb), and the timer runs only while a
+    // phone is here: quickly while it connects or waits to be trusted, now
+    // and then for its battery once it is ready.
+    m_phoneTimer.setSingleShot(true);
     connect(&m_phoneTimer, &QTimer::timeout, this, &DeviceManager::scanPhones);
-    m_phoneTimer.start();
+    connect(&m_usbWatcher, &QFileSystemWatcher::directoryChanged, this, &DeviceManager::usbChanged);
+    watchUsb();
     scanPhones();
+}
+
+void DeviceManager::watchUsb() {
+    const QString root = QStringLiteral("/dev/bus/usb");
+    QStringList dirs{root};
+    for (const QString& bus : QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot))
+        dirs << root + "/" + bus;
+    const QStringList watched = m_usbWatcher.directories();
+    for (const QString& d : std::as_const(dirs))
+        if (!watched.contains(d)) m_usbWatcher.addPath(d);
+}
+
+void DeviceManager::usbChanged() {
+    watchUsb();   // a new bus, after a hub or a dock
+    // Asked at once and again a little later: usbmuxd and gvfs take a moment
+    // to know a phone after its cable is in.
+    scanPhones();
+    QTimer::singleShot(2000, this, &DeviceManager::scanPhones);
+    QTimer::singleShot(6000, this, &DeviceManager::scanPhones);
+}
+
+void DeviceManager::schedulePhoneScan() {
+    bool waiting = false;
+    for (const QVariantMap& p : std::as_const(m_phones))
+        if (p.value("state") != "ready") waiting = true;
+    if (m_usbWatcher.directories().isEmpty() || waiting) m_phoneTimer.start(3000);   // no USB events to wait for, or a phone on its way
+    else if (!m_phones.isEmpty()) m_phoneTimer.start(30000);                         // the battery, now and then
+    else m_phoneTimer.stop();                                                        // nothing to ask about until a cable goes in
 }
 
 DeviceManager::~DeviceManager() {
@@ -454,7 +488,11 @@ void DeviceManager::scanPhones() {
     if (!apple && !mtp) return;
     m_scanning = true;
     auto pending = std::make_shared<int>((apple ? 1 : 0) + (mtp ? 1 : 0));
-    auto done = [this, pending] { if (--*pending == 0) m_scanning = false; };
+    auto done = [this, pending] {
+        if (--*pending > 0) return;
+        m_scanning = false;
+        schedulePhoneScan();
+    };
     if (apple) {
         run("idevice_id", {"-l"}, [this, done](int code, const QByteArray& out, const QByteArray&) {
             QStringList udids;
@@ -497,7 +535,7 @@ void DeviceManager::scanIphones(const QStringList& udids) {
         const QVariantMap p = m_phones[u];
         const int age = p.value("age").toInt() + 1;
         m_phones[u]["age"] = age;
-        if (fresh || p.value("state") != "ready" || age % 10 == 0) describeIphone(u);
+        if (fresh || p.value("state") != "ready" || age % 2 == 0) describeIphone(u);
     }
     if (changed) publish();
 }
@@ -666,7 +704,7 @@ void DeviceManager::scanAndroids(const QByteArray& gioList) {
         } else {
             const int age = m_phones[uri].value("age").toInt() + 1;
             m_phones[uri]["age"] = age;
-            if (age % 10 == 0) describeAndroid(uri);
+            if (age % 2 == 0) describeAndroid(uri);
         }
     }
     if (changed) publish();

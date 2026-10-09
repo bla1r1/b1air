@@ -297,7 +297,11 @@ void read_battery() {
     std::error_code ec;
     for (const auto& e : std::filesystem::directory_iterator("/sys/class/power_supply", ec)) {
         const auto& d = e.path();
-        if (read_line(d / "type") != "Battery" || read_line(d / "scope") == "Device") continue;
+        const std::string type = read_line(d / "type");
+        // On the charger counts as charging here: a pack held below a charge
+        // limit says "Not charging" with the cable in, and was drawn red.
+        if ((type == "Mains" || type == "USB") && read_line(d / "online") == "1") charging = true;
+        if (type != "Battery" || read_line(d / "scope") == "Device") continue;
         ++packs;
         const std::string st = read_line(d / "status");
         charging = charging || st == "Charging" || st == "Full";

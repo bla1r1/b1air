@@ -1,6 +1,7 @@
 #include "i18n.hpp"
 #include "sway_ipc.hpp"
 #include "focustime_db.hpp"
+#include "file_index.hpp"
 #include "user_manager.hpp"
 #include "system_control.hpp"
 #include "idle.hpp"
@@ -1000,6 +1001,15 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         return SystemControl::open_default(kind) ? 0 : 1;
+    } else if (cmd == "files") {
+        // The file index (file_index.hpp): Spotlight asks it for names.
+        const std::string sub = argc >= 3 ? argv[2] : "";
+        if (sub == "search" && argc >= 4)
+            return file_index::search_cli(argv[3], argc >= 5 ? std::max(1, std::atoi(argv[4])) : 24);
+        if (sub == "update") return file_index::update_cli();
+        if (sub == "reindex") return file_index::reindex_cli();
+        std::cerr << "usage: b1air-daemon files search <query> [limit] | files update | files reindex\n";
+        return 2;
     } else if (cmd == "apps" || cmd == "applications") {
         std::string cat = (argc >= 3) ? argv[2] : "all";
         std::cout << SystemControl::apps_list_json(cat) << "\n";
