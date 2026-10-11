@@ -202,7 +202,13 @@ std::vector<FileListModel::Entry> FileListModel::list(const QString& dir, QStrin
                 mt = mimeDb.mimeTypeForName(QStringLiteral("application/x-executable"));
             e.kind = mt.comment().isEmpty() ? mt.name() : mt.comment();
             if (!e.kind.isEmpty()) e.kind[0] = e.kind[0].toUpper();
-            e.category = categoryFor(mt.name(), false, fi.isExecutable() && mt.inherits("application/octet-stream"));
+            // Whether it runs, only for a file nothing else has named:
+            // isExecutable() is an access() call, and on a share each is a
+            // trip to the server — 7 ms a file on a router's Samba, most of
+            // what an album's folder took to list, asked of every song.
+            e.category = categoryFor(mt.name(), false, false);
+            if (e.category == u"file" && mt.inherits("application/octet-stream") && fi.isExecutable())
+                e.category = QStringLiteral("executable");
         }
         out.push_back(std::move(e));
     }

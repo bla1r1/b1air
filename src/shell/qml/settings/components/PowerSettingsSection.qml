@@ -479,7 +479,7 @@ ColumnLayout {
                 RowLayout {
                     id: lidHead
                     required property bool modelData
-                    readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
+                    readonly property bool now: modelData === (Power.hasBattery && !Power.pluggedIn)
                     Layout.fillWidth: false
                     Layout.preferredWidth: Design.s(170)
                     spacing: Design.s(Design.space.xs)

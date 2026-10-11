@@ -87,7 +87,7 @@ MiniView {
                     spacing: 0
 
                     Label {
-                        text: Power.charging ? I18n.tr("Running on power adapter") : I18n.tr("Running on battery")
+                        text: Power.pluggedIn ? I18n.tr("Running on power adapter") : I18n.tr("Running on battery")
                         role: "body"
                         weight: Design.weight.semibold
                         Layout.fillWidth: true

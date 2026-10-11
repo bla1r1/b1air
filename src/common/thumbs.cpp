@@ -18,8 +18,8 @@
 #include <algorithm>
 #include <array>
 
-#ifdef B1AIR_HAVE_LIBAV
 #include <QTransform>
+#ifdef B1AIR_HAVE_LIBAV
 #include <cmath>
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -166,6 +166,82 @@ QImage fromPicture(const QString& path, int size) {
     if (!img.isNull() && (img.width() > size || img.height() > size))
         img = img.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     return img;
+}
+
+// The small picture a camera or a phone writes into a JPEG's EXIF header
+// (160 to 512 px), turned as the photo is, or null. For a photo on a share
+// or a phone: it is in the first few KB, where the photo itself is 3 to
+// 10 MB read to the end — a round trip to the other end for every 16 KB.
+QImage exifPreview(const QString& path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return {};
+    QByteArray buf = f.read(64 * 1024);
+    const auto u8 = [&](qsizetype i) { return quint8(buf[i]); };
+    if (buf.size() < 4 || u8(0) != 0xFF || u8(1) != 0xD8) return {};
+
+    // APP1 "Exif": among the first segments, before the picture's data.
+    qsizetype tiff = -1, end = 0;
+    for (qsizetype i = 2; i + 4 <= buf.size() && u8(i) == 0xFF;) {
+        const quint8 marker = u8(i + 1);
+        if (marker == 0xDA || marker == 0xD9) break;   // the picture, or the end
+        const qsizetype len = (u8(i + 2) << 8) | u8(i + 3);
+        if (marker == 0xE1 && buf.mid(i + 4, 6) == QByteArrayLiteral("Exif\0\0")) {
+            tiff = i + 10;
+            end = i + 2 + len;
+            break;
+        }
+        i += 2 + len;
+    }
+    if (tiff < 0) return {};
+    if (end > buf.size()) buf += f.read(end - buf.size());
+    if (end > buf.size()) return {};
+    const QByteArray t = buf.mid(tiff, end - tiff);
+
+    const bool little = t.startsWith("II");
+    if (!little && !t.startsWith("MM")) return {};
+    const auto rd16 = [&](qsizetype o) -> quint32 {
+        if (o < 0 || o + 2 > t.size()) return 0;
+        return little ? qFromLittleEndian<quint16>(t.constData() + o) : qFromBigEndian<quint16>(t.constData() + o);
+    };
+    const auto rd32 = [&](qsizetype o) -> quint32 {
+        if (o < 0 || o + 4 > t.size()) return 0;
+        return little ? qFromLittleEndian<quint32>(t.constData() + o) : qFromBigEndian<quint32>(t.constData() + o);
+    };
+    // IFD0 is the photo (its Orientation); IFD1, the one after, the preview.
+    int orientation = 1;
+    quint32 at = 0, length = 0;
+    const quint32 ifd0 = rd32(4);
+    const quint32 n0 = rd16(ifd0);
+    for (quint32 k = 0; k < n0; ++k)
+        if (rd16(ifd0 + 2 + 12 * k) == 0x0112) orientation = int(rd16(ifd0 + 2 + 12 * k + 8));
+    const quint32 ifd1 = rd32(ifd0 + 2 + 12 * n0);
+    if (ifd1 == 0) return {};
+    const quint32 n1 = rd16(ifd1);
+    for (quint32 k = 0; k < n1; ++k) {
+        const quint32 e = ifd1 + 2 + 12 * k;
+        const quint32 tag = rd16(e), type = rd16(e + 2);
+        const quint32 value = type == 3 ? rd16(e + 8) : rd32(e + 8);   // SHORT or LONG
+        if (tag == 0x0201) at = value;
+        else if (tag == 0x0202) length = value;
+    }
+    if (at == 0 || length == 0 || qsizetype(at) + qsizetype(length) > t.size()) return {};
+
+    QImage img = QImage::fromData(t.mid(at, length), "JPEG");
+    if (img.isNull()) return {};
+    // The preview is stored as the sensor saw it, as the photo is; the
+    // photo's Orientation says how to turn both.
+    QTransform turn;
+    switch (orientation) {
+    case 2: turn.scale(-1, 1); break;
+    case 3: turn.rotate(180); break;
+    case 4: turn.scale(1, -1); break;
+    case 5: turn = QTransform(0, 1, 1, 0, 0, 0); break;     // transpose
+    case 6: turn.rotate(90); break;
+    case 7: turn = QTransform(0, -1, -1, 0, 0, 0); break;   // transverse
+    case 8: turn.rotate(270); break;
+    default: return img;
+    }
+    return img.transformed(turn);
 }
 
 // The bytes of the picture tagged into a song — ID3 APIC, FLAC PICTURE,
@@ -421,6 +497,7 @@ struct Made {
     QString mtime;     // its mtime, in seconds
     QString cached;    // the thumbnail's place in the cache
     bool shared = false;   // a song's cover: its PNG is the album's
+    bool preview = false;  // a photo's EXIF preview, not the photo
 };
 
 // Into the freedesktop cache, after the picture has gone to the view: the
@@ -432,7 +509,8 @@ void store(const Made& m) {
     // 8 bytes and IHDR 25.
     if (png.size() < 33 || png.mid(12, 4) != "IHDR") return;
     png.insert(33, pngTextChunk("Thumb::URI", QUrl::fromLocalFile(m.path).toEncoded())
-                   + pngTextChunk("Thumb::MTime", m.mtime.toLatin1()));
+                   + pngTextChunk("Thumb::MTime", m.mtime.toLatin1())
+                   + (m.preview ? pngTextChunk("b1air::Preview", "exif") : QByteArray()));
     QDir().mkpath(QFileInfo(m.cached).absolutePath());
     // Written under a temporary name and renamed: another reader never sees
     // half a file.
@@ -453,7 +531,12 @@ void store(const Made& m) {
 // it from listing the folder) — otherwise -1, and it is asked for here. On a
 // share that is a round trip to the server for every tile, even one whose
 // thumbnail is in the cache already.
-Made make(const QString& path, int size, bool far, qint64 knownMtime) {
+//
+// need is the long side the view draws it at. A photo's EXIF preview is
+// taken only when it is that big, and kept marked: a larger tile later reads
+// the photo.
+Made make(const QString& path, int size, bool far, qint64 knownMtime, int need) {
+    need = need > 0 ? std::min(need, size) : size;
     Made m;
     const QFileInfo fi(path);
     if (knownMtime < 0 && !fi.isFile()) return m;
@@ -462,7 +545,8 @@ Made make(const QString& path, int size, bool far, qint64 knownMtime) {
     const QString cached = cachePathFor(m.path, size);
     {
         QImage c;
-        if (c.load(cached, "PNG") && c.text("Thumb::MTime") == m.mtime) {
+        if (c.load(cached, "PNG") && c.text("Thumb::MTime") == m.mtime
+            && (c.text("b1air::Preview").isEmpty() || std::max(c.width(), c.height()) >= need)) {
             m.image = c;
             return m;
         }
@@ -474,6 +558,17 @@ Made make(const QString& path, int size, bool far, qint64 knownMtime) {
     if (audio) {
         QFile f(fail);
         if (f.open(QIODevice::ReadOnly) && f.readAll() == m.mtime.toLatin1()) return m;
+    }
+    if (far && mime == u"image/jpeg") {
+        QImage p = exifPreview(m.path);
+        if (!p.isNull() && std::max(p.width(), p.height()) >= need) {
+            if (p.width() > size || p.height() > size)
+                p = p.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            m.image = p;
+            m.cached = cached;
+            m.preview = true;
+            return m;
+        }
     }
     m.image = mime.startsWith("video/") ? fromVideo(m.path, size)
             : audio ? fromAudio(m.path, size, far)
@@ -497,10 +592,10 @@ Made make(const QString& path, int size, bool far, qint64 knownMtime) {
 class Job : public QObject, public QRunnable {
     Q_OBJECT
 public:
-    Job(QString path, int size, bool far, qint64 mtime)
-        : m_path(std::move(path)), m_size(size), m_far(far), m_mtime(mtime) {}
+    Job(QString path, int size, bool far, qint64 mtime, int need)
+        : m_path(std::move(path)), m_size(size), m_far(far), m_mtime(mtime), m_need(need) {}
     void run() override {
-        const Made m = make(m_path, m_size, m_far, m_mtime);
+        const Made m = make(m_path, m_size, m_far, m_mtime, m_need);
         emit done(m.image);
         store(m);
     }
@@ -511,13 +606,14 @@ private:
     int m_size;
     bool m_far;
     qint64 m_mtime;
+    int m_need;
 };
 
 class Response : public QQuickImageResponse {
 public:
     Response(const QString& path, qint64 mtime, QSize want, QThreadPool& pool, bool far)
         : m_want(want), m_pool(&pool) {
-        auto* job = new Job(path, sizeFor(want), far, mtime);
+        auto* job = new Job(path, sizeFor(want), far, mtime, want.isValid() ? std::max(want.width(), want.height()) : 0);
         m_job = job;
         connect(job, &Job::done, this, [this](const QImage& image) {
             m_job = nullptr;
