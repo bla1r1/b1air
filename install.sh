@@ -15,6 +15,8 @@ source "$REPO_DIR/lib/distro.sh"
 source "$REPO_DIR/lib/fingerprint.sh"
 # shellcheck source=lib/wallpapers.sh
 source "$REPO_DIR/lib/wallpapers.sh"
+# shellcheck source=lib/sddm.sh
+source "$REPO_DIR/lib/sddm.sh"
 
 # The daemon's dotfiles_sync/status/sys look for the repo by guessing among a
 # few hardcoded paths, so a clone anywhere else silently made those features
@@ -660,57 +662,6 @@ install_aur_packages() {
     done
 }
 
-deploy_sddm_theme() {
-    local sddm_src="$REPO_DIR/usr/share/sddm/themes/b1air"
-    local sddm_dst="/usr/share/sddm/themes/b1air"
-    local wallpaper_group="wallpaper"
-    local installer_user="${SUDO_USER:-$USER}"
-    local cache_dir="/var/cache/wallpaper"
-    local cache_wall="$cache_dir/current.jpg"
-
-    if [[ -d "$sddm_src" ]]; then
-        log "Deploying b1air SDDM theme to $sddm_dst..."
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            log "Would install $sddm_src -> $sddm_dst"
-        else
-            sudo install -d -m 755 "$sddm_dst"
-            sudo rsync -a --delete "$sddm_src/" "$sddm_dst/"
-        fi
-    fi
-
-    if [[ -f "$REPO_DIR/etc/sddm.conf" ]]; then
-        log "Installing /etc/sddm.conf..."
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            log "Would install $REPO_DIR/etc/sddm.conf -> /etc/sddm.conf"
-        else
-            sudo install -Dm644 "$REPO_DIR/etc/sddm.conf" "/etc/sddm.conf"
-        fi
-    fi
-
-    # Shared wallpaper cache for SDDM background
-    log "Configuring shared SDDM wallpaper cache in $cache_dir..."
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would setup wallpaper group and permissions for $cache_dir"
-    else
-        sudo groupadd -f "$wallpaper_group"
-        sudo install -d -o root -g "$wallpaper_group" -m 2775 "$cache_dir"
-        id "$installer_user" >/dev/null 2>&1 && sudo usermod -aG "$wallpaper_group" "$installer_user" || true
-        id sddm >/dev/null 2>&1 && sudo usermod -aG "$wallpaper_group" sddm || true
-
-        local seed_wall=""
-        # The default the desktop starts on too (wallpaper restore), so the
-        # login screen and the first login match; else any picture.
-        if [[ -f "$REPO_DIR/.wallpapers/Sky/clouds-day.jpg" ]]; then
-            seed_wall="$REPO_DIR/.wallpapers/Sky/clouds-day.jpg"
-        elif [[ -d "$REPO_DIR/.wallpapers" ]]; then
-            seed_wall="$(find "$REPO_DIR/.wallpapers" -maxdepth 2 -type f \( -iname '*.jpg' -o -iname '*.png' \) | head -n 1 || true)"
-        fi
-        if [[ -n "$seed_wall" && -f "$seed_wall" ]]; then
-            sudo install -o root -g "$wallpaper_group" -m 664 "$seed_wall" "$cache_wall"
-        fi
-    fi
-}
-
 deploy_session_files() {
     log "Deploying b1air FreeDesktop Wayland session files & portals..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -773,7 +724,7 @@ deploy_dotfiles() {
     log "Deploying user dotfiles..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "Would deploy .config, the cursor theme and .wallpapers to $HOME"
-        deploy_sddm_theme
+        deploy_sddm_theme "$REPO_DIR" "$DRY_RUN"
         deploy_session_files
         return 0
     fi
@@ -854,7 +805,7 @@ deploy_dotfiles() {
     # a real install never called it at all, so /usr/share/sddm/themes/b1air
     # and /etc/sddm.conf were never deployed on any machine that actually ran
     # this script for real. The dry-run preview lied about what would happen.
-    deploy_sddm_theme
+    deploy_sddm_theme "$REPO_DIR" "$DRY_RUN"
 
     # Deploy Wayland session files & portals
     deploy_session_files
@@ -1286,7 +1237,9 @@ main() {
     # (see usr/share/sddm/themes/b1air/components/ThemeColors.qml). Nothing has
     # written it yet on a fresh machine, so the very first login would show the
     # theme's built-in fallback colours rather than the ones just installed.
-    if command -v b1air-daemon >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/b1air-daemon" ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would publish the login screen palette to /var/cache/wallpaper"
+    elif command -v b1air-daemon >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/b1air-daemon" ]]; then
         "$(command -v b1air-daemon || echo "$HOME/.local/bin/b1air-daemon")" appearance >/dev/null 2>&1 \
             && ok "Login screen palette published to /var/cache/wallpaper" \
             || warn "Could not publish the login screen palette; it will follow the first theme change."

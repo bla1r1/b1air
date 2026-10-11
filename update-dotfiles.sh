@@ -19,6 +19,8 @@ source "$REPO_DIR/lib/distro.sh"
 source "$REPO_DIR/lib/fingerprint.sh"
 # shellcheck source=lib/wallpapers.sh
 source "$REPO_DIR/lib/wallpapers.sh"
+# shellcheck source=lib/sddm.sh
+source "$REPO_DIR/lib/sddm.sh"
 BACKUP_ROOT="${HOME}/.dotfiles-backups"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
@@ -482,6 +484,9 @@ main() {
     if [[ "$CONFIGS_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
         update_compositor
         update_suite
+    fi
+    if [[ "$CONFIGS_ONLY" -eq 0 ]]; then
+        deploy_sddm_theme "$REPO_DIR" "$DRY_RUN"
     fi
     sync_configs
     mark_setup_baseline

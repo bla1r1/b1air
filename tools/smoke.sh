@@ -28,6 +28,10 @@
 #                   translation yet are listed, not failed — a new English
 #                   string must not block a commit.
 #   daemon-cli      The read-only verbs still answer.
+#   sddm-theme      The login screen: every key in default.conf is one
+#                   Config.qml reads (a misspelt one is silently ignored), every
+#                   icon it names exists, and the installed copy is the repo's —
+#                   only install.sh deployed it once, and it sat a week behind.
 #   shell-boot      The shell actually starts. Only when there is a Wayland
 #                   session to start it in; skipped otherwise.
 #
@@ -51,7 +55,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QML_DIRS=("$REPO/src/shell/qml" "$REPO/src/apps")
+SDDM_THEME="$REPO/usr/share/sddm/themes/b1air"
+QML_DIRS=("$REPO/src/shell/qml" "$REPO/src/apps" "$SDDM_THEME")
 
 # Qt 6's qmllint first. /usr/bin/qmllint can be Qt 5's (it says "qmllint
 # 1.0"), which reads Qt 6 QML and reports nothing — an unbalanced brace in
@@ -625,8 +630,68 @@ PY_I18N
     else fail "a translation is broken"; fi
 }
 
+# ── sddm-theme ───────────────────────────────────────────────────────────────
+check_sddm_theme() {
+    head_ "sddm-theme"
+    [[ -d "$SDDM_THEME" ]] || { skip "no theme in the repo"; return; }
+    if python3 - "$SDDM_THEME" <<'PY_SDDM'; then
+import os, re, sys
+
+theme = sys.argv[1]
+config = open(os.path.join(theme, "components/Config.qml"), encoding="utf-8").read()
+problems = []
+
+# Keys Config.qml reads: config.xValue("Section/key") and config['Section/key'].
+read = set(re.findall(r"""config(?:\.\w+Value\(|\[)["']([^"']+)["']""", config))
+section, icons = "General", set()
+for n, line in enumerate(open(os.path.join(theme, "default.conf"), encoding="utf-8"), 1):
+    line = line.split(";", 1)[0].strip()
+    if not line:
+        continue
+    m = re.fullmatch(r"\[(.+)\]", line)
+    if m:
+        section = m.group(1)
+        continue
+    key, _, value = (x.strip() for x in line.partition("="))
+    full = key if section == "General" else f"{section}/{key}"
+    if full not in read:
+        problems.append(f"default.conf:{n}: `{full}` is not read by Config.qml")
+    if key == "icon":
+        icons.add(value.strip('"'))
+
+icons |= set(re.findall(r'Icon"\) \|\| "([^"]+)"', config))
+for root, _, files in os.walk(theme):
+    for f in files:
+        if f.endswith(".qml"):
+            icons |= set(re.findall(r'getIcon\("([^"]+)"\)', open(os.path.join(root, f), encoding="utf-8").read()))
+for icon in sorted(icons):
+    name = icon if "." in icon else icon + ".svg"
+    if not os.path.isfile(os.path.join(theme, "icons", name)):
+        problems.append(f"icons/{name} is named but missing")
+if not os.path.isfile(os.path.join(theme, "backgrounds/default.jpg")):
+    problems.append("backgrounds/default.jpg is missing: no fallback picture")
+
+for p in problems:
+    print("      " + p)
+sys.exit(1 if problems else 0)
+PY_SDDM
+        pass "default.conf keys are read, icons and fallback picture exist"
+    else
+        fail "login screen theme, problems above"
+    fi
+
+    local installed=/usr/share/sddm/themes/b1air
+    if [[ ! -d "$installed" ]]; then
+        skip "theme not installed here"
+    elif diff -rq "$SDDM_THEME" "$installed" >/dev/null 2>&1; then
+        pass "installed login screen theme matches the repo"
+    else
+        skip "installed login screen theme is behind the repo: run update-dotfiles.sh"
+    fi
+}
+
 # ── driver ───────────────────────────────────────────────────────────────────
-ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n daemon_cli shell_boot)
+ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n sddm_theme daemon_cli shell_boot)
 
 # Runnable by name, absent from the default run: it needs the network.
 EXTRA=(vendor_updates)

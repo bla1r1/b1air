@@ -121,10 +121,15 @@ Item {
                 }
             }
 
+            // The shared wallpaper can be missing or empty (a machine where the
+            // daemon never copied one): the theme's own picture, not grey.
             onStatusChanged: {
-                if (status === Image.Error) {
+                if (status !== Image.Error)
+                    return;
+                if (source.toString().indexOf("backgrounds/default.jpg") < 0)
+                    source = "backgrounds/default.jpg";
+                else
                     displayColor = true;
-                }
             }
 
             Rectangle {

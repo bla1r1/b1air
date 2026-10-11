@@ -3573,6 +3573,22 @@ bool SystemControl::kbd_backlight_off() {
 }
 
 // ── Wallpaper ────────────────────────────────────────────────────────────────
+
+// The login screen's copy. /var/cache/wallpaper/current.jpg was created by
+// install.sh as root, and we only have group write on it: copy_file() opens it
+// with O_TRUNC and then fails on fchmod() (not the owner), leaving the login
+// screen an empty file and a blank backdrop. A new file beside it, renamed
+// over the old one, needs only write access to the directory (2775, no sticky
+// bit) — and is readable by sddm whatever the source's mode was.
+static void publish_login_wallpaper(const std::string& src) {
+    const std::string dst = "/var/cache/wallpaper/current.jpg";
+    const std::string tmp = dst + ".tmp";
+    std::error_code ec;
+    std::filesystem::copy_file(src, tmp, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec || chmod(tmp.c_str(), 0664) != 0 || std::rename(tmp.c_str(), dst.c_str()) != 0)
+        (void)unlink(tmp.c_str());
+}
+
 bool SystemControl::wallpaper_set(const std::string& filepath, const std::string& mode) {
     std::string resolved_path;
     if (!safe_wallpaper_file(filepath, resolved_path) || access(resolved_path.c_str(), R_OK) != 0 || !safe_sway_path(resolved_path)) return false;
@@ -3586,8 +3602,8 @@ bool SystemControl::wallpaper_set(const std::string& filepath, const std::string
         std::error_code ec;
         const auto overwrite = std::filesystem::copy_options::overwrite_existing;
         std::filesystem::copy_file(resolved_path, cache_file, overwrite, ec);
-        std::filesystem::copy_file(resolved_path, "/var/cache/wallpaper/current.jpg", overwrite, ec);
     }
+    publish_login_wallpaper(resolved_path);
 
     // A new picture for every screen replaces any one screen's own; a
     // restore keeps them.
