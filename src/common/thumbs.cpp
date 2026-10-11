@@ -1,6 +1,7 @@
 #include "thumbs.hpp"
 
 #include <QBuffer>
+#include <QtEndian>
 #include <QCryptographicHash>
 #include <QHash>
 #include <QMutex>
@@ -15,6 +16,7 @@
 #include <QThread>
 #include <QUrl>
 #include <algorithm>
+#include <array>
 
 #ifdef B1AIR_HAVE_LIBAV
 #include <QTransform>
@@ -173,20 +175,40 @@ QImage fromPicture(const QString& path, int size) {
 // few small reads. It was an ffmpeg process per song, which decoded the
 // picture, scaled it and wrote it out again as a PNG: a folder of 300 songs
 // was 300 processes, one after the other, three at a time.
+//
+// The demuxer is named from the extension: left to guess, libavformat probes
+// with a buffer that grows until it sees past the ID3 tag — and the tag *is*
+// the cover, a few hundred KB — reading the start of every MP3 again and
+// again: 26 ms a song, against 0.1 ms told. A name that turns out wrong
+// (an .mp3 that is really AAC) is opened again and guessed.
 QByteArray embeddedCover(const QString& path) {
 #ifdef B1AIR_HAVE_LIBAV
-    AVFormatContext* ctx = nullptr;
+    static const QHash<QString, const char*> demuxers = {
+        {"mp3", "mp3"}, {"flac", "flac"}, {"m4a", "mov"}, {"m4b", "mov"}, {"mp4", "mov"},
+        {"ogg", "ogg"}, {"oga", "ogg"}, {"opus", "ogg"}, {"wma", "asf"}, {"ape", "ape"},
+        {"wv", "wv"}, {"aiff", "aiff"}, {"aif", "aiff"}, {"wav", "wav"},
+    };
     const QByteArray name = QFile::encodeName(path);
-    if (avformat_open_input(&ctx, name.constData(), nullptr, nullptr) < 0) return {};
-    QByteArray out;
-    for (unsigned i = 0; i < ctx->nb_streams; ++i) {
-        const AVStream* st = ctx->streams[i];
-        if ((st->disposition & AV_DISPOSITION_ATTACHED_PIC) && st->attached_pic.size > 0) {
-            out = QByteArray(reinterpret_cast<const char*>(st->attached_pic.data), st->attached_pic.size);
-            break;
+    const auto read = [&name](const AVInputFormat* format) {
+        AVFormatContext* ctx = nullptr;
+        if (avformat_open_input(&ctx, name.constData(), format, nullptr) < 0) return QByteArray();
+        QByteArray out;
+        for (unsigned i = 0; i < ctx->nb_streams; ++i) {
+            const AVStream* st = ctx->streams[i];
+            if ((st->disposition & AV_DISPOSITION_ATTACHED_PIC) && st->attached_pic.size > 0) {
+                out = QByteArray(reinterpret_cast<const char*>(st->attached_pic.data), st->attached_pic.size);
+                break;
+            }
         }
-    }
-    avformat_close_input(&ctx);
+        avformat_close_input(&ctx);
+        return out;
+    };
+    const char* demuxer = demuxers.value(QFileInfo(path).suffix().toLower(), nullptr);
+    const AVInputFormat* hint = demuxer ? av_find_input_format(demuxer) : nullptr;
+    // The mp3 demuxer opens nearly anything without complaint, so no picture
+    // through the hint is asked again — cheap where there is no big tag.
+    QByteArray out = hint ? read(hint) : QByteArray();
+    if (out.isEmpty()) out = read(nullptr);
     return out;
 #else
     // Without the library, the ffmpeg command — copying the picture's bytes
@@ -229,8 +251,10 @@ QMutex g_coversLock;
 QHash<QByteArray, QImage> g_covers;
 
 QImage coverFromBytes(const QByteArray& bytes, int size) {
-    QByteArray key = QCryptographicHash::hash(bytes, QCryptographicHash::Md5);
-    key += QByteArray::number(size);
+    // qHash, not MD5: the key only has to tell this process's covers apart,
+    // and MD5 of a 400 KB picture was half of what a song's tile cost.
+    const QByteArray key = QByteArray::number(quint64(qHash(bytes, 0x6231616972))) + ':'
+                         + QByteArray::number(bytes.size()) + ':' + QByteArray::number(size);
     {
         QMutexLocker lock(&g_coversLock);
         const auto it = g_covers.constFind(key);
@@ -247,45 +271,82 @@ QImage coverFromBytes(const QByteArray& bytes, int size) {
 
 // The cover.jpg or folder.jpg beside the songs, looked for once a folder:
 // the folder was listed again for every song in it, and on a network share
-// that is a round trip to the server each time. Looked for again when the
-// folder changes.
-struct FolderCover { qint64 mtime; QString file; };
-QMutex g_folderLock;
+// that is a round trip to the server each time. The picture is read and
+// decoded once too — it was read whole again for every song. Looked for
+// again when the folder changes.
+//
+// One folder at a time: the songs of a folder are asked for together, and
+// the first lists and reads while the rest wait for its answer instead of
+// all of them going to the share for the same file at once.
+struct FolderCover { qint64 mtime; QString file; QHash<int, QImage> images; };
+QMutex g_folderLock;   // the map
+QMutex g_folderLoad;   // the looking
 QHash<QString, FolderCover> g_folderCovers;
 
-QString folderCover(const QString& dirPath) {
+QImage folderCoverImage(const QString& dirPath, int size) {
     const qint64 mtime = QFileInfo(dirPath).lastModified().toMSecsSinceEpoch();
+    // Known: the picture, or that there is none.
+    const auto known = [&](QImage& out) {
+        QMutexLocker lock(&g_folderLock);
+        const auto it = g_folderCovers.constFind(dirPath);
+        if (it == g_folderCovers.cend() || it->mtime != mtime) return false;
+        if (it->file.isEmpty()) return true;
+        const auto img = it->images.constFind(size);
+        if (img == it->images.cend()) return false;
+        out = *img;
+        return true;
+    };
+    QImage out;
+    if (known(out)) return out;
+    QMutexLocker load(&g_folderLoad);
+    if (known(out)) return out;
+
+    QString found;
     {
         QMutexLocker lock(&g_folderLock);
         const auto it = g_folderCovers.constFind(dirPath);
-        if (it != g_folderCovers.cend() && it->mtime == mtime) return it->file;
+        if (it != g_folderCovers.cend() && it->mtime == mtime) found = it->file;
+        else found = QStringLiteral("?");
     }
-    QString found;
-    const QDir dir(dirPath);
-    for (const QString& name : dir.entryList({"cover.*", "folder.*", "front.*", "albumart*.*"}, QDir::Files)) {
-        const QString suffix = QFileInfo(name).suffix().toLower();
-        if (suffix == "jpg" || suffix == "jpeg" || suffix == "png" || suffix == "webp") {
-            found = dir.filePath(name);
-            break;
+    if (found == u"?") {
+        found.clear();
+        const QDir dir(dirPath);
+        for (const QString& name : dir.entryList({"cover.*", "folder.*", "front.*", "albumart*.*"}, QDir::Files)) {
+            const QString suffix = QFileInfo(name).suffix().toLower();
+            if (suffix == "jpg" || suffix == "jpeg" || suffix == "png" || suffix == "webp") {
+                found = dir.filePath(name);
+                break;
+            }
         }
+    }
+    if (!found.isEmpty()) {
+        QFile f(found);
+        if (f.open(QIODevice::ReadOnly)) out = decodeScaled(f.readAll(), size);
     }
     QMutexLocker lock(&g_folderLock);
     if (g_folderCovers.size() >= 1024) g_folderCovers.clear();
-    g_folderCovers.insert(dirPath, {mtime, found});
-    return found;
+    FolderCover& entry = g_folderCovers[dirPath];
+    if (entry.mtime != mtime || entry.file != found) entry = {mtime, found, {}};
+    if (!out.isNull()) entry.images.insert(size, out);
+    return out;
 }
 
 // An album's cover: the picture tagged into the song, else the one beside it.
-QImage fromAudio(const QString& path, int size) {
+// On a share the one beside it is asked for first: a folder's songs then
+// cost one file from the server, not each song's own tags, a few hundred KB
+// apiece, over and over for the same picture.
+QImage fromAudio(const QString& path, int size, bool far) {
+    const QString dir = QFileInfo(path).absolutePath();
+    if (far) {
+        const QImage img = folderCoverImage(dir, size);
+        if (!img.isNull()) return img;
+    }
     const QByteArray bytes = embeddedCover(path);
     if (!bytes.isEmpty()) {
         const QImage img = coverFromBytes(bytes, size);
         if (!img.isNull()) return img;
     }
-    const QString cover = folderCover(QFileInfo(path).absolutePath());
-    if (cover.isEmpty()) return {};
-    QFile f(cover);
-    return f.open(QIODevice::ReadOnly) ? coverFromBytes(f.readAll(), size) : QImage();
+    return far ? QImage() : folderCoverImage(dir, size);
 }
 
 // Songs without a cover are many and stay without one: the try is
@@ -297,45 +358,137 @@ QString failPathFor(const QString& path) {
         + "/thumbnails/fail/b1air/" + QString::fromLatin1(md5);
 }
 
-QImage make(const QString& path, int size) {
+// A PNG chunk's CRC (ISO 3309, as zlib's crc32).
+quint32 pngCrc(const QByteArray& data) {
+    static const auto table = [] {
+        std::array<quint32, 256> t{};
+        for (quint32 n = 0; n < 256; ++n) {
+            quint32 c = n;
+            for (int k = 0; k < 8; ++k) c = c & 1 ? 0xedb88320u ^ (c >> 1) : c >> 1;
+            t[n] = c;
+        }
+        return t;
+    }();
+    quint32 c = 0xffffffffu;
+    for (const char ch : data) c = table[(c ^ quint8(ch)) & 0xff] ^ (c >> 8);
+    return c ^ 0xffffffffu;
+}
+
+QByteArray pngTextChunk(const QByteArray& key, const QByteArray& value) {
+    const QByteArray body = "tEXt" + key + '\0' + value;
+    QByteArray chunk(4, '\0');
+    qToBigEndian(quint32(body.size() - 4), chunk.data());
+    chunk += body;
+    QByteArray crc(4, '\0');
+    qToBigEndian(pngCrc(body), crc.data());
+    return chunk + crc;
+}
+
+// The picture as a PNG, without the file's own Thumb::URI and Thumb::MTime.
+// The songs of an album carry the same cover, the same QImage from the cache
+// above, and it is compressed once: at 8 ms a tile that was most of what a
+// folder of songs cost, twenty times over for one picture. Keyed by the
+// QImage's own identity, which its copies share.
+QMutex g_pngLock;
+QHash<qint64, QByteArray> g_pngs;
+
+QByteArray encodePng(const QImage& img, bool shared) {
+    const qint64 key = img.cacheKey();
+    if (shared) {
+        QMutexLocker lock(&g_pngLock);
+        const auto it = g_pngs.constFind(key);
+        if (it != g_pngs.cend()) return *it;
+    }
+    QByteArray png;
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    // Quality 75 is zlib level 2: Qt's default, level 6, took 30 ms for a
+    // 256 px tile — longer than reading and decoding the cover — and 8 ms
+    // buys a file 15% larger.
+    if (!img.save(&buf, "PNG", 75)) return {};
+    if (shared) {
+        QMutexLocker lock(&g_pngLock);
+        if (g_pngs.size() >= 64) g_pngs.clear();
+        g_pngs.insert(key, png);
+    }
+    return png;
+}
+
+// What a job made, and where it is to be kept.
+struct Made {
+    QImage image;
+    QString path;      // the file, absolute
+    QString mtime;     // its mtime, in seconds
+    QString cached;    // the thumbnail's place in the cache
+    bool shared = false;   // a song's cover: its PNG is the album's
+};
+
+// Into the freedesktop cache, after the picture has gone to the view: the
+// tile does not wait for its PNG to be compressed and written.
+void store(const Made& m) {
+    if (m.image.isNull() || m.cached.isEmpty()) return;
+    QByteArray png = encodePng(m.image, m.shared);
+    // The text after IHDR, where the reader looks for it: the signature is
+    // 8 bytes and IHDR 25.
+    if (png.size() < 33 || png.mid(12, 4) != "IHDR") return;
+    png.insert(33, pngTextChunk("Thumb::URI", QUrl::fromLocalFile(m.path).toEncoded())
+                   + pngTextChunk("Thumb::MTime", m.mtime.toLatin1()));
+    QDir().mkpath(QFileInfo(m.cached).absolutePath());
+    // Written under a temporary name and renamed: another reader never sees
+    // half a file.
+    const QString tmp = m.cached + ".part";
+    QFile f(tmp);
+    if (!f.open(QIODevice::WriteOnly) || f.write(png) != png.size()) {
+        f.remove();
+        return;
+    }
+    f.close();
+    if (!QFile::rename(tmp, m.cached)) {
+        QFile::remove(m.cached);
+        if (!QFile::rename(tmp, m.cached)) QFile::remove(tmp);
+    }
+}
+
+// mtime is the file's, in seconds, when the view already knows it (Files has
+// it from listing the folder) — otherwise -1, and it is asked for here. On a
+// share that is a round trip to the server for every tile, even one whose
+// thumbnail is in the cache already.
+Made make(const QString& path, int size, bool far, qint64 knownMtime) {
+    Made m;
     const QFileInfo fi(path);
-    if (!fi.isFile()) return {};
-    const QString mtime = QString::number(fi.lastModified().toSecsSinceEpoch());
-    const QString cached = cachePathFor(fi.absoluteFilePath(), size);
+    if (knownMtime < 0 && !fi.isFile()) return m;
+    m.path = fi.absoluteFilePath();
+    m.mtime = QString::number(knownMtime >= 0 ? knownMtime : fi.lastModified().toSecsSinceEpoch());
+    const QString cached = cachePathFor(m.path, size);
     {
         QImage c;
-        if (c.load(cached, "PNG") && c.text("Thumb::MTime") == mtime) return c;
+        if (c.load(cached, "PNG") && c.text("Thumb::MTime") == m.mtime) {
+            m.image = c;
+            return m;
+        }
     }
     static const QMimeDatabase db;
     const QString mime = db.mimeTypeForFile(fi, QMimeDatabase::MatchExtension).name();
     const bool audio = mime.startsWith("audio/");
-    const QString fail = audio ? failPathFor(fi.absoluteFilePath()) : QString();
+    const QString fail = audio ? failPathFor(m.path) : QString();
     if (audio) {
         QFile f(fail);
-        if (f.open(QIODevice::ReadOnly) && f.readAll() == mtime.toLatin1()) return {};
+        if (f.open(QIODevice::ReadOnly) && f.readAll() == m.mtime.toLatin1()) return m;
     }
-    QImage img = mime.startsWith("video/") ? fromVideo(fi.absoluteFilePath(), size)
-               : audio ? fromAudio(fi.absoluteFilePath(), size)
-               : fromPicture(fi.absoluteFilePath(), size);
-    if (img.isNull()) {
+    m.image = mime.startsWith("video/") ? fromVideo(m.path, size)
+            : audio ? fromAudio(m.path, size, far)
+            : fromPicture(m.path, size);
+    if (m.image.isNull()) {
         if (audio) {
             QDir().mkpath(QFileInfo(fail).absolutePath());
             QFile f(fail);
-            if (f.open(QIODevice::WriteOnly)) f.write(mtime.toLatin1());
+            if (f.open(QIODevice::WriteOnly)) f.write(m.mtime.toLatin1());
         }
-        return {};
+        return m;
     }
-    img.setText("Thumb::URI", QString::fromUtf8(QUrl::fromLocalFile(fi.absoluteFilePath()).toEncoded()));
-    img.setText("Thumb::MTime", mtime);
-    QDir().mkpath(QFileInfo(cached).absolutePath());
-    // Written under a temporary name and renamed: another reader never sees
-    // half a file.
-    const QString tmp = cached + ".part";
-    if (img.save(tmp, "PNG") && !QFile::rename(tmp, cached)) {
-        QFile::remove(cached);
-        if (!QFile::rename(tmp, cached)) QFile::remove(tmp);
-    }
-    return img;
+    m.cached = cached;
+    m.shared = audio;
+    return m;
 }
 
 // The work, apart from the response: the engine may delete a response it no
@@ -344,19 +497,27 @@ QImage make(const QString& path, int size) {
 class Job : public QObject, public QRunnable {
     Q_OBJECT
 public:
-    Job(QString path, int size) : m_path(std::move(path)), m_size(size) {}
-    void run() override { emit done(make(m_path, m_size)); }
+    Job(QString path, int size, bool far, qint64 mtime)
+        : m_path(std::move(path)), m_size(size), m_far(far), m_mtime(mtime) {}
+    void run() override {
+        const Made m = make(m_path, m_size, m_far, m_mtime);
+        emit done(m.image);
+        store(m);
+    }
 signals:
     void done(const QImage& image);
 private:
     QString m_path;
     int m_size;
+    bool m_far;
+    qint64 m_mtime;
 };
 
 class Response : public QQuickImageResponse {
 public:
-    Response(const QString& path, QSize want, QThreadPool& pool) : m_want(want), m_pool(&pool) {
-        auto* job = new Job(path, sizeFor(want));
+    Response(const QString& path, qint64 mtime, QSize want, QThreadPool& pool, bool far)
+        : m_want(want), m_pool(&pool) {
+        auto* job = new Job(path, sizeFor(want), far, mtime);
         m_job = job;
         connect(job, &Job::done, this, [this](const QImage& image) {
             m_job = nullptr;
@@ -392,21 +553,35 @@ private:
 } // namespace
 
 ThumbProvider::ThumbProvider() {
-    // Three at a time where the files are far — a network share, a phone over
-    // USB — so the link is not asked for a hundred pictures at once. On this
-    // machine's own disks, as many as there are cores.
-    m_slow.setMaxThreadCount(3);
+    // Eight at a time where the files are far — a network share, a phone over
+    // USB — so the link is not asked for a hundred pictures at once. It was
+    // three, and a folder of songs on a share filled in three tiles at a
+    // time: each one is mostly waiting for the server, and gvfsd-fuse and
+    // the server both answer several requests together. On this machine's
+    // own disks, as many as there are cores.
+    m_slow.setMaxThreadCount(8);
     m_pool.setMaxThreadCount(std::max(4, QThread::idealThreadCount()));
 }
 
 QQuickImageResponse* ThumbProvider::requestImageResponse(const QString& id, const QSize& requestedSize) {
-    const QString path = QUrl::fromPercentEncoding(id.toUtf8());
+    // <percent-encoded path>, and ?mtime=<seconds> where the view knows it
+    // (a ? in the path itself is encoded, so the last one is ours). A file
+    // that changes gets a new address, and so a new thumbnail, by itself.
+    QString encoded = id;
+    qint64 mtime = -1;
+    if (const qsizetype q = id.lastIndexOf(u"?mtime="); q >= 0) {
+        bool ok = false;
+        const qint64 v = id.mid(q + 7).toLongLong(&ok);
+        if (ok) mtime = v;
+        encoded = id.left(q);
+    }
+    const QString path = QUrl::fromPercentEncoding(encoded.toUtf8());
     // gvfs (shares, MTP phones) and our own phone mounts live under the
     // runtime directory; removable drives under /run/media, /media and /mnt.
     static const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR", QStringLiteral("/run/user/"));
     const bool far = path.startsWith(runtime) || path.startsWith(u"/run/media/") || path.startsWith(u"/media/")
                   || path.startsWith(u"/mnt/");
-    return new Response(path, requestedSize, far ? m_slow : m_pool);
+    return new Response(path, mtime, requestedSize, far ? m_slow : m_pool, far);
 }
 
 } // namespace b1air

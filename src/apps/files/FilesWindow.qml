@@ -197,7 +197,13 @@ C.ApplicationWindow {
         return [head].concat(list.slice(at + 3));
     }
 
-    function thumbUrl(path) { return "image://thumb/" + encodeURIComponent(path); }
+    // With the file's mtime from the listing: thumbs.cpp then need not ask the
+    // disk — on a share, the server — before using the thumbnail it has, and
+    // a file that changes gets a new address and a new thumbnail.
+    function thumbUrl(path, modified) {
+        const t = modified ? modified.getTime() : NaN;
+        return "image://thumb/" + encodeURIComponent(path) + (isNaN(t) ? "" : "?mtime=" + Math.floor(t / 1000));
+    }
 
     // ── Kinds of file: one glyph and one colour each ─────────────────────────
     function glyphFor(category) {
@@ -1130,6 +1136,22 @@ C.ApplicationWindow {
                     // its thumbnails are being made before they scroll in.
                     reuseItems: true
                     cacheBuffer: Math.max(0, height)
+                    // The tiles laid out ahead ask for their thumbnails only
+                    // once the view has been still for a moment: asked at
+                    // once, they queued beside the ones on screen, and a
+                    // folder on a share filled in out of view first.
+                    property bool settled: false
+                    Timer {
+                        id: settleTimer
+                        interval: 250
+                        onTriggered: gridView.settled = true
+                    }
+                    function unsettle() { settled = false; settleTimer.restart(); }
+                    onContentYChanged: unsettle()
+                    onModelChanged: unsettle()
+                    onCountChanged: unsettle()
+                    readonly property string folder: window.currentPath
+                    onFolderChanged: unsettle()
                     focus: visible
                     boundsBehavior: Flickable.StopAtBounds
                     readonly property int columns: Math.max(1, Math.floor(width / cellWidth))
@@ -1153,8 +1175,27 @@ C.ApplicationWindow {
                         required property string category
                         required property string sizeText
                         required property var tags
+                        required property var modified
                         width: gridView.cellWidth
                         height: gridView.cellHeight
+
+                        readonly property bool hasThumb: tile.isImage || tile.category === "video" || tile.category === "audio"
+                        // From the index, not y: a new tile is at 0 until the
+                        // grid lays it out, and would count as on screen.
+                        readonly property real rowTop: Math.floor(index / gridView.columns) * gridView.cellHeight
+                        readonly property bool onScreen: rowTop + gridView.cellHeight > gridView.contentY - gridView.originY
+                                                         && rowTop < gridView.contentY - gridView.originY + gridView.height
+                        // Once asked for, kept: a tile scrolled just out of
+                        // view does not drop the picture it has.
+                        property bool thumbWanted: false
+                        function wantThumb() { if (!thumbWanted && (onScreen || gridView.settled)) thumbWanted = true; }
+                        onOnScreenChanged: wantThumb()
+                        Component.onCompleted: wantThumb()
+                        GridView.onReused: { thumbWanted = false; wantThumb(); }
+                        Connections {
+                            target: gridView
+                            function onSettledChanged() { tile.wantThumb(); }
+                        }
 
                         Rectangle {
                             id: tileBg
@@ -1180,8 +1221,8 @@ C.ApplicationWindow {
                                     id: thumb
                                     anchors.fill: parent
                                     // Made and cached in the background (thumbs.cpp), videos too.
-                                    visible: (tile.isImage || tile.category === "video" || tile.category === "audio") && status === Image.Ready
-                                    source: tile.isImage || tile.category === "video" || tile.category === "audio" ? window.thumbUrl(tile.path) : ""
+                                    visible: tile.hasThumb && status === Image.Ready
+                                    source: tile.hasThumb && tile.thumbWanted ? window.thumbUrl(tile.path, tile.modified) : ""
                                     sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
                                     fillMode: Image.PreserveAspectFit
                                     asynchronous: true
@@ -1618,6 +1659,7 @@ C.ApplicationWindow {
                             required property bool isImage
                             required property bool selected
                             required property string category
+                            required property var modified
                             y: Design.s(10)
                             width: Design.s(72)
                             height: Design.s(72)
@@ -1630,7 +1672,7 @@ C.ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: Design.s(4)
                                 visible: (gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio") && status === Image.Ready
-                                source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path) : ""
+                                source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path, gthumb.modified) : ""
                                 sourceSize: Qt.size(Design.s(144), Design.s(144))
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true

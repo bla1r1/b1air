@@ -11,12 +11,16 @@ namespace b1air {
  * The grid loaded every picture whole and scaled it in QML — a 12-megapixel
  * HEIC from an iPhone over USB a quarter of a second each, a folder of them
  * all at once, every time the folder was opened; and a video had no picture
- * at all. Here: made off the GUI thread, three at a time, kept in the
+ * at all. Here: made off the GUI thread (eight at a time from a share or a phone), kept in the
  * freedesktop thumbnail cache (~/.cache/thumbnails/large, the file's mtime in
  * it) so a folder opened again is there at once and other file managers share
  * them. Pictures through QImageReader (turned the way the camera held them),
  * videos as a frame from ffmpeg when it is installed, songs as their album
  * cover (tagged in, or a cover.jpg beside them).
+ *
+ * The address may end in ?mtime=<seconds> when the view knows the file's
+ * mtime already (Files, from the listing): the cache is then used without
+ * asking the disk, or the share, about the file first.
  *
  * Registered by b1air-files on its engine and by the B1air.Daemon plugin on
  * every engine that imports it (the shell, Settings): the wallpaper picker
