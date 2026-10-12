@@ -1131,12 +1131,14 @@ PanelWindow {
                         }
                     }
 
-                    // Remote desktop: shown while the server listens, red
-                    // while someone is connected. A click stops the server,
-                    // which drops every viewer — the one-click way out.
+                    // Remote desktop: shown while our VNC server listens, and
+                    // whenever someone is connected — by VNC or RustDesk (whose
+                    // service listens always, so only a session shows) — red
+                    // then. A click ends it: the VNC server stops, which drops
+                    // every viewer, and a RustDesk session is let go.
                     Rectangle {
-                        visible: Remote.running
-                        readonly property bool watched: Remote.clients > 0
+                        visible: Remote.running || Remote.rustdeskSession
+                        readonly property bool watched: Remote.viewers > 0
                         readonly property color tone: watched ? Design.red : Design.blue
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(18); height: Design.s(18)
@@ -1153,7 +1155,10 @@ PanelWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Remote.stop()
+                            onClicked: {
+                                if (Remote.rustdeskSession) Remote.stopRustdesk();
+                                if (Remote.running) Remote.stop();
+                            }
                         }
                     }
 

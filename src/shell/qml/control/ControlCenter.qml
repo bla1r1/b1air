@@ -83,7 +83,7 @@ PopupShell {
         if (id === "wifi") return Network.hasWifi;
         if (id === "bluetooth") return Network.hasBluetooth;
         if (id === "powermode") return Power.hasBattery || Power.hasProfiles;
-        if (id === "remote") return Remote.available;
+        if (id === "remote") return Remote.available || Remote.rustdeskInstalled;
         return true;
     }
 
@@ -716,11 +716,11 @@ PopupShell {
                 glyph: "\u{f0379}"
                 title: I18n.tr("Remote Desktop")
                 on: Remote.running
-                // Red while someone is actually watching: that is the state
-                // worth noticing, not the server merely listening.
-                // Red while someone is connected: that is worth noticing.
-                discColor: Remote.clients > 0 ? Design.danger : Design.accent
-                detail: !on ? I18n.tr("Off")
+                // Red while someone is connected: that is worth noticing —
+                // by our VNC or by RustDesk.
+                discColor: Remote.viewers > 0 ? Design.danger : Design.accent
+                detail: Remote.rustdeskSession ? I18n.tr("RustDesk session")
+                      : !on ? I18n.tr("Off")
                       : Remote.clients > 0 ? I18n.trn("%1 viewer connected", "%1 viewers connected", Remote.clients)
                       : I18n.tr("Waiting on port %1", Remote.port)
                 trailingGlyph: ""

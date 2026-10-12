@@ -342,6 +342,25 @@ build_swayfx_from_source() {
     hash -r
 }
 
+# The screencast portal with our patches (tools/build-xdpw.sh), started in
+# place of the distribution's by a drop-in for its user service. Without them
+# RustDesk showed a black screen. Skipped where that portal is not installed.
+install_portal() {
+    local script="$REPO_DIR/tools/build-xdpw.sh"
+    [[ -x /usr/lib/xdg-desktop-portal-wlr ]] || return 0
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would build the patched screencast portal ($script)"
+        return 0
+    fi
+    if "$script" --check; then
+        ok "Screencast portal (patched) is up to date"
+        return 0
+    fi
+    local deps="$REPO_DIR/packages/xdpw-build/${DISTRO}.txt"
+    [[ -f "$deps" ]] && install_package_set "$deps"
+    "$script" >&2 || warn "Screencast portal build failed; the distribution's stays in use (~/.cache/b1air/xdpw-build.log)."
+}
+
 # ── Quickshell ───────────────────────────────────────────────────────────────
 
 install_quickshell() {
@@ -1201,6 +1220,7 @@ main() {
         # Every run: cheap when our swayfx is up to date, and a build that
         # failed last time is tried again.
         install_compositor
+        install_portal
         step quickshell install_quickshell
         step gpu        install_gpu_drivers
         if [[ "$DISTRO" == "arch" ]]; then

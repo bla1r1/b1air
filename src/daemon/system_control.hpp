@@ -107,6 +107,36 @@ public:
     static bool remote_desktop_stop();
     static bool remote_desktop_toggle();
     static std::string remote_desktop_status_json();
+    // The remote servers as this session sees them: our VNC (wayvnc) and
+    // RustDesk. `rustdesk` is any RustDesk process of this account (the
+    // server the root service starts in the session, or the app itself);
+    // `rustdesk_session` a connection being served (its connection manager,
+    // `rustdesk --cm`, runs for exactly that long).
+    struct RemoteState {
+        bool vnc = false;
+        int vnc_clients = 0;
+        int vnc_port = 5900;
+        // Its pid file is there and it is not: it ended by itself (wayvnc
+        // exits when the screen it shows goes and no other is left).
+        bool vnc_died = false;
+        bool rustdesk_installed = false;
+        bool rustdesk = false;           // any RustDesk process (the app too)
+        bool rustdesk_serving = false;   // its server, taking connections
+        bool rustdesk_session = false;   // someone connected through it
+        bool viewer() const { return vnc_clients > 0 || rustdesk_session; }
+        bool serving() const { return vnc || rustdesk_serving; }
+    };
+    static RemoteState remote_state();
+    static bool rustdesk_service_enabled();
+    static bool rustdesk_service_set(bool on);
+    // The RustDesk session going on now ended: its connection manager (one
+    // per session) is closed, which lets the viewer go.
+    static bool rustdesk_disconnect();
+    // Its server ended, for RustDesk's service to start again (a session
+    // moved to the screen there is now).
+    static bool rustdesk_restart_server();
+    static bool rustdesk_open();
+    static bool rustdesk_service_available();
     static bool set_screencast_prompt_free(bool enable);
     static bool is_screencast_prompt_free();
     static bool sidecar_create_virtual_display(int width = 1920, int height = 1080);
@@ -273,6 +303,8 @@ public:
     // them to `b1air-daemon lid close|open` and `power-key`; the idle thread
     // tells logind to leave them to us while those bindings are there).
     static bool lid_event(bool closed);
+    // What closing the lid does for the power source now (Settings → Power).
+    static std::string lid_action();
     static bool power_key();
 
     // System updates and the brightness status line.

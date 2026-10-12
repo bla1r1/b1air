@@ -123,9 +123,13 @@ install:
 	cp -a ../.local/share/icons/b1air-cursors $(DATADIR)/icons/
 	# The B1air.Daemon QML module goes on Qt's import path, which only root can
 	# write. A per-user install leaves it to install.sh, which asks for sudo.
+	# rsync, not cp: cp wrote the new plugin into the old file, the one the
+	# running shell has mapped, and the shell crashed (SIGSEGV) on every
+	# install. rsync writes beside it and renames: the shell keeps the old
+	# copy until it restarts below.
 	@qt_qml="$$(cat $(BUILD)/qt-qml-dir 2>/dev/null)"; \
 	if [ -n "$$qt_qml" ] && [ -w "$$qt_qml" ]; then \
-		cp -r $(BUILD)/qml/B1air "$$qt_qml/" && echo "B1air.Daemon -> $$qt_qml"; \
+		rsync -rlpt $(BUILD)/qml/B1air "$$qt_qml/" && echo "B1air.Daemon -> $$qt_qml"; \
 	fi
 	# podsync (../third_party/podsync, a submodule): the iPod engine Files
 	# drives through b1air-podsync. Python, so it is copied rather than built;
@@ -139,10 +143,21 @@ install:
 	else echo "third_party/podsync is empty (git submodule update --init): no iPod support." >&2; fi
 	mkdir -p $(CONFDIR)/environment.d
 	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/
-	# A running shell keeps its old singletons while pages load the new files;
-	# reload it so both are the installed version.
-	-for p in $$(pgrep -u $$(id -u) -f "^quickshell -p $(QMLDIR)/Main.qml$$"); do \
-		quickshell ipc --pid $$p call main forceReload >/dev/null 2>&1; done
+	# What is running goes over to what was installed, as the person whose
+	# session it is: under sudo, `id -u` was root's, and neither the shell nor
+	# the daemon was ever found. The session daemon execs the new binary in
+	# its place (session-restart; it went on running the old one until the
+	# next login); then the shell, which keeps its old singletons while pages
+	# load the new files, is restarted by it. By name: quickshell rewrites its
+	# command line to its own path, so the `-p …/Main.qml` this looked for
+	# was never there and the reload never happened either.
+	-@u="$${SUDO_USER:-$$(id -un)}"; uid="$$(id -u "$$u")"; \
+	as_user() { if [ "$$(id -u)" = 0 ] && [ "$$uid" != 0 ]; then \
+		sudo -u "$$u" env XDG_RUNTIME_DIR=/run/user/$$uid "$$@"; else "$$@"; fi; }; \
+	as_user $(PREFIX)/b1air-daemon session-restart >/dev/null && echo "Session daemon restarted"; \
+	sleep 1; \
+	for p in $$(pgrep -u "$$uid" -x quickshell); do \
+		as_user quickshell ipc --pid $$p call main forceReload >/dev/null 2>&1; done; true
 
 # The static checks run anywhere; shell-boot needs a Wayland session and skips
 # itself without one.

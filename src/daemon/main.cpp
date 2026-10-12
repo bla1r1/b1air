@@ -22,6 +22,7 @@
 #include <chrono>
 #include <thread>
 #include <csignal>
+#include "proc_scan.hpp"
 #include <cstdlib>
 #include <unistd.h>
 #include <fcntl.h>
@@ -207,6 +208,28 @@ int main(int argc, char* argv[]) {
         return DaemonDBus::run_service();
     } else if (cmd == "session" || cmd == "start-session") {
         return SessionManager::run_session();
+    } else if (cmd == "session-restart") {
+        // The running session daemon execs the installed binary in its place
+        // (session_manager.cpp says how). src/Makefile's install runs this.
+        // Only the daemon that wrote session.pid knows SIGUSR1; one from
+        // before would be ended by it, so that one is left for a new login.
+        std::string pid_text;
+        {
+            std::ifstream f(runtime_path("session.pid"));
+            std::getline(f, pid_text);
+        }
+        const long pid = std::strtol(pid_text.c_str(), nullptr, 10);
+        bool ours = false;
+        b1air::proc::for_each([&](const b1air::proc::Process& p) {
+            if (p.pid == pid && p.exe_name == "b1air-daemon"
+                && (p.cmdline.ends_with(" session") || p.cmdline.ends_with(" start-session"))) ours = true;
+            return !ours;
+        });
+        if (!ours) {
+            std::cerr << "The session daemon running now cannot restart itself (it predates this, or none is running): log out and back in to start the installed one.\n";
+            return 1;
+        }
+        return ::kill(static_cast<pid_t>(pid), SIGUSR1) == 0 ? 0 : 1;
     } else if (cmd == "settings") {
         std::string sub = (argc >= 3) ? argv[2] : "apply";
         if (sub == "watch") {
@@ -444,6 +467,14 @@ int main(int argc, char* argv[]) {
             return SystemControl::remote_desktop_stop() ? 0 : 1;
         } else if (sub == "toggle") {
             return SystemControl::remote_desktop_toggle() ? 0 : 1;
+        } else if (sub == "rustdesk-open") {
+            return SystemControl::rustdesk_open() ? 0 : 1;
+        } else if (sub == "rustdesk-disconnect") {
+            return SystemControl::rustdesk_disconnect() ? 0 : 1;
+        } else if (sub == "rustdesk") {
+            // RustDesk's service on or off for good (asks for the password).
+            if (argc < 4 || (std::string(argv[3]) != "on" && std::string(argv[3]) != "off")) return 1;
+            return SystemControl::rustdesk_service_set(std::string(argv[3]) == "on") ? 0 : 1;
         } else if (sub == "prompt-free") {
             if (argc < 4 || (std::string(argv[3]) != "on" && std::string(argv[3]) != "off")) return 1;
             bool en = std::string(argv[3]) == "on";

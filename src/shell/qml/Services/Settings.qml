@@ -72,6 +72,8 @@ Singleton {
     // Websites' passkeys from the phone, over a QR code (src/passkey). On
     // unless turned off; the key exists only where there is Bluetooth.
     readonly property alias passkeyPhone: data.passkeyPhone
+    // A virtual screen for remote sessions when none is on (daemon remote_display).
+    readonly property alias remoteVirtualDisplay: data.remoteVirtualDisplay
     // File names indexed for Spotlight (daemon/file_index).
     readonly property alias fileIndex: data.fileIndex
     readonly property alias dimTimeout: data.dimTimeout
@@ -519,6 +521,7 @@ Singleton {
         lockSecondaryOff: true,
         fingerprintUnlock: true,
         passkeyPhone: true,
+        remoteVirtualDisplay: true,
         fileIndex: true,
         dimTimeout: 240,
         lockTimeout: 300,
@@ -683,6 +686,7 @@ Singleton {
             property bool lockSecondaryOff: true
             property bool fingerprintUnlock: true
             property bool passkeyPhone: true
+            property bool remoteVirtualDisplay: true
             property bool fileIndex: true
             property int dimTimeout: 240
             property int lockTimeout: 300

@@ -4,6 +4,7 @@
 #include "magic_mouse.hpp"
 #include "file_index.hpp"
 #include "idle.hpp"
+#include "remote_display.hpp"
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "focustime_db.hpp"
@@ -31,6 +32,9 @@
 #include <mutex>
 #include <chrono>
 #include <sstream>
+#include <linux/close_range.h>
+#include <fstream>
+#include <dirent.h>
 
 namespace b1air {
 
@@ -38,6 +42,44 @@ static volatile sig_atomic_t g_session_running = 1;
 
 static void session_sig_handler(int) {
     g_session_running = 0;
+}
+
+// ── Taking over from itself ──────────────────────────────────────────────────
+//
+// An install put the new daemon on disk and left the old one running for the
+// rest of the session: nothing restarted it, and it cannot simply be stopped
+// and started again — sway started it, and it is the parent of the shell and
+// the background. `b1air-daemon session-restart` (src/Makefile's install)
+// sends SIGUSR1, and the session execs the installed binary in place: the
+// same process to sway, the same parent to its children. The new one knows
+// it was resumed and does not do again what a login does once (autostart,
+// the agents), and takes the shell and the background it finds as its own.
+static volatile sig_atomic_t g_reexec = 0;
+static void session_reexec_handler(int) { g_reexec = 1; }
+
+// A child of this process by its kernel name, a zombie included — after an
+// exec, the shell and the background are still our children, but no thread
+// is waiting on them.
+static pid_t own_child(const char* comm) {
+    const pid_t self = getpid();
+    DIR* dir = opendir("/proc");
+    if (!dir) return 0;
+    pid_t found = 0;
+    while (const struct dirent* e = readdir(dir)) {
+        char* end = nullptr;
+        const long pid = std::strtol(e->d_name, &end, 10);
+        if (!end || *end || pid <= 0) continue;
+        std::ifstream f(std::string("/proc/") + e->d_name + "/stat");
+        std::string line;
+        if (!std::getline(f, line)) continue;
+        const size_t open = line.find('('), close = line.rfind(')');
+        if (open == std::string::npos || close == std::string::npos || close + 4 >= line.size()) continue;
+        if (line.compare(open + 1, close - open - 1, comm) != 0) continue;
+        // After ") S ": the parent.
+        if (std::strtol(line.c_str() + close + 4, nullptr, 10) == self) { found = static_cast<pid_t>(pid); break; }
+    }
+    closedir(dir);
+    return found;
 }
 
 
@@ -393,6 +435,39 @@ void SessionManager::run_autotiler() {
 int SessionManager::run_session() {
     std::signal(SIGINT, session_sig_handler);
     std::signal(SIGTERM, session_sig_handler);
+    std::signal(SIGUSR1, session_reexec_handler);
+    // Who answers session-restart: a daemon from before it existed is ended
+    // by SIGUSR1 (the default action), so the command signals only the one
+    // named here.
+    {
+        const std::string pid_file = runtime_path("session.pid");
+        const int fd = open(pid_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
+        if (fd >= 0) {
+            const std::string pid = std::to_string(getpid()) + "\n";
+            (void)!write(fd, pid.data(), pid.size());
+            close(fd);
+        }
+    }
+    // Where this binary is, read now: once an install has replaced it the
+    // link reads "… (deleted)".
+    std::string self_exe;
+    {
+        char buf[4096];
+        const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (n > 0) self_exe.assign(buf, static_cast<size_t>(n));
+    }
+    const char* resumed_env = std::getenv("B1AIR_SESSION_RESUMED");
+    const bool resumed = resumed_env && std::string(resumed_env) == "1";
+    unsetenv("B1AIR_SESSION_RESUMED");   // not for anything this starts
+    if (resumed) std::cerr << "[b1air-session] resumed in the installed daemon\n";
+    // What an earlier session left in the runtime directory is none of this
+    // one's: the lid state it heard, remote_display's and the tablet's
+    // outputs. The directory can outlive a login (linger, another session),
+    // and a stale name would be matched against this session's first
+    // virtual screen.
+    else
+        for (const char* stale : {"lid-state", "lid-deferred", "sidecar-output", "remote-display.json"})
+            std::remove(runtime_path(stale).c_str());
 
     // Startup is occasionally slow enough to notice, with no clear single
     // cause — these timestamps turn the next slow boot into a log line
@@ -518,6 +593,13 @@ int SessionManager::run_session() {
         std::thread bg_supervisor([] {
             constexpr int kMaxRestarts = 5;
             int restarts = 0;
+            // The background started before a session-restart: still our
+            // child, waited on before one is started again.
+            if (const pid_t adopted = own_child("b1air-bg"); adopted > 0) {
+                int status = 0;
+                while (waitpid(adopted, &status, 0) < 0 && errno == EINTR) {}
+                if (!g_session_running || (WIFEXITED(status) && WEXITSTATUS(status) == 0)) return;
+            }
             while (g_session_running) {
                 const char* argv[] = {"b1air-bg", nullptr};
                 posix_spawnattr_t attr;
@@ -549,7 +631,7 @@ int SessionManager::run_session() {
 
     // Night light was saved as on and never turned back on: the toggle kept
     // saying "Enabled" at every login over a screen at full blue.
-    if (SettingsManager::get_json_bool("nightLightEnabled", false)) {
+    if (!resumed && SettingsManager::get_json_bool("nightLightEnabled", false)) {
         SystemControl::night_light_on(SettingsManager::get_json_int("nightLightTemp", 4000), false);
         mark("night light restored");
     }
@@ -597,13 +679,13 @@ int SessionManager::run_session() {
     settings_th.detach();
 
     // 7. Launch Polkit Agent
-    if (!is_process_running("b1air-daemon polkit") && !is_process_running("polkit-gnome")) {
+    if (!resumed && !is_process_running("b1air-daemon polkit") && !is_process_running("polkit-gnome")) {
         spawn_argv_detached({"b1air-polkit-agent"});
     }
 
     // 8. The phone as a security key (src/passkey). Always started: it reads
     //    its switch (passkeyPhone) itself and holds no device while it is off.
-    if (!is_process_running("b1air-passkey")) {
+    if (!resumed && !is_process_running("b1air-passkey")) {
         spawn_argv_detached({"b1air-passkey"});
     }
 
@@ -613,6 +695,10 @@ int SessionManager::run_session() {
     (void)proc::kill_all("swayidle");
     std::thread idle_th([]() { idle::run(&g_session_running); });
     idle_th.detach();
+
+    // A screen for remote viewers when there is none here (remote_display.hpp).
+    std::thread remote_th([]() { remote_display::run(&g_session_running); });
+    remote_th.detach();
 
     // 10. The desktop shell, and a supervisor that owns it.
     //
@@ -667,6 +753,13 @@ int SessionManager::run_session() {
             // the desktop comes up with no shell at all, which is how this was
             // found: a test script named the binary, the guard saw it, and the
             // bar never appeared.
+            // Unless it is ours already: the session restarted itself into a
+            // new daemon (session-restart) and the shell it started before is
+            // still its child. Waited on, as any shell it started.
+            if (const pid_t adopted = own_child("quickshell"); adopted > 0) {
+                int status = 0;
+                while (waitpid(adopted, &status, 0) < 0 && errno == EINTR) {}
+            }
             while (g_session_running
                    && proc::running("quickshell")) {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -777,8 +870,9 @@ int SessionManager::run_session() {
     }
     mark("renderer detection done");
 
-    // 12. Autostart Applications from settings.json
-    for (const auto& app : settings.autostartApps) {
+    // 12. Autostart Applications from settings.json — at login, not again
+    // when an install restarts the daemon.
+    for (const auto& app : resumed ? std::vector<std::string>{} : settings.autostartApps) {
         if (app == "telegram" && !is_process_running("telegram-desktop")) {
             spawn_argv_detached({"telegram-desktop", "-startintray"});
         } else if (app == "discord" && !is_process_running("discord") && !is_process_running("vesktop")) {
@@ -791,7 +885,7 @@ int SessionManager::run_session() {
         }
     }
 
-    for (const auto& custom_cmd : settings.autostartCustom) {
+    for (const auto& custom_cmd : resumed ? std::vector<std::string>{} : settings.autostartCustom) {
         // A program and its arguments, split at spaces: Settings refuses
         // shell syntax in these (quotes, $, ;, |, & …), so there is nothing
         // a shell would add, and none is started for them.
@@ -834,6 +928,25 @@ int SessionManager::run_session() {
     // Main session loop processing D-Bus messages with kernel epoll (0% CPU)
     auto sway_checked = std::chrono::steady_clock::now();
     while (g_session_running) {
+        if (g_reexec) {
+            g_reexec = 0;
+            if (!self_exe.empty() && access(self_exe.c_str(), X_OK) == 0) {
+                std::cerr << "[b1air-session] restarting into the installed " << self_exe << "\n";
+                if (dbus) sd_bus_flush(dbus);
+                // Every descriptor but the three standard ones closes with the
+                // exec — the bus, the inhibitors, the databases — so the new
+                // daemon takes them afresh; and if the exec fails, nothing is
+                // lost and this one goes on.
+                close_range(3, ~0U, CLOSE_RANGE_CLOEXEC);
+                setenv("B1AIR_SESSION_RESUMED", "1", 1);
+                const char* args[] = {self_exe.c_str(), "session", nullptr};
+                execv(self_exe.c_str(), const_cast<char* const*>(args));
+                unsetenv("B1AIR_SESSION_RESUMED");
+                std::cerr << "[b1air-session] could not restart: " << std::strerror(errno) << "\n";
+            } else {
+                std::cerr << "[b1air-session] cannot restart: " << self_exe << " is not there\n";
+            }
+        }
         if (!session_swaysock.empty()
             && std::chrono::steady_clock::now() - sway_checked >= std::chrono::seconds(2)) {
             sway_checked = std::chrono::steady_clock::now();

@@ -1,0 +1,4 @@
+# Build dependencies of the patched screencast portal (tools/build-xdpw.sh).
+# Format: see lib/distro.sh.
+meson ninja pkgconf git gcc
+wayland wayland-protocols libdrm mesa libinih libpipewire systemd-libs

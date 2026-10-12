@@ -2372,5 +2372,16 @@
  "Play (Space)": "Грати (Пробіл)",
  "Previous (Page Up)": "Назад (Page Up)",
  "Shares on %1": "Спільні папки на %1",
- "Viewer": "Перегляд"
+ "Viewer": "Перегляд",
+ "Back to the saved file": "Повернути збережений файл",
+ "Let go of the changes to %1 and show it as it is on disk?": "Відкинути зміни в %1 і показати файл таким, як він на диску?",
+ "Save changes to %1 before closing it?": "Зберегти зміни в %1 перед закриттям?",
+ "End the session": "Завершити сеанс",
+ "In use: %1": "Використовується: %1",
+ "Not installed": "Не встановлено",
+ "Open RustDesk": "Відкрити RustDesk",
+ "Remote access with RustDesk": "Віддалений доступ через RustDesk",
+ "RustDesk session": "Сеанс RustDesk",
+ "Someone is connected": "Хтось підключений",
+ "Virtual screen when none is on": "Віртуальний екран, коли жоден не ввімкнено"
 }

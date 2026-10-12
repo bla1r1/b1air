@@ -390,6 +390,21 @@ update_compositor() {
     "$script" >&2 || warn "swayfx rebuild failed; keeping the installed one. See ~/.cache/b1air/swayfx-build.log"
 }
 
+# The screencast portal with our patches (tools/build-xdpw.sh): without them
+# RustDesk's picture went black on connecting. Only where the distribution's
+# portal is installed (sway sessions); rebuilt only when its version or
+# patches change.
+update_portal() {
+    local script="$REPO_DIR/tools/build-xdpw.sh"
+    [[ -x "$script" && -x /usr/lib/xdg-desktop-portal-wlr ]] || return 0
+    if "$script" --check; then
+        ok "Screencast portal is up to date."
+        return 0
+    fi
+    log "Screencast portal patches or version changed; rebuilding it..."
+    "$script" >&2 || warn "Screencast portal build failed; the distribution's stays in use. See ~/.cache/b1air/xdpw-build.log"
+}
+
 # Nothing under src/ different from what was last installed: no build, no
 # install. Local edits in src/ always count as a change.
 suite_unchanged() {
@@ -483,6 +498,7 @@ main() {
     # ponytail: configs without binaries = stale suite after a source change
     if [[ "$CONFIGS_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
         update_compositor
+        update_portal
         update_suite
     fi
     if [[ "$CONFIGS_ONLY" -eq 0 ]]; then

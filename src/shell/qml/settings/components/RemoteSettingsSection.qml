@@ -149,12 +149,59 @@ ColumnLayout {
         }
     }
 
+    // ── RustDesk ─────────────────────────────────────────────────────────────
+    // Beside our VNC: its service on or off (it starts a RustDesk server in
+    // every session after a login), the app, and the session going on.
+    Card {
+        title: "RustDesk"
+        icon: "\u{f0379}"
+        accentColor: Design.teal
+
+        Toggle {
+            visible: !Remote.rustdeskInstalled || Remote.rustdeskServiceAvailable
+            label: I18n.tr("Remote access with RustDesk")
+            subtitle: !Remote.rustdeskInstalled ? I18n.tr("Not installed")
+                    : Remote.rustdeskSession ? I18n.tr("Someone is connected") : ""
+            enabled: Remote.rustdeskInstalled
+            checked: Remote.rustdeskService
+            onToggled: Remote.setRustdeskService(!Remote.rustdeskService)
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: Remote.rustdeskInstalled
+            spacing: Design.s(Design.space.sm)
+            ActionButton {
+                label: I18n.tr("Open RustDesk")
+                icon: "\u{f0379}"
+                onActivated: Remote.openRustdesk()
+            }
+            ActionButton {
+                visible: Remote.rustdeskSession
+                label: I18n.tr("End the session")
+                icon: "\u{f0156}"
+                onActivated: Remote.stopRustdesk()
+            }
+        }
+
+    }
+
     // ── 2. Unattended Screen Sharing & Permissions ───────────────────────────
     Card {
         title: I18n.tr("Unattended Remote Access & Permissions")
         subtitle: I18n.tr("Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS")
         icon: "\u{f016d}"
         accentColor: Design.teal
+
+        // With the lid closed or no monitor plugged in, a virtual screen
+        // for remote sessions (VNC or RustDesk), the windows on it — ready
+        // before anyone connects, so their picture never goes away.
+        Toggle {
+            label: I18n.tr("Virtual screen when none is on")
+            subtitle: Remote.virtualOutput !== "" ? I18n.tr("In use: %1", Remote.virtualOutput) : ""
+            checked: Settings.remoteVirtualDisplay !== false
+            onToggled: Settings.set("remoteVirtualDisplay", !(Settings.remoteVirtualDisplay !== false))
+        }
 
         // Prompt-Free Screencast Toggle
         Toggle {

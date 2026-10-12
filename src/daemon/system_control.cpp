@@ -2,6 +2,7 @@
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "proc_scan.hpp"
+#include "remote_display.hpp"
 #include "notify.hpp"
 #include "backlight.hpp"
 #include <optional>
@@ -669,9 +670,31 @@ bool SystemControl::lock_session() {
 }
 
 bool SystemControl::logout_session() {
-    if (logind_session_call("TerminateSession")) return true;
+    // The compositor first: sway exiting is the session ending the way the
+    // display manager expects — the process SDDM started returns, and its
+    // helper reports a session over. This asked logind to TerminateSession
+    // first, which signals everything in the session's scope at once, SDDM's
+    // helper with it; SDDM took that for a crash ("sddm-helper crashed",
+    // "Process crashed"), never put the login screen back, and logging out
+    // left a black screen and a blinking cursor until a power-off.
+    //
+    // Whether sway answered is no sign of anything: it stops its event loop
+    // as it runs `exit`, and the reply is often never sent. Read as "it would
+    // not go", that sent TerminateSession the same instant — the crash above,
+    // back whenever the reply lost the race. Gone is gone: its socket away,
+    // or no longer answering.
     SwayIPC ipc;
-    return ipc.connect() && ipc.send_command(0, "exit").find("success") != std::string::npos;
+    if (ipc.connect()) {
+        (void)ipc.send_command(0, "exit");
+        const char* sock = std::getenv("SWAYSOCK");
+        for (int i = 0; i < 50; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (sock && *sock ? access(sock, F_OK) != 0 : !SwayIPC().connect()) return true;
+            if (sock && *sock && !SwayIPC().connect()) return true;
+        }
+    }
+    // No sway to ask, or one that would not go: the session, by logind.
+    return logind_session_call("TerminateSession");
 }
 
 bool SystemControl::suspend_system() {
@@ -718,15 +741,27 @@ bool internal_output(const std::string& name) {
 } // namespace
 
 bool SystemControl::lid_event(bool closed) {
+    // As heard here, for remote_display: not every lid is an ACPI button.
+    (void)write_private_file(runtime_path("lid-state"), closed ? "closed\n" : "open\n");
     SwayIPC ipc;
     std::vector<std::string> internal, external;
+    // Screens nobody here looks at are not a dock: the remote sessions'
+    // virtual one and the tablet's. Counted as external, a closed lid with
+    // the virtual screen up was "docked", and never put the laptop to sleep.
+    std::string sidecar;
+    {
+        std::ifstream in(runtime_path("sidecar-output"));
+        in >> sidecar;
+    }
+    const std::string virt = remote_display::virtual_output();
     if (ipc.connect()) {
         const auto outputs = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
         if (outputs.is_array())
             for (const auto& o : outputs) {
                 if (!o.value("active", false)) continue;
                 const std::string n = o.contains("name") && o["name"].is_string() ? o["name"].get<std::string>() : "";
-                if (!n.empty()) (internal_output(n) ? internal : external).push_back(n);
+                if (n.empty() || n == virt || n == sidecar) continue;
+                (internal_output(n) ? internal : external).push_back(n);
             }
     }
     auto power = [&](const std::vector<std::string>& names, bool on) {
@@ -736,12 +771,23 @@ bool SystemControl::lid_event(bool closed) {
         // Back to what was there: the built-in screen on, unless the lock
         // keeps the others dark (the idle thread wakes the main one).
         power(internal, true);
+        remote_display::poke();   // a virtual screen standing in for it goes
         return true;
     }
     // Docked — another screen connected — the lid only puts the built-in one
     // away, as logind's HandleLidSwitchDocked=ignore and every desktop do.
     if (!external.empty() && SettingsManager::get_json_bool("lidIgnoreDocked", true)) {
         power(internal, false);
+        return true;
+    }
+    // Someone connected from afar: the machine stays up under them. The
+    // built-in screen goes dark, and a virtual one takes its place
+    // (remote_display); what the lid does happens when they have gone.
+    if (remote_state().viewer()) {
+        power(internal, false);
+        // Done once they have been gone a while (remote_display).
+        (void)write_private_file(runtime_path("lid-deferred"), "1\n");
+        remote_display::poke();
         return true;
     }
     const std::string action = power_action("lidAction", "sleep");
@@ -752,6 +798,8 @@ bool SystemControl::lid_event(bool closed) {
     power(internal, false);   // nothing: but a closed lid shows nothing anyway
     return true;
 }
+
+std::string SystemControl::lid_action() { return power_action("lidAction", "sleep"); }
 
 bool SystemControl::power_key() {
     const std::string action = power_action("powerKeyAction", "ask");
@@ -1437,6 +1485,10 @@ std::string SystemControl::pick_color() {
 }
 
 // ── Window Minimization & Window Switcher ────────────────────────────────────
+namespace {
+std::vector<int64_t> minimized_ids(SwayIPC& ipc);
+}
+
 bool SystemControl::window_minimize() {
     SwayIPC ipc;
     if (!ipc.connect()) return false;
@@ -1449,9 +1501,16 @@ bool SystemControl::window_restore(int64_t con_id) {
     if (!ipc.connect()) return false;
     std::string cmd;
     if (con_id > 0) {
-        cmd = "[con_id=" + std::to_string(con_id) + "] scratchpad show; [con_id=" + std::to_string(con_id) + "] focus; [con_id=" + std::to_string(con_id) + "] mark --toggle _b1air_minimized";
+        // unmark, not mark --toggle: a window minimized by its own button
+        // has no mark, and toggling gave it one as it came back.
+        const std::string sel = "[con_id=" + std::to_string(con_id) + "] ";
+        cmd = sel + "scratchpad show; " + sel + "focus; " + sel + "unmark _b1air_minimized";
     } else {
-        cmd = "[con_mark=\"_b1air_minimized\"] scratchpad show; [con_mark=\"_b1air_minimized\"] focus; [con_mark=\"_b1air_minimized\"] mark --toggle _b1air_minimized";
+        // The last one minimized, by the shortcut or by its own button.
+        const auto hidden = minimized_ids(ipc);
+        if (hidden.empty()) return false;
+        const std::string sel = "[con_id=" + std::to_string(hidden.back()) + "] ";
+        cmd = sel + "scratchpad show; " + sel + "focus; " + sel + "unmark _b1air_minimized";
     }
     std::string resp = ipc.send_command(0, cmd);
     return (resp.find("\"success\":true") != std::string::npos || resp.find("\"success\": true") != std::string::npos);
@@ -1464,14 +1523,7 @@ bool SystemControl::window_toggle_minimize() {
 int SystemControl::window_count_minimized() {
     SwayIPC ipc;
     if (!ipc.connect()) return 0;
-    std::string tree = ipc.send_command(4, "");
-    int count = 0;
-    size_t pos = 0;
-    while ((pos = tree.find("\"_b1air_minimized\"", pos)) != std::string::npos) {
-        count++;
-        pos += 18;
-    }
-    return count;
+    return static_cast<int>(minimized_ids(ipc).size());
 }
 
 namespace {
@@ -1569,11 +1621,35 @@ std::string node_app_id(const nlohmann::json& n) {
     return "application";
 }
 
+// The minimized windows, in the order they went: those the shortcut or the
+// dock minimized (marked), and those minimized by their own button, which
+// swayfx (scratchpad_minimize) sends to the scratchpad unmarked. The
+// scratchpad's other windows — the drop-down terminal, ones sent there on
+// purpose — are hidden too, and come back the same way.
+std::vector<int64_t> minimized_ids(SwayIPC& ipc) {
+    std::vector<int64_t> ids;
+    nlohmann::json tree;
+    try { tree = nlohmann::json::parse(ipc.send_command(4, "")); }
+    catch (const std::exception&) { return ids; }
+    walk_tree(tree, [&](const nlohmann::json& n) {
+        if (json_str(n, "type", "") != "workspace") return;
+        if (json_str(n, "name", "") == "__i3_scratch") {
+            walk_tree(n, [&](const nlohmann::json& w) {
+                if (!is_window(w) || node_app_id(w) == "b1air-dropdown") return;
+                const int64_t id = w.value("id", static_cast<int64_t>(0));
+                if (id > 0) ids.push_back(id);
+            });
+        }
+    });
+    return ids;
+}
+
 } // namespace
 
 std::string SystemControl::window_list_minimized_json() {
     SwayIPC ipc;
     if (!ipc.connect()) return "[]";
+    const std::vector<int64_t> hidden = minimized_ids(ipc);
 
     nlohmann::json tree;
     try { tree = nlohmann::json::parse(ipc.send_command(4, "")); }
@@ -1584,14 +1660,8 @@ std::string SystemControl::window_list_minimized_json() {
         if (!is_window(n)) return;
         if (!n.contains("marks") || !n["marks"].is_array()) return;
 
-        bool minimized = false;
-        for (const auto& mark : n["marks"])
-            if (mark.is_string() && mark.get<std::string>().find("_b1air_minimized") != std::string::npos)
-                minimized = true;
-        if (!minimized) return;
-
         const int64_t id = n.value("id", static_cast<int64_t>(0));
-        if (id <= 0) return;
+        if (id <= 0 || std::find(hidden.begin(), hidden.end(), id) == hidden.end()) return;
         items.push_back("{\"id\":" + std::to_string(id)
                         + ",\"name\":\"" + json_escape(json_str(n, "name", "Window"))
                         + "\",\"app_id\":\"" + json_escape(node_app_id(n)) + "\"}");
@@ -1886,7 +1956,12 @@ bool SystemControl::appearance_apply() {
         }
         // The scheme the rest of this function resolved, so the greeter shows
         // the same light or dark face the session does.
-        qml += std::string("    readonly property bool dark: ") + (dark ? "true" : "false") + "\n}\n";
+        qml += std::string("    readonly property bool dark: ") + (dark ? "true" : "false") + "\n";
+        // And the language the lock screen speaks, which the greeter's own
+        // locale (the system's) need not be.
+        std::string lang = SettingsManager::get_json_string("uiLanguage");
+        if (lang.find_first_not_of("abcdefghijklmnopqrstuvwxyz_") != std::string::npos) lang.clear();
+        qml += "    readonly property string lang: \"" + lang + "\"\n}\n";
         (void)write_file_best_effort("/var/cache/wallpaper/Palette.qml", qml);
     }
     return true;
@@ -2264,6 +2339,7 @@ void SystemControl::watch_outputs() {
         if (key.empty() || key == last) return;
         last = key;
         std::cerr << "[b1air-displays] screens now: " << key << "\n";
+        remote_display::poke();
         monitors_restore();
         monitors_arm_hotplug();
     });
@@ -4882,6 +4958,14 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
     // grim writes png and jpeg itself; webp is converted afterwards.
     grim_args.push_back("-t");
     grim_args.push_back(format == "webp" ? "png" : ext);
+    // PNG at zlib's level 3, not grim's 6: the shot is in the clipboard, and
+    // the sound plays, only once it is written. A 1920×1080 desktop took
+    // 0.62 s at 6 and 0.26 s at 3, for a file 13% larger; the PNG that only
+    // becomes a WebP is not kept at all, and takes the fastest level.
+    if (format == "png" || format == "webp") {
+        grim_args.push_back("-l");
+        grim_args.push_back(format == "webp" ? "1" : "3");
+    }
     if (!selected.empty()) { grim_args.push_back("-g"); grim_args.push_back(selected); }
     grim_args.push_back(filepath);
     if (!run_argv_status(grim_args)) return false;
@@ -5032,8 +5116,10 @@ bool SystemControl::record_toggle(const std::string& geom, double desk_vol, doub
 
 std::string SystemControl::scan_qr(const std::string& geom) {
     if (!geom.empty() && !valid_geometry(geom)) return "";
-    std::string tmp_img = runtime_path(("qr-scan-" + std::to_string(getpid()) + ".png").c_str());
-    std::vector<std::string> grim_args = {"grim"};
+    // Read once and deleted: uncompressed, which grim writes in a fraction of
+    // the time a PNG takes it (38 ms against 620 for a whole screen).
+    std::string tmp_img = runtime_path(("qr-scan-" + std::to_string(getpid()) + ".ppm").c_str());
+    std::vector<std::string> grim_args = {"grim", "-t", "ppm"};
     if (!geom.empty()) { grim_args.push_back("-g"); grim_args.push_back(geom); }
     grim_args.push_back(tmp_img);
     if (!run_argv_status(grim_args)) return "";
@@ -5278,6 +5364,9 @@ bool SystemControl::remote_desktop_start(int port, const std::string& password) 
         execlp("wayvnc", "wayvnc", "--render-cursor", "-C", config_path.c_str(), nullptr);
         _exit(127);
     }
+    // The port, apart from the config (which holds the password and goes
+    // with the server): to start it again where it was.
+    (void)write_private_file(runtime_path("wayvnc.port"), std::to_string(port) + "\n");
     if (!write_private_file(pid_file, std::to_string(child) + "\n")) {
         (void)::kill(child, SIGTERM);
         return false;
@@ -5288,12 +5377,14 @@ bool SystemControl::remote_desktop_start(int port, const std::string& password) 
 bool SystemControl::remote_desktop_stop() {
     const std::string pid_file = runtime_path("wayvnc.pid");
     const pid_t pid = runtime_pid(pid_file);
+    // The pid file first: one left beside a server that is gone means it
+    // ended by itself (remote_state's vnc_died), and a stop is not that.
+    unlink(pid_file.c_str());
     if (pid > 0) {
         (void)::kill(pid, SIGTERM);
         std::this_thread::sleep_for(std::chrono::milliseconds(150));
         (void)::kill(pid, SIGKILL);
     }
-    unlink(pid_file.c_str());
     // The config contains the VNC password. It must not survive the server.
     unlink(runtime_path("wayvnc.conf").c_str());
     unlink(runtime_path("wayvnc-tls.key").c_str());
@@ -5341,14 +5432,196 @@ static int running_vnc_port(const std::string& config_path) {
     return 5900;
 }
 
+// RustDesk's own service (rustdesk --service, root), from /proc: it is what
+// starts a RustDesk server in this session after every login.
+bool SystemControl::rustdesk_service_enabled() {
+    DIR* dir = opendir("/proc");
+    if (!dir) return false;
+    bool found = false;
+    while (const dirent* e = readdir(dir)) {
+        if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+        std::ifstream in(std::string("/proc/") + e->d_name + "/cmdline", std::ios::binary);
+        std::string cmd((std::istreambuf_iterator<char>(in)), {});
+        if (cmd.find("rustdesk") != std::string::npos && cmd.find(std::string("\0--service", 10)) != std::string::npos) {
+            found = true;
+            break;
+        }
+    }
+    closedir(dir);
+    return found;
+}
+
+// RustDesk's service on or off for good: systemctl through polkit, which
+// asks for the password in this desktop's own dialog.
+bool SystemControl::rustdesk_service_set(bool on) {
+    const bool ok = run_argv_status({"pkexec", "systemctl", on ? "enable" : "disable", "--now", "rustdesk.service"});
+    remote_display::poke();
+    return ok;
+}
+
+namespace {
+
+bool is_rustdesk(const proc::Process& p) {
+    return p.exe_name == "rustdesk" || p.comm == "rustdesk" || p.exe_name == "com.rustdesk.RustDesk";
+}
+// The app run on its own (no service: Flatpak, AppImage, `rustdesk`): it
+// takes connections itself, in a thread of the window's process, with no
+// --server argument anywhere (upstream core_main: start_server).
+bool app_alone(const proc::Process& p) {
+    return p.cmdline.find(" --") == std::string::npos;
+}
+
+bool has_arg(const proc::Process& p, const char* arg) {
+    const std::string a = std::string(" ") + arg;
+    const size_t at = p.cmdline.find(a);
+    return at != std::string::npos && (at + a.size() == p.cmdline.size() || p.cmdline[at + a.size()] == ' ');
+}
+
+// Socket inodes the process holds open.
+std::set<unsigned long> socket_inodes(pid_t pid) {
+    std::set<unsigned long> out;
+    const std::string dir = "/proc/" + std::to_string(pid) + "/fd";
+    DIR* d = opendir(dir.c_str());
+    if (!d) return out;
+    char target[64];
+    while (const dirent* e = readdir(d)) {
+        const ssize_t n = readlink((dir + "/" + e->d_name).c_str(), target, sizeof(target) - 1);
+        if (n <= 0) continue;
+        target[n] = 0;
+        unsigned long inode = 0;
+        if (std::sscanf(target, "socket:[%lu]", &inode) == 1) out.insert(inode);
+    }
+    closedir(d);
+    return out;
+}
+
+// A viewer, by what RustDesk's server holds: an established TCP connection
+// that is not to RustDesk's own ID and relay servers (21115-21117 there),
+// besides its listener. Its connection manager (--cm) alone is not one: it
+// starts at the login request, before any password, and has been seen to
+// outlive the connection.
+bool rustdesk_connected(const std::vector<pid_t>& servers) {
+    std::set<unsigned long> inodes;
+    for (const pid_t pid : servers) {
+        const auto s = socket_inodes(pid);
+        inodes.insert(s.begin(), s.end());
+    }
+    if (inodes.empty()) return false;
+    for (const char* table : {"/proc/net/tcp", "/proc/net/tcp6"}) {
+        std::ifstream in(table);
+        std::string line;
+        std::getline(in, line);
+        while (std::getline(in, line)) {
+            std::istringstream row(line);
+            std::string slot, local, remote, state, queues, timer, retr, uid, timeout;
+            unsigned long inode = 0;
+            if (!(row >> slot >> local >> remote >> state >> queues >> timer >> retr >> uid >> timeout >> inode)) continue;
+            if (state != "01" || !inodes.count(inode)) continue;   // 01: established
+            const size_t colon = remote.rfind(':');
+            if (colon == std::string::npos) continue;
+            const int remote_port = std::stoi(remote.substr(colon + 1), nullptr, 16);
+            if (remote_port >= 21115 && remote_port <= 21117) {
+                // The relay (21117) carries a session too: only while one runs.
+                if (remote_port == 21117) return true;
+                continue;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool SystemControl::rustdesk_restart_server() {
+    bool any = false;
+    proc::for_each([&](const proc::Process& p) {
+        if (is_rustdesk(p) && (has_arg(p, "--server") || has_arg(p, "--cm")))
+            any = ::kill(p.pid, SIGTERM) == 0 || any;
+        return true;
+    });
+    return any;
+}
+
+// Ending a RustDesk session for real: on Linux its server keeps a connection
+// whose connection manager has gone (only Windows forwards that), so closing
+// the --cm window left the viewer watching. The server itself is ended;
+// RustDesk's service starts it again at once, without them.
+bool SystemControl::rustdesk_disconnect() {
+    bool any = rustdesk_restart_server();
+    // No service: the server is the app's own window process, and ending
+    // the session ends the app (nothing would start a --server again).
+    bool has_server = false;
+    proc::for_each([&](const proc::Process& p) {
+        if (is_rustdesk(p) && has_arg(p, "--server")) has_server = true;
+        return true;
+    });
+    if (!has_server)
+        proc::for_each([&](const proc::Process& p) {
+            if (is_rustdesk(p) && app_alone(p)) any = ::kill(p.pid, SIGTERM) == 0 || any;
+            return true;
+        });
+    remote_display::poke();
+    return any;
+}
+
+bool SystemControl::rustdesk_open() {
+    if (util::command_exists("rustdesk")) return util::spawn_detached({"rustdesk"});
+    return util::spawn_detached({"flatpak", "run", "com.rustdesk.RustDesk"});
+}
+
+bool SystemControl::rustdesk_service_available() {
+    for (const char* unit : {"/usr/lib/systemd/system/rustdesk.service", "/etc/systemd/system/rustdesk.service",
+                             "/lib/systemd/system/rustdesk.service"})
+        if (access(unit, F_OK) == 0) return true;
+    return false;
+}
+
+SystemControl::RemoteState SystemControl::remote_state() {
+    RemoteState r;
+    const pid_t pid = runtime_pid(runtime_path("wayvnc.pid"));
+    r.vnc = pid > 0 && ::kill(pid, 0) == 0;
+    r.vnc_died = pid > 0 && !r.vnc;
+    {
+        std::ifstream port_file(runtime_path("wayvnc.port"));
+        int port = 0;
+        r.vnc_port = (port_file >> port) && port > 0 ? port : running_vnc_port(runtime_path("wayvnc.conf"));
+    }
+    r.vnc_clients = r.vnc ? count_established_on_port(r.vnc_port) : 0;
+    r.rustdesk_installed = util::command_exists("rustdesk") || access("/var/lib/flatpak/exports/bin/com.rustdesk.RustDesk", X_OK) == 0;
+    if (!r.rustdesk_installed) return r;
+    std::vector<pid_t> servers;
+    bool cm = false;
+    proc::for_each([&](const proc::Process& p) {
+        if (!is_rustdesk(p)) return true;
+        r.rustdesk = true;
+        // Serving: the server RustDesk's service starts in the session.
+        if (has_arg(p, "--server") || app_alone(p)) servers.push_back(p.pid);
+        if (has_arg(p, "--cm")) cm = true;
+        return true;
+    });
+    r.rustdesk_serving = !servers.empty();
+    r.rustdesk_session = cm && rustdesk_connected(servers);
+    return r;
+}
+
 std::string SystemControl::remote_desktop_status_json() {
     const pid_t pid = runtime_pid(runtime_path("wayvnc.pid"));
     bool running = pid > 0 && ::kill(pid, 0) == 0;
     if (!running) {
-        unlink(runtime_path("wayvnc.pid").c_str());
-        unlink(runtime_path("wayvnc.conf").c_str());
-        unlink(runtime_path("wayvnc-tls.key").c_str());
-        unlink(runtime_path("wayvnc-tls.crt").c_str());
+        // Its secrets go; its pid file stays for remote_display to read
+        // (it ended by itself, or was stopped), which clears it. Not a
+        // config written a moment ago: a start in progress writes it before
+        // the server and its pid file exist.
+        auto recent = [](const char* name) {
+            struct stat st{};
+            return stat(runtime_path(name).c_str(), &st) == 0 && time(nullptr) - st.st_mtime < 10;
+        };
+        if (!recent("wayvnc.conf") && !recent("wayvnc-tls.key")) {
+            unlink(runtime_path("wayvnc.conf").c_str());
+            unlink(runtime_path("wayvnc-tls.key").c_str());
+            unlink(runtime_path("wayvnc-tls.crt").c_str());
+        }
     }
     const char* bind = std::getenv("B1AIR_DEV_MODE");
     bool dev_mode = bind && std::string(bind) == "1";
@@ -5376,7 +5649,17 @@ std::string SystemControl::remote_desktop_status_json() {
         json += "\"username\":\"" + util::escape_json(pw && pw->pw_name ? pw->pw_name : "") + "\",";
     }
     json += "\"promptFreeScreencast\":" + std::string(is_screencast_prompt_free() ? "true" : "false") + ",";
-    json += "\"uinputReady\":" + std::string(access("/dev/uinput", W_OK) == 0 ? "true" : "false");
+    json += "\"uinputReady\":" + std::string(access("/dev/uinput", W_OK) == 0 ? "true" : "false") + ",";
+    {
+        const RemoteState rs = remote_state();
+        json += "\"rustdeskInstalled\":" + std::string(rs.rustdesk_installed ? "true" : "false") + ",";
+        json += "\"rustdesk\":" + std::string(rs.rustdesk ? "true" : "false") + ",";
+        json += "\"rustdeskSession\":" + std::string(rs.rustdesk_session ? "true" : "false") + ",";
+        json += "\"rustdeskService\":" + std::string(rs.rustdesk_installed && rustdesk_service_enabled() ? "true" : "false") + ",";
+        json += "\"rustdeskServiceAvailable\":" + std::string(rs.rustdesk_installed && rustdesk_service_available() ? "true" : "false") + ",";
+        const std::string virt = remote_display::virtual_output();
+        json += "\"virtualOutput\":\"" + util::escape_json(virt) + "\"";
+    }
     json += "}";
     return json;
 }
@@ -5410,19 +5693,44 @@ bool SystemControl::is_screencast_prompt_free() {
     return false;
 }
 
+// The tablet's second screen: a virtual output of its own, its name found
+// rather than assumed (it was always "HEADLESS-1", which is whatever virtual
+// output sway made first — the remote screen's, say) and kept for removal.
 bool SystemControl::sidecar_create_virtual_display(int width, int height) {
     SwayIPC ipc;
     if (!ipc.connect()) return false;
+    auto names = [&ipc] {
+        std::set<std::string> out;
+        const auto j = nlohmann::json::parse(ipc.get_outputs(), nullptr, false);
+        if (j.is_array()) for (const auto& o : j) out.insert(o.value("name", std::string()));
+        return out;
+    };
+    const auto before = names();
     ipc.send_command(0, "create_output");
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    ipc.send_command(0, "output HEADLESS-1 mode " + std::to_string(width) + "x" + std::to_string(height));
+    std::string made;
+    for (int i = 0; i < 20 && made.empty(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        for (const auto& n : names()) if (!before.count(n)) made = n;
+    }
+    if (made.empty()) return false;
+    (void)write_private_file(runtime_path("sidecar-output"), made + "\n");
+    ipc.send_command(0, "output \"" + made + "\" mode " + std::to_string(width) + "x" + std::to_string(height));
+    remote_display::poke();
     return true;
 }
 
 bool SystemControl::sidecar_remove_virtual_display() {
+    std::string name;
+    {
+        std::ifstream in(runtime_path("sidecar-output"));
+        in >> name;
+    }
+    if (name.empty()) return false;
     SwayIPC ipc;
     if (!ipc.connect()) return false;
-    ipc.send_command(0, "output HEADLESS-1 unplug");
+    ipc.send_command(0, "output \"" + name + "\" unplug");
+    unlink(runtime_path("sidecar-output").c_str());
+    remote_display::poke();
     return true;
 }
 
@@ -5447,8 +5755,9 @@ bool SystemControl::ocr_screen(const std::string& geom) {
     }
     if (!valid_geometry(g)) return false;
 
-    std::string tmp_img = runtime_path(("ocr-" + std::to_string(getpid()) + ".png").c_str());
-    if (!run_argv_status({"grim", "-g", g, tmp_img})) return false;
+    // Uncompressed, as for QR codes above: it is read once and deleted.
+    std::string tmp_img = runtime_path(("ocr-" + std::to_string(getpid()) + ".ppm").c_str());
+    if (!run_argv_status({"grim", "-t", "ppm", "-g", g, tmp_img})) return false;
 
     std::string text = run_argv_capture({"tesseract", tmp_img, "stdout"});
     unlink(tmp_img.c_str());

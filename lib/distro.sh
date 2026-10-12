@@ -95,6 +95,21 @@ pm_refresh() {
 }
 
 # pm_install <family> <pkg...> — one transaction, fails as a whole.
+# The Vulkan driver package for the GPU the kernel drives (Arch names).
+vulkan_driver_package() {
+    local d drivers=""
+    for d in /sys/class/drm/card*/device/driver; do
+        [[ -e "$d" ]] && drivers+=" $(basename "$(readlink -f "$d")")"
+    done
+    case "$drivers" in
+        *" i915"*|*" xe"*) echo vulkan-intel ;;
+        *" amdgpu"*|*" radeon"*) echo vulkan-radeon ;;
+        *" nouveau"*) echo vulkan-nouveau ;;
+        *" nvidia"*) echo nvidia-utils ;;
+        *) echo vulkan-swrast ;;
+    esac
+}
+
 pm_install() {
     local family="$1"; shift
     [[ $# -gt 0 ]] || return 0
@@ -106,7 +121,36 @@ pm_install() {
             local missing=()
             mapfile -t missing < <(pacman -T "$@" 2>/dev/null)
             [[ ${#missing[@]} -gt 0 ]] || return 0
-            sudo pacman -S --needed --noconfirm "${missing[@]}" ;;
+            # Not what something installed conflicts with: fprintd beside
+            # the fprintd-clients-git a python-validity reader runs on. pacman
+            # puts the whole list in one transaction, and that one conflict
+            # failed it — inter-font and the rest never went in either.
+            local conflicts keep=() p
+            conflicts=" $(LC_ALL=C pacman -Qi 2>/dev/null | sed -n 's/^Conflicts With *: //p' \
+                | tr -s ' ' '\n' | sed 's/[<>=].*//' | grep -vx 'None' | sort -u | tr '\n' ' ') "
+            for p in "${missing[@]}"; do
+                if [[ "$conflicts" == *" $p "* ]]; then
+                    echo "  $p: left out, an installed package conflicts with it" >&2
+                    continue
+                fi
+                keep+=("$p")
+            done
+            [[ ${#keep[@]} -gt 0 ]] || return 0
+            # A Vulkan driver, when something asks for one (zed) and none is
+            # installed: the one for this GPU. Left to pacman, --noconfirm
+            # took its first offer, nvidia-utils, on an Intel laptop.
+            if ! pacman -T vulkan-driver >/dev/null 2>&1 \
+                    && LC_ALL=C pacman -Si "${keep[@]}" 2>/dev/null | grep '^Depends On' | grep -qw 'vulkan-driver'; then
+                keep=("$(vulkan_driver_package)" "${keep[@]}")
+            fi
+            # One at a time when all at once fails, so one package that cannot
+            # go in does not keep the others out.
+            sudo pacman -S --needed --noconfirm "${keep[@]}" && return 0
+            local failed=0
+            for p in "${keep[@]}"; do
+                sudo pacman -S --needed --noconfirm "$p" || failed=1
+            done
+            return "$failed" ;;
         # No recommends: every package the desktop needs is named explicitly,
         # and Debian's recommends for sddm and friends drag in half of Plasma.
         debian)   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@" ;;

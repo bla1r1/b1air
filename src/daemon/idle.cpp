@@ -168,6 +168,13 @@ void on_resumed(Stage stage) {
 
 void notification_idled(void* data, struct ext_idle_notification_v1*) {
     auto* n = static_cast<Notification*>(data);
+    // Someone working from afar (VNC, RustDesk) and nobody here: their
+    // picture does not dim, go dark or fall asleep under them. The lock
+    // still comes — they can open it — but the rest waits for them to go
+    // (remote_display restarts the countdown then). Not marked idle either,
+    // so nothing is "resumed" that never happened: no screens woken, no
+    // undim, no "back" for the break reminder.
+    if (n->stage != Stage::Lock && SystemControl::remote_state().viewer()) return;
     n->idle = true;
     on_idled(n->stage);
 }

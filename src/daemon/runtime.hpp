@@ -45,14 +45,29 @@ inline std::string qml_entry(const char* name) {
     return {};
 }
 
+// A directory made, and made private (0700), only where it is not already.
+//
+// This used to chmod both directories on every call, and runtime_path()
+// calls it for every state file read. A chmod changes the directory's ctime
+// even when the mode stays the same, so each one was an IN_ATTRIB for
+// everyone watching it. The idle thread watches this directory and reads
+// lock-state each time it wakes, so it woke itself, about 50 000 times a
+// second: a core at 100% for the whole session. And everything watching
+// $XDG_RUNTIME_DIR woke with it (xdg-desktop-portal, 100 000 times a second).
+inline void private_dir(const std::string& path) {
+    struct stat st {};
+    if (stat(path.c_str(), &st) != 0) {
+        if (mkdir(path.c_str(), 0700) != 0 || stat(path.c_str(), &st) != 0) return;
+    }
+    if ((st.st_mode & 07777) != 0700) chmod(path.c_str(), 0700);
+}
+
 inline std::string runtime_dir() {
     const char* configured = std::getenv("XDG_RUNTIME_DIR");
     std::string base = configured && *configured ? configured : ("/tmp/b1air-" + std::to_string(static_cast<unsigned long>(getuid())));
     std::string dir = base + "/b1air";
-    mkdir(base.c_str(), 0700);
-    chmod(base.c_str(), 0700);
-    mkdir(dir.c_str(), 0700);
-    chmod(dir.c_str(), 0700);
+    private_dir(base);
+    private_dir(dir);
     return dir;
 }
 
