@@ -49,12 +49,15 @@ Item {
         fingerprintLogin = c.status === Component.Ready;
     }
     readonly property var fpWords: ({
-        en: { hint: "Password or finger", touch: "Touch the fingerprint reader" },
-        uk: { hint: "Пароль або палець", touch: "Прикладіть палець до сканера" },
-        ru: { hint: "Пароль или палец", touch: "Приложите палец к сканеру" }
+        // Enter on an empty field is what starts the reader (/etc/pam.d/sddm
+        // asks it only for an empty password); "Password or finger" read as
+        // "just touch it", and touching it did nothing.
+        en: { hint: "Password · Enter for finger", touch: "Touch the fingerprint reader" },
+        uk: { hint: "Пароль · Enter для пальця", touch: "Прикладіть палець до сканера" },
+        ru: { hint: "Пароль · Enter для пальца", touch: "Приложите палец к сканеру" }
     })
     function fpWord(key) {
-        const w = fpWords[Qt.locale().name.slice(0, 2)] || fpWords.en;
+        const w = fpWords[Config.lang] || fpWords.en;
         return w[key];
     }
 

@@ -3,7 +3,7 @@
 # from wayland-protocols, MIT), cairo to draw, xkbcommon for the keys, PAM to
 # check the password; b1air-bg's decoder for the wallpaper and b1air-core for
 # which wallpaper and which language.
-pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon)
+pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon fontconfig)
 # PAM by its library and header, not pkg-config: Debian's pam.pc requires
 # audit.pc, which only libaudit-dev has.
 find_library(PAM_LIBRARY pam REQUIRED)
@@ -41,6 +41,11 @@ pkg_check_modules(LOCK_WEBP IMPORTED_TARGET libwebp)
 if(LOCK_WEBP_FOUND)
     target_link_libraries(b1air-lock PRIVATE PkgConfig::LOCK_WEBP)
     target_compile_definitions(b1air-lock PRIVATE B1AIR_HAVE_WEBP)
+endif()
+pkg_check_modules(LOCK_TURBOJPEG IMPORTED_TARGET libturbojpeg)
+if(LOCK_TURBOJPEG_FOUND)
+    target_link_libraries(b1air-lock PRIVATE PkgConfig::LOCK_TURBOJPEG)
+    target_compile_definitions(b1air-lock PRIVATE B1AIR_HAVE_TURBOJPEG)
 endif()
 if(B1AIR_HAVE_PAM_CONFDIR)
     target_compile_definitions(b1air-lock PRIVATE B1AIR_HAVE_PAM_CONFDIR)

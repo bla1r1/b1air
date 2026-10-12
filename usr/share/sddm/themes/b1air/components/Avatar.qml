@@ -13,6 +13,15 @@ Rectangle {
     property int strokeSize: active ? (Config.avatarActiveBorderSize * Config.generalScale) : (Config.avatarInactiveBorderSize * Config.generalScale)
     property string tooltipText: ""
     property bool showTooltip: false
+    // Whose it is, for the initial when there is no picture.
+    property string name: ""
+    // No picture of their own (none set, or SDDM's stand-in face): the
+    // initial on a disc, as the lock screen shows it, not a grey silhouette.
+    readonly property bool standIn: {
+        const s = String(source);
+        return s === "" || s.indexOf("qrc:") === 0 || s.indexOf("/sddm/faces/") >= 0 || s.indexOf("default") >= 0
+            || faceImage.status === Image.Error;
+    }
 
     signal clicked
     signal clickedOutside
@@ -60,8 +69,25 @@ Rectangle {
             antialiasing: true
         }
     }
+    Rectangle {
+        visible: avatar.standIn
+        anchors.fill: parent
+        radius: avatar.squareRadius
+        color: ThemeColors.mid
+        border.width: avatar.strokeSize
+        border.color: avatar.strokeColor
+        Text {
+            anchors.centerIn: parent
+            text: avatar.name.length ? avatar.name.charAt(0).toUpperCase() : ""
+            font.family: Config.usernameFontFamily
+            font.pixelSize: avatar.width * 0.43
+            font.bold: true
+            color: ThemeColors.primary
+        }
+    }
     MultiEffect {
         id: faceEffects
+        visible: !avatar.standIn
         anchors.fill: faceImage
         source: faceImage
         antialiasing: true

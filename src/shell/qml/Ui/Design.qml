@@ -24,9 +24,13 @@ QtObject {
 
         // Inter: the open face closest to the one a desktop like this is
         // usually set in — wide, even, with figures that can be told to
-        // line up (Design.tabular). Fira Sans where Inter is missing:
-        // fontconfig falls back to it (.config/fontconfig/fonts.conf).
-        readonly property string sans: "Inter"
+        // line up (Design.tabular). Where it is missing, sans-serif, which
+        // .config/fontconfig/fonts.conf orders Fira Sans after it. Not
+        // "Inter" regardless: asked for a family that is not installed,
+        // fontconfig hands over what it ranks first, and that was JetBrains
+        // Mono — the whole desktop, every app and the bar, in the terminal's
+        // font, which is how the inter-font package going missing looked.
+        readonly property string sans: Qt.fontFamilies().indexOf("Inter") >= 0 ? "Inter" : "sans-serif"
         readonly property string mono: "JetBrainsMono Nerd Font"
         // The "Mono" cut, deliberately: in the plain Nerd Font the icon glyphs
         // are drawn inside a double-width advance with the ink hugging the left

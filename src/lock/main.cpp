@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cairo.h>
+#include "fonts.hpp"
 #include <cerrno>
 #include <chrono>
 #include <cmath>
@@ -135,8 +136,8 @@ struct App {
     Status status = Status::Idle;
     bool caps = false;
     bool locked = false;
-    bool finished = false;   // the compositor refused, or it is over
-    bool unlocked = false;
+    std::atomic<bool> finished{false};   // the compositor refused, or it is over
+    std::atomic<bool> unlocked{false};
 
     std::string user;
     std::string name;                      // the full name, or the login
@@ -418,11 +419,15 @@ void rounded(cairo_t* cr, double x, double y, double w, double h, double r) {
 }
 
 // The desktop's: Design.qml's sans for words, its Nerd Font for icons.
-constexpr const char* kFont = "Inter";
+// Inter, the desktop's sans (Ui/Design), or sans-serif without it.
+const std::string& sans_font() {
+    static const std::string family = b1air::installed_family("Inter");
+    return family;
+}
 constexpr const char* kIconFont = "b1air Symbols";
 
 void font(cairo_t* cr, double size, bool bold, bool icon = false) {
-    cairo_select_font_face(cr, icon ? kIconFont : kFont, CAIRO_FONT_SLANT_NORMAL,
+    cairo_select_font_face(cr, icon ? kIconFont : sans_font().c_str(), CAIRO_FONT_SLANT_NORMAL,
                            bold ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, size);
 }
@@ -514,6 +519,8 @@ const char* battery_icon() {
 void buffer_release(void*, struct wl_buffer* buffer) { wl_buffer_destroy(buffer); }
 const struct wl_buffer_listener kBufferListener = {buffer_release};
 
+void paint(cairo_t* cr, Output* o, double W, double H);
+
 void draw(Output* o) {
     if (!o->configured || o->width == 0 || o->height == 0) return;
     load_wallpaper(o);
@@ -536,7 +543,26 @@ void draw(Output* o) {
         cairo_image_surface_create_for_data(static_cast<unsigned char*>(data), CAIRO_FORMAT_RGB24, w, h, stride);
     cairo_t* cr = cairo_create(target);
     cairo_scale(cr, scale, scale);
-    const double W = o->width, H = o->height;
+    paint(cr, o, o->width, o->height);
+    cairo_destroy(cr);
+    cairo_surface_flush(target);
+    cairo_surface_destroy(target);
+    munmap(data, size);
+
+    struct wl_shm_pool* pool = wl_shm_create_pool(g.shm, fd, static_cast<int32_t>(size));
+    struct wl_buffer* buffer = wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_XRGB8888);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+    wl_buffer_add_listener(buffer, &kBufferListener, nullptr);
+    wl_surface_set_buffer_scale(o->surface, scale);
+    wl_surface_attach(o->surface, buffer, 0, 0);
+    wl_surface_damage_buffer(o->surface, 0, 0, w, h);
+    wl_surface_commit(o->surface);
+}
+
+// One screen of the lock, W × H in surface units, onto cr. Apart from draw()
+// so it can be drawn into a picture too (a test, a preview).
+void paint(cairo_t* cr, Output* o, double W, double H) {
 
     // The picture, blurred, and a veil over it.
     set(cr, g.pal.ground);
@@ -731,20 +757,6 @@ void draw(Output* o) {
         }
     }
 
-    cairo_destroy(cr);
-    cairo_surface_flush(target);
-    cairo_surface_destroy(target);
-    munmap(data, size);
-
-    struct wl_shm_pool* pool = wl_shm_create_pool(g.shm, fd, static_cast<int32_t>(size));
-    struct wl_buffer* buffer = wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_XRGB8888);
-    wl_shm_pool_destroy(pool);
-    close(fd);
-    wl_buffer_add_listener(buffer, &kBufferListener, nullptr);
-    wl_surface_set_buffer_scale(o->surface, scale);
-    wl_surface_attach(o->surface, buffer, 0, 0);
-    wl_surface_damage_buffer(o->surface, 0, 0, w, h);
-    wl_surface_commit(o->surface);
 }
 
 void draw_all() {
@@ -801,7 +813,7 @@ void fingerprint_loop() {
 #ifdef B1AIR_HAVE_PAM_CONFDIR
     const std::string dir = fingerprint_confdir();
     int errors = 0;
-    while (errors < 3) {
+    while (!g.unlocked && !g.finished) {
         std::string nothing;   // pam_fprintd asks no questions; it says things
         const struct pam_conv conv = {conversation, &nothing};
         pam_handle_t* pam = nullptr;
@@ -809,8 +821,14 @@ void fingerprint_loop() {
         g.fp_listening = true;
         const uint64_t one = 1;
         (void)!write(g.event_fd, &one, sizeof(one));   // redraw: "or touch the reader"
+        const auto began = std::chrono::steady_clock::now();
         const int r = pam_authenticate(pam, 0);
         pam_end(pam, r);
+        // pam_fprintd waits 30 s for a finger, then gives up with the same
+        // "unavailable" a missing reader gives. Nobody touching it is no
+        // fault: counted as one, three of them stopped the reader for good,
+        // a minute and a half after locking — before anyone came back.
+        const bool waited = std::chrono::steady_clock::now() - began >= std::chrono::seconds(20);
         g.fp_listening = false;
         if (r == PAM_SUCCESS) {
             g.fp_result = 1;
@@ -820,11 +838,15 @@ void fingerprint_loop() {
         if (r == PAM_AUTH_ERR || r == PAM_MAXTRIES) {
             g.fp_result = -1;   // a finger that is not this one
             errors = 0;
+        } else if (waited) {
+            errors = 0;         // nobody touched it: ask again
         } else {
             ++errors;           // the reader gone, fprintd not answering
         }
         (void)!write(g.event_fd, &one, sizeof(one));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // A reader that fails at once (just woken, its service restarting)
+        // is asked again later rather than given up on: 1 s, 5 s, then 30 s.
+        std::this_thread::sleep_for(std::chrono::seconds(errors == 0 ? 1 : errors == 1 ? 5 : 30));
     }
 #endif
 }
@@ -867,7 +889,12 @@ void kb_key(void*, struct wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32
     if (state != WL_KEYBOARD_KEY_STATE_PRESSED || !g.xkb_state) return;
     const xkb_keycode_t code = key + 8;
     const xkb_keysym_t sym = xkb_state_key_get_one_sym(g.xkb_state, code);
-    const bool ctrl = xkb_state_mod_name_is_active(g.xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0;
+    // Ctrl with Alt is AltGr as Windows sends it (and RustDesk, VNC and
+    // other remote viewers pass it on): a character (~ @ { on a German
+    // layout), not a shortcut. Read as Ctrl it was dropped, and a password
+    // with one could not be typed from afar.
+    const bool ctrl = xkb_state_mod_name_is_active(g.xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_EFFECTIVE) > 0
+                      && xkb_state_mod_name_is_active(g.xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_EFFECTIVE) <= 0;
     const bool logo = xkb_state_mod_name_is_active(g.xkb_state, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0;
     if (logo) return;   // Super+3 out of habit is not part of a password
     if (g.status == Status::Checking) return;

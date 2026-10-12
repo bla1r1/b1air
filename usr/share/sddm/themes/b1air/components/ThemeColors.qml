@@ -90,6 +90,9 @@ QtObject {
 
     // Whether the session resolved to a dark face. Kept for components that
     // need to choose a shadow or an overlay rather than a palette colour.
+    // The lock screen's language (Settings → language), "" for the system's.
+    readonly property string lang: (palette.live && palette.live.lang !== undefined)
+                                   ? palette.live.lang : ""
     readonly property bool dark: (palette.live && palette.live.dark !== undefined)
                                  ? palette.live.dark : true
 }
