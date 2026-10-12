@@ -66,6 +66,14 @@ Scope {
         return Apps.iconSource(item.icon || item.appId);
     }
 
+    // Files dropped on an app: opened with it, as its desktop entry says
+    // (gtk-launch hands them to its Exec line).
+    function openWith(item, urls) {
+        const id = String(item.appId || "");
+        if (!id || !urls || urls.length === 0) return;
+        Quickshell.execDetached(["gtk-launch", id].concat(urls));
+    }
+
     function activate(item) {
         if (item.wins.length > 0) {
             // Already in front: the next of its windows.
@@ -117,6 +125,13 @@ Scope {
                 width: parent.width
                 height: 2
                 HoverHandler { onHoveredChanged: if (hovered) dock.hovered = true }
+                // A drag delivers no hover: files brought to the edge bring
+                // the dock up too, to be dropped on an app.
+                DropArea {
+                    anchors.fill: parent
+                    keys: ["text/uri-list"]
+                    onEntered: dock.hovered = true
+                }
             }
 
             Rectangle {
@@ -182,6 +197,22 @@ Scope {
                                 anchors.fill: parent
                                 source: root.iconFor(cell.modelData)
                                 mipmap: true
+                                // Files held over it: it lifts, as it will
+                                // take them.
+                                scale: cellDrop.containsDrag ? 1.15 : 1.0
+                                Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
+                            }
+                            DropArea {
+                                id: cellDrop
+                                anchors.fill: parent
+                                keys: ["text/uri-list"]
+                                onDropped: drop => {
+                                    const urls = (drop.hasUrls ? Array.from(drop.urls, u => String(u))
+                                                 : String(drop.getDataAsString("text/uri-list") || "").split(/\r?\n/).filter(l => l && !l.startsWith("#")));
+                                    if (urls.length === 0) return;
+                                    drop.accept(Qt.CopyAction);
+                                    root.openWith(cell.modelData, urls);
+                                }
                             }
                             // Running.
                             Rectangle {

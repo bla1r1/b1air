@@ -36,46 +36,24 @@ Window {
     visible: true
     color: "transparent"
 
-    // This copy — the one main.cpp actually loads — quit outright, so closing
-    // b1air-text with unsaved changes threw them away without a word. The
-    // confirmation below already existed in src/apps/text/TextWindow.qml, a
-    // copy nothing loads, so the protection was written and then never shipped.
-    onClosing: function(close) {
-        if (TextBackend.isModified) {
-            close.accepted = false;
-            window.closeAfterSave = true;
-            unsavedDialog.open();
-        } else {
-            Qt.quit();
+    // Closing keeps everything: the tabs and what is typed in them are the
+    // session (backend.cpp), back as they were at the next start, unsaved
+    // changes included — and the files on disk as they were, until Save.
+    onClosing: Qt.quit()
+
+    property bool wordWrapEnabled: false
+    // The editor in front, for the status bar and the keys.
+    property var pane: null
+
+    // Another `b1air-text` handed its files over (main.cpp): this window
+    // comes forward with them.
+    Connections {
+        target: TextBackend
+        function onRaiseRequested() {
+            window.raise();
+            window.requestActivate();
         }
     }
-
-    property bool closeAfterSave: false
-    property bool wordWrapEnabled: false
-    property int currentLine: 1
-    property int currentCol: 1
-    // Offset of the first character of every line, for the gutter.
-    property var lineStarts: [0]
-
-    function recomputeLineStarts() {
-        const t = editorArea.text;
-        const starts = [0];
-        let i = -1;
-        while ((i = t.indexOf("\n", i + 1)) !== -1) starts.push(i + 1);
-        window.lineStarts = starts;
-    }
-
-    function newFileWithConfirmation() {
-        window.closeAfterSave = false;
-        if (TextBackend.isModified) unsavedDialog.open();
-        else TextBackend.newFile();
-    }
-
-    // What to do once a save started by the unsaved-changes dialog lands:
-    // "quit", "new", or "" for a plain save. Only after it succeeds — the
-    // dialog's Save used to quit straight away, so a save that failed (an
-    // Untitled file has nowhere to go) threw the text away anyway.
-    property string afterSave: ""
 
     function save() {
         if (!TextBackend.filePath) {
@@ -85,28 +63,51 @@ Window {
         TextBackend.saveFile();
     }
 
+    // The tab to close once a save started by the unsaved-changes dialog
+    // lands. Only after it succeeds — a save that failed (an Untitled file
+    // has nowhere to go) must not throw the text away anyway.
+    property string closeAfterSave: ""
     Connections {
         target: TextBackend
         function onSaved(ok) {
-            if (!ok) { window.afterSave = ""; return; }
-            const next = window.afterSave;
-            window.afterSave = "";
-            if (next === "quit") Qt.quit();
-            else if (next === "new") TextBackend.newFile();
+            const id = window.closeAfterSave;
+            window.closeAfterSave = "";
+            if (ok && id) window.closeTabNow(id);
         }
     }
 
-    function calculateCursorPos() {
-        let textBefore = editorArea.text.substring(0, editorArea.cursorPosition);
-        let lines = textBefore.split("\n");
-        currentLine = lines.length;
-        currentCol = lines[lines.length - 1].length + 1;
+    function tabIndexOf(id) {
+        for (let i = 0; i < tabRepeater.count; i++)
+            if (tabRepeater.itemAt(i) && tabRepeater.itemAt(i).docId === id) return i;
+        return -1;
+    }
+    function closeTabNow(id) {
+        const i = window.tabIndexOf(id);
+        if (i >= 0) TextBackend.closeTab(i);
+    }
+    // A tab with changes is asked about; one without closes.
+    function closeTab(i) {
+        if (i < 0 || i >= tabRepeater.count) return;
+        if (!TextBackend.isModifiedAt(i)) {
+            TextBackend.closeTab(i);
+            return;
+        }
+        TextBackend.currentIndex = i;
+        unsavedDialog.closing = TextBackend.currentId;
+        unsavedDialog.open();
+    }
+    function step(by) {
+        const n = tabRepeater.count;
+        if (n > 1) TextBackend.currentIndex = (TextBackend.currentIndex + by + n) % n;
     }
 
     // ── Global Shortcuts ─────────────────────────────────────────────────────
     Shortcut { sequence: "Ctrl+S"; onActivated: window.save() }
     Shortcut { sequence: "Ctrl+Shift+S"; onActivated: saveAsDialog.open() }
-    Shortcut { sequence: "Ctrl+N"; onActivated: window.newFileWithConfirmation() }
+    Shortcut { sequences: ["Ctrl+N", "Ctrl+T"]; onActivated: TextBackend.newFile() }
+    Shortcut { sequence: "Ctrl+W"; onActivated: window.closeTab(TextBackend.currentIndex) }
+    Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: window.step(1) }
+    Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: window.step(-1) }
     Shortcut { sequence: "Escape"; onActivated: window.close() }
 
     Rectangle {
@@ -125,253 +126,240 @@ Window {
             anchors.fill: parent
             spacing: 0
 
-        // ═════════════════════════════════════════════════════════════════════
-        // TOP HEADER BAR (COMPACT TILED TOOLBAR)
-        // ═════════════════════════════════════════════════════════════════════
-        AppToolbar {
-            Layout.fillWidth: true
-
-            BarGroup {
-                BarButton { glyph: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
-                BarButton { glyph: "\u{f0193}"; label: I18n.tr("Save"); primary: TextBackend.isModified; tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
-            }
-            ColumnLayout {
+            // ═════════════════════════════════════════════════════════════════
+            // TOP HEADER BAR (COMPACT TILED TOOLBAR)
+            // ═════════════════════════════════════════════════════════════════
+            AppToolbar {
                 Layout.fillWidth: true
-                spacing: 0
-                Label {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
-                    weight: Design.weight.semibold
-                    elide: Text.ElideMiddle
+
+                BarGroup {
+                    BarButton { glyph: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
+                    BarButton { glyph: "\u{f0193}"; label: I18n.tr("Save"); primary: TextBackend.isModified; tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
+                    // Changes kept from before (the session) or made now,
+                    // let go: the file as it is on disk.
+                    BarButton {
+                        visible: TextBackend.isModified && TextBackend.filePath !== ""
+                        glyph: "\u{f054c}"
+                        tip: I18n.tr("Back to the saved file")
+                        onClicked: revertDialog.open()
+                    }
                 }
-                Label {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    visible: text !== ""
-                    horizontalAlignment: Text.AlignHCenter
-                    text: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
-                    role: "caption"
-                    color: Design.textFaint
-                    elide: Text.ElideMiddle
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
+                        weight: Design.weight.semibold
+                        elide: Text.ElideMiddle
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: text !== ""
+                        horizontalAlignment: Text.AlignHCenter
+                        text: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
+                        role: "caption"
+                        color: Design.textFaint
+                        elide: Text.ElideMiddle
+                    }
+                }
+                BarGroup {
+                    BarButton { glyph: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
                 }
             }
-            BarGroup {
-                BarButton { glyph: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
-            }
-        }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // MAIN TEXT EDITOR WITH LINE NUMBERS
-        // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            color: Design.base
+            // ═════════════════════════════════════════════════════════════════
+            // TABS — one file each
+            // ═════════════════════════════════════════════════════════════════
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(34)
+                color: Design.crust
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.glassBorder }
 
-            RowLayout {
-                anchors.fill: parent
-                spacing: 0
-
-                // ── Line Numbers Gutter ──────────────────────────────────────
-                Rectangle {
-                    Layout.fillHeight: true
-                    Layout.preferredWidth: Design.s(52)
-                    color: Design.crust
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Design.s(Design.space.xs)
+                    anchors.rightMargin: Design.s(Design.space.xs)
+                    spacing: Design.s(2)
 
                     ListView {
-                        id: lineNumbersView
-                        anchors.fill: parent
-                        anchors.topMargin: editorArea.topPadding
-                        anchors.bottomMargin: editorArea.bottomPadding
+                        id: tabStrip
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.maximumWidth: contentWidth
+                        orientation: ListView.Horizontal
                         clip: true
-                        interactive: false
-                        contentY: editorFlickable.contentY
+                        spacing: Design.s(2)
+                        boundsBehavior: Flickable.StopAtBounds
+                        model: TextBackend.tabs
+                        currentIndex: TextBackend.currentIndex
+                        onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
 
-                        // One number per logical line, each as tall as that
-                        // line is in the editor and placed where it is. They
-                        // had a fixed 20px row against the editor's ~16px
-                        // line, so the numbers drifted further from their
-                        // lines the further down the file one read.
-                        model: window.lineStarts.length
-
-                        delegate: Item {
+                        delegate: Rectangle {
+                            id: tab
                             required property int index
-                            // Re-evaluated when the layout changes: width
-                            // (wrapping) and contentHeight (any edit).
-                            readonly property real _layout: editorArea.contentHeight + editorArea.width
-                            readonly property rect _here: (_layout, editorArea.positionToRectangle(window.lineStarts[index] || 0))
-                            readonly property real _next: index + 1 < window.lineStarts.length
-                                ? (_layout, editorArea.positionToRectangle(window.lineStarts[index + 1]).y)
-                                : _here.y + _here.height
-                            width: lineNumbersView.width - Design.s(14)
-                            height: Math.max(1, _next - _here.y)
+                            required property string docId
+                            required property string name
+                            required property string path
+                            required property bool modified
+                            readonly property bool current: index === TextBackend.currentIndex
+                            height: tabStrip.height
+                            width: Math.min(Design.s(220), tabRow.implicitWidth + Design.s(20))
+                            color: current ? Design.base : (tabMa.containsMouse ? Design.hover : "transparent")
 
-                            Text {
-                                width: parent.width
-                                height: parent._here.height
-                                text: String(index + 1)
-                                font.family: Design.font.mono
-                                font.pixelSize: Design.s(Design.font.body)
-                                color: (index + 1 === window.currentLine) ? Design.accent : Design.textFaint
-                                horizontalAlignment: Text.AlignRight
-                                verticalAlignment: Text.AlignVCenter
+                            Rectangle {
+                                visible: tab.current
+                                anchors.top: parent.top
+                                width: parent.width; height: Design.s(2)
+                                color: Design.accent
                             }
-                        }
-                    }
 
-                    // Gutter Right Divider
-                    Rectangle {
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: 1
-                        color: Design.glassBorder
-                    }
-                }
-
-                // ── Editor TextArea ──────────────────────────────────────────
-                Flickable {
-                    id: editorFlickable
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-
-                    ScrollBar.vertical: OverflowBar {}
-                    ScrollBar.horizontal: ScrollBar { policy: window.wordWrapEnabled ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded }
-
-                    TextArea.flickable: TextArea {
-                        id: editorArea
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(13)
-                        color: Design.text
-                        selectionColor: Design.tint(Design.accent, 0.35)
-                        selectedTextColor: Design.text
-                        tabStopDistance: 32
-                        wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
-                        padding: Design.s(12)
-                        selectByMouse: true
-                        // Typing works the moment the window appears.
-                        Component.onCompleted: forceActiveFocus()
-
-                        text: TextBackend.fileContent
-
-                        onTextChanged: {
-                            if (text !== TextBackend.fileContent) {
-                                TextBackend.setFileContent(text);
-                            }
-                            window.recomputeLineStarts();
-                            window.calculateCursorPos();
-                        }
-
-                        onCursorPositionChanged: {
-                            window.calculateCursorPos();
-                        }
-
-                        Connections {
-                            target: TextBackend
-                            function onContentChanged() {
-                                if (editorArea.text !== TextBackend.fileContent) {
-                                    editorArea.text = TextBackend.fileContent;
+                            MouseArea {
+                                id: tabMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                                onClicked: mouse => {
+                                    if (mouse.button === Qt.MiddleButton) window.closeTab(tab.index);
+                                    else TextBackend.currentIndex = tab.index;
                                 }
                             }
+
+                            RowLayout {
+                                id: tabRow
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(10)
+                                anchors.rightMargin: Design.s(6)
+                                spacing: Design.s(6)
+                                Label {
+                                    Layout.fillWidth: true
+                                    Layout.maximumWidth: Design.s(170)
+                                    text: tab.name
+                                    elide: Text.ElideMiddle
+                                    role: "caption"
+                                    weight: tab.current ? Design.weight.semibold : Design.weight.regular
+                                    color: tab.current ? Design.text : Design.textDim
+                                }
+                                // The dot for changes; the cross under the pointer.
+                                Item {
+                                    Layout.preferredWidth: Design.s(16)
+                                    Layout.preferredHeight: Design.s(16)
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        visible: tab.modified && !tabMa.containsMouse && !closeMa.containsMouse
+                                        width: Design.s(7); height: width; radius: width / 2
+                                        color: Design.accent
+                                    }
+                                    Icon {
+                                        anchors.centerIn: parent
+                                        visible: tabMa.containsMouse || closeMa.containsMouse || (tab.current && !tab.modified)
+                                        text: "\u{f0156}"
+                                        role: "caption"
+                                        color: closeMa.containsMouse ? Design.text : Design.textFaint
+                                    }
+                                    MouseArea {
+                                        id: closeMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: window.closeTab(tab.index)
+                                    }
+                                }
+                            }
+                            ToolTip.visible: tabMa.containsMouse && tab.path !== ""
+                            ToolTip.delay: 600
+                            ToolTip.text: tab.path
                         }
                     }
-
-                    // The TextArea is only as tall as its text, so a click in
-                    // the empty space below the last line landed on nothing
-                    // and the editor never took the caret. This takes it there
-                    // and puts the caret at the end.
-                    MouseArea {
-                        x: 0
-                        y: editorArea.height
-                        width: editorFlickable.width
-                        height: Math.max(0, editorFlickable.height - editorArea.height)
-                        cursorShape: Qt.IBeamCursor
-                        onClicked: {
-                            editorArea.forceActiveFocus();
-                            editorArea.cursorPosition = editorArea.length;
-                        }
+                    BarButton {
+                        glyph: "\u{f0415}"
+                        tip: I18n.tr("New tab (Ctrl+T)")
+                        onClicked: TextBackend.newFile()
                     }
-
-                    // Something to read on an empty document.
-                    //
-                    // Every other app in this suite says what to do when it
-                    // has nothing open — the image viewer names the command,
-                    // the git client says to pick a repository. This one drew
-                    // a black field and the number 1 in the gutter, which is
-                    // the same thing a broken window looks like.
-                    ColumnLayout {
-                        // Positioned against the Flickable's viewport rather
-                        // than anchored to `parent`: assigning TextArea.flickable
-                        // makes this a child of the content item, whose origin
-                        // is the top-left of the *document*, so centring on it
-                        // put the message in the gutter.
-                        x: (editorFlickable.width - implicitWidth) / 2
-                        y: (editorFlickable.height - implicitHeight) / 2
-                        spacing: Design.s(Design.space.sm)
-                        visible: editorArea.text.length === 0
-                                 && !TextBackend.filePath
-                                 && !editorArea.activeFocus
-
-                        Icon {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: "\u{f0219}"
-                            role: "display"
-                            color: Design.textFaint
-                        }
-
-                        Label {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: I18n.tr("Empty document")
-                            weight: Design.weight.semibold
-                            dim: true
-                        }
-
-                        Label {
-                            Layout.alignment: Qt.AlignHCenter
-                            horizontalAlignment: Text.AlignHCenter
-                            text: I18n.tr("Start typing, or open a file: b1air-text notes.md")
-                            role: "caption"
-                            color: Design.textFaint
-                        }
-                    }
+                    Item { Layout.fillWidth: true }
                 }
             }
-        }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // BOTTOM STATUS BAR
-        // ═════════════════════════════════════════════════════════════════════
-        AppStatusBar {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("Ln %1, Col %2", window.currentLine, window.currentCol); role: "caption"; isMono: true; dim: true }
-            Label { text: I18n.trn("%1 line", "%1 lines", TextBackend.lineCount) + "  ·  " + I18n.trn("%1 word", "%1 words", TextBackend.wordCount); role: "caption"; dim: true }
-            // A save or open that failed says so, where the eye already is.
-            Label {
+            // ═════════════════════════════════════════════════════════════════
+            // THE EDITORS — one per tab, each with its own undo and place
+            // ═════════════════════════════════════════════════════════════════
+            StackLayout {
+                id: editors
                 Layout.fillWidth: true
-                text: TextBackend.lastError
-                elide: Text.ElideRight
-                role: "caption"
-                color: Design.danger
+                Layout.fillHeight: true
+                currentIndex: TextBackend.currentIndex
+
+                Repeater {
+                    id: tabRepeater
+                    model: TextBackend.tabs
+                    delegate: EditorPane {}
+                }
             }
-            Label { text: TextBackend.fileType + "  ·  UTF-8"; role: "caption"; color: Design.textFaint }
+
+            // ═════════════════════════════════════════════════════════════════
+            // BOTTOM STATUS BAR
+            // ═════════════════════════════════════════════════════════════════
+            AppStatusBar {
+                Layout.fillWidth: true
+                Label { text: I18n.tr("Ln %1, Col %2", window.pane ? window.pane.currentLine : 1, window.pane ? window.pane.currentCol : 1); role: "caption"; isMono: true; dim: true }
+                Label { text: I18n.trn("%1 line", "%1 lines", TextBackend.lineCount) + "  ·  " + I18n.trn("%1 word", "%1 words", TextBackend.wordCount); role: "caption"; dim: true }
+                // A save or open that failed says so, where the eye already is.
+                Label {
+                    Layout.fillWidth: true
+                    text: TextBackend.lastError
+                    elide: Text.ElideRight
+                    role: "caption"
+                    color: Design.danger
+                }
+                Label { text: TextBackend.fileType + "  ·  UTF-8"; role: "caption"; color: Design.textFaint }
+            }
         }
     }
-}
+
+    // Above everything: files dragged in from Files open here, each in a tab
+    // of its own beside what is open already.
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            // urls, or the list itself when the drag carried only that.
+            const urls = (drop.hasUrls ? Array.from(drop.urls, u => String(u))
+                              : String(drop.getDataAsString("text/uri-list") || "").split(/\r?\n/).filter(l => l && !l.startsWith("#")));
+            const files = urls.filter(u => u.startsWith("file://"));
+            if (files.length === 0) return;
+            drop.accept(Qt.CopyAction);
+            for (const u of files) TextBackend.openFile(decodeURIComponent(u.slice(7)));
+        }
+    }
 
     AppDialog {
         id: unsavedDialog
+        // The tab being closed.
+        property string closing: ""
         title: I18n.tr("Unsaved changes")
-        message: I18n.tr("Save changes before starting a new file or closing the editor?")
+        message: I18n.tr("Save changes to %1 before closing it?", TextBackend.fileName)
         standardButtons: Dialog.Cancel | Dialog.Discard | Dialog.Save
         onAccepted: {
-            window.afterSave = window.closeAfterSave ? "quit" : "new";
+            window.closeAfterSave = unsavedDialog.closing;
             window.save();
         }
         onDiscarded: {
             unsavedDialog.close();
-            if (window.closeAfterSave) Qt.quit();
-            else TextBackend.newFile();
+            window.closeTabNow(unsavedDialog.closing);
+        }
+        onRejected: unsavedDialog.closing = ""
+    }
+
+    AppDialog {
+        id: revertDialog
+        title: I18n.tr("Back to the saved file")
+        message: I18n.tr("Let go of the changes to %1 and show it as it is on disk?", TextBackend.fileName)
+        standardButtons: Dialog.Cancel | Dialog.Discard
+        onDiscarded: {
+            revertDialog.close();
+            TextBackend.revertCurrent();
         }
     }
 
@@ -384,7 +372,7 @@ Window {
             savePathField.focusInput();
         }
         onAccepted: TextBackend.saveFile(savePathField.text.trim())
-        onRejected: window.afterSave = ""
+        onRejected: window.closeAfterSave = ""
 
         contentItem: ColumnLayout {
             implicitWidth: Design.s(420)
@@ -399,6 +387,223 @@ Window {
                 id: savePathField
                 Layout.fillWidth: true
                 onAccepted: saveAsDialog.accept()
+            }
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // One tab's editor: line numbers and the text
+    // ═════════════════════════════════════════════════════════════════════════
+    component EditorPane: Rectangle {
+        id: pane
+        required property int index
+        required property string docId
+        required property string path
+        color: Design.base
+
+        property int currentLine: 1
+        property int currentCol: 1
+        // Offset of the first character of every line, for the gutter.
+        property var lineStarts: [0]
+
+        readonly property bool isCurrent: StackLayout.isCurrentItem
+        onIsCurrentChanged: if (isCurrent) { window.pane = pane; editorArea.forceActiveFocus(); }
+
+        function recomputeLineStarts(t) {
+            const starts = [0];
+            let i = -1;
+            while ((i = t.indexOf("\n", i + 1)) !== -1) starts.push(i + 1);
+            pane.lineStarts = starts;
+        }
+        // From the line starts, by halves: it took the text up to the caret
+        // and split it into lines, a copy of most of the file on every key.
+        function calculateCursorPos() {
+            const pos = editorArea.cursorPosition, starts = pane.lineStarts;
+            let lo = 0, hi = starts.length - 1;
+            while (lo < hi) {
+                const mid = (lo + hi + 1) >> 1;
+                if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
+            }
+            pane.currentLine = lo + 1;
+            pane.currentCol = pos - starts[lo] + 1;
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            // ── Line Numbers Gutter ──────────────────────────────────────────
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.preferredWidth: Design.s(52)
+                color: Design.crust
+
+                ListView {
+                    id: lineNumbersView
+                    anchors.fill: parent
+                    anchors.topMargin: editorArea.topPadding
+                    anchors.bottomMargin: editorArea.bottomPadding
+                    clip: true
+                    interactive: false
+                    contentY: editorFlickable.contentY
+
+                    // One number per logical line, each as tall as that
+                    // line is in the editor and placed where it is. They
+                    // had a fixed 20px row against the editor's ~16px
+                    // line, so the numbers drifted further from their
+                    // lines the further down the file one read.
+                    model: pane.lineStarts.length
+
+                    delegate: Item {
+                        required property int index
+                        // Re-evaluated when the layout changes: width
+                        // (wrapping) and contentHeight (any edit).
+                        readonly property real _layout: editorArea.contentHeight + editorArea.width
+                        readonly property rect _here: (_layout, editorArea.positionToRectangle(pane.lineStarts[index] || 0))
+                        readonly property real _next: index + 1 < pane.lineStarts.length
+                            ? (_layout, editorArea.positionToRectangle(pane.lineStarts[index + 1]).y)
+                            : _here.y + _here.height
+                        width: lineNumbersView.width - Design.s(14)
+                        height: Math.max(1, _next - _here.y)
+
+                        Text {
+                            width: parent.width
+                            height: parent._here.height
+                            text: String(index + 1)
+                            font.family: Design.font.mono
+                            font.pixelSize: Design.s(Design.font.body)
+                            color: (index + 1 === pane.currentLine) ? Design.accent : Design.textFaint
+                            horizontalAlignment: Text.AlignRight
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                }
+
+                // Gutter Right Divider
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 1
+                    color: Design.glassBorder
+                }
+            }
+
+            // ── Editor TextArea ──────────────────────────────────────────────
+            Flickable {
+                id: editorFlickable
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+
+                ScrollBar.vertical: OverflowBar {}
+                ScrollBar.horizontal: ScrollBar { policy: window.wordWrapEnabled ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded }
+
+                TextArea.flickable: TextArea {
+                    id: editorArea
+                    font.family: Design.font.mono
+                    font.pixelSize: Design.s(13)
+                    color: Design.text
+                    selectionColor: Design.tint(Design.accent, 0.35)
+                    selectedTextColor: Design.text
+                    tabStopDistance: 32
+                    wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
+                    padding: Design.s(12)
+                    selectByMouse: true
+                    // The tab's text is put in when it opens and when the
+                    // backend replaces it (contentReset), not bound: bound,
+                    // each key sent the whole text back to be compared with
+                    // itself.
+                    property bool loading: true
+                    Component.onCompleted: {
+                        text = TextBackend.contentOf(pane.docId);
+                        cursorPosition = Math.min(TextBackend.cursorOf(pane.docId), length);
+                        loading = false;
+                        pane.recomputeLineStarts(text);
+                        pane.calculateCursorPos();
+                        if (pane.isCurrent) { window.pane = pane; forceActiveFocus(); }
+                    }
+
+                    onTextChanged: {
+                        if (loading) return;
+                        const t = text;
+                        TextBackend.setContentOf(pane.docId, t);
+                        pane.recomputeLineStarts(t);
+                        pane.calculateCursorPos();
+                    }
+
+                    onCursorPositionChanged: {
+                        pane.calculateCursorPos();
+                        if (!loading) TextBackend.setCursorOf(pane.docId, cursorPosition);
+                    }
+
+                    Connections {
+                        target: TextBackend
+                        function onContentReset(id) {
+                            if (id !== pane.docId) return;
+                            const pos = editorArea.cursorPosition;
+                            editorArea.loading = true;
+                            editorArea.text = TextBackend.contentOf(pane.docId);
+                            editorArea.cursorPosition = Math.min(pos, editorArea.length);
+                            editorArea.loading = false;
+                            pane.recomputeLineStarts(editorArea.text);
+                            pane.calculateCursorPos();
+                        }
+                    }
+                }
+
+                // The TextArea is only as tall as its text, so a click in
+                // the empty space below the last line landed on nothing
+                // and the editor never took the caret. This takes it there
+                // and puts the caret at the end.
+                MouseArea {
+                    x: 0
+                    y: editorArea.height
+                    width: editorFlickable.width
+                    height: Math.max(0, editorFlickable.height - editorArea.height)
+                    cursorShape: Qt.IBeamCursor
+                    onClicked: {
+                        editorArea.forceActiveFocus();
+                        editorArea.cursorPosition = editorArea.length;
+                    }
+                }
+
+                // Something to read on an empty document.
+                ColumnLayout {
+                    // Positioned against the Flickable's viewport rather
+                    // than anchored to `parent`: assigning TextArea.flickable
+                    // makes this a child of the content item, whose origin
+                    // is the top-left of the *document*, so centring on it
+                    // put the message in the gutter.
+                    x: (editorFlickable.width - implicitWidth) / 2
+                    y: (editorFlickable.height - implicitHeight) / 2
+                    spacing: Design.s(Design.space.sm)
+                    visible: editorArea.text.length === 0
+                             && !pane.path
+                             && !editorArea.activeFocus
+
+                    Icon {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "\u{f0219}"
+                        role: "display"
+                        color: Design.textFaint
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: I18n.tr("Empty document")
+                        weight: Design.weight.semibold
+                        dim: true
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: I18n.tr("Start typing, or open a file: b1air-text notes.md")
+                        role: "caption"
+                        color: Design.textFaint
+                    }
+                }
             }
         }
     }

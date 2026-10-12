@@ -35,7 +35,7 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void updateProcesses(const std::vector<ProcessInfo>& procs);
+    void updateProcesses(std::vector<ProcessInfo> procs);
     void setFilter(const QString& filter);
     void setSort(const QString& field);
 
@@ -162,6 +162,9 @@ private:
     QHash<int, unsigned long long> m_prevProcTicks;
     qint64 m_prevProcSampleMs = 0;
     QHash<uint, QString> m_userNames;
+    // A name cut to 15 characters, and the whole one read from its cmdline.
+    struct LongName { QString comm; QString name; };
+    QHash<int, LongName> m_longNames;
     int m_taskCount = 0;
 };
 

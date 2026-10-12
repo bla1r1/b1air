@@ -121,7 +121,10 @@ async fn serve(sock: UnixSeqpacket) {
     let mut busy: Option<Busy> = None;
     let mut silent = Silent::default();
     let (done_tx, mut done_rx) = mpsc::channel::<(u32, Vec<u8>)>(4);
+    // Ticks only while the browser waits on the phone (the branch below has
+    // `if busy`): it ticked ten times a second all session for nothing.
     let mut keepalive = tokio::time::interval(Duration::from_millis(100));
+    keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut settings = tokio::time::interval(Duration::from_secs(2));
     let mut buf = [0u8; ctaphid::REPORT + 1];
 
@@ -160,7 +163,7 @@ async fn serve(sock: UnixSeqpacket) {
                     if !send(cid, ctaphid::CBOR, response).await { return; }
                 }
             }
-            _ = keepalive.tick() => {
+            _ = keepalive.tick(), if busy.is_some() => {
                 if let Some(b) = &busy {
                     if !send(b.cid, ctaphid::KEEPALIVE, vec![b.status]).await { return; }
                 }

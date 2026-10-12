@@ -146,6 +146,11 @@ private:
     static std::vector<Entry> readAndKeep(const QString& dir, QString* error);
     // The folders inside `dir`, read ahead in the background.
     static void readAheadOf(const QString& dir, const std::vector<Entry>& entries);
+    // A folder on this machine's disks: read on a worker, waited for briefly.
+    void readLocal(const QString& dir, int generation);
+    // A read done on a worker, back on this thread.
+    void received(const QString& dir, int generation, std::vector<Entry> raw,
+                  const QString& error, bool network);
     // `m_raw` through the options into the rows shown.
     void refilter();
     void setLoading(bool on);
@@ -153,6 +158,7 @@ private:
     std::vector<Entry> m_raw;     // the folder as read, before filter and sort
     QString m_rawDir;             // which folder m_raw is
     bool m_loading = false;
+    bool m_reading = false;       // a read on a worker is still to come
     int m_generation = 0;         // a read that comes back late is dropped
     QStringList m_pendingSelection;
     bool m_hasPendingSelection = false;

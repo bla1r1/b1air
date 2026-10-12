@@ -6,6 +6,7 @@
 #include <QSet>
 #include <QProcess>
 #include <algorithm>
+#include <vector>
 
 ViewBackend::ViewBackend(QObject* parent) : QObject(parent) {}
 
@@ -82,34 +83,42 @@ void ViewBackend::scanDirectory(const QString& dirPath, const QString& currentFi
     // other two, and the arrows go through all of them in the folder.
     QDir dir(dirPath);
     dir.setFilter(QDir::Files);
-    QFileInfoList list = dir.entryInfoList();
+    dir.setSorting(QDir::NoSort);
+    // What the window can open first, then only those sorted: the rest of a
+    // folder (sidecar files, a camera's .xmp beside each photo) was sorted too.
+    struct Item { QFileInfo fi; QString kind; QCollatorSortKey key; };
     // In the order a person counts: "2 - Song" before "10 - Song", as the
-    // tracks of an album are numbered.
+    // tracks of an album are numbered. A sort key each, made once, rather
+    // than the collator asked about both names in every comparison. In lower
+    // case: a key from the C locale's collator would put "B" before "a".
     QCollator collator;
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(list.begin(), list.end(), [&](const QFileInfo& a, const QFileInfo& b) {
-        return collator.compare(a.fileName(), b.fileName()) < 0;
-    });
+    std::vector<Item> items;
+    for (const QFileInfo& fi : dir.entryInfoList()) {
+        const QString kind = kindOf(fi, fi.absoluteFilePath() == currentFile);
+        if (!kind.isEmpty()) items.push_back({fi, kind, collator.sortKey(fi.fileName().toLower())});
+    }
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.key.compare(b.key) < 0; });
 
     m_imageList.clear();
     m_kinds.clear();
     m_filesInDir.clear();
     m_currentIndex = -1;
+    m_imageList.reserve(qsizetype(items.size()));
+    m_kinds.reserve(qsizetype(items.size()));
+    m_filesInDir.reserve(qsizetype(items.size()));
 
-    for (const QFileInfo& fi : list) {
-        const QString path = fi.absoluteFilePath();
-        const bool current = path == currentFile;
-        const QString kind = kindOf(fi, current);
-        if (kind.isEmpty()) continue;
-        if (current) m_currentIndex = m_imageList.size();
+    for (const Item& it : items) {
+        const QString path = it.fi.absoluteFilePath();
+        if (path == currentFile) m_currentIndex = m_imageList.size();
         m_imageList.append(path);
-        m_kinds.append(kind);
+        m_kinds.append(it.kind);
 
         QVariantMap item;
         item["path"] = path;
-        item["name"] = fi.fileName();
-        item["kind"] = kind;
+        item["name"] = it.fi.fileName();
+        item["kind"] = it.kind;
         m_filesInDir.append(item);
     }
 

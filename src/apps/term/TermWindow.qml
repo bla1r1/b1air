@@ -211,6 +211,22 @@ Window {
                                 if (holding) window.closeTab(index);
                             }
                         }
+
+                        // Files dragged in from Files: their paths, typed in
+                        // where the cursor is; text dragged in, pasted.
+                        DropArea {
+                            anchors.fill: singleTermView
+                            onEntered: drag => drag.accept(Qt.CopyAction)
+                            onDropped: drop => {
+                                const urls = (drop.hasUrls ? Array.from(drop.urls, u => String(u))
+                                                 : String(drop.getDataAsString("text/uri-list") || "").split(/\r?\n/).filter(l => l && !l.startsWith("#")));
+                                if (urls.length > 0) singleTermView.dropUrls(urls);
+                                else if (drop.hasText) singleTermView.pasteText(drop.text);
+                                else return;
+                                drop.accept(Qt.CopyAction);
+                                window.currentTabIndex = index;
+                            }
+                        }
                     }
                 }
             }

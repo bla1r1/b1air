@@ -24,10 +24,20 @@ int main(int argc, char* argv[]) {
     // a container, a driver that is not loaded) Mesa's EGL failed to start,
     // and the window that came up was drawn at the wrong scale, half of it
     // off the edge. The software renderer is what that machine would have
-    // ended up using anyway, minus the breakage. QT_QUICK_BACKEND overrides.
-    if (!qEnvironmentVariableIsSet("QT_QUICK_BACKEND")
-        && QDir("/dev/dri").entryList({"renderD*"}, QDir::System).isEmpty())
+    // ended up using anyway, minus the breakage.
+    //
+    // Where there is one, the GPU whatever the session says: it exports
+    // QT_QUICK_BACKEND=software for every app, and Qt's software renderer
+    // draws no video at all (Qt 6.11, see b1air-view) — the viewfinder came up
+    // black. OpenGL also turns the camera's YUV frames into RGB in a shader
+    // rather than on the CPU. Not Vulkan: Qt's video node crashed in it here.
+    const bool gpu = !QDir("/dev/dri").entryList({"renderD*"}, QDir::System).isEmpty();
+    if (!gpu) {
         qputenv("QT_QUICK_BACKEND", "software");
+    } else if (qEnvironmentVariable("QT_QUICK_BACKEND") == QLatin1String("software")) {
+        qunsetenv("QT_QUICK_BACKEND");
+        qputenv("QSG_RHI_BACKEND", "opengl");
+    }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-camera");

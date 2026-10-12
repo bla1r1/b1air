@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QQuickPaintedItem>
+#include <QUrl>
 #include <QFont>
 #include <QFontMetricsF>
 #include <QSocketNotifier>
@@ -55,6 +56,10 @@ public:
     Q_INVOKABLE void sendText(const QString &text);
     Q_INVOKABLE void copySelection();
     Q_INVOKABLE void pasteClipboard();
+    /** Text as if pasted (bracketed when the program asked for it). */
+    Q_INVOKABLE void pasteText(const QString& text);
+    /** Files dropped on the terminal: their paths, quoted, typed in. */
+    Q_INVOKABLE void dropUrls(const QStringList& urls);
     Q_INVOKABLE void zoomIn();
     Q_INVOKABLE void zoomOut();
     Q_INVOKABLE void resetZoom();
@@ -96,6 +101,7 @@ private:
     void initTerminal(int rows, int cols);
     void childExited();
     void restartBlink();
+    void updateRows(int from, int to);   // rows [from, to) of the live screen
     void updateFontMetrics();
     void updatePtySize();
     QColor toQColor(const VTermColor &color, const QColor &defaultColor) const;

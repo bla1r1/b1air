@@ -592,11 +592,19 @@ Made make(const QString& path, int size, bool far, qint64 knownMtime, int need) 
 class Job : public QObject, public QRunnable {
     Q_OBJECT
 public:
-    Job(QString path, int size, bool far, qint64 mtime, int need)
-        : m_path(std::move(path)), m_size(size), m_far(far), m_mtime(mtime), m_need(need) {}
+    Job(QString path, int size, bool far, qint64 mtime, QSize want)
+        : m_path(std::move(path)), m_size(size), m_far(far), m_mtime(mtime), m_want(want) {}
     void run() override {
-        const Made m = make(m_path, m_size, m_far, m_mtime, m_need);
-        emit done(m.image);
+        const Made m = make(m_path, m_size, m_far, m_mtime,
+                            m_want.isValid() ? std::max(m_want.width(), m_want.height()) : 0);
+        // Down to the size asked for here, on the pool: done in the response
+        // it was the image provider's one thread that scaled every tile of
+        // the folder, one after another, cached ones too.
+        QImage shown = m.image;
+        if (!shown.isNull() && m_want.width() > 0 && m_want.height() > 0
+            && (shown.width() > m_want.width() || shown.height() > m_want.height()))
+            shown = shown.scaled(m_want, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        emit done(shown);
         store(m);
     }
 signals:
@@ -606,21 +614,18 @@ private:
     int m_size;
     bool m_far;
     qint64 m_mtime;
-    int m_need;
+    QSize m_want;
 };
 
 class Response : public QQuickImageResponse {
 public:
     Response(const QString& path, qint64 mtime, QSize want, QThreadPool& pool, bool far)
-        : m_want(want), m_pool(&pool) {
-        auto* job = new Job(path, sizeFor(want), far, mtime, want.isValid() ? std::max(want.width(), want.height()) : 0);
+        : m_pool(&pool) {
+        auto* job = new Job(path, sizeFor(want), far, mtime, want);
         m_job = job;
         connect(job, &Job::done, this, [this](const QImage& image) {
             m_job = nullptr;
             m_image = image;
-            if (!m_image.isNull() && m_want.isValid() && m_want.width() > 0 && m_want.height() > 0
-                && (m_image.width() > m_want.width() || m_image.height() > m_want.height()))
-                m_image = m_image.scaled(m_want, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             emit finished();
         }, Qt::QueuedConnection);
         pool.start(job);
@@ -640,7 +645,6 @@ public:
         }
     }
 private:
-    QSize m_want;
     QImage m_image;
     QThreadPool* m_pool;
     QRunnable* m_job = nullptr;   // ours again only if taken back unstarted

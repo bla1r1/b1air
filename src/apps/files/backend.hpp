@@ -245,6 +245,8 @@ private:
     bool restoreOriginals(const QStringList& originals);
     int m_trashCount = 0;
     QVariantList m_volumes;
+    bool m_volumesReading = false;
+    bool m_volumesAgain = false;
     QVariantList m_shares;
     QVariantList m_recentServers;
     bool m_connecting = false;

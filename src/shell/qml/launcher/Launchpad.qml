@@ -170,11 +170,12 @@ PopupShell {
             "b1air-monitor", "b1air-view", "b1air-text"
         ];
         if (nativeApps.includes(value)) {
-            // execvp resolves a bare name via PATH, and this whole suite
-            // installs to ~/.local/bin — not guaranteed to be on it (it
-            // wasn't, for every session already running before that got
-            // fixed). Absolute path sidesteps PATH entirely.
-            Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/" + value]);
+            // By name, through PATH, as the rest of the shell runs them
+            // (FocusTimePopup's b1air-daemon): the suite installs wherever
+            // install.sh puts it (/usr/local/bin now). The absolute
+            // ~/.local/bin path it used to have here ran nothing once the
+            // copies there were gone — no tile of ours opened.
+            Quickshell.execDetached([value]);
             return true;
         }
 

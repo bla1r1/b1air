@@ -269,6 +269,10 @@ ApplicationWindow {
                                 : Qt.size(Screen.width * Screen.devicePixelRatio,
                                           Screen.height * Screen.devicePixelRatio)
                             cache: false
+                            // The picture before stays until the next one is
+                            // decoded: stepping through a folder showed the
+                            // empty canvas between every two.
+                            retainWhileLoading: true
                             smooth: true
                             mipmap: window.zoomFactor < 0.9
                             rotation: window.rotationAngle
@@ -588,7 +592,9 @@ ApplicationWindow {
                         border.color: isCur ? window.colBlue : "transparent"
                         border.width: 1
 
-                        readonly property bool isCur: modelData.path === ViewBackend.currentPath
+                        required property int index
+                        required property var modelData
+                        readonly property bool isCur: index === ViewBackend.fileIndex
 
                         // A film by a frame of it, a song by its cover, a
                         // picture small — all from the thumbnail cache Files
@@ -684,5 +690,21 @@ ApplicationWindow {
         property bool active: false
         glyph: icon
         checked: active
+    }
+
+    // A picture, a film or a song dragged in from Files: shown, with its
+    // folder to step through.
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            // urls, or the list itself when the drag carried only that.
+            const urls = (drop.hasUrls ? Array.from(drop.urls, u => String(u))
+                              : String(drop.getDataAsString("text/uri-list") || "").split(/\r?\n/).filter(l => l && !l.startsWith("#")));
+            const url = urls.length ? urls[0] : "";
+            if (!url.startsWith("file://")) return;
+            drop.accept(Qt.CopyAction);
+            ViewBackend.openFile(decodeURIComponent(url.slice(7)));
+        }
     }
 }

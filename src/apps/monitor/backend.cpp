@@ -15,6 +15,11 @@
 #include <cstring>
 #include <pwd.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cstdlib>
 
 namespace b1air {
 
@@ -55,8 +60,8 @@ QHash<int, QByteArray> ProcessModel::roleNames() const {
     };
 }
 
-void ProcessModel::updateProcesses(const std::vector<ProcessInfo>& procs) {
-    m_all = procs;
+void ProcessModel::updateProcesses(std::vector<ProcessInfo> procs) {
+    m_all = std::move(procs);
     applyFilterAndSort();
 }
 
@@ -104,6 +109,7 @@ void ProcessModel::applyFilterAndSort() {
 
     // In place, not a model reset. A reset every refresh threw the list back
     // to the top 40 times a minute and rebuilt every row.
+    const std::vector<ProcessInfo> prev = m_filtered;
     const int oldCount = static_cast<int>(m_filtered.size());
     const int newCount = static_cast<int>(next.size());
     if (newCount > oldCount) {
@@ -117,8 +123,22 @@ void ProcessModel::applyFilterAndSort() {
     } else {
         m_filtered = std::move(next);
     }
-    if (!m_filtered.empty())
-        emit dataChanged(index(0), index(static_cast<int>(m_filtered.size()) - 1));
+    // Only the rows that read differently: every row was told it changed on
+    // every sample, and each one on screen redid all its bindings — on an
+    // idle machine, for the same numbers.
+    const auto same = [](const ProcessInfo& a, const ProcessInfo& b) {
+        return a.pid == b.pid && a.cpu == b.cpu && a.mem == b.mem && a.name == b.name && a.user == b.user;
+    };
+    const int common = std::min(oldCount, newCount);
+    int from = -1;
+    for (int i = 0; i <= common; ++i) {
+        const bool changed = i < common && !same(prev[size_t(i)], m_filtered[size_t(i)]);
+        if (changed && from < 0) from = i;
+        if (!changed && from >= 0) {
+            emit dataChanged(index(from), index(i - 1));
+            from = -1;
+        }
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -320,6 +340,22 @@ void MonitorBackend::updateLoadAndUptime() {
 // re-sorted the 40 busiest by CPU, and the footer counted 40 tasks on any
 // machine. ps's %CPU is also the average over the process's whole life, not
 // what it is doing now; this is the share of the last interval, as top shows.
+namespace {
+
+// A small file under /proc, whole, by a path relative to the open /proc.
+// QFile cost more than the reading: an object, a path built, an open through
+// its engine, for each of three files of each of hundreds of processes.
+ssize_t readProc(int procFd, const char* path, char* buf, size_t size) {
+    const int fd = openat(procFd, path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    const ssize_t n = read(fd, buf, size - 1);
+    close(fd);
+    buf[n > 0 ? n : 0] = 0;
+    return n;
+}
+
+} // namespace
+
 void MonitorBackend::updateProcesses() {
     static const long ticksPerSec = sysconf(_SC_CLK_TCK);
     static const long pageKb = sysconf(_SC_PAGESIZE) / 1024;
@@ -329,56 +365,87 @@ void MonitorBackend::updateProcesses() {
     const double memTotalKb = m_ramTotalMb > 0 ? m_ramTotalMb * 1024.0 : 0.0;
 
     std::vector<ProcessInfo> list;
+    list.reserve(m_prevProcTicks.size() + 16);
     QHash<int, unsigned long long> ticksNow;
-    const QStringList pids = QDir("/proc").entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QString& entry : pids) {
-        bool isPid = false;
-        const int pid = entry.toInt(&isPid);
-        if (!isPid) continue;
-        const QString base = "/proc/" + entry;
+    ticksNow.reserve(m_prevProcTicks.size() + 16);
+    QHash<int, LongName> longNames;
+    DIR* proc = opendir("/proc");
+    if (!proc) return;
+    const int procFd = dirfd(proc);
+    char buf[4096];
+    char path[64];
+    while (const struct dirent* e = readdir(proc)) {
+        if (e->d_type != DT_DIR && e->d_type != DT_UNKNOWN) continue;
+        char* end = nullptr;
+        const long pid = std::strtol(e->d_name, &end, 10);
+        if (!end || *end || pid <= 0) continue;
 
-        QFile statFile(base + "/stat");
-        if (!statFile.open(QIODevice::ReadOnly)) continue;
-        const QByteArray stat = statFile.readAll();
+        std::snprintf(path, sizeof(path), "%ld/stat", pid);
+        if (readProc(procFd, path, buf, sizeof(buf)) <= 0) continue;
         // comm is in parentheses and may itself hold spaces or ')'.
-        const int open = stat.indexOf('('), close = stat.lastIndexOf(')');
-        if (open < 0 || close < open) continue;
-        QString name = QString::fromUtf8(stat.mid(open + 1, close - open - 1));
-        const QList<QByteArray> f = stat.mid(close + 2).split(' ');
-        if (f.size() < 22) continue;
-        const unsigned long long ticks = f[11].toULongLong() + f[12].toULongLong(); // utime + stime
-        const long long rssPages = f[21].toLongLong();
-        ticksNow.insert(pid, ticks);
+        const char* open = std::strchr(buf, '(');
+        const char* close = std::strrchr(buf, ')');
+        if (!open || !close || close < open || close[1] == 0) continue;
+        // The fields after comm, from the state (field 3) on: utime and
+        // stime are 14 and 15, rss 24.
+        unsigned long long utime = 0, stime = 0;
+        long long rssPages = 0;
+        const char* f = close + 2;
+        int field = 3;
+        while (*f && field <= 24) {
+            if (field == 14) utime = std::strtoull(f, nullptr, 10);
+            else if (field == 15) stime = std::strtoull(f, nullptr, 10);
+            else if (field == 24) rssPages = std::strtoll(f, nullptr, 10);
+            f = std::strchr(f, ' ');
+            if (!f) break;
+            ++f;
+            ++field;
+        }
+        if (field < 24) continue;
+        const unsigned long long ticks = utime + stime;
+        ticksNow.insert(int(pid), ticks);
+        QString name = QString::fromUtf8(open + 1, close - open - 1);
 
         // comm stops at 15 characters ("environment-man"); the executable's
-        // own name is in cmdline.
+        // own name is in cmdline — read once for each process, not on every
+        // sample.
         if (name.size() >= 15) {
-            QFile cmd(base + "/cmdline");
-            if (cmd.open(QIODevice::ReadOnly)) {
-                const QByteArray argv0 = cmd.readAll().split('\0').value(0);
-                const QString exe = QFileInfo(QString::fromUtf8(argv0)).fileName();
-                if (exe.startsWith(name)) name = exe;
+            const auto known = m_longNames.constFind(int(pid));
+            if (known != m_longNames.cend() && known->comm == name) {
+                longNames.insert(int(pid), *known);
+                name = known->name;
+            } else {
+                const QString comm = name;
+                std::snprintf(path, sizeof(path), "%ld/cmdline", pid);
+                if (readProc(procFd, path, buf, sizeof(buf)) > 0) {
+                    const QString exe = QFileInfo(QString::fromUtf8(buf)).fileName();   // argv[0]
+                    if (exe.startsWith(name)) name = exe;
+                }
+                longNames.insert(int(pid), {comm, name});
             }
         }
 
         ProcessInfo p;
-        p.pid = pid;
-        p.name = name;
-        const auto prev = m_prevProcTicks.constFind(pid);
+        p.pid = int(pid);
+        p.name = std::move(name);
+        const auto prev = m_prevProcTicks.constFind(int(pid));
         p.cpu = (elapsedTicks > 0 && prev != m_prevProcTicks.cend() && ticks >= *prev)
                 ? float((ticks - *prev) / elapsedTicks * 100.0) : 0.0f;
         p.mem = memTotalKb > 0 ? float(rssPages * pageKb / memTotalKb * 100.0) : 0.0f;
 
-        const uint uid = QFileInfo(base).ownerId();
+        struct stat st {};
+        const uint uid = fstatat(procFd, e->d_name, &st, 0) == 0 ? st.st_uid : 0;
         auto u = m_userNames.constFind(uid);
         if (u == m_userNames.cend()) {
             const struct passwd* pw = getpwuid(uid);
             u = m_userNames.insert(uid, pw ? QString::fromUtf8(pw->pw_name) : QString::number(uid));
         }
         p.user = *u;
-        list.push_back(p);
+        list.push_back(std::move(p));
     }
+    closedir(proc);
     m_prevProcTicks = std::move(ticksNow);
+    m_longNames = std::move(longNames);
     m_prevProcSampleMs = nowMs;
 
     if (m_taskCount != int(list.size())) {
@@ -386,7 +453,7 @@ void MonitorBackend::updateProcesses() {
         emit tasksChanged();
     }
     if (m_procModel) {
-        m_procModel->updateProcesses(list);
+        m_procModel->updateProcesses(std::move(list));
     }
 }
 

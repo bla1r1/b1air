@@ -8,7 +8,11 @@
 #include <QQmlContext>
 #include <QDir>
 #include <QFile>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <iostream>
+#include <memory>
+#include <unistd.h>
 #include "qml_search.hpp"
 #include "backend.hpp"
 
@@ -35,6 +39,29 @@ int main(int argc, char* argv[]) {
     app.setDesktopFileName("b1air-text");
     app.setOrganizationName("bla1r1");
 
+    // The files named on the command line, as absolute paths.
+    QStringList files;
+    for (int i = 1; i < argc; ++i) {
+        const QString arg = QString::fromUtf8(argv[i]);
+        if (!arg.startsWith('-')) files << b1air::app::path_arg(arg);
+    }
+
+    // One window, with a tab per file: a second `b1air-text` (a file opened
+    // from Files, from the terminal) hands its files to the window already
+    // open and goes. It used to be a window each, and the tabs and the
+    // session would have been split between them.
+    const QString socketName = QStringLiteral("b1air-text-") + QString::number(getuid());
+    {
+        QLocalSocket other;
+        other.connectToServer(socketName);
+        if (other.waitForConnected(500)) {
+            other.write((files.join('\n') + '\n').toUtf8());
+            other.waitForBytesWritten(1000);
+            other.disconnectFromServer();
+            return 0;
+        }
+    }
+
     QQmlApplicationEngine engine;
     b1air::app::add_import_paths(engine, "text");
 
@@ -45,9 +72,27 @@ int main(int argc, char* argv[]) {
     });
 
     b1air::TextBackend backend;
-    if (argc > 1) {
-        QString fileArg = b1air::app::path_arg(QString::fromUtf8(argv[1]));
-        backend.openFile(fileArg);
+    // The tabs left open last time, unsaved changes included; then these.
+    backend.restoreSession();
+    for (const QString& f : files) backend.openFile(f);
+
+    QLocalServer server;
+    QLocalServer::removeServer(socketName);   // one left by a crash
+    server.setSocketOptions(QLocalServer::UserAccessOption);
+    if (server.listen(socketName)) {
+        QObject::connect(&server, &QLocalServer::newConnection, &server, [&server, &backend] {
+            while (QLocalSocket* s = server.nextPendingConnection()) {
+                auto buffer = std::make_shared<QByteArray>();
+                QObject::connect(s, &QLocalSocket::readyRead, s, [s, buffer] { buffer->append(s->readAll()); });
+                QObject::connect(s, &QLocalSocket::disconnected, s, [s, buffer, &backend] {
+                    buffer->append(s->readAll());
+                    for (const QString& f : QString::fromUtf8(*buffer).split('\n', Qt::SkipEmptyParts))
+                        backend.openFile(f);
+                    emit backend.raiseRequested();
+                    s->deleteLater();
+                });
+            }
+        });
     }
     engine.rootContext()->setContextProperty("TextBackend", &backend);
 

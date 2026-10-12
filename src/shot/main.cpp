@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cairo.h>
+#include "fonts.hpp"
 #include <cerrno>
 #include <chrono>
 #include <cmath>
@@ -277,13 +278,17 @@ void load_mics() {
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
 
-constexpr const char* kFont = "Inter";
+// Inter, the desktop's sans (Ui/Design), or sans-serif without it.
+const std::string& sans_font() {
+    static const std::string family = b1air::installed_family("Inter");
+    return family;
+}
 constexpr const char* kIconFont = "b1air Symbols";
 
 void set(cairo_t* cr, const Colour& c, double a = 1.0) { cairo_set_source_rgba(cr, c.r, c.g, c.b, a); }
 
 void font(cairo_t* cr, double size, bool bold, bool icon = false) {
-    cairo_select_font_face(cr, icon ? kIconFont : kFont, CAIRO_FONT_SLANT_NORMAL,
+    cairo_select_font_face(cr, icon ? kIconFont : sans_font().c_str(), CAIRO_FONT_SLANT_NORMAL,
                            bold ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cr, size);
 }

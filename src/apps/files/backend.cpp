@@ -1085,29 +1085,47 @@ void FileManagerBackend::compressItems(const QStringList& paths, const QString& 
 
 // ── Drives ──────────────────────────────────────────────────────────────────
 
+// On a worker: QStorageInfo asks every mount for its size (statvfs), a
+// network one included, and a NAS mounted under /mnt that has gone to sleep
+// held the window for as long as it took to answer — every three seconds.
 void FileManagerBackend::updateVolumes() {
-    QVariantList list;
-    for (const QStorageInfo& s : QStorageInfo::mountedVolumes()) {
-        if (!s.isValid() || !s.isReady()) continue;
-        const QString root = s.rootPath();
-        // What a person plugged in or mounted, not the system's own mounts.
-        const bool user = root.startsWith("/media/") || root.startsWith("/run/media/") || root.startsWith("/mnt/");
-        if (!user) continue;
-        QVariantMap v;
-        v["name"] = s.displayName().isEmpty() || s.displayName() == root ? QFileInfo(root).fileName() : s.displayName();
-        v["path"] = root;
-        v["device"] = QString::fromUtf8(s.device());
-        v["free"] = FileListModel::formatSize(s.bytesAvailable());     // the UI adds "free"
-        v["percent"] = s.bytesTotal() > 0 ? 1.0 - double(s.bytesAvailable()) / double(s.bytesTotal()) : 0.0;
-        // Shown as a device (DeviceManager), not as a drive.
-        v["ipod"] = QFileInfo(root + "/iPod_Control").isDir();
-        list << v;
-    }
-    if (list != m_volumes) {
-        m_volumes = list;
-        emit volumesChanged();
-    }
-    updateShares();
+    // The last look has not come back yet: one more when it has (an unmount
+    // asks right after the drive is gone).
+    if (m_volumesReading) { m_volumesAgain = true; return; }
+    m_volumesReading = true;
+    QPointer<FileManagerBackend> self(this);
+    std::thread([self]() {
+        QVariantList list;
+        for (const QStorageInfo& s : QStorageInfo::mountedVolumes()) {
+            if (!s.isValid() || !s.isReady()) continue;
+            const QString root = s.rootPath();
+            // What a person plugged in or mounted, not the system's own mounts.
+            const bool user = root.startsWith("/media/") || root.startsWith("/run/media/") || root.startsWith("/mnt/");
+            if (!user) continue;
+            QVariantMap v;
+            v["name"] = s.displayName().isEmpty() || s.displayName() == root ? QFileInfo(root).fileName() : s.displayName();
+            v["path"] = root;
+            v["device"] = QString::fromUtf8(s.device());
+            v["free"] = FileListModel::formatSize(s.bytesAvailable());     // the UI adds "free"
+            v["percent"] = s.bytesTotal() > 0 ? 1.0 - double(s.bytesAvailable()) / double(s.bytesTotal()) : 0.0;
+            // Shown as a device (DeviceManager), not as a drive.
+            v["ipod"] = QFileInfo(root + "/iPod_Control").isDir();
+            list << v;
+        }
+        QMetaObject::invokeMethod(qApp, [self, list]() {
+            if (!self) return;
+            self->m_volumesReading = false;
+            if (list != self->m_volumes) {
+                self->m_volumes = list;
+                emit self->volumesChanged();
+            }
+            self->updateShares();
+            if (self->m_volumesAgain) {
+                self->m_volumesAgain = false;
+                self->updateVolumes();
+            }
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 bool FileManagerBackend::unmount(const QString& path) {

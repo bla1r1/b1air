@@ -49,8 +49,14 @@ public:
     int count() const { return m_rows.size(); }
     Q_INVOKABLE QString hashAt(int row) const;
 
+    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; QString email; };
+    /** A page of the log, newest first; safe off the GUI thread. */
+    static QList<Commit> readPage(const QString& repoPath, int skip);
+
     /** Start again from the newest commit of the repository at path. */
     void reload(const QString& repoPath);
+    /** The same, with the first page already read (GitBackend::refresh, on a worker). */
+    void reset(const QString& repoPath, const QList<Commit>& firstPage);
 
     /**
      * Which commits are on no remote. Updated in place — a push changes every
@@ -63,8 +69,7 @@ signals:
     void countChanged();
 
 private:
-    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; QString email; };
-    QList<Commit> readPage(int skip) const;
+    QList<Commit> readPage(int skip) const { return readPage(m_repoPath, skip); }
 
     QString m_repoPath;
     QList<Commit> m_rows;
@@ -72,6 +77,9 @@ private:
     QSet<QString> m_unpushed;
     bool m_hasRemote = false;
 };
+
+// What refresh() reads on the GUI thread and what a worker finds (git_backend.cpp).
+struct GitRefresh;
 
 class GitBackend : public QObject {
     Q_OBJECT
@@ -313,10 +321,11 @@ private:
     // top unstaged file read as staged and its button called unstage.
     QString runGit(const QStringList& args, bool trim = true);
     bool m_isRepo = false;
-    void updateBranch();
-    void updateStatus();
-    void updateHistory();
-    void updateSync();
+    // refresh() runs git on a worker; one at a time, and one more if asked
+    // for while it ran.
+    bool m_refreshing = false;
+    bool m_refreshAgain = false;
+    void applyRefresh(const GitRefresh& r);
     void updateDiff();
 
     bool m_hasRemote = false;

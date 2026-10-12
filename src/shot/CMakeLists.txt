@@ -2,7 +2,7 @@
 # place of ScreenshotOverlay.qml (a Quickshell process per press of Print).
 # wayland-client with wlr-layer-shell, cairo, xkbcommon; b1air-core for the
 # settings, the palette, the translations and the QR scan.
-pkg_check_modules(SHOT_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon)
+pkg_check_modules(SHOT_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon fontconfig)
 find_program(SHOT_WAYLAND_SCANNER wayland-scanner REQUIRED)
 
 set(SHOT_XML ${PROJECT_SOURCE_DIR}/bg/protocol/wlr-layer-shell-unstable-v1.xml)

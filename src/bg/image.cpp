@@ -12,6 +12,9 @@
 #ifdef B1AIR_HAVE_WEBP
 #include <webp/decode.h>
 #include <iterator>
+#ifdef B1AIR_HAVE_TURBOJPEG
+#include <turbojpeg.h>
+#endif
 #endif
 
 #include <algorithm>
@@ -128,7 +131,9 @@ int exif_orientation(const std::string& path) {
     }
 }
 
-bool load(const std::string& path, Pixels& px) {
+// need_w × need_h: the least the picture is wanted at (0 for whole), so a
+// JPEG can be decoded straight at a fraction of its size.
+bool load(const std::string& path, Pixels& px, int need_w = 0, int need_h = 0) {
 #ifdef B1AIR_HAVE_WEBP
     {
         std::ifstream f(path, std::ios::binary);
@@ -148,6 +153,48 @@ bool load(const std::string& path, Pixels& px) {
         }
     }
 #endif
+#ifdef B1AIR_HAVE_TURBOJPEG
+    // JPEG through libjpeg-turbo, three to four times stb's speed, and at
+    // 1/2, 1/4 or 1/8 of the size wherever that is still enough: stb took
+    // 0.44 s to bring a 6512×4341 wallpaper to a 1920×1080 screen, and the
+    // lock screen, which wants a twelfth of the screen, waited 0.41 s for it
+    // on every screen. Anything it cannot do (CMYK, a broken file) goes on
+    // to stb below.
+    {
+        std::ifstream f(path, std::ios::binary);
+        unsigned char soi[2] = {};
+        if (f.read(reinterpret_cast<char*>(soi), 2) && soi[0] == 0xff && soi[1] == 0xd8) {
+            f.seekg(0);
+            const std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(f)), {});
+            tjhandle tj = tjInitDecompress();
+            int W = 0, H = 0, sub = 0, space = 0;
+            if (tj && tjDecompressHeader3(tj, bytes.data(), static_cast<unsigned long>(bytes.size()),
+                                          &W, &H, &sub, &space) == 0 && W > 0 && H > 0) {
+                int bw = W, bh = H, n = 0;
+                const tjscalingfactor* factors = tjGetScalingFactors(&n);
+                for (int k = 0; factors && k < n; ++k) {
+                    const int sw = TJSCALED(W, factors[k]), sh = TJSCALED(H, factors[k]);
+                    if (sw >= need_w && sh >= need_h && sw > 0 && sh > 0 && long(sw) * sh < long(bw) * bh) {
+                        bw = sw;
+                        bh = sh;
+                    }
+                }
+                auto* data = static_cast<unsigned char*>(std::malloc(static_cast<size_t>(bw) * bh * 3));
+                if (data && tjDecompress2(tj, bytes.data(), static_cast<unsigned long>(bytes.size()), data,
+                                          bw, 0, bh, TJPF_RGB, 0) == 0) {
+                    tjDestroy(tj);
+                    px = {};
+                    px.width = bw; px.height = bh; px.channels = 3;
+                    px.data = data;
+                    px.release = [](void* p) { std::free(p); };
+                    return true;
+                }
+                std::free(data);
+            }
+            if (tj) tjDestroy(tj);
+        }
+    }
+#endif
     int w = 0, h = 0, comp = 0;
     if (!stbi_info(path.c_str(), &w, &h, &comp)) return false;
     // Three channels when there is no alpha to keep: a quarter less to hold.
@@ -164,7 +211,12 @@ bool decode_cover(const std::string& path, int width, int height, uint32_t groun
                   uint32_t* dst, int stride) {
     if (width <= 0 || height <= 0) return false;
     Pixels px;
-    if (!load(path, px) || px.width <= 0 || px.height <= 0) return false;
+    // Turned a quarter (orientations 5-8), the picture's width is the
+    // screen's height.
+    const int orientation = exif_orientation(path);
+    const bool turned = orientation >= 5 && orientation <= 8;
+    if (!load(path, px, turned ? height : width, turned ? width : height) || px.width <= 0 || px.height <= 0)
+        return false;
 
     // The picture as it is meant to be seen: pixel (u, v) of it is raw pixel
     // origin + u·du + v·dv. Turning it this way costs nothing — no second
@@ -173,7 +225,7 @@ bool decode_cover(const std::string& path, int width, int height, uint32_t groun
     const long W = px.width, H = px.height;
     long origin = 0, du = 1, dv = W;
     int iw = px.width, ih = px.height;
-    switch (exif_orientation(path)) {
+    switch (orientation) {
     case 2: origin = W - 1;               du = -1; dv = W;  break;   // mirrored
     case 3: origin = (H - 1) * W + W - 1; du = -1; dv = -W; break;   // upside down
     case 4: origin = (H - 1) * W;         du = 1;  dv = -W; break;   // mirrored, upside down

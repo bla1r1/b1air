@@ -56,6 +56,13 @@ if(WEBP_FOUND)
     target_link_libraries(b1air-bg PRIVATE PkgConfig::WEBP)
     target_compile_definitions(b1air-bg PRIVATE B1AIR_HAVE_WEBP)
 endif()
+# JPEG through libjpeg-turbo where its headers are there (image.cpp says why);
+# stb_image otherwise.
+pkg_check_modules(TURBOJPEG IMPORTED_TARGET libturbojpeg)
+if(TURBOJPEG_FOUND)
+    target_link_libraries(b1air-bg PRIVATE PkgConfig::TURBOJPEG)
+    target_compile_definitions(b1air-bg PRIVATE B1AIR_HAVE_TURBOJPEG)
+endif()
 b1air_warnings(b1air-bg)
 # stb_image is not warning-clean under -Wextra; its one translation unit is
 # held to less.

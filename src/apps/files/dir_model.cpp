@@ -21,7 +21,9 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QThreadPool>
+#include <QWaitCondition>
 #include <atomic>
+#include <memory>
 
 namespace b1air {
 
@@ -136,6 +138,8 @@ void FileListModel::load(const QString& dir, const Options& opts, bool relist) {
         m_selected.clear();
         m_current = -1;
         m_anchor = -1;
+        m_hasPendingSelection = false;
+        m_pendingSelection.clear();
     }
     if (!relist && sameDir && m_rawDir == dir && !m_loading) {
         refilter();
@@ -148,6 +152,42 @@ void FileListModel::open(const QString& dir, bool showHidden) {
     Options o;
     o.showHidden = showHidden;
     load(dir, o);
+}
+
+// What a file's name alone makes of it, kept by the name. A name with no
+// extension the database knows is tried against every other pattern it has
+// ("Makefile", "README*", "*~"): 55 µs a file, and /usr/bin is 2000 such
+// names — 0.12 s of the 0.2 s it took to list. Asked again for the same
+// name (the folder reopened, changed on disk, read ahead), it is a lookup.
+static QMimeType typeByName(const QMimeDatabase& db, const QFileInfo& fi) {
+    static QMutex lock;
+    static QHash<QString, QString> known;
+    const QString name = fi.fileName();
+    {
+        QMutexLocker l(&lock);
+        const auto it = known.constFind(name);
+        if (it != known.cend()) return db.mimeTypeForName(*it);
+    }
+    const QMimeType mt = db.mimeTypeForFile(name, QMimeDatabase::MatchExtension);
+    QMutexLocker l(&lock);
+    if (known.size() > 200000) known.clear();
+    known.insert(name, mt.name());
+    return mt;
+}
+
+// "PNG image" for image/png: the comment is looked up in the database's
+// translations each time it is asked for, 8 µs a file.
+static QString kindOfType(const QMimeType& mt) {
+    static QMutex lock;
+    static QHash<QString, QString> known;
+    QMutexLocker l(&lock);
+    auto it = known.constFind(mt.name());
+    if (it == known.cend()) {
+        QString kind = mt.comment().isEmpty() ? mt.name() : mt.comment();
+        if (!kind.isEmpty()) kind[0] = kind[0].toUpper();
+        it = known.insert(mt.name(), kind);
+    }
+    return *it;
 }
 
 std::vector<FileListModel::Entry> FileListModel::list(const QString& dir, QString* error) {
@@ -195,13 +235,12 @@ std::vector<FileListModel::Entry> FileListModel::list(const QString& dir, QStrin
             // content either for a program (/usr/bin: 2000 files read, 0.6 s
             // of the 0.7 s it took to open) or for a file on a share or a
             // phone, where each read is a trip to the other end.
-            QMimeType mt = mimeDb.mimeTypeForFile(fi, QMimeDatabase::MatchExtension);
+            QMimeType mt = typeByName(mimeDb, fi);
             if (mt.isDefault() && fi.suffix().isEmpty() && fi.size() < (64 << 20) && !far && !fi.isExecutable())
                 mt = mimeDb.mimeTypeForFile(fi, QMimeDatabase::MatchContent);
             else if (mt.isDefault() && fi.suffix().isEmpty() && fi.isExecutable())
                 mt = mimeDb.mimeTypeForName(QStringLiteral("application/x-executable"));
-            e.kind = mt.comment().isEmpty() ? mt.name() : mt.comment();
-            if (!e.kind.isEmpty()) e.kind[0] = e.kind[0].toUpper();
+            e.kind = kindOfType(mt);
             // Whether it runs, only for a file nothing else has named:
             // isExecutable() is an access() call, and on a share each is a
             // trip to the server — 7 ms a file on a router's Samba, most of
@@ -351,13 +390,18 @@ void FileListModel::readAheadOf(const QString& dir, const std::vector<Entry>& en
 void FileListModel::reload() {
     const int generation = ++m_generation;
     const QString dir = m_dir;
-    if (!m_opts.background || dir.startsWith(QLatin1String("tag:"))) {
+    m_reading = false;
+    if (dir.startsWith(QLatin1String("tag:"))) {
         QString error;
         m_raw = list(dir, &error);
         m_rawDir = dir;
         m_error = error;
         setLoading(false);
         refilter();
+        return;
+    }
+    if (!m_opts.background) {
+        readLocal(dir, generation);
         return;
     }
     // Another folder: what it held last time, at once, if it was seen
@@ -385,28 +429,97 @@ void FileListModel::reload() {
     } else if (m_raw.empty()) {
         setLoading(true);
     }
+    m_reading = true;
     QPointer<FileListModel> self(this);
     std::thread([self, dir, generation]() {
         QString error;
         std::vector<Entry> raw = readAndKeep(dir, &error);
         QMetaObject::invokeMethod(qApp, [self, dir, generation, raw = std::move(raw), error]() mutable {
-            if (!self || generation != self->m_generation) return;
-            const bool wasShown = self->m_rawDir == dir;
-            // Unchanged since it was shown from memory: nothing to redo, and
-            // the view keeps its place.
-            if (wasShown && error == self->m_error && sameListing(raw, self->m_raw)) {
-                self->setLoading(false);
-                return;
-            }
-            self->m_raw = std::move(raw);
-            self->m_rawDir = dir;
-            self->m_error = error;
-            self->setLoading(false);
-            self->refilter();
-            emit self->reloaded();
-            if (!wasShown) readAheadOf(dir, self->m_entries);
+            if (self) self->received(dir, generation, std::move(raw), error, true);
         }, Qt::QueuedConnection);
     }).detach();
+}
+
+// A folder on this machine's disks is read on a worker too, and waited for a
+// moment: nearly every folder is in well within it and shown as if read here,
+// with no "Loading…" between. One that is not — /usr/bin, 2000 files and a
+// fifth of a second — no longer holds the window while it is read.
+void FileListModel::readLocal(const QString& dir, int generation) {
+    constexpr int kWaitMs = 50;
+    struct Read {
+        QMutex lock;
+        QWaitCondition ready;
+        bool done = false;
+        bool late = false;   // given up waiting for: it reports by itself
+        std::vector<Entry> raw;
+        QString error;
+    };
+    auto read = std::make_shared<Read>();
+    QPointer<FileListModel> self(this);
+    std::thread([read, self, dir, generation]() {
+        QString error;
+        std::vector<Entry> raw = list(dir, &error);
+        QMutexLocker lock(&read->lock);
+        if (!read->late) {
+            read->raw = std::move(raw);
+            read->error = error;
+            read->done = true;
+            read->ready.wakeAll();
+            return;
+        }
+        lock.unlock();
+        QMetaObject::invokeMethod(qApp, [self, dir, generation, raw = std::move(raw), error]() mutable {
+            if (self) self->received(dir, generation, std::move(raw), error, false);
+        }, Qt::QueuedConnection);
+    }).detach();
+
+    QMutexLocker lock(&read->lock);
+    if (!read->done) read->ready.wait(&read->lock, QDeadlineTimer(kWaitMs));
+    if (read->done) {
+        m_raw = std::move(read->raw);
+        m_rawDir = dir;
+        m_error = read->error;
+        lock.unlock();
+        setLoading(false);
+        refilter();
+        return;
+    }
+    read->late = true;
+    lock.unlock();
+    m_reading = true;
+    if (m_rawDir != dir) {
+        m_raw.clear();
+        m_rawDir.clear();
+        m_error.clear();
+        refilter();
+        setLoading(true);
+    } else if (m_raw.empty()) {
+        setLoading(true);
+    }
+}
+
+void FileListModel::received(const QString& dir, int generation, std::vector<Entry> raw,
+                             const QString& error, bool network) {
+    if (generation != m_generation) return;
+    m_reading = false;
+    const bool wasShown = m_rawDir == dir;
+    // Unchanged since it was shown from memory: nothing to redo, and the
+    // view keeps its place.
+    if (wasShown && error == m_error && sameListing(raw, m_raw)) {
+        setLoading(false);
+        if (m_hasPendingSelection) {
+            m_hasPendingSelection = false;
+            selectPaths(std::exchange(m_pendingSelection, {}));
+        }
+        return;
+    }
+    m_raw = std::move(raw);
+    m_rawDir = dir;
+    m_error = error;
+    setLoading(false);
+    refilter();
+    emit reloaded();
+    if (network && !wasShown) readAheadOf(dir, m_entries);
 }
 
 void FileListModel::setLoading(bool on) {
@@ -438,7 +551,7 @@ void FileListModel::refilter() {
     emit countChanged();
     if (selChanged) emit selectionChanged();
     // A selection asked for while the folder was still being read.
-    if (m_hasPendingSelection && !m_loading) {
+    if (m_hasPendingSelection && !m_loading && !m_reading) {
         m_hasPendingSelection = false;
         selectPaths(std::exchange(m_pendingSelection, {}));
     }
@@ -476,14 +589,18 @@ void FileListModel::sortEntries() {
     QCollator coll;
     coll.setNumericMode(true);          // "file2" before "file10"
     coll.setCaseSensitivity(Qt::CaseInsensitive);
-    const QString field = m_opts.sortField;
+    enum { Name, Size, Time, Type } field = Name;
+    if (m_opts.sortField == u"size") field = Size;
+    else if (m_opts.sortField == u"time") field = Time;
+    else if (m_opts.sortField == u"type") field = Type;
     const bool asc = m_opts.ascending;
+    const bool dirsFirst = m_opts.dirsFirst;
     std::stable_sort(m_entries.begin(), m_entries.end(), [&](const Entry& a, const Entry& b) {
-        if (m_opts.dirsFirst && a.isDir != b.isDir) return a.isDir;
+        if (dirsFirst && a.isDir != b.isDir) return a.isDir;
         int c = 0;
-        if (field == "size") c = a.size < b.size ? -1 : (a.size > b.size ? 1 : 0);
-        else if (field == "time") c = a.modified < b.modified ? -1 : (a.modified > b.modified ? 1 : 0);
-        else if (field == "type") c = coll.compare(a.kind, b.kind);
+        if (field == Size) c = a.size < b.size ? -1 : (a.size > b.size ? 1 : 0);
+        else if (field == Time) c = a.modified < b.modified ? -1 : (a.modified > b.modified ? 1 : 0);
+        else if (field == Type && a.kind != b.kind) c = coll.compare(a.kind, b.kind);
         if (c == 0) c = naturalCompare(coll, a.name, b.name);
         return asc ? c < 0 : c > 0;
     });
@@ -578,16 +695,18 @@ void FileListModel::clearSelection() {
 }
 
 void FileListModel::selectPaths(const QStringList& paths) {
-    // Not read yet (a network drive): kept for when it is.
-    if (m_loading) {
+    // Not read yet (a network drive, a large folder; or read again after
+    // a change, the new file not in the list shown): kept for when it is.
+    if (m_loading || m_reading) {
         m_pendingSelection = paths;
         m_hasPendingSelection = true;
         return;
     }
     m_selected.clear();
     int first = -1;
+    const QSet<QString> wanted(paths.cbegin(), paths.cend());
     for (int i = 0; i < int(m_entries.size()); ++i) {
-        if (paths.contains(m_entries[size_t(i)].path)) {
+        if (wanted.contains(m_entries[size_t(i)].path)) {
             m_selected.insert(m_entries[size_t(i)].path);
             if (first < 0) first = i;
         }

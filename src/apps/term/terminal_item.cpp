@@ -83,7 +83,21 @@ TerminalItem::TerminalItem(QQuickItem *parent)
 
 void TerminalItem::onBlink() {
     m_blinkOn = !m_blinkOn;
-    update();
+    updateRows(m_cursorPos.row, m_cursorPos.row + 1);
+}
+
+// Only these rows painted again, the full width of the window (a glyph may
+// lean past its cell): the whole screen was redrawn for the cursor's blink
+// twice a second, and for every key typed.
+void TerminalItem::updateRows(int from, int to) {
+    // Scrolled back, the live screen's rows are not where they are drawn.
+    if (m_viewOffset != 0) { update(); return; }
+    from = std::max(0, from);
+    to = std::min(m_rows, to);
+    if (to <= from) return;
+    const int top = int(std::floor(from * m_cellHeight)) - 1;
+    const int bottom = int(std::ceil(to * m_cellHeight)) + 1;
+    update(QRect(0, top, int(std::ceil(width())) + 1, bottom - top));
 }
 
 // Solid again at once after typing or output, and blinking only while the
@@ -498,8 +512,14 @@ void TerminalItem::paint(QPainter *painter) {
     painter->setFont(m_font);
     painter->setRenderHint(QPainter::TextAntialiasing, true);
 
+    // Only the rows inside what is being painted again (updateRows): the
+    // rest of the picture is kept from the last frame.
+    const QRectF area = painter->hasClipping() ? painter->clipBoundingRect() & boundingRect() : boundingRect();
+    const int firstRow = std::max(0, int(std::floor(area.top() / m_cellHeight)));
+    const int lastRow = std::min(m_rows, int(std::ceil(area.bottom() / m_cellHeight)));
+
     // Background fill
-    painter->fillRect(boundingRect(), m_background);
+    painter->fillRect(area, m_background);
 
     // Plain ASCII is drawn a run at a time: one drawText per cell was the
     // whole cost of a frame — about 20 ms for a 211x52 screen here, several
@@ -535,7 +555,7 @@ void TerminalItem::paint(QPainter *painter) {
     };
 
     // Draw cells
-    for (int row = 0; row < m_rows; ++row) {
+    for (int row = firstRow; row < lastRow; ++row) {
         flush();
         int col = 0;
         while (col < m_cols) {
@@ -1132,17 +1152,38 @@ void TerminalItem::copySelection() {
 }
 
 void TerminalItem::pasteClipboard() {
-    if (m_masterFd < 0) return;
-    QString text = QGuiApplication::clipboard()->text();
-    if (!text.isEmpty()) {
-        // Bracketed, when the program asked for it (libvterm emits the markers
-        // only then): a shell or an editor can tell a pasted block from typed
-        // keys, and does not run each line as it arrives.
-        vterm_keyboard_start_paste(m_vt);
-        QByteArray data = text.toUtf8();
-        writeAll(m_masterFd, data.constData(), static_cast<size_t>(data.size()));
-        vterm_keyboard_end_paste(m_vt);
+    pasteText(QGuiApplication::clipboard()->text());
+}
+
+void TerminalItem::pasteText(const QString& text) {
+    if (m_masterFd < 0 || text.isEmpty()) return;
+    // Bracketed, when the program asked for it (libvterm emits the markers
+    // only then): a shell or an editor can tell a pasted block from typed
+    // keys, and does not run each line as it arrives.
+    vterm_keyboard_start_paste(m_vt);
+    QByteArray data = text.toUtf8();
+    writeAll(m_masterFd, data.constData(), static_cast<size_t>(data.size()));
+    vterm_keyboard_end_paste(m_vt);
+}
+
+// Files dropped from Files (or anywhere): their paths, each quoted for the
+// shell where it needs it, and a space after, as other terminals do — so a
+// file can be dragged onto `cp ` and the next one after it. A dropped
+// address that is no file (a link from a browser) goes in as it is.
+void TerminalItem::dropUrls(const QStringList& addresses) {
+    static const QRegularExpression plain(QStringLiteral("^[A-Za-z0-9_./+@%:,=~-]+$"));
+    QStringList words;
+    for (const QString& address : addresses) {
+        const QUrl url(address.trimmed());
+        QString word = url.isLocalFile() ? url.toLocalFile() : url.toString();
+        if (word.isEmpty()) continue;
+        if (!plain.match(word).hasMatch())
+            word = "'" + QString(word).replace("'", "'\\''") + "'";
+        words << word;
     }
+    if (words.isEmpty()) return;
+    pasteText(words.join(' ') + ' ');
+    forceActiveFocus();
 }
 
 void TerminalItem::zoomIn() {
@@ -1172,9 +1213,8 @@ void TerminalItem::sendText(const QString &text) {
 
 // ── libvterm callbacks ───────────────────────────────────────────────────────
 int TerminalItem::cbDamage(VTermRect rect, void *user) {
-    Q_UNUSED(rect);
     auto *term = static_cast<TerminalItem*>(user);
-    term->update();
+    term->updateRows(rect.start_row, rect.end_row);
     return 1;
 }
 
@@ -1187,11 +1227,12 @@ int TerminalItem::cbMoverect(VTermRect dest, VTermRect src, void *user) {
 }
 
 int TerminalItem::cbMovecursor(VTermPos pos, VTermPos oldpos, int visible, void *user) {
-    Q_UNUSED(oldpos);
     auto *term = static_cast<TerminalItem*>(user);
     term->m_cursorPos = pos;
     term->m_cursorVisible = (visible != 0);
-    term->update();
+    // Where it was and where it is.
+    term->updateRows(oldpos.row, oldpos.row + 1);
+    term->updateRows(pos.row, pos.row + 1);
     return 1;
 }
 

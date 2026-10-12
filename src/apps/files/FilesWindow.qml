@@ -119,6 +119,10 @@ C.ApplicationWindow {
     }
     // Bumped after a tag changes, so the sidebar counts read again.
     property int tagStamp: 0
+    // Read once for the seven rows: each row asked for all seven counts,
+    // and each count reads the tag index and asks every tagged file — 49
+    // times over for every change.
+    readonly property var tagCounts: (tagStamp, FilesBackend.tagCounts())
     function toggleTag(paths, tag) {
         FilesBackend.toggleTag(paths, tag);
         window.tagStamp++;
@@ -743,7 +747,7 @@ C.ApplicationWindow {
                         model: window.tagNames
                         delegate: SideRow {
                             required property string modelData
-                            readonly property int n: (window.tagStamp, FilesBackend.tagCounts()[modelData] || 0)
+                            readonly property int n: window.tagCounts[modelData] || 0
                             label: I18n.tr(modelData)
                             glyph: "\u25CF"
                             glyphColor: window.tagColor(modelData)
@@ -1281,7 +1285,7 @@ C.ApplicationWindow {
                             }
                         }
 
-                        DragProxy { id: tileProxy; active: tileMa.drag.active; paths: tile.selected ? fm.selectedPaths() : [tile.path] }
+                        DragProxy { id: tileProxy; active: tileMa.drag.active; whole: tile.selected; path: tile.path }
 
                         MouseArea {
                             id: tileMa
@@ -1407,7 +1411,7 @@ C.ApplicationWindow {
                                 }
                             }
 
-                            DragProxy { id: rowProxy; active: rowMa.drag.active; paths: row.selected ? fm.selectedPaths() : [row.path] }
+                            DragProxy { id: rowProxy; active: rowMa.drag.active; whole: row.selected; path: row.path }
 
                             MouseArea {
                                 id: rowMa
@@ -1458,7 +1462,25 @@ C.ApplicationWindow {
                     }
                     // Only while shown: hidden, it still opened every folder above this one
                     // on each move — on a network share a listing each, on the GUI thread.
-                    model: window.viewMode === "columns" ? columnsView.dirs.length + 1 : 0
+                    // A column a folder, and the preview after them, changed
+                    // only where the way down changed: the model was the
+                    // number of columns, and a new number made every column
+                    // anew, each folder above this one listed again on every
+                    // step down or up.
+                    model: ListModel { id: colModel }
+                    function syncColumns() {
+                        const want = window.viewMode === "columns" ? columnsView.dirs : [];
+                        let keep = 0;
+                        while (keep < colModel.count && keep < want.length
+                               && !colModel.get(keep).preview && colModel.get(keep).dir === want[keep])
+                            keep++;
+                        if (colModel.count > keep) colModel.remove(keep, colModel.count - keep);
+                        for (let i = keep; i < want.length; i++) colModel.append({ dir: want[i], preview: false });
+                        if (window.viewMode === "columns") colModel.append({ dir: "", preview: true });
+                    }
+                    onDirsChanged: syncColumns()
+                    Component.onCompleted: syncColumns()
+                    Connections { target: window; function onViewModeChanged() { columnsView.syncColumns(); } }
                     onCountChanged: Qt.callLater(() => columnsView.positionViewAtEnd())
                     // The current folder's column takes the keys.
                     function positionViewAtIndex(i, mode) { if (lastColumn) lastColumn.positionViewAtIndex(i, ListView.Contain); }
@@ -1469,9 +1491,10 @@ C.ApplicationWindow {
                     delegate: Loader {
                         id: col
                         required property int index
-                        readonly property bool isPreview: col.index === columnsView.dirs.length
-                        readonly property bool isLast: col.index === columnsView.dirs.length - 1
-                        readonly property string dir: col.isPreview ? "" : columnsView.dirs[col.index]
+                        required property string dir
+                        required property bool preview
+                        readonly property bool isPreview: col.preview
+                        readonly property bool isLast: !col.preview && col.index === columnsView.dirs.length - 1
                         // The next folder on the way, lit in this column.
                         readonly property string onPath: col.index + 1 < columnsView.dirs.length ? columnsView.dirs[col.index + 1] : ""
                         width: col.isPreview ? Math.max(Design.s(260), columnsView.width - columnsView.dirs.length * Design.s(220)) : Design.s(220)
@@ -1481,9 +1504,25 @@ C.ApplicationWindow {
                         Component {
                             id: folderColumn
                             Item {
+                                id: folderCol
                                 Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
                                 FileListModel { id: other }
-                                Component.onCompleted: if (!col.isLast) other.open(col.dir, FilesBackend.showHidden)
+                                // The last column shows the window's own listing; one
+                                // that stops being last (a step down) lists its folder.
+                                function reopen() {
+                                    // Not one on its way out (a step up): it is no longer on the way.
+                                    if (!col.isLast && columnsView.dirs[col.index] === col.dir)
+                                        other.open(col.dir, FilesBackend.showHidden);
+                                }
+                                Component.onCompleted: reopen()
+                                Connections {
+                                    target: col
+                                    function onIsLastChanged() {
+                                        folderCol.reopen();
+                                        if (col.isLast) columnsView.lastColumn = colList;
+                                    }
+                                }
+                                Connections { target: FilesBackend; function onShowHiddenChanged() { folderCol.reopen(); } }
                                 ListView {
                                     id: colList
                                     anchors.fill: parent
@@ -2533,16 +2572,24 @@ C.ApplicationWindow {
     // ═════════════════════════════════════════════════════════════════════════
 
     // Carries the drag: text/uri-list, so other applications take it too.
+    // The paths are worked out when the drag starts: bound for good, every
+    // selected tile on screen listed the whole selection and made a URL of
+    // each path on every change of it — a hundred tiles times two thousand
+    // files for a Ctrl+A. Drag.Automatic starts the drag as `active` is set,
+    // so the data goes in first.
     component DragProxy: Item {
-        property var paths: []
         property bool active: false
+        property bool whole: false   // the selection, not only `path`
+        property string path: ""
         width: 1; height: 1
-        Drag.active: active
         Drag.dragType: Drag.Automatic
         Drag.supportedActions: Qt.MoveAction | Qt.CopyAction
         Drag.proposedAction: Qt.MoveAction
-        Drag.mimeData: ({ "text/uri-list": window.urlsOf(paths) })
         Drag.keys: ["text/uri-list"]
+        onActiveChanged: {
+            if (active) Drag.mimeData = { "text/uri-list": window.urlsOf(whole ? window.fm.selectedPaths() : [path]) };
+            Drag.active = active;
+        }
     }
 
     component SideHeading: SidebarHeading {}

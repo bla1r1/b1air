@@ -3342,4 +3342,20 @@ Item {
             onClicked: toast.shown = false
         }
     }
+
+    // A folder dragged in from Files — or any file inside a repository —
+    // opens that repository (openRepo looks up for its .git).
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            // urls, or the list itself when the drag carried only that.
+            const urls = (drop.hasUrls ? Array.from(drop.urls, u => String(u))
+                              : String(drop.getDataAsString("text/uri-list") || "").split(/\r?\n/).filter(l => l && !l.startsWith("#")));
+            const url = urls.length ? urls[0] : "";
+            if (!url.startsWith("file://")) return;
+            drop.accept(Qt.CopyAction);
+            GitBackend.openRepo(decodeURIComponent(url.slice(7)));
+        }
+    }
 }
