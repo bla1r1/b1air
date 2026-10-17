@@ -495,7 +495,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 HoverWash { shown: appMenuArea.containsMouse }
 
                 Row {
@@ -546,7 +545,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 visible: Settings.barShowPinned && PinnedApps.pinnedList.length > 0
 
                 Row {
@@ -641,7 +639,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 Row {
                     id: workspacesRow
                     anchors.centerIn: parent
@@ -759,7 +756,6 @@ PanelWindow {
             color: Design.glassBg
             border.color: Design.glassBorder
             border.width: Design.border
-            GlassRim { radius: parent.radius; sheen: false }
             HoverWash { shown: clockArea.containsMouse }
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
@@ -880,7 +876,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 HoverWash { shown: mediaArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -931,7 +926,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 HoverWash { shown: weatherArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -982,7 +976,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 anchors.verticalCenter: parent.verticalCenter
 
                 // No applets means no empty pill sitting in the bar.
@@ -1061,7 +1054,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 HoverWash { shown: statsArea.containsMouse }
                 Row {
                     id: statsRow
@@ -1098,7 +1090,6 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
-                GlassRim { radius: parent.radius; sheen: false }
                 Row {
                     id: systemRow
                     anchors.centerIn: parent

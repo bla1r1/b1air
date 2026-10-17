@@ -87,18 +87,44 @@ Window {
             anchors.fill: parent
             spacing: 0
 
-            // The standard toolbar: what runs in the current tab on the left,
-            // a new tab and a menu on the right. It was a 42px header of its
-            // own, with the tabs, an app glyph and five icon buttons in a row.
+            // One row, as the old 42px header was, in the toolbar's style:
+            // with one shell its title on the left; with more the tabs take
+            // that place (the title is the active tab's label), and a new tab
+            // and the menu stay on the right. The tabs had a strip of their
+            // own under the toolbar, which also said "Tab 2 of 2" above them.
             AppToolbar {
                 Layout.fillWidth: true
-                rule: tabsModel.count < 2
                 z: 10
 
                 AppTitle {
+                    visible: tabsModel.count < 2
                     readonly property var tab: tabsModel.count > window.currentTabIndex ? tabsModel.get(window.currentTabIndex) : null
                     title: (tab && tab.tabTitle) || "fish"
-                    subtitle: tabsModel.count > 1 ? I18n.tr("Tab %1 of %2", window.currentTabIndex + 1, tabsModel.count) : ""
+                }
+                ListView {
+                    id: tabStrip
+                    visible: tabsModel.count > 1
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: Design.s(Design.size.md)
+                    orientation: ListView.Horizontal
+                    spacing: Design.s(Design.space.xs)
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: tabsModel
+                    currentIndex: window.currentTabIndex
+                    // The active tab stays in view when there are more than fit.
+                    highlightFollowsCurrentItem: false
+                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                    delegate: AppTab {
+                        required property int index
+                        required property var model
+                        label: model.tabTitle || "fish"
+                        active: window.currentTabIndex === index
+                        closable: tabsModel.count > 1
+                        onClicked: window.currentTabIndex = index
+                        onCloseRequested: window.closeTab(index)
+                    }
                 }
                 Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
                 Button {
@@ -115,38 +141,6 @@ Window {
                     AppMenuSeparator {}
                     AppMenuItem { text: I18n.tr("Larger text"); keys: "Ctrl+="; glyph: "\u{f0415}"; onTriggered: currentTermView().zoomIn() }
                     AppMenuItem { text: I18n.tr("Smaller text"); keys: "Ctrl+−"; glyph: "\u{f0374}"; onTriggered: currentTermView().zoomOut() }
-                }
-            }
-
-            // The tabs, under the toolbar as in Files; with one there is
-            // nothing to choose between, so no strip.
-            Item {
-                visible: tabsModel.count > 1
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.knob)
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.md)
-                    anchors.rightMargin: Design.s(Design.space.md)
-                    spacing: Design.s(Design.space.xs)
-                    Repeater {
-                        model: tabsModel
-                        delegate: AppTab {
-                            required property int index
-                            required property var model
-                            label: model.tabTitle || "fish"
-                            active: window.currentTabIndex === index
-                            closable: tabsModel.count > 1
-                            onClicked: window.currentTabIndex = index
-                            onCloseRequested: window.closeTab(index)
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-                Rectangle {
-                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                    height: Design.border
-                    color: Design.separator
                 }
             }
 

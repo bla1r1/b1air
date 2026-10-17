@@ -65,8 +65,8 @@ QtObject {
     component RadiusScale: QtObject {
         readonly property int sm: 4       // chips, badges, inner elements
         readonly property int ctl: 8      // buttons, fields, list rows, selects
-        readonly property int card: 14    // cards, groups, quick-tiles
-        readonly property int panel: 22   // popup panels, main windows
+        readonly property int card: 12    // cards, groups, quick-tiles
+        readonly property int panel: 16   // popup panels, main windows
         readonly property int pill: 999   // toggles, chips, status pills
     }
 
@@ -308,25 +308,15 @@ QtObject {
     // dark panel. Behind a real blur (layer_effects in windowrules.conf) 0.7
     // keeps text readable over a bright sky and still shows what is behind.
     readonly property bool darkTheme: _lum(_col(text)) > _lum(_col(ground))
-    readonly property color glassBg: tint(surface, translucent ? (darkTheme ? 0.56 : 0.52) : 1.0)
+    readonly property color glassBg: tint(surface, translucent ? (darkTheme ? 0.70 : 0.66) : 1.0)
     // Cards sit on a glass panel, so their own glass adds to it: at 0.5 a
     // card on a 0.7 panel came out nearly opaque. A lighter film keeps them
     // distinct by their edge and a shade, as cards on a desktop's panels are.
-    // Grouped as macOS groups: a lighter film and no outline of its own.
-    // The outlines on every card were most of what read as a template.
-    readonly property color glassCard: translucent ? (darkTheme ? tint(text, 0.07) : tint("#ffffff", 0.50)) : raised
-    readonly property color glassTile: translucent ? (darkTheme ? tint(text, 0.06) : tint("#ffffff", 0.45)) : raised
-    readonly property color glassBorder: tint(text, 0.06)
+    readonly property color glassCard: translucent ? tint(raised, 0.36) : raised
+    readonly property color glassTile: translucent ? tint(raised, 0.32) : raised
+    readonly property color glassBorder: tint(text, 0.12)
     // The lit top edge of a pane of glass: a hairline lighter than the border.
     readonly property color glassEdge: translucent ? tint("#ffffff", darkTheme ? 0.10 : 0.55) : "transparent"
-    // GlassRim: light along the top edge fading down the sides, a dark
-    // hairline outside it, and a faint sheen across the top of the pane.
-    readonly property color glassRimTop: tint("#ffffff", darkTheme ? 0.30 : 0.85)
-    readonly property color glassRimBottom: tint("#ffffff", darkTheme ? 0.07 : 0.30)
-    readonly property color glassOutline: tint("#000000", darkTheme ? 0.45 : 0.10)
-    readonly property color glassSheen: tint("#ffffff", darkTheme ? 0.05 : 0.20)
-    // A switch's or slider's knob: white on any theme, lit like a bead.
-    readonly property color knob: "#ffffff"
     // An app's sidebar: the desktop through it, blurred, as a desktop's own
     // sidebars are. The rest of an app window is glassBg, the same pane as
     // the shell's popups: a window and the Control Center are one material.

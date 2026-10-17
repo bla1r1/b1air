@@ -759,7 +759,7 @@ Singleton {
             property string themeNight: "breeze-dark"
             property string appColorScheme: "auto"
             property string accentName: ""
-            property int cornerRadius: 14
+            property int cornerRadius: 10
             property bool blurEnabled: true
             property bool shadowsEnabled: true
             property bool dimInactive: true

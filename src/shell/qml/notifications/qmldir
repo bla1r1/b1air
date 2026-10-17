@@ -1,0 +1,4 @@
+module notifications
+NotificationIcon 1.0 NotificationIcon.qml
+NotificationToasts 1.0 NotificationToasts.qml
+ReplyField 1.0 ReplyField.qml

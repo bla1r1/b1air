@@ -523,7 +523,9 @@ PopupShell {
             }
 
             BatteryPill {
-                visible: !center.editing
+                // Its own `visible: Power.hasBattery` is replaced by this
+                // binding, not combined with it: a desktop showed "0%".
+                visible: Power.hasBattery && !center.editing
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: center.currentView = "power"
             }

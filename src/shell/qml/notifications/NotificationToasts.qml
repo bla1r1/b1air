@@ -142,7 +142,6 @@ PanelWindow {
                         color: Design.glassBg
                         border.color: toast.critical ? Design.tint(Design.warn, 0.6) : "transparent"
                         border.width: toast.critical ? Design.border : 0
-                        GlassRim { visible: !toast.critical; radius: parent.radius }
                         // Urgent: the warning colour over the glass, not instead of it.
                         Rectangle {
                             anchors.fill: parent

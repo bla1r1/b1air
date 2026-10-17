@@ -565,7 +565,7 @@ bool SystemControl::disable_game_mode() {
         std::string cmd =
             std::string("blur ") + (SettingsManager::get_json_bool("blurEnabled", true) ? "enable" : "disable")
             + "; shadows " + (SettingsManager::get_json_bool("shadowsEnabled", true) ? "enable" : "disable")
-            + "; corner_radius " + std::to_string(SettingsManager::get_json_int("cornerRadius", 14))
+            + "; corner_radius " + std::to_string(SettingsManager::get_json_int("cornerRadius", 10))
             + "; default_border pixel " + std::to_string(s.borderWidth)
             + "; output * allow_tearing no";
         if (SettingsManager::get_json_bool("gameModeAdaptiveSync", false))

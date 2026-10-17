@@ -391,6 +391,9 @@ arch_build_package() {
     (cd "$dir" && makepkg -sf --noconfirm --needed) || return 1
     mapfile -t files < <(cd "$dir" && makepkg --packagelist)
     sudo pacman -U --noconfirm --ask 4 "${overwrite[@]}" "${files[@]}" || return 1
+    # pacman does not flush: on btrfs a hard reset soon after leaves the
+    # package's files at 0 bytes, the session and login theme with them.
+    sync
     rm -f "${files[@]}"
 }
 
