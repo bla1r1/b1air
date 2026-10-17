@@ -1,5 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Dialogs
+import Quickshell
+import Quickshell.Io
 import "../../Ui"
 import "../../Services"
 
@@ -391,6 +394,116 @@ ColumnLayout {
                     text: I18n.tr("Forget")
                     tip: I18n.tr("Forget")
                     onClicked: Network.forgetWifi(savedRow.modelData.name)
+                }
+            }
+        }
+    }
+
+    // ── VPN ──────────────────────────────────────────────────────────────────
+    // NetworkManager's connections and Tailscale (Services/Vpn.qml). A
+    // provider's .ovpn or a WireGuard .conf becomes a connection with Import.
+    SettingsGroup {
+        title: I18n.tr("VPN")
+
+        Repeater {
+            model: Vpn.connections
+
+            SettingsRow {
+                id: vpnRow
+                required property var modelData
+                icon: "\u{f0498}"
+                label: vpnRow.modelData.name
+                note: vpnRow.modelData.type + (vpnRow.modelData.active ? " • " + I18n.tr("Connected") : "")
+                Switch {
+                    checked: vpnRow.modelData.active
+                    accessibleName: vpnRow.modelData.name
+                    onToggled: vpnRow.modelData.active ? Vpn.down(vpnRow.modelData.name) : Vpn.up(vpnRow.modelData.name)
+                }
+            }
+        }
+
+        SettingsRow {
+            visible: Vpn.hasTailscale
+            icon: "\u{f0498}"
+            label: "Tailscale"
+            note: Vpn.tailscaleUp ? I18n.tr("Connected")
+                : Vpn.tailscaleState === "NeedsLogin" ? I18n.tr("Not signed in: turning it on opens the sign-in page")
+                : Vpn.tailscaleState === "stopped" ? I18n.tr("Its service is not running")
+                : I18n.tr("Off")
+            Switch {
+                checked: Vpn.tailscaleUp
+                accessibleName: "Tailscale"
+                onToggled: Vpn.tailscaleUp ? Vpn.down("Tailscale") : Vpn.up("Tailscale")
+            }
+        }
+
+        EmptyState {
+            Layout.fillWidth: true
+            visible: !Vpn.available
+            icon: "\u{f0498}"
+            title: I18n.tr("No VPN set up")
+            hint: I18n.tr("Import the .ovpn or WireGuard .conf file your VPN provider gives you.")
+        }
+
+        SettingsRow {
+            label: I18n.tr("Add a VPN")
+            note: section.vpnNote !== "" ? section.vpnNote : I18n.tr("OpenVPN (.ovpn) or WireGuard (.conf)")
+            Button {
+                icon: "\u{f0552}"
+                label: I18n.tr("Import…")
+                onActivated: vpnFileDialog.open()
+            }
+        }
+    }
+
+    property string vpnNote: ""
+    Connections {
+        target: Vpn
+        function onFailed(message) { section.vpnNote = message; }
+    }
+
+    FileDialog {
+        id: vpnFileDialog
+        title: I18n.tr("Import a VPN")
+        nameFilters: [I18n.tr("VPN configurations") + " (*.ovpn *.conf)"]
+        onAccepted: {
+            section.vpnNote = "";
+            Vpn.importFile(selectedFile.toString());
+        }
+    }
+
+    // ── Firewall ─────────────────────────────────────────────────────────────
+    // firewalld, which the default edition installs and turns on with the
+    // remote desktop and mDNS let in (install.sh, configure_firewall).
+    property string firewallState: ""   // "" unknown, "absent", "running", "not running"
+
+    Process {
+        id: firewallProbe
+        running: section.visible
+        command: ["sh", "-c", "command -v firewall-cmd >/dev/null 2>&1 || { echo absent; exit; }; firewall-cmd --state 2>&1 | tail -n1"]
+        stdout: StdioCollector { onStreamFinished: section.firewallState = this.text.trim() }
+    }
+    Process {
+        id: firewallSwitch
+        onExited: { firewallProbe.running = false; firewallProbe.running = true; }
+    }
+
+    SettingsGroup {
+        visible: section.firewallState !== "" && section.firewallState !== "absent"
+        title: I18n.tr("Firewall")
+
+        SettingsRow {
+            icon: "\u{f0498}"
+            label: I18n.tr("Firewall")
+            note: section.firewallState === "running"
+                ? I18n.tr("On: only the remote desktop and devices on this network can reach in")
+                : I18n.tr("Off: anything on the network can reach whatever this computer serves")
+            Switch {
+                checked: section.firewallState === "running"
+                accessibleName: I18n.tr("Firewall")
+                onToggled: {
+                    firewallSwitch.command = ["pkexec", "systemctl", checked ? "disable" : "enable", "--now", "firewalld"];
+                    firewallSwitch.running = true;
                 }
             }
         }

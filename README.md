@@ -153,6 +153,24 @@ For an interactive menu:
 ./install-ui.sh
 ```
 
+#### Editions
+
+Each edition is the one before it plus what it adds
+([packages/editions](packages/editions/README.md)):
+
+| Edition | What it is |
+|---|---|
+| `minimal` | The desktop and its apps, nothing more |
+| `default` | minimal + Windows programs (Wine, Bottles), `.deb` on Arch (debtap), software search in Spotlight (Flatpak), containers (Distrobox), VPN (OpenVPN, WireGuard, Tailscale) and a firewall |
+| `gaming` | default + Steam, Heroic, ProtonUp-Qt, MangoHud, GameMode, gamescope and the 32-bit graphics drivers |
+
+```bash
+./install.sh --edition gaming
+```
+
+The installer's menu (`./install-ui.sh`) asks. Another edition is a directory
+in `packages/editions/` naming the one it adds to and listing its packages.
+
 #### Flags
 ```bash
 # Deploy dotfiles and compile C++ tools without reinstalling packages

@@ -19,6 +19,7 @@ PrivacySettingsSection 1.0 PrivacySettingsSection.qml
 RegionSettingsSection 1.0 RegionSettingsSection.qml
 RemoteSettingsSection 1.0 RemoteSettingsSection.qml
 SetupWizard 1.0 SetupWizard.qml
+Welcome 1.0 Welcome.qml
 ShortcutsSettingsSection 1.0 ShortcutsSettingsSection.qml
 StartupSettingsSection 1.0 StartupSettingsSection.qml
 ThemeSettingsSection 1.0 ThemeSettingsSection.qml

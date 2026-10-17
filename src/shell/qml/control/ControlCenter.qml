@@ -52,11 +52,11 @@ PopupShell {
     property bool editing: false
 
     readonly property var tileIds: ["wifi", "bluetooth", "dnd", "nightlight", "powermode",
-                                    "gamemode", "caffeine", "screenshot", "dropper", "remote"]
+                                    "gamemode", "caffeine", "screenshot", "dropper", "remote", "vpn"]
     readonly property var tileById: ({
         "wifi": wifiTile, "bluetooth": btTile, "dnd": dndTile, "nightlight": nightTile,
         "powermode": powerTile, "gamemode": gameTile, "caffeine": caffeineTile,
-        "screenshot": screenTile, "dropper": pickerTile, "remote": remoteTile
+        "screenshot": screenTile, "dropper": pickerTile, "remote": remoteTile, "vpn": vpnTile
     })
 
     /**
@@ -84,6 +84,7 @@ PopupShell {
         if (id === "bluetooth") return Network.hasBluetooth;
         if (id === "powermode") return Power.hasBattery || Power.hasProfiles;
         if (id === "remote") return Remote.available;
+        if (id === "vpn") return Vpn.available;
         return true;
     }
 
@@ -231,7 +232,8 @@ PopupShell {
         "dnd": ["Do Not Disturb", "\u{f009b}"], "nightlight": ["Night Light", "\u{f0599}"],
         "powermode": ["Power Mode", "\u{f0e4}"], "gamemode": ["Game Mode", "\u{f11b}"],
         "caffeine": ["Caffeine", "\u{f0f4}"], "screenshot": ["Screenshot", "\u{f016d}"],
-        "dropper": ["Color Dropper", "\u{f0592}"], "remote": ["Remote Desktop", "\u{f0379}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
+        "dropper": ["Color Dropper", "\u{f0592}"], "remote": ["Remote Desktop", "\u{f0379}"],
+        "vpn": ["VPN", "\u{f0498}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
         "weather": ["Weather", "\u{f0590}"], "media": ["Now Playing", "\u{f0025}"],
         "session": ["Power Buttons", "\u{f0425}"]
     })
@@ -729,6 +731,28 @@ PopupShell {
                     // No password saved yet: the page where one is set.
                     function onNeedsSetup() { center.openFull("settings", "remote"); }
                 }
+            }
+
+            // On for whichever VPN is up; the chevron opens Settings → Network,
+            // where each one is listed. Hidden with nothing set up to connect.
+            QuickTile {
+                id: vpnTile
+                Layout.fillWidth: true
+                widgetId: "vpn"
+                Layout.row: center.placeOf("vpn").row
+                Layout.column: center.placeOf("vpn").col
+                Layout.columnSpan: center.placeOf("vpn").cols
+                Layout.rowSpan: center.placeOf("vpn").rows
+                Layout.preferredHeight: center.tileHeightFor("vpn")
+                visible: center.tileShown("vpn")
+                glyph: "\u{f0498}"
+                title: I18n.tr("VPN")
+                on: Vpn.active
+                detail: Vpn.active ? Vpn.activeNames.join(", ")
+                      : Vpn.tailscaleState === "NeedsLogin" && Vpn.connections.length === 0 ? I18n.tr("Sign in to Tailscale")
+                      : I18n.tr("Off")
+                onToggled: Vpn.toggle()
+                onActivated: center.openFull("settings", "network")
             }
 
             QuickTile {

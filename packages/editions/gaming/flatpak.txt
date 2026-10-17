@@ -1,0 +1,4 @@
+# From Flathub where the packages did not bring it: <app id> [command].
+com.valvesoftware.Steam steam
+com.heroicgameslauncher.hgl heroic
+net.davidotek.pupgui2 protonup-qt

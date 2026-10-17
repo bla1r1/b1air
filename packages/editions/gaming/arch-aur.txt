@@ -1,0 +1,3 @@
+# Epic and GOG, and Proton versions beyond Steam's own.
+heroic-games-launcher-bin
+protonup-qt

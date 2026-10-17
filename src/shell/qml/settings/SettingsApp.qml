@@ -22,6 +22,9 @@ Item {
     // "setup" (or "setup.<step>.<step>…") is the first-run wizard, in place
     // of the rail and the page.
     readonly property bool setupMode: app.page === "setup" || app.page.indexOf("setup.") === 0
+    // "welcome" (Mod+H, and at login while "Show at login" is ticked): the
+    // welcome, in place of the rail and the page too.
+    readonly property bool welcomeMode: app.page === "welcome"
     function close() {
         if (app.standalone) app.closeRequested();
         else Quickshell.execDetached(["b1air-shell", "close"]);
@@ -76,7 +79,7 @@ Item {
     // space below a two-line page.
     onPageChanged: {
         if (app.moved[app.page]) { app.page = app.moved[app.page]; return; }
-        if (app.page === "setup" || app.page.indexOf("setup.") === 0) app.returnPage = "";
+        if (app.page === "setup" || app.page.indexOf("setup.") === 0 || app.page === "welcome") app.returnPage = "";
         if (pageScroll.contentItem) pageScroll.contentItem.contentY = 0;
     }
 
@@ -128,8 +131,20 @@ Item {
         }
     }
 
+    Loader {
+        anchors.fill: parent
+        active: app.welcomeMode
+        sourceComponent: Component {
+            Sections.Welcome {
+                onFinished: app.close()
+                // A page opened from here has a way back to it.
+                onOpenPage: id => { app.returnPage = id === "setup" ? "" : "welcome"; app.open(id); }
+            }
+        }
+    }
+
     RowLayout {
-        visible: !app.setupMode
+        visible: !app.setupMode && !app.welcomeMode
         anchors.fill: parent
         anchors.margins: Design.border
         spacing: 0
@@ -276,11 +291,11 @@ Item {
                     Layout.topMargin: Design.s(Design.space.xl)
                     Layout.bottomMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.xs)
-                    // Back to the news this page was opened from.
+                    // Back to the news or the welcome this page was opened from.
                     Button {
                         visible: app.returnPage !== ""
                         icon: "\u{f0141}"
-                        label: I18n.tr("What's new")
+                        label: app.returnPage === "welcome" ? I18n.tr("Welcome") : I18n.tr("What's new")
                         onClicked: { app.page = app.returnPage; app.returnPage = ""; }
                     }
                     Label {

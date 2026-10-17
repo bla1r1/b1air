@@ -35,6 +35,7 @@ SKIP_PACKAGES=0
 SKIP_DOTFILES=0
 SKIP_SERVICES=0
 NO_AUR=0
+EDITION=""
 DRY_RUN=0
 RESTART=0
 ADD_USER=""
@@ -92,6 +93,8 @@ Options:
   --no-aur          Arch: skip AUR packages (plain sway instead of swayfx).
                     Other distributions: skip downloads from upstream releases
                     (Nerd Font, starship, eza). Quickshell is always installed.
+  --edition <name>  What to install on top of the desktop: $(editions_available "$REPO_DIR" | tr '\n' ' ')
+                    (default: ${B1AIR_DEFAULT_EDITION}; see packages/editions/README.md)
   --dry-run         Simulate installation without making system changes
   --restart         Ignore saved progress and run every step from scratch
   --add-user <name> Prepare another account for b1air: the input and power
@@ -110,6 +113,8 @@ parse_args() {
             --skip-dotfiles) SKIP_DOTFILES=1; shift ;;
             --skip-services) SKIP_SERVICES=1; shift ;;
             --no-aur|--no-extras) NO_AUR=1; shift ;;
+            --edition)       EDITION="${2:-}"; shift 2 ;;
+            --edition=*)     EDITION="${1#--edition=}"; shift ;;
             --dry-run)       DRY_RUN=1; shift ;;
             --restart)       RESTART=1; shift ;;
             --add-user)      ADD_USER="${2:-}"; shift 2 ;;
@@ -118,6 +123,13 @@ parse_args() {
             *) err "Unknown option: $1"; usage; exit 1 ;;
         esac
     done
+
+    # Unset: the one this machine already has, else the default.
+    [[ -n "$EDITION" ]] || EDITION="$(installed_edition)"
+    if ! edition_chain "$REPO_DIR" "$EDITION" >/dev/null; then
+        err "Unknown edition '$EDITION'. There are: $(editions_available "$REPO_DIR" | tr '\n' ' ')"
+        exit 1
+    fi
 
     [[ -n "$DISTRO" ]] || DISTRO="$(detect_distro)"
     if [[ -z "$DISTRO" ]]; then
@@ -230,12 +242,26 @@ install_one_of() {
 }
 
 install_packages() {
+    # Wine and Steam are in Arch's [multilib], off in a stock pacman.conf;
+    # minimal has neither.
+    if [[ "$DISTRO" == arch && "$EDITION" != minimal ]]; then
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would enable [multilib] in /etc/pacman.conf (Wine)"
+        elif arch_enable_multilib; then ok "[multilib] enabled (Wine)"
+        else warn "[multilib] not enabled ($(uname -m)): no Wine; Bottles brings its own."; fi
+    fi
     if [[ "$DRY_RUN" -eq 0 ]]; then
         log "Refreshing package databases..."
         pm_refresh "$DISTRO" || warn "Could not refresh the package databases; continuing with what is cached."
     fi
-    install_package_set "$REPO_DIR/packages/${DISTRO}.txt"
+    local list
+    log "Edition: ${EDITION} ($(edition_chain "$REPO_DIR" "$EDITION" | paste -sd'>' | sed 's/>/ → /g'))"
+    while IFS= read -r list; do
+        install_package_set "$list"
+    done < <(edition_lists "$REPO_DIR" "$DISTRO" "$EDITION")
+    # For update-dotfiles.sh, which keeps this edition's packages installed.
+    record_edition "$EDITION" "$DRY_RUN" || warn "Could not record the edition in $B1AIR_EDITION_FILE."
 }
+
 
 # The compositor. Our swayFX — built from source with its own wlroots and our
 # patches (src/swayfx, src/scenefx) — on every family, so that every machine
@@ -666,10 +692,22 @@ ensure_aur_helper() {
 
 install_aur_packages() {
     local aur_helper="$1"
-    local pkgs=()
+    local pkgs=() list layer_pkgs=()
     mapfile -t pkgs < <(read_package_list "$REPO_DIR/packages/arch-aur.txt" required)
+    # The edition's: a failed build of one of these (Bottles, Heroic) is
+    # warned about, not fatal — the desktop does not need them to start.
+    while IFS= read -r list; do
+        [[ "$list" == "$REPO_DIR/packages/arch-aur.txt" ]] && continue
+        mapfile -t -O "${#layer_pkgs[@]}" layer_pkgs < <(read_package_list "$list" required)
+    done < <(edition_lists "$REPO_DIR" arch-aur "$EDITION")
 
     log "Installing AUR packages with ${aur_helper}..."
+    for pkg in "${layer_pkgs[@]}"; do
+        pacman -Qi "$pkg" >/dev/null 2>&1 && continue
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would install AUR ($EDITION): $pkg"; continue; fi
+        "$aur_helper" -S --needed --noconfirm "$pkg" \
+            || warn "AUR package '$pkg' did not build; the rest of the install goes on. Later: $aur_helper -S $pkg"
+    done
     for pkg in "${pkgs[@]}"; do
         pacman -Qi "$pkg" >/dev/null 2>&1 && continue
         # Ours is built from source (install_compositor); the AUR's only when
@@ -1045,6 +1083,23 @@ enable_sddm() {
 # and systemd-networkd-wait-online, finding nothing it manages come up,
 # holds the boot for its full two-minute timeout. archinstall's "copy ISO
 # network config" leaves networkd enabled; plain Arch installs often dhcpcd.
+# firewalld, where the edition installed it: on, with what the desktop itself
+# serves let in — and nothing else. Before it there was no firewall at all,
+# so these worked and must go on working: the remote desktop (WayVNC, the port
+# Settings → Remote Desktop uses) and mDNS (printers, other devices found on
+# the network).
+configure_firewall() {
+    systemctl list-unit-files firewalld.service >/dev/null 2>&1 || return 0
+    # ufw on top of firewalld is two rule sets fighting.
+    systemctl is-enabled ufw >/dev/null 2>&1 && { warn "ufw is enabled; leaving firewalld off."; return 0; }
+    sudo systemctl enable --now firewalld || { warn "Failed to enable firewalld"; return 0; }
+    sudo firewall-cmd --permanent --add-port=5900/tcp >/dev/null \
+        && sudo firewall-cmd --permanent --add-service=mdns >/dev/null \
+        && sudo firewall-cmd --reload >/dev/null \
+        && ok "Firewall on: remote desktop (5900) and mDNS let in" \
+        || warn "firewalld is on, but its rules for the remote desktop and mDNS were not added."
+}
+
 disable_competing_network_daemons() {
     local unit
     for unit in systemd-networkd.service systemd-networkd.socket \
@@ -1059,7 +1114,7 @@ disable_competing_network_daemons() {
 enable_services() {
     log "Enabling system services..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "Would enable: NetworkManager, bluetooth, power-profiles-daemon, cups, sddm"
+        log "Would enable: NetworkManager, bluetooth, power-profiles-daemon, cups, firewalld (default edition), tailscaled, sddm"
         return 0
     fi
 
@@ -1073,6 +1128,15 @@ enable_services() {
         || sudo systemctl enable tuned 2>/dev/null \
         || warn "Failed to enable a power-profiles service"
     sudo systemctl enable cups.socket || warn "Failed to enable CUPS"
+    configure_firewall
+    # Tailscale's daemon, and this account as its operator, so the Control
+    # Center's VPN tile can bring it up and down without sudo. `tailscale up`
+    # itself — the sign-in — is the user's, in the browser it opens.
+    if systemctl list-unit-files tailscaled.service >/dev/null 2>&1; then
+        sudo systemctl enable --now tailscaled \
+            && sudo tailscale set --operator="${SUDO_USER:-$USER}" >/dev/null 2>&1 \
+            || warn "Tailscale is installed but its daemon could not be set up."
+    fi
     # ponytail: SDDM last and strict — enabling it early boots the user into a broken session
     enable_sddm || { err "Failed to enable SDDM."; exit 1; }
 }
@@ -1327,6 +1391,7 @@ main() {
             step extras install_extras
         fi
         step vm-tools   detect_and_install_vm_guest_tools
+        step flatpaks   install_edition_flatpaks "$REPO_DIR" "$EDITION" "$DRY_RUN"
         # Every run, not a step: cheap when the driver is in place, and a
         # reader that appeared since (a dock, a new board) gets one.
         fingerprint_step

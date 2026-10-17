@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Windows Program
+Name[uk]=Програма Windows
+Name[ru]=Программа Windows
+Comment=Run with Bottles or Wine
+Comment[uk]=Запустити через Bottles або Wine
+Comment[ru]=Запустить через Bottles или Wine
+Exec=b1air-run-windows %f
+TryExec=b1air-run-windows
+Icon=application-x-ms-dos-executable
+Terminal=false
+NoDisplay=true
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/vnd.microsoft.portable-executable;application/x-msi;application/x-ms-shortcut;

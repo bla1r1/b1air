@@ -71,6 +71,10 @@ install:
 	mkdir -p $(DESTDIR)$(PREFIX)
 	# Whatever CMake built, so a new app needs no edit here.
 	install -m 755 $(BUILD)/bin/b1air-* $(DESTDIR)$(PREFIX)/
+	# The handlers Files opens Windows programs and downloaded packages with,
+	# and Spotlight's software search (scripts/: shell, so nothing to build).
+	install -m 755 scripts/b1air-run-windows scripts/b1air-install-package scripts/b1air-software \
+		scripts/b1air-gamemode-hook $(DESTDIR)$(PREFIX)/
 	mkdir -p $(DESTDIR)$(QMLDIR)
 	# -rlpt, not -a: run as root, -a kept the checkout's owner, and the
 	# system QML tree every account loads — the polkit dialog among it —
@@ -103,7 +107,7 @@ install:
 	# menu at all. environment.d fixes PATH for systemd-started sessions; the
 	# full path fixes it for everything else.
 	mkdir -p $(DESTDIR)$(DATADIR)/applications
-	for f in apps/*/b1air-*.desktop; do \
+	for f in apps/*/b1air-*.desktop scripts/b1air-*.desktop; do \
 		sed -e 's|^Exec=b1air-|Exec=$(PREFIX)/b1air-|' -e 's|^TryExec=b1air-|TryExec=$(PREFIX)/b1air-|' \
 			"$$f" > $(DESTDIR)$(DATADIR)/applications/$$(basename "$$f"); \
 	done

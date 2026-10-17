@@ -39,6 +39,112 @@ distro_pretty_name() {
     (. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-${NAME:-Linux}}") || echo Linux
 }
 
+# ── Editions ─────────────────────────────────────────────────────────────────
+#
+# An edition is a set of packages on top of another edition. minimal is the
+# desktop itself: packages/<family>.txt and packages/arch-aur.txt. Every
+# other one is a directory packages/editions/<name>/ holding
+#
+#   parent            the edition it adds to (one word: minimal, default, ...)
+#   <family>.txt      what it adds, in the same format as packages/<family>.txt
+#   arch-aur.txt      what it adds from the AUR
+#   description       one line for the installer's menu
+#
+# so a new edition is a new directory: name its parent and list what it adds.
+# The one installed is kept in /etc/b1air/edition, for update-dotfiles.sh.
+
+B1AIR_EDITION_FILE=/etc/b1air/edition
+B1AIR_DEFAULT_EDITION=default
+
+# The editions there are, minimal first, one per line.
+editions_available() {
+    local repo="$1" dir
+    echo minimal
+    for dir in "$repo"/packages/editions/*/; do
+        [[ -f "$dir/parent" ]] && basename "$dir"
+    done
+}
+
+# edition_chain <repo> <edition> — minimal, then each edition down to the
+# one asked for, one per line. Fails for an unknown edition or a loop.
+edition_chain() {
+    local repo="$1" ed="$2" chain=() parent seen=" "
+    while [[ "$ed" != minimal ]]; do
+        [[ -f "$repo/packages/editions/$ed/parent" ]] || return 1
+        [[ "$seen" == *" $ed "* ]] && return 1
+        seen+="$ed "
+        chain=("$ed" "${chain[@]}")
+        read -r parent < "$repo/packages/editions/$ed/parent" || return 1
+        ed="${parent:-minimal}"
+    done
+    echo minimal
+    printf '%s\n' "${chain[@]}"
+}
+
+# edition_lists <repo> <family|arch-aur> <edition> — the package list files
+# that make up the edition, in order; only the ones that exist.
+edition_lists() {
+    local repo="$1" name="$2" ed="$3" layer file
+    while IFS= read -r layer; do
+        if [[ "$layer" == minimal ]]; then file="$repo/packages/$name.txt"
+        else file="$repo/packages/editions/$layer/$name.txt"; fi
+        [[ -f "$file" ]] && echo "$file"
+    done < <(edition_chain "$repo" "$ed")
+}
+
+# The edition this machine was installed as; the default for one installed
+# before there were editions, which had what default has now.
+installed_edition() {
+    local ed=""
+    [[ -r "$B1AIR_EDITION_FILE" ]] && read -r ed < "$B1AIR_EDITION_FILE"
+    echo "${ed:-$B1AIR_DEFAULT_EDITION}"
+}
+
+# edition_description <repo> <edition> — its line for a menu.
+edition_description() {
+    local repo="$1" ed="$2"
+    if [[ "$ed" == minimal ]]; then echo "The desktop and its apps, nothing more"
+    else head -n1 "$repo/packages/editions/$ed/description" 2>/dev/null || echo "$ed"; fi
+}
+
+# record_edition <edition> <dry-run 0|1> — into /etc/b1air/edition (sudo).
+record_edition() {
+    local ed="$1" dry="${2:-0}"
+    if [[ "$dry" -eq 1 ]]; then echo "Would record edition '$ed' in $B1AIR_EDITION_FILE" >&2; return 0; fi
+    sudo install -d -m 755 "$(dirname "$B1AIR_EDITION_FILE")" \
+        && printf '%s\n' "$ed" | sudo tee "$B1AIR_EDITION_FILE" >/dev/null
+}
+
+# install_edition_flatpaks <repo> <edition> <dry-run 0|1> — the Flathub apps
+# of every layer (packages/editions/*/flatpak.txt), for this account. A line
+# is `<app id> [command]`: where the command is already there, the
+# distribution's packages brought the app and the Flatpak is skipped.
+install_edition_flatpaks() {
+    local repo="$1" ed="$2" dry="${3:-0}" layer file id cmd todo=()
+    while IFS= read -r layer; do
+        file="$repo/packages/editions/$layer/flatpak.txt"
+        [[ -f "$file" ]] || continue
+        while read -r id cmd _; do
+            [[ -z "$id" || "$id" == \#* ]] && continue
+            [[ -n "${cmd:-}" ]] && command -v "$cmd" >/dev/null 2>&1 && continue
+            flatpak info "$id" >/dev/null 2>&1 && continue
+            todo+=("$id")
+        done < "$file"
+    done < <(edition_chain "$repo" "$ed")
+    [[ ${#todo[@]} -gt 0 ]] || return 0
+    if ! command -v flatpak >/dev/null 2>&1; then
+        echo "flatpak is not installed; skipped from Flathub: ${todo[*]}" >&2
+        return 0
+    fi
+    if [[ "$dry" -eq 1 ]]; then echo "Would install from Flathub (--user): ${todo[*]}" >&2; return 0; fi
+    flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo >&2 \
+        || { echo "Could not add Flathub; skipped: ${todo[*]}" >&2; return 0; }
+    for id in "${todo[@]}"; do
+        flatpak install --user --noninteractive flathub "$id" >&2 \
+            || echo "Could not install $id from Flathub. Later: flatpak install --user flathub $id" >&2
+    done
+}
+
 # ── Package queries ──────────────────────────────────────────────────────────
 
 # pkg_installed <family> <pkg>
@@ -92,6 +198,18 @@ pm_refresh() {
         fedora)   sudo dnf -y makecache ;;
         opensuse) sudo zypper -n refresh ;;
     esac
+}
+
+# arch_enable_multilib — switch on Arch's [multilib] repository, where Wine
+# and its 32-bit libraries are. x86_64 only: there is no multilib, and no
+# Wine, on aarch64. Prints nothing; returns non-zero when it could not.
+arch_enable_multilib() {
+    [[ "$(uname -m)" == x86_64 ]] || return 1
+    grep -qE '^[[:space:]]*\[multilib\]' /etc/pacman.conf && return 0
+    grep -qE '^#[[:space:]]*\[multilib\]' /etc/pacman.conf || return 1
+    # The stock pacman.conf has the section commented out as two lines:
+    # "#[multilib]" and the "#Include = …" right under it.
+    sudo sed -i '/^#[[:space:]]*\[multilib\]/{s/^#[[:space:]]*//;n;s/^#[[:space:]]*//}' /etc/pacman.conf
 }
 
 # pm_install <family> <pkg...> — one transaction, fails as a whole.

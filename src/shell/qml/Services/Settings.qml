@@ -523,7 +523,7 @@ Singleton {
     // The schema defaults, kept separately so reset() has something to go back
     // to — the same reason dconf stores only deltas.
     readonly property var defaults: ({
-        openGuideAtStartup: false,
+        openGuideAtStartup: true,
         topbarHelpIcon: true,
         guideShortcut: "Mod+H",
         language: "us,ua",
@@ -684,7 +684,7 @@ Singleton {
 
         JsonAdapter {
             id: data
-            property bool openGuideAtStartup: false
+            property bool openGuideAtStartup: true
             property bool topbarHelpIcon: true
             property string guideShortcut: "Mod+H"
             property string language: "us,ua"

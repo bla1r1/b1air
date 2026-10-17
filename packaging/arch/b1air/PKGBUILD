@@ -52,7 +52,14 @@ _filter() {
 }
 depends=(sway $(_filter $(_list arch.txt) $(_list arch-aur.txt)))
 makedepends=(cmake git rsync pkgconf wayland-protocols rust)
-optdepends=('b1air-swayfx: blur, rounded corners and the b1air patches (else plain sway)')
+# The editions (packages/editions/) are not depended on: install.sh installs
+# the one chosen on top of this package. These are what they bring that the
+# desktop uses when it is there.
+optdepends=('b1air-swayfx: blur, rounded corners and the b1air patches (else plain sway)'
+            'bottles: run Windows programs opened from Files (AUR)'
+            'wine: run Windows programs opened from Files ([multilib])'
+            'winetricks: Windows components for Wine'
+            'debtap: install .deb packages opened from Files (AUR)')
 backup=(etc/sddm.conf.d/10-b1air.conf)
 install=b1air.install
 # !lto: makepkg's -flto=auto turns the C half of the passkey's `ring` crate

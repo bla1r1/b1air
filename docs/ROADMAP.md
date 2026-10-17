@@ -266,6 +266,11 @@ large-text preset in M13 are kept.
       **Cut:** The bar is not where a controller battery is looked at.
 - [~] Add Wine and Proton bottle prefix manager in App Launcher for running Windows executables.
       **Cut:** Steam and Lutris do this, and better.
+- [x] Run Windows programs and downloaded packages from Files, through the tools that already do it:
+      `.exe`/`.msi` go to Bottles or Wine (`b1air-run-windows`), `.deb`/`.rpm`/Flatpak/AppImage to the
+      package manager in a terminal (`b1air-install-package`); programs Wine and Flatpak install appear in
+      the Launchpad with their icons. Wine, Bottles and (on Arch) debtap come with the desktop; a .deb on
+      Arch is converted by debtap and installed with pacman.
 
 ## M11: File Management, Storage Analytics, and Archive Suite
 

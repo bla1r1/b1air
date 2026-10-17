@@ -74,7 +74,26 @@ ColumnLayout {
           icon: "\u{f008}",
           mimes: ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac"],
           names: ["mpv", "vlc", "celluloid", "audacious", "totem", "haruna"],
-          missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") }
+          missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") },
+        // b1air's own handler is offered first (`builtin`): it hands the file
+        // to Bottles, or else to Wine, whichever is there. A Flatpak app's
+        // Exec is `flatpak run …`, so those are matched by desktop id (`ids`).
+        { kind: "windows", title: I18n.tr("Windows Programs"), subtitle: I18n.tr(".exe and .msi files opened from Files"),
+          icon: "\u{f05b3}",
+          mimes: ["application/x-ms-dos-executable", "application/x-msi", "application/x-msdownload",
+                  "application/vnd.microsoft.portable-executable"],
+          names: ["bottles", "wine", "lutris", "heroic"],
+          ids: ["com.usebottles.bottles", "net.lutris.lutris", "com.heroicgameslauncher.hgl", "wine"],
+          builtin: { desktopFile: "b1air-run-windows.desktop", name: I18n.tr("Bottles or Wine") },
+          missing: I18n.tr("Neither Bottles nor Wine is installed. They come with b1air: run the installer again, or install Bottles with your package manager.") },
+        { kind: "packages", title: I18n.tr("Downloaded Packages"), subtitle: I18n.tr(".deb, .rpm, Flatpak and AppImage files"),
+          icon: "\u{f03d3}",
+          mimes: ["application/vnd.debian.binary-package", "application/x-rpm", "application/vnd.appimage",
+                  "application/vnd.flatpak.ref"],
+          names: ["gdebi-gtk", "gnome-software", "plasma-discover"],
+          ids: ["org.gnome.Software", "org.kde.discover"],
+          builtin: { desktopFile: "b1air-install-package.desktop", name: I18n.tr("Install in a terminal") },
+          missing: "" }
     ]
 
     /** The command's binary name: "/usr/bin/foo --bar %U" -> "foo". */
@@ -85,8 +104,12 @@ ColumnLayout {
 
     function candidates(row) {
         const out = [];
+        if (row.builtin)
+            out.push({ desktopFile: row.builtin.desktopFile, name: row.builtin.name, builtin: true });
+        const ids = row.ids || [];
         for (const app of Services.Apps.list) {
-            if (row.names.indexOf(section.execBinary(app.exec)) >= 0)
+            const id = String(app.desktopFile || "").replace(/\.desktop$/, "");
+            if (row.names.indexOf(section.execBinary(app.exec)) >= 0 || ids.indexOf(id) >= 0)
                 out.push(app);
         }
         // Whatever is set right now is offered even when it is not in the
@@ -168,8 +191,10 @@ ColumnLayout {
             subtitle: rowCard.modelData.subtitle
             icon: rowCard.modelData.icon
 
+            // Said even beside b1air's own handler: it only passes the file
+            // on, and with nothing to pass it to that is worth knowing here.
             Label {
-                visible: rowCard.apps.length === 0
+                visible: text !== "" && !rowCard.apps.some(a => !a.builtin)
                 Layout.fillWidth: true
                 text: rowCard.modelData.missing
                 role: "caption"

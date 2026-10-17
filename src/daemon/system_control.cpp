@@ -536,6 +536,9 @@ bool SystemControl::enable_game_mode() {
     (void)ppd_set_active("performance");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "256"});
     SettingsManager::set_json_value("notificationsDnd", "true");
+    // The tile and the Settings page show this: when a game turns Game Mode
+    // on (gamemoded's start hook, b1air-gamemode-hook), they say so too.
+    SettingsManager::set_json_value("gameModeEnabled", "true");
 
     if (!write_private_file(runtime_path("game-mode.state"), "1\n")) return false;
 
@@ -567,6 +570,7 @@ bool SystemControl::disable_game_mode() {
     (void)ppd_set_active("balanced");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0"});
     SettingsManager::set_json_value("notificationsDnd", "false");
+    SettingsManager::set_json_value("gameModeEnabled", "false");
 
     unlink(runtime_path("game-mode.state").c_str());
 
@@ -1025,6 +1029,7 @@ struct DesktopAppEntry {
     std::string try_exec;
     std::string only_show_in;
     std::string not_show_in;
+    std::string wm_class;
 };
 
 // Desktop-entry visibility rules from the XDG spec that the scan used to skip.
@@ -1166,7 +1171,12 @@ static std::string resolve_desktop_icon(const std::string& icon) {
     const std::string h = home ? home : "";
 
     std::vector<std::string> theme_roots;
+    // Flatpak apps (Bottles among them) export their icons beside their
+    // desktop entries, not into /usr/share/icons; without these an app from
+    // Flathub drew the "not found" placeholder.
     for (const std::string& base : { h.empty() ? std::string() : h + "/.local/share/icons",
+                                     h.empty() ? std::string() : h + "/.local/share/flatpak/exports/share/icons",
+                                     std::string("/var/lib/flatpak/exports/share/icons"),
                                      std::string("/usr/share/icons") }) {
         if (base.empty()) continue;
         for (const std::string& theme : { configured_icon_theme(), std::string("hicolor") })
@@ -1226,78 +1236,98 @@ std::string SystemControl::apps_list_json(const std::string& category) {
         return s_apps_cache_json;
     }
 
-    std::vector<std::string> search_dirs = {
-        "/usr/share/applications",
-        "/var/lib/flatpak/exports/share/applications"
-    };
+    // Most important first, as XDG reads them: a user's own entry replaces
+    // the system's of the same id, and a user's Hidden=true hides it. The
+    // system dirs came first here, so neither worked. And the user's own
+    // Flatpak installs — `flatpak install --user`, the way Bottles usually
+    // goes on — were not read at all.
     const char* home = std::getenv("HOME");
-    if (home) {
-        search_dirs.push_back(std::string(home) + "/.local/share/applications");
+    const char* data_home = std::getenv("XDG_DATA_HOME");
+    const std::string user_data = data_home && *data_home ? std::string(data_home)
+                                : home ? std::string(home) + "/.local/share" : std::string();
+    std::vector<std::string> search_dirs;
+    if (!user_data.empty()) {
+        search_dirs.push_back(user_data + "/applications");
+        search_dirs.push_back(user_data + "/flatpak/exports/share/applications");
     }
+    search_dirs.push_back("/var/lib/flatpak/exports/share/applications");
+    search_dirs.push_back("/usr/local/share/applications");
+    search_dirs.push_back("/usr/share/applications");
 
     std::unordered_map<std::string, DesktopAppEntry> apps;
+    // Ids already decided by a more important dir, shown or hidden.
+    std::unordered_set<std::string> seen;
 
     for (const auto& dir_path : search_dirs) {
-        DIR* d = opendir(dir_path.c_str());
-        if (!d) continue;
-        struct dirent* ent;
-        while ((ent = readdir(d)) != nullptr) {
-            std::string fname = ent->d_name;
-            if (fname.size() > 8 && fname.substr(fname.size() - 8) == ".desktop") {
-                if (apps.count(fname)) continue;
+        std::error_code ec;
+        if (!std::filesystem::is_directory(dir_path, ec)) continue;
+        // Into subdirectories too: Wine puts what a Windows installer adds to
+        // the Start menu under wine/Programs/…, and none of it reached the
+        // Launchpad. The desktop id of such an entry is its path with the
+        // slashes as dashes (wine-Programs-Foo.desktop).
+        const auto opts = std::filesystem::directory_options::follow_directory_symlink
+                        | std::filesystem::directory_options::skip_permission_denied;
+        for (std::filesystem::recursive_directory_iterator it(dir_path, opts, ec), end; it != end; it.increment(ec)) {
+            if (ec) break;
+            if (it.depth() > 4) { it.disable_recursion_pending(); continue; }
+            const std::filesystem::path& path = it->path();
+            if (path.extension() != ".desktop") continue;
+            std::string fname = std::filesystem::relative(path, dir_path, ec).string();
+            if (ec) { ec.clear(); continue; }
+            std::replace(fname.begin(), fname.end(), '/', '-');
+            if (!seen.insert(fname).second) continue;
 
-                std::ifstream f(dir_path + "/" + fname);
-                if (!f) continue;
-                std::string line;
-                DesktopAppEntry entry;
-                entry.desktop_file = fname;
-                bool in_desktop_entry = false;
+            std::ifstream f(path);
+            if (!f) continue;
+            std::string line;
+            DesktopAppEntry entry;
+            entry.desktop_file = fname;
+            bool in_desktop_entry = false;
 
-                while (std::getline(f, line)) {
-                    if (line == "[Desktop Entry]") {
-                        in_desktop_entry = true;
-                        continue;
-                    } else if (!line.empty() && line[0] == '[' && in_desktop_entry) {
-                        break;
-                    }
-                    if (!in_desktop_entry) continue;
-
-                    size_t eq = line.find('=');
-                    if (eq != std::string::npos) {
-                        std::string key = line.substr(0, eq);
-                        std::string val = line.substr(eq + 1);
-
-                        if (key == "Name" && entry.name.empty()) entry.name = val;
-                        else if (key == "Exec" && entry.exec.empty()) {
-                            size_t p;
-                            while ((p = val.find("%")) != std::string::npos && p + 1 < val.size()) {
-                                val.erase(p, 2);
-                            }
-                            while (!val.empty() && val.back() == ' ') val.pop_back();
-                            entry.exec = val;
-                        }
-                        else if (key == "Icon" && entry.icon.empty()) entry.icon = val;
-                        else if (key == "Comment" && entry.comment.empty()) entry.comment = val;
-                        else if (key == "Categories") entry.categories = val;
-                        else if (key == "MimeType") entry.mime_type = val;
-                        else if (key == "NoDisplay") entry.no_display = (val == "true" || val == "1");
-                        else if (key == "Terminal") entry.terminal = (val == "true" || val == "1");
-                        else if (key == "Hidden") entry.hidden = (val == "true" || val == "1");
-                        else if (key == "TryExec" && entry.try_exec.empty()) entry.try_exec = val;
-                        else if (key == "OnlyShowIn") entry.only_show_in = val;
-                        else if (key == "NotShowIn") entry.not_show_in = val;
-                    }
+            while (std::getline(f, line)) {
+                if (line == "[Desktop Entry]") {
+                    in_desktop_entry = true;
+                    continue;
+                } else if (!line.empty() && line[0] == '[' && in_desktop_entry) {
+                    break;
                 }
+                if (!in_desktop_entry) continue;
 
-                if (!entry.name.empty() && !entry.exec.empty()
-                        && !entry.no_display && !entry.hidden
-                        && desktop_entry_runs_here(entry.only_show_in, entry.not_show_in)
-                        && try_exec_present(entry.try_exec)) {
-                    apps[fname] = entry;
+                size_t eq = line.find('=');
+                if (eq != std::string::npos) {
+                    std::string key = line.substr(0, eq);
+                    std::string val = line.substr(eq + 1);
+
+                    if (key == "Name" && entry.name.empty()) entry.name = val;
+                    else if (key == "Exec" && entry.exec.empty()) {
+                        size_t p;
+                        while ((p = val.find("%")) != std::string::npos && p + 1 < val.size()) {
+                            val.erase(p, 2);
+                        }
+                        while (!val.empty() && val.back() == ' ') val.pop_back();
+                        entry.exec = val;
+                    }
+                    else if (key == "Icon" && entry.icon.empty()) entry.icon = val;
+                    else if (key == "Comment" && entry.comment.empty()) entry.comment = val;
+                    else if (key == "Categories") entry.categories = val;
+                    else if (key == "MimeType") entry.mime_type = val;
+                    else if (key == "NoDisplay") entry.no_display = (val == "true" || val == "1");
+                    else if (key == "Terminal") entry.terminal = (val == "true" || val == "1");
+                    else if (key == "Hidden") entry.hidden = (val == "true" || val == "1");
+                    else if (key == "TryExec" && entry.try_exec.empty()) entry.try_exec = val;
+                    else if (key == "OnlyShowIn") entry.only_show_in = val;
+                    else if (key == "NotShowIn") entry.not_show_in = val;
+                    else if (key == "StartupWMClass" && entry.wm_class.empty()) entry.wm_class = val;
                 }
             }
+
+            if (!entry.name.empty() && !entry.exec.empty()
+                    && !entry.no_display && !entry.hidden
+                    && desktop_entry_runs_here(entry.only_show_in, entry.not_show_in)
+                    && try_exec_present(entry.try_exec)) {
+                apps[fname] = entry;
+            }
         }
-        closedir(d);
     }
 
     std::vector<DesktopAppEntry> matched;
@@ -1371,6 +1401,7 @@ std::string SystemControl::apps_list_json(const std::string& category) {
                            "\"desktopFile\":\"" + json_escape(a.desktop_file) + "\","
                            "\"icon\":\"" + json_escape(a.icon) + "\","
                            "\"iconPath\":\"" + json_escape(resolve_desktop_icon(a.icon)) + "\","
+                           "\"wmClass\":\"" + json_escape(a.wm_class) + "\","
                            "\"comment\":\"" + json_escape(a.comment) + "\","
                            // Terminal=true was parsed and then dropped on the floor.
                            // Launchers executed such an entry directly, so htop and

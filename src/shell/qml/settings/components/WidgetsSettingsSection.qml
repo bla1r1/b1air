@@ -138,7 +138,8 @@ ColumnLayout {
                 { id: "caffeine",   title: I18n.tr("Caffeine") },
                 { id: "screenshot", title: I18n.tr("Screenshot") },
                 { id: "dropper",    title: I18n.tr("Color Dropper") },
-                { id: "remote",     title: I18n.tr("Remote Desktop") }
+                { id: "remote",     title: I18n.tr("Remote Desktop") },
+                { id: "vpn",        title: I18n.tr("VPN") }
             ]
             delegate: CcRow {
                 required property var modelData

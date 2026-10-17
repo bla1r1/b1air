@@ -288,6 +288,88 @@ ColumnLayout {
         }
     }
 
+    // ── Edition ──────────────────────────────────────────────────────────────
+    // packages/editions/ in the repository this desktop was installed from,
+    // and the one installed (/etc/b1air/edition). Switching runs
+    // update-dotfiles.sh --edition in a terminal: the package manager asks,
+    // and what it installs is shown. Nothing is removed going to a smaller one.
+    property string editionRepo: ""
+    property string editionNow: ""
+    property var editions: []      // [{ name, desc, parent }], each after its parent
+
+    Process {
+        id: editionProbe
+        running: section.part === "updates" && section.visible
+        command: ["sh", "-c",
+            "repo=$(cat \"${XDG_STATE_HOME:-$HOME/.local/state}/b1air/dotfiles-repo\" 2>/dev/null); "
+            + "echo \"repo=$repo\"; echo \"now=$(cat /etc/b1air/edition 2>/dev/null)\"; "
+            + "for d in \"$repo\"/packages/editions/*/; do [ -f \"$d/parent\" ] || continue; "
+            + "printf 'ed=%s|%s|%s\\n' \"$(basename \"$d\")\" \"$(head -n1 \"$d/description\" 2>/dev/null)\" \"$(head -n1 \"$d/parent\")\"; done"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const eds = [{ name: "minimal", desc: "The desktop and its apps, nothing more", parent: "" }];
+                for (const line of this.text.split("\n")) {
+                    if (line.indexOf("repo=") === 0) section.editionRepo = line.slice(5);
+                    else if (line.indexOf("now=") === 0) section.editionNow = line.slice(4) || "default";
+                    else if (line.indexOf("ed=") === 0) {
+                        const f = line.slice(3).split("|");
+                        eds.push({ name: f[0], desc: f[1] || "", parent: f[2] || "minimal" });
+                    }
+                }
+                // Each after the one it adds to.
+                const depth = n => { let d = 0, e = eds.find(x => x.name === n); while (e && e.parent) { d++; e = eds.find(x => x.name === e.parent); } return d; };
+                eds.sort((a, b) => depth(a.name) - depth(b.name));
+                section.editions = eds;
+            }
+        }
+    }
+
+    // Is `a` part of `b` (b adds to a, directly or not)?
+    function editionWithin(a, b) {
+        let e = section.editions.find(x => x.name === b);
+        while (e) {
+            if (e.name === a) return true;
+            e = section.editions.find(x => x.name === e.parent);
+        }
+        return false;
+    }
+
+    SettingsGroup {
+        visible: section.part === "updates" && section.editionRepo !== ""
+        title: I18n.tr("Edition")
+        subtitle: I18n.tr("Each one is the one before it plus what it adds")
+        icon: "\u{f03d3}"
+
+        Repeater {
+            model: section.editions
+
+            SettingsRow {
+                id: edRow
+                required property var modelData
+                readonly property bool current: edRow.modelData.name === section.editionNow
+                readonly property bool smaller: !edRow.current && section.editionWithin(edRow.modelData.name, section.editionNow)
+                label: edRow.modelData.name.charAt(0).toUpperCase() + edRow.modelData.name.slice(1)
+                note: I18n.tr(edRow.modelData.desc)
+                    + (edRow.smaller ? " · " + I18n.tr("What the current one installed stays installed") : "")
+
+                Label {
+                    visible: edRow.current
+                    text: I18n.tr("Installed")
+                    role: "caption"
+                    dim: true
+                }
+                Button {
+                    visible: !edRow.current
+                    label: I18n.tr("Switch")
+                    confirmText: I18n.tr("Switch to %1?", edRow.label)
+                    onActivated: Quickshell.execDetached(["b1air-term", "--hold", "-e", "bash",
+                        section.editionRepo + "/update-dotfiles.sh", "--packages-only",
+                        "--edition", edRow.modelData.name, "--repo-dir", section.editionRepo])
+                }
+            }
+        }
+    }
+
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
     SettingsGroup {
         visible: section.part === ""

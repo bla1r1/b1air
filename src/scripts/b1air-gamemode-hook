@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# =============================================================================
+# b1air-gamemode-hook start|end — Feral GameMode's hooks (.config/gamemode.ini)
+#
+# A game asks gamemoded for GameMode — Steam with `gamemoderun %command%`,
+# Heroic's and Lutris's GameMode switch — and gamemoded runs `start` when the
+# first game does and `end` when the last one quits. This turns b1air's Game
+# Mode (effects off, performance profile, Do Not Disturb) on and off with it.
+#
+# Only off again if it was this that turned it on: Game Mode switched on by
+# hand from the Control Center stays on when a game quits.
+# =============================================================================
+set -u
+mark="${XDG_RUNTIME_DIR:-/tmp}/b1air-gamemode-auto"
+active() { b1air-daemon game-mode status 2>/dev/null | grep -q '"enabled": *true'; }
+
+case "${1:-}" in
+    start)
+        active && exit 0
+        b1air-daemon game-mode on && : > "$mark" ;;
+    end)
+        [[ -e "$mark" ]] || exit 0
+        rm -f "$mark"
+        b1air-daemon game-mode off ;;
+    *) echo "Usage: $0 start|end" >&2; exit 2 ;;
+esac

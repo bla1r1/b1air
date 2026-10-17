@@ -6,6 +6,7 @@ singleton I18n 1.0 I18n.qml
 # frame
 PopupShell    1.0 PopupShell.qml
 GlassRim      1.0 GlassRim.qml
+CheckBox      1.0 CheckBox.qml
 Popover       1.0 Popover.qml
 SettingsGroup 1.0 SettingsGroup.qml
 Tile          1.0 Tile.qml

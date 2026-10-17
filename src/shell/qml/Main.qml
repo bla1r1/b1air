@@ -110,7 +110,17 @@ Scope {
     Timer {
         id: guideDelay
         interval: 2000
-        onTriggered: masterWindow.handleIpcCommand("toggle:guide:", true)
+        onTriggered: firstRunPending.running = true
+    }
+    // Not over the first-run setup: autostart.conf opens that a moment later
+    // in the same panel, and the welcome would be gone before it was read.
+    // It shows at the next login instead.
+    Process {
+        id: firstRunPending
+        command: ["b1air-settings", "--first-run", "--print"]
+        stdout: StdioCollector {
+            onStreamFinished: if (this.text.trim() === "") masterWindow.handleIpcCommand("toggle:guide:", true)
+        }
     }
 
     Connections {
@@ -575,8 +585,23 @@ Scope {
         }
     }
 
+    // The panel to come back to when this one closes: the welcome sets it
+    // when it opens the Control Center or the updater, so closing those goes
+    // back to it rather than to nothing. Any other panel opened in between
+    // forgets it.
+    property string returnTo: ""
+
     function switchWidget(newWidget, arg) {
         // REMOVED: Quickshell.execDetached file writing. State is strictly in memory now.
+
+        if (newWidget === "hidden" && masterWindow.returnTo !== "" && currentActive !== masterWindow.returnTo) {
+            const back = masterWindow.returnTo;
+            masterWindow.returnTo = "";
+            newWidget = back;
+            arg = "";
+        } else if (newWidget !== "hidden" && newWidget !== "control" && newWidget !== "updater") {
+            masterWindow.returnTo = "";
+        }
 
         prepTimer.stop();
         delayedClear.stop();
@@ -644,11 +669,10 @@ Scope {
         if (w === "network") return (a === "bt" || a === "bluetooth") ? "bluetooth" : "wifi";
         if (w === "control") return a || "main";
         if (w === "notifications") return "notifications";
-        // The guide is the keybinding sheet, not the About page. "Open Guide
-        // on Login" promises "the keybinding and tips modal" and this opened
-        // System Specifications and a memory reading; About is still one page
-        // away, and still reachable directly as `toggle settings about`.
-        if (w === "guide") return "shortcuts";
+        // The welcome (settings/components/Welcome.qml): where things are,
+        // each opening it, and the keys; the full keybinding sheet is one card
+        // away. Not the About page, which it once opened.
+        if (w === "guide") return "welcome";
         if (w === "focus") return "focus";
         // Registry entries that open the Settings window on one page. None of
         // these were listed here, so every one of them opened Settings on

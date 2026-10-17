@@ -18,7 +18,7 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     property var autostartCustom: Settings.autostartCustom || []
-    property bool openGuideAtStartup: Settings.openGuideAtStartup || false
+    property bool openGuideAtStartup: Settings.openGuideAtStartup === true
     property bool showAppPicker: false
     property string appSearchQuery: ""
 
@@ -336,7 +336,8 @@ ColumnLayout {
         icon: "\u{f02d}"
 
         SwitchRow {
-            label: I18n.tr("Open Guide on Login")
+            label: I18n.tr("Show the welcome at login")
+            note: I18n.tr("Where things are, and the keys for them. Super+H opens it any time.")
             checked: section.openGuideAtStartup
             onToggled: {
                 const next = !section.openGuideAtStartup;

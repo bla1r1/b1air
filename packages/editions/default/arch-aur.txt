@@ -1,0 +1,5 @@
+# The default edition's AUR packages.
+# Windows programs (src/scripts/b1air-run-windows).
+bottles
+# .deb packages, converted for pacman (src/scripts/b1air-install-package).
+debtap

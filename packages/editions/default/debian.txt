@@ -1,0 +1,9 @@
+# The default edition on Debian and Ubuntu: what it adds to minimal.
+# Format: see lib/distro.sh. `?name` = optional. Bottles is not packaged
+# here; it comes from Flathub (flatpak.txt). Tailscale is not in the
+# archive either: its own repository is the way to it.
+
+?wine ?winetricks
+flatpak
+distrobox podman
+network-manager-openvpn wireguard-tools firewalld

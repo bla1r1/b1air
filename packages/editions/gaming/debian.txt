@@ -1,0 +1,4 @@
+# The gaming edition on Debian and Ubuntu: what it adds to default. Steam
+# needs the i386 architecture and contrib/non-free; where those are off, it
+# comes from Flathub instead (flatpak.txt).
+?steam-installer ?gamemode ?mangohud ?gamescope

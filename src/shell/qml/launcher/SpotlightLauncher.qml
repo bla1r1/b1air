@@ -142,9 +142,41 @@ PopupShell {
         }
     }
 
+    // ── Software to install ──────────────────────────────────────────────────
+    // "install vlc" (or "установить …", "встановити …"): what Flathub, the
+    // distribution and the AUR have, through b1air-software, which installs
+    // the one picked in a terminal that asks first. A prefix, not every query:
+    // the package indexes are not something to read at each keystroke.
+    readonly property string installQuery: {
+        const m = window.query.match(/^\s*(install|get|установить|встановити)\s+(.+)$/i);
+        return m ? m[2].trim() : "";
+    }
+    property var softwareHits: []
+    Timer {
+        id: softwareDelay
+        interval: 350
+        onTriggered: {
+            if (window.installQuery.length < 2) { window.softwareHits = []; return; }
+            softwareFind.running = false;
+            softwareFind.command = ["b1air-software", "search", window.installQuery];
+            softwareFind.running = true;
+        }
+    }
+    Process {
+        id: softwareFind
+        stdout: StdioCollector {
+            onStreamFinished: window.softwareHits = this.text.split("\n").filter(l => l.length > 0).map(l => {
+                const f = l.split("\t");
+                return { source: f[0], id: f[1], name: f[2] || f[1], summary: f[3] || "" };
+            })
+        }
+    }
+    readonly property var sourceNames: ({ "flathub": "Flathub", "repo": I18n.tr("Repositories"), "aur": "AUR" })
+
     // The files are the slow part; while they are still coming an empty list
     // is not yet an answer.
     readonly property bool searchingFiles: fileDelay.running || fileFind.running || findFallback.running
+        || softwareDelay.running || softwareFind.running
 
     // ── Results ──────────────────────────────────────────────────────────────
 
@@ -154,6 +186,8 @@ PopupShell {
         window.selectedIndex = 0;
         window.fileHits = [];
         fileDelay.restart();
+        window.softwareHits = [];
+        softwareDelay.restart();
     }
 
     function matches(q, ...fields) {
@@ -165,6 +199,13 @@ PopupShell {
         const q = window.query.trim().toLowerCase();
         if (!q) return [];
         const out = [];
+        if (window.installQuery !== "") {
+            for (const h of window.softwareHits)
+                out.push({ section: I18n.tr("Install"), kind: "software", title: h.name,
+                           sub: window.sourceNames[h.source] + (h.summary ? " · " + h.summary : ""),
+                           glyph: "\u{f03d3}", source: h.source, pkg: h.id });
+            return out;
+        }
         if (window.calcResult !== "")
             out.push({ section: I18n.tr("Calculator"), kind: "calc", title: window.calcResult,
                        sub: window.query.trim(), glyph: "\u{f1ec}" });
@@ -190,6 +231,11 @@ PopupShell {
 
         for (const c of window.commands.filter(c => window.matches(q, c.name, c.desc)))
             out.push({ section: I18n.tr("Commands"), kind: "command", title: c.name, sub: c.desc, glyph: c.glyph, cmd: c.cmd });
+
+        // Nothing installed by that name: offer to look for it.
+        if (apps.length === 0 && q.length >= 3)
+            out.push({ section: I18n.tr("Install"), kind: "findsoftware", title: I18n.tr("Find “%1” to install", window.query.trim()),
+                       sub: I18n.tr("Flathub and the repositories"), glyph: "\u{f03d3}" });
 
         if (out.length === 0)
             out.push({ section: I18n.tr("Commands"), kind: "run", title: I18n.tr("Run “%1”", window.query.trim()),
@@ -228,8 +274,13 @@ PopupShell {
             window.close();
             return;
         }
+        if (item.kind === "findsoftware") {
+            window.query = "install " + window.query.trim();
+            return;
+        }
         window.close();
-        if (item.kind === "setting") Quickshell.execDetached(["b1air-settings", item.page]);
+        if (item.kind === "software") Quickshell.execDetached(["b1air-software", "install", item.source, item.pkg]);
+        else if (item.kind === "setting") Quickshell.execDetached(["b1air-settings", item.page]);
         else if (item.kind === "file") Quickshell.execDetached(["xdg-open", item.path]);
         else if (item.kind === "app" && item.terminal) Quickshell.execDetached(["b1air-term", "-e", "sh", "-c", item.cmd.replace(/%[a-zA-Z]/g, "")]);
         else window.safeLaunchCommand(item.cmd);
@@ -328,9 +379,13 @@ PopupShell {
                 mode: !window.hasQuery || window.results.length > 0 ? ""
                     : window.searchingFiles ? "loading" : "empty"
                 icon: "\u{f002}"
-                title: mode === "loading" ? I18n.tr("Searching files…")
-                                          : I18n.tr("No results for “%1”", window.query.trim())
-                hint: I18n.tr("Apps, settings, files and sums show up here.")
+                title: window.installQuery !== ""
+                    ? (mode === "loading" ? I18n.tr("Looking for “%1”…", window.installQuery)
+                                          : I18n.tr("Nothing to install called “%1”", window.installQuery))
+                    : (mode === "loading" ? I18n.tr("Searching files…")
+                                          : I18n.tr("No results for “%1”", window.query.trim()))
+                hint: window.installQuery !== "" ? I18n.tr("Flathub and the repositories were searched.")
+                    : I18n.tr("Apps, settings, files and sums show up here. “install …” finds new ones.")
             }
 
             // ── Results | preview ────────────────────────────────────────────
@@ -403,7 +458,10 @@ PopupShell {
                             }
                             Label {
                                 Layout.maximumWidth: list.width * 0.45
-                                text: row.modelData.kind === "file" ? row.modelData.sub : ""
+                                // Where it is, for a file; where it comes from, for a program to
+                                // install (the same name from Flathub and the repositories).
+                                text: row.modelData.kind === "file" ? row.modelData.sub
+                                    : row.modelData.kind === "software" ? window.sourceNames[row.modelData.source] : ""
                                 visible: text !== ""
                                 role: "caption"
                                 color: row.on ? Design.tint(Design.accentText, 0.75) : Design.textFaint
@@ -502,6 +560,8 @@ PopupShell {
                                 : preview.it.kind === "calc" ? I18n.tr("Enter copies the result")
                                 : preview.it.kind === "file" ? I18n.tr("Enter opens it, Ctrl+Enter shows it in Files")
                                 : preview.it.kind === "setting" ? I18n.tr("Enter opens this page of Settings")
+                                : preview.it.kind === "software" ? I18n.tr("Enter installs it, in a terminal that asks first")
+                                : preview.it.kind === "findsoftware" ? I18n.tr("Enter searches for it")
                                 : I18n.tr("Enter opens it · Tab goes to the next section")
                         }
                     }
