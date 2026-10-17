@@ -132,7 +132,7 @@ PopupShell {
                 Label {
                     text: root.fileName
                     role: "subhead"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                 }
                 Label {
                     text: root.filePath

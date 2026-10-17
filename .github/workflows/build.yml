@@ -8,9 +8,10 @@
 # check needs a Wayland session and skips itself here.
 name: build
 
+# Off for now: no runs on push or pull request. Run it by hand from the
+# Actions tab, or put push: and pull_request: back to turn it on again.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:

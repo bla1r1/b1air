@@ -118,7 +118,7 @@ PopupShell {
             Label {
                 text: I18n.tr("Input Sources")
                 role: "caption"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 color: Design.textDim
                 Layout.fillWidth: true
             }
@@ -172,7 +172,7 @@ PopupShell {
                                 anchors.centerIn: parent
                                 text: row.info.badge
                                 role: "caption"
-                                weight: Design.weight.bold
+                                weight: Design.weight.semibold
                                 isMono: true
                                 color: row.isActive ? Design.surface : Design.text
                             }
@@ -183,7 +183,7 @@ PopupShell {
                             text: row.info.name
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            weight: row.isActive ? Design.weight.bold : Design.weight.medium
+                            weight: row.isActive ? Design.weight.semibold : Design.weight.medium
                             color: row.isActive ? Design.text : Design.textDim
                         }
 

@@ -38,7 +38,6 @@ ColumnLayout {
         title: I18n.tr("Accent colour")
         subtitle: I18n.tr("Buttons, selection and focus. The theme's own, or one of its other colours")
         icon: "\u{f0376}"
-        accentColor: Design.mauve
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -78,8 +77,6 @@ ColumnLayout {
                         border.color: (Settings.accentName || "") === accentDot.modelData.name ? Design.text : "transparent"
                         border.width: 2
 
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
-                        scale: accentDotMa.pressed ? 0.9 : (accentDotMa.containsMouse ? 1.15 : 1.0)
 
                         Icon {
                             visible: (Settings.accentName || "") === accentDot.modelData.name
@@ -111,7 +108,6 @@ ColumnLayout {
         title: I18n.tr("Other Applications")
         subtitle: I18n.tr("Browsers, GTK and Qt programs: follow the theme, or stay dark or light")
         icon: "\u{f08c6}"
-        accentColor: Design.sapphire
 
         RowLayout {
             Layout.fillWidth: true

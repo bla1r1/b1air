@@ -8,8 +8,14 @@ import "../WindowRegistry.js" as LayoutMath
 // THE reference file for the whole shell UI.
 //
 // Colour, type, shape, motion and scale — one place, one import.
-// Provides both semantic design-system tokens and the rich Catppuccin /
-// Material You palette for vibrant, modern rice aesthetics.
+//
+// How the colours are meant to be used:
+//   - surfaces (ground … active) and text (text, textDim, textFaint) for
+//     everything that is not saying something;
+//   - accent for what is chosen, in focus, or the main action — one thing;
+//   - ok / warn / danger for state, and only for state;
+//   - the named hues (blue, mauve, peach, …) for data: Files tags, charts,
+//     avatars, and the accent picker. Not to tell one widget from another.
 // =============================================================================
 
 QtObject {
@@ -19,7 +25,7 @@ QtObject {
         readonly property int caption: 11   // metadata, units, timestamps
         readonly property int body: 13      // standard UI working size
         readonly property int subhead: 15   // card titles, device names
-        readonly property int title: 18     // section / page titles
+        readonly property int title: 20     // page and popup titles
         readonly property int display: 24   // popup headlines, hero numbers
 
         // Inter: the open face closest to the one a desktop like this is

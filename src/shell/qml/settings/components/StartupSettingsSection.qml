@@ -112,7 +112,6 @@ ColumnLayout {
         title: I18n.tr("Autostart Applications")
         subtitle: I18n.tr("Launch your favourite applications, background daemons, and scripts on login")
         icon: "\u{f009}"
-        accentColor: Design.mauve
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -125,7 +124,7 @@ ColumnLayout {
 
                 Label {
                     text: I18n.tr("Startup Programs")
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     role: "subhead"
                     Layout.fillWidth: true
                 }
@@ -134,7 +133,6 @@ ColumnLayout {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: section.showAppPicker ? I18n.tr("Close App List") : I18n.tr("Add Installed App…")
-                    tone: Design.sapphire
                     onActivated: section.showAppPicker = !section.showAppPicker
                 }
             }
@@ -160,7 +158,7 @@ ColumnLayout {
                         Layout.preferredHeight: Design.s(32)
                         radius: Design.s(Design.radius.ctl)
                         color: Design.surface
-                        border.color: appSearchInput.activeFocus ? Design.sapphire : Design.tint(Design.line, 0.4)
+                        border.color: appSearchInput.activeFocus ? Design.accent : Design.tint(Design.line, 0.4)
                         border.width: 1
 
                         RowLayout {
@@ -230,7 +228,7 @@ ColumnLayout {
                                     visible: !parent.children[0].visible
                                     text: "󰄛"
                                     role: "caption"
-                                    color: Design.sapphire
+                                    color: Design.accent
                                 }
 
                                 Label {
@@ -253,7 +251,6 @@ ColumnLayout {
                                 ActionButton {
                                     icon: "󰐕"
                                     label: I18n.tr("Add")
-                                    tone: Design.sapphire
                                     onActivated: section.addCustomApp(appPickerItem.model.name, appPickerItem.model.exec, appPickerItem.model.icon)
                                 }
                             }
@@ -300,7 +297,6 @@ ColumnLayout {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: I18n.tr("Add Binary")
-                    tone: Design.teal
                     onActivated: section.addCustomApp(customNameInput.text, customCmdInput.text, "")
                 }
             }
@@ -332,7 +328,7 @@ ColumnLayout {
                         Layout.preferredHeight: Design.s(44)
                         spacing: Design.s(Design.space.md)
 
-                        Icon { text: "󰄛"; role: "title"; color: Design.teal }
+                        Icon { text: "󰄛"; role: "title"; color: Design.textDim }
 
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -364,7 +360,6 @@ ColumnLayout {
         title: I18n.tr("Welcome & first-run setup")
         subtitle: I18n.tr("The shortcut guide at login, and the setup a new account goes through")
         icon: "\u{f02d}"
-        accentColor: Design.yellow
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -373,7 +368,7 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
-                Icon { visible: false; text: "󰋖"; role: "title"; color: Design.yellow }
+                Icon { visible: false; text: "󰋖"; role: "title"; color: Design.textDim }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)
@@ -394,7 +389,7 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
-                Icon { visible: false; text: "\u{f0493}"; role: "title"; color: Design.yellow }
+                Icon { visible: false; text: "\u{f0493}"; role: "title"; color: Design.textDim }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Design.s(2)

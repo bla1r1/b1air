@@ -128,7 +128,6 @@ ColumnLayout {
         title: I18n.tr("Today's Activity")
         subtitle: I18n.tr("Real-time summary of your computer usage and focus intervals")
         icon: "\u{f051e}"
-        accentColor: Design.teal
 
         RowLayout {
             Layout.fillWidth: true
@@ -139,7 +138,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(72)
                 radius: Design.s(Design.radius.card)
-                color: Design.sunken
+                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -152,8 +151,8 @@ ColumnLayout {
                     Label {
                         text: (section.screenHours > 0 ? section.screenHours + "h " : "") + section.screenMins + "m"
                         role: "subhead"
-                        weight: Design.weight.bold
-                        color: Design.teal
+                        weight: Design.weight.semibold
+                        color: Design.text
                     }
                 }
             }
@@ -163,7 +162,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(72)
                 radius: Design.s(Design.radius.card)
-                color: Design.sunken
+                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -177,8 +176,8 @@ ColumnLayout {
                         readonly property real pct: Math.min(100, Math.round((section.screenSeconds / (section.dailyGoalHours * 3600)) * 100))
                         text: I18n.tr("%1% used", pct)
                         role: "subhead"
-                        weight: Design.weight.bold
-                        color: pct > 100 ? Design.danger : Design.sapphire
+                        weight: Design.weight.semibold
+                        color: pct > 100 ? Design.danger : Design.accent
                     }
                 }
             }
@@ -188,7 +187,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(72)
                 radius: Design.s(Design.radius.card)
-                color: Design.sunken
+                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -204,8 +203,8 @@ ColumnLayout {
                             : Notifications.quietHours ? I18n.tr("Quiet hours")
                             : Notifications.dnd ? I18n.tr("Do Not Disturb") : I18n.tr("Active")
                         role: "subhead"
-                        weight: Design.weight.bold
-                        color: Notifications.dnd ? Design.peach : Design.green
+                        weight: Design.weight.semibold
+                        color: Notifications.dnd ? Design.warn : Design.ok
                     }
                 }
             }
@@ -218,7 +217,6 @@ ColumnLayout {
         title: I18n.tr("Application Notification Filters")
         subtitle: I18n.tr("Control banner popups and sound alerts for individual apps")
         icon: "\u{f0f3}"
-        accentColor: Design.mauve
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -238,7 +236,7 @@ ColumnLayout {
                         Rectangle {
                             width: Design.s(32); height: Design.s(32)
                             radius: Design.s(Design.radius.ctl)
-                            color: Design.sunken
+                            color: Design.well
 
                             Icon {
                                 anchors.centerIn: parent
@@ -287,7 +285,6 @@ ColumnLayout {
         title: I18n.tr("Focus & Break Intervals")
         subtitle: I18n.tr("Customize work cycles and rest duration for FocusTime timer")
         icon: "\u{f0520}"
-        accentColor: Design.sapphire
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -371,7 +368,6 @@ ColumnLayout {
         title: I18n.tr("Focus modes")
         subtitle: I18n.tr("Each one holds back banners and sounds, except from the apps you let through. Sleep also comes on with quiet hours, Work with the focus timer, Gaming with Game Mode")
         icon: "\u{f0594}"
-        accentColor: Design.mauve
         property string editing: "dnd"
 
         Flow {
@@ -425,14 +421,14 @@ ColumnLayout {
     Card {
         visible: section.part === "notifications"
         title: I18n.tr("Quiet hours")
-        subtitle: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd))
-                                           : I18n.tr("Do Not Disturb on a schedule, every day")
+        subtitle: I18n.tr("Do Not Disturb on a schedule, every day")
+        // Shown while it is in force: what is being held back, and until when.
+        note: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd)) : ""
         icon: "\u{f00a0}"
-        accentColor: Design.lavender
 
         Toggle {
             label: I18n.tr("Quiet hours")
-            subtitle: I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
+            note: I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
             checked: Settings.dndScheduleEnabled === true
             onToggled: Settings.set("dndScheduleEnabled", !(Settings.dndScheduleEnabled === true))
         }
@@ -460,7 +456,6 @@ ColumnLayout {
         title: I18n.tr("Focus Automation")
         subtitle: I18n.tr("Do Not Disturb while focusing, and break reminders. Recording screen time is on Privacy")
         icon: "\u{f009b}"
-        accentColor: Design.peach
 
         ColumnLayout {
             Layout.fillWidth: true

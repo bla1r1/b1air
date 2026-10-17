@@ -20,6 +20,10 @@ RowLayout {
     property string icon: ""
     property string label: ""
     property string subtitle: ""
+    // What turning it on or off costs — a restart, the next login, something
+    // that stays locked. Drawn, unlike `subtitle`: the 0.3.0 cut of every
+    // line under a switch took these warnings with the explanations.
+    property string note: ""
     property bool checked: false
     signal toggled()
 
@@ -52,8 +56,8 @@ RowLayout {
         }
 
         Label {
-            text: row.subtitle
-            visible: false
+            text: row.note
+            visible: text !== ""
             role: "caption"
             dim: true
             Layout.fillWidth: true

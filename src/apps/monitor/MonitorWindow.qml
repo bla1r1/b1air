@@ -596,7 +596,7 @@ Window {
                             Text {
                                 text: "\u{f108}" // binary icon
                                 font.family: Design.font.icon
-                                color: Design.sapphire
+                                color: Design.textDim
                                 font.pixelSize: Design.s(12)
                             }
 
@@ -648,8 +648,8 @@ Window {
                                 width: parent.width * Math.min(1, model.cpu / 100)
                                 height: Design.s(6)
                                 radius: height / 2
-                                color: model.cpu > 15.0 ? Design.pink
-                                     : (model.cpu > 5.0 ? Design.peach : Design.tint(Design.sapphire, 0.75))
+                                color: model.cpu > 15.0 ? Design.danger
+                                     : (model.cpu > 5.0 ? Design.warn : Design.tint(Design.sapphire, 0.75))
                             }
                         }
 
@@ -664,9 +664,9 @@ Window {
                         Text {
                             text: model.cpu.toFixed(1) + "%"
                             font.family: Design.font.mono
-                            font.weight: model.cpu > 5.0 ? Design.weight.bold : Design.weight.regular
+                            font.weight: model.cpu > 5.0 ? Design.weight.semibold : Design.weight.regular
                             font.pixelSize: Design.s(Design.font.caption)
-                            color: model.cpu > 15.0 ? Design.pink : (model.cpu > 5.0 ? Design.peach : Design.text)
+                            color: model.cpu > 15.0 ? Design.danger : (model.cpu > 5.0 ? Design.warn : Design.text)
                             Layout.preferredWidth: Design.s(70)
                             horizontalAlignment: Text.AlignRight
                         }
@@ -690,13 +690,13 @@ Window {
                                 width: Design.s(26)
                                 height: Design.s(26)
                                 radius: width / 2
-                                color: killHover.containsMouse ? Design.tint(Design.pink, 0.25) : "transparent"
+                                color: killHover.containsMouse ? Design.tint(Design.danger, 0.25) : "transparent"
 
                                 Text {
                                     anchors.centerIn: parent
                                     text: "\u{f00d}" // cross
                                     font.family: Design.font.icon
-                                    color: killHover.containsMouse ? Design.pink : Design.textDim
+                                    color: killHover.containsMouse ? Design.danger : Design.textDim
                                     font.pixelSize: Design.s(11)
                                 }
 
@@ -711,7 +711,7 @@ Window {
                                 width: Design.s(26)
                                 height: Design.s(26)
                                 radius: width / 2
-                                color: forceHover.containsMouse ? Design.pink : "transparent"
+                                color: forceHover.containsMouse ? Design.danger : "transparent"
 
                                 Text {
                                     anchors.centerIn: parent

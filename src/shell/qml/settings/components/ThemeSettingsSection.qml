@@ -31,7 +31,6 @@ ColumnLayout {
                       Services.Theme.nightFrom, Services.Theme.nightTo)
             : I18n.tr("One theme all day, or light by day and dark after sunset")
         icon: "\u{f050e}"
-        accentColor: Design.yellow
 
         Flow {
             Layout.fillWidth: true
@@ -77,7 +76,6 @@ ColumnLayout {
         title: I18n.tr("Theme")
         subtitle: I18n.tr("The whole palette — surfaces, text and accents — in one file")
         icon: "\u{f0765}"
-        accentColor: Design.mauve
 
         // From the wallpaper.
         //

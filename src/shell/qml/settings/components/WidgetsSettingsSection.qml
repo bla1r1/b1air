@@ -68,7 +68,6 @@ ColumnLayout {
         title: I18n.tr("Dock")
         subtitle: I18n.tr("Pinned and open apps along the bottom of the screen; a dot under the ones running")
         icon: "\u{f0db}"
-        accentColor: Design.blue
 
         Toggle {
             label: I18n.tr("Show the dock")
@@ -156,7 +155,6 @@ ColumnLayout {
         title: I18n.tr("Control Center")
         subtitle: I18n.tr("Which tiles and cards the panel shows. Their order is changed in the panel itself, with the pencil")
         icon: "\u{f062e}"
-        accentColor: Design.blue
 
         Repeater {
             model: [

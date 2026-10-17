@@ -51,7 +51,7 @@ Item {
             Label {
                 text: root.title
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }

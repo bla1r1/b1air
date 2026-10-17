@@ -100,7 +100,6 @@ ColumnLayout {
         title: I18n.tr("System Specifications")
         subtitle: I18n.tr("%1 on %2", section.osName, section.hostName)
         icon: "\u{f035b}"
-        accentColor: Design.sapphire
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -158,7 +157,6 @@ ColumnLayout {
         title: I18n.tr("Service Health & Subsystems")
         subtitle: I18n.tr("Live status of background communication daemons")
         icon: "\u{f02ce}"
-        accentColor: Design.teal
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -170,12 +168,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.md)
                 Rectangle {
                     width: Design.s(10); height: width; radius: width/2
-                    color: Audio.defaultSink !== null ? Design.green : Design.danger
+                    color: Audio.defaultSink !== null ? Design.ok : Design.danger
                 }
                 Label { text: I18n.tr("PipeWire Audio Server"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
                     text: Audio.defaultSink !== null ? I18n.tr("Connected") : I18n.tr("Inactive")
-                    tone: Audio.defaultSink !== null ? Design.green : Design.danger
+                    tone: Audio.defaultSink !== null ? Design.ok : Design.danger
                 }
             }
 
@@ -185,12 +183,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.md)
                 Rectangle {
                     width: Design.s(10); height: width; radius: width/2
-                    color: Design.green
+                    color: Design.ok
                 }
                 Label { text: I18n.tr("NetworkManager & Connectivity"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
                     text: Network.hasWifi || Network.hasBluetooth ? I18n.tr("Active") : I18n.tr("Ready")
-                    tone: Design.green
+                    tone: Design.ok
                 }
             }
 
@@ -200,12 +198,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.md)
                 Rectangle {
                     width: Design.s(10); height: width; radius: width/2
-                    color: Power.hasBattery ? Design.green : Design.sapphire
+                    color: Power.hasBattery ? Design.ok : Design.textDim
                 }
                 Label { text: I18n.tr("UPower Power Management"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
                     text: Power.hasBattery ? I18n.tr("Battery Active") : I18n.tr("AC Connected")
-                    tone: Power.hasBattery ? Design.green : Design.sapphire
+                    tone: Power.hasBattery ? Design.ok : Design.accent
                 }
             }
 
@@ -215,12 +213,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.md)
                 Rectangle {
                     width: Design.s(10); height: width; radius: width/2
-                    color: Design.green
+                    color: Design.ok
                 }
                 Label { text: I18n.tr("Freedesktop Notification Daemon"); weight: Design.weight.semibold; Layout.fillWidth: true }
                 Badge {
                     text: Notifications.dnd ? I18n.tr("DND Active") : I18n.tr("Running (Native)")
-                    tone: Notifications.dnd ? Design.peach : Design.green
+                    tone: Notifications.dnd ? Design.warn : Design.ok
                 }
             }
         }

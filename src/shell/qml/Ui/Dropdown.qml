@@ -44,7 +44,7 @@ ColumnLayout {
     }
 
     spacing: Design.s(4)
-    opacity: enabled ? 1 : 0.6
+    opacity: enabled ? 1 : Design.opacity.disabled
     Layout.preferredWidth: Design.s(300)
     Layout.maximumWidth: Design.s(360)
 

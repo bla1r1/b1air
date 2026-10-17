@@ -128,7 +128,6 @@ ColumnLayout {
             ? I18n.tr("Active at %1K color temperature", section.tempK)
             : I18n.tr("Reduce blue light in evening hours to protect sleep")
         icon: "\u{f0599}"
-        accentColor: Design.yellow
 
         Toggle {
             label: I18n.tr("Night Light")
@@ -144,7 +143,6 @@ ColumnLayout {
         title: I18n.tr("Color Temperature")
         subtitle: I18n.tr("Lower values produce warmer, amber tones with less blue light")
         icon: "\u{f0590}"
-        accentColor: Design.yellow
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -154,7 +152,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Label { text: I18n.tr("Color Warmth"); weight: Design.weight.semibold }
                 Item { Layout.fillWidth: true }
-                Label { text: section.tempK + " K"; role: "caption"; isMono: true; color: Design.yellow }
+                Label { text: section.tempK + " K"; role: "caption"; isMono: true; color: Design.textDim }
             }
 
             // Slider: 1900K (a candle flame, as warm as f.lux and gammastep
@@ -163,7 +161,6 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.ctl)
                 value: Math.round(((section.tempK - 1900) / 4600) * 100)
-                tone: Design.yellow
                 icon: "\u{f0590}"
                 onMoved: pct => {
                     section.dragTemp = Math.round((1900 + (pct / 100) * 4600) / 100) * 100;
@@ -222,7 +219,6 @@ ColumnLayout {
             : preview.night !== "" ? I18n.tr("Warm from %1 to %2", preview.night.split("-")[0], preview.night.split("-")[1])
             : ""
         icon: "\u{f0150}"
-        accentColor: Design.yellow
 
         Flow {
             Layout.fillWidth: true

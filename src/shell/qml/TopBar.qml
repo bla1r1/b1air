@@ -197,8 +197,6 @@ PanelWindow {
     readonly property color colBg: Design.glassBg
     readonly property color colBorder: Design.glassBorder
     readonly property color colBlue: Design.accent
-    readonly property color colPurple: Design.mauve
-    readonly property color colCyan: Design.sapphire
     readonly property color colGreen: Design.ok
     readonly property color colOrange: Design.warn
     readonly property color colRed: Design.danger
@@ -495,8 +493,8 @@ PanelWindow {
                 border.color: appMenuArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
                 border.width: 1
 
-                Behavior on color { ColorAnimation { duration: 150 } }
-                Behavior on border.color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+                Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
 
                 Row {
                     id: appRow
@@ -510,10 +508,13 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
-                        text: I18n.tr("APPS")
+                        // Sentence case and the medium cut, as every other
+                        // label on the bar: it was the one word in capitals
+                        // and bold, the loudest thing on the left.
+                        text: I18n.tr("Apps")
                         font.family: topBar.fontMain
-                        font.pixelSize: Design.s(12)
-                        font.bold: true
+                        font.pixelSize: Design.s(Design.font.body)
+                        font.weight: Design.weight.medium
                         color: topBar.colFg
                         anchors.verticalCenter: parent.verticalCenter
                     }
@@ -668,7 +669,7 @@ PanelWindow {
                                 text: wsPill.modelData.name
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: wsPill.modelData.focused ? Design.accentText
                                      : (wsMouseArea.containsMouse ? topBar.colBlue : topBar.colFgDim)
                             }
@@ -758,7 +759,7 @@ PanelWindow {
             border.color: clockArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
             border.width: 1
 
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             Text {
                 id: clockText
@@ -807,12 +808,12 @@ PanelWindow {
             height: Design.s(28)
             radius: 999
 
-            readonly property color tone: Focus.onBreak ? Design.green : Design.sapphire
+            readonly property color tone: Focus.onBreak ? Design.ok : Design.accent
             color: focusArea.containsMouse ? Qt.alpha(tone, 0.32) : Qt.alpha(tone, 0.18)
             border.width: 1
             border.color: Qt.alpha(tone, Focus.running ? 0.55 : 0.28)
 
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             Row {
                 id: focusRow
@@ -833,7 +834,7 @@ PanelWindow {
                     text: Focus.remainingText
                     font.family: topBar.fontMain
                     font.pixelSize: Design.s(12)
-                    font.bold: true
+                    font.weight: Design.weight.semibold
                     color: focusPill.tone
                     opacity: Focus.running ? 1.0 : 0.65
                 }
@@ -875,8 +876,8 @@ PanelWindow {
                 height: Design.s(30)
                 width: mediaRow.implicitWidth + Design.s(20)
                 radius: Design.s(10)
-                color: mediaArea.containsMouse ? Design.tint(Design.mauve, 0.15) : topBar.colBg
-                border.color: mediaArea.containsMouse ? Design.tint(Design.mauve, 0.35) : topBar.colBorder
+                color: mediaArea.containsMouse ? Design.glassHover : topBar.colBg
+                border.color: mediaArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
                 border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -924,8 +925,8 @@ PanelWindow {
                 height: Design.s(30)
                 width: weatherRow.implicitWidth + Design.s(20)
                 radius: Design.s(10)
-                color: weatherArea.containsMouse ? Design.tint(Design.sapphire, 0.15) : topBar.colBg
-                border.color: weatherArea.containsMouse ? Design.tint(Design.sapphire, 0.35) : topBar.colBorder
+                color: weatherArea.containsMouse ? Design.glassHover : topBar.colBg
+                border.color: weatherArea.containsMouse ? Design.glassBorderStrong : topBar.colBorder
                 border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -948,7 +949,7 @@ PanelWindow {
                         text: Weather.temp
                         font.family: topBar.fontMain
                         font.pixelSize: Design.s(11)
-                        font.bold: true
+                        font.weight: Design.weight.semibold
                         color: topBar.colFgDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
@@ -1063,13 +1064,13 @@ PanelWindow {
                     Row {
                         spacing: Design.s(4)
                         Text { anchors.verticalCenter: parent.verticalCenter; text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colFgDim }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.weight: Design.weight.semibold; color: topBar.colFg }
                     }
 
                     Row {
                         spacing: Design.s(4)
                         Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(12); color: topBar.colFgDim }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.bold: true; color: topBar.colFg }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(11); font.weight: Design.weight.semibold; color: topBar.colFg }
                     }
                 }
 
@@ -1107,12 +1108,12 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(18); height: Design.s(18)
                         radius: width / 2
-                        color: Design.tint(Design.red, 0.22)
+                        color: Design.tint(Design.danger, 0.22)
                         Icon {
                             anchors.centerIn: parent
                             text: "\u{f036c}"
                             role: "caption"
-                            color: Design.red
+                            color: Design.danger
                         }
                     }
 
@@ -1121,12 +1122,12 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(18); height: Design.s(18)
                         radius: width / 2
-                        color: Design.tint(Design.peach, 0.22)
+                        color: Design.tint(Design.warn, 0.22)
                         Icon {
                             anchors.centerIn: parent
                             text: "\u{f0567}"
                             role: "caption"
-                            color: Design.peach
+                            color: Design.warn
                         }
                     }
 
@@ -1136,7 +1137,7 @@ PanelWindow {
                     Rectangle {
                         visible: Remote.running
                         readonly property bool watched: Remote.clients > 0
-                        readonly property color tone: watched ? Design.red : Design.blue
+                        readonly property color tone: watched ? Design.danger : Design.accent
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(18); height: Design.s(18)
                         radius: width / 2
@@ -1164,15 +1165,15 @@ PanelWindow {
                         width: capsText.implicitWidth + Design.s(10)
                         height: Design.s(20)
                         radius: Design.s(5)
-                        color: Design.tint(Design.yellow, 0.20)
+                        color: Design.tint(Design.warn, 0.20)
                         Text {
                             id: capsText
                             anchors.centerIn: parent
                             text: I18n.tr("CAPS")
                             font.family: topBar.fontMain
                             font.pixelSize: Design.s(10)
-                            font.bold: true
-                            color: Design.yellow
+                            font.weight: Design.weight.semibold
+                            color: Design.warn
                         }
                     }
 
@@ -1188,7 +1189,7 @@ PanelWindow {
                             text: topBar.kbdLayout
                             font.family: topBar.fontMain
                             font.pixelSize: Design.s(11)
-                            font.bold: true
+                            font.weight: Design.weight.semibold
                             color: topBar.colFg
                         }
                         MouseArea {
@@ -1231,7 +1232,7 @@ PanelWindow {
                                 text: Network.activeWifi ? Network.activeWifi.name : ""
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: topBar.colFg
                             }
                         }
@@ -1264,7 +1265,7 @@ PanelWindow {
                                 text: (Audio.defaultSink && Audio.defaultSink.audio) ? Math.round(Audio.defaultSink.audio.volume * 100) + "%" : "65%"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: topBar.colFg
                             }
                         }
@@ -1309,7 +1310,7 @@ PanelWindow {
                                 text: Power.capacity + "%"
                                 font.family: topBar.fontMain
                                 font.pixelSize: Design.s(11)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: topBar.colFg
                             }
                         }
@@ -1410,7 +1411,7 @@ PanelWindow {
                             text: "⏻"
                             font.family: topBar.fontMain
                             font.pixelSize: Design.s(13)
-                            font.bold: true
+                            font.weight: Design.weight.semibold
                             color: topBar.colRed
                         }
 

@@ -20,7 +20,7 @@ MiniView {
 
     title: I18n.tr("Sound")
     icon: "\u{f057f}"
-    tone: Design.sapphire
+    tone: Design.accent
     footerLabel: I18n.tr("Sound Settings…")
 
     readonly property var sink: Audio.defaultSink
@@ -42,7 +42,7 @@ MiniView {
             Layout.preferredHeight: Design.s(Design.size.ctl)
             value: root.sink ? root.sink.volume : 0
             muted: root.sink ? root.sink.mute : false
-            tone: Design.sapphire
+            tone: Design.accent
             icon: (root.sink && root.sink.mute) ? "\u{f075f}" : "\u{f057f}"
             label: root.sink ? (root.sink.description || root.sink.name) : ""
             iconClickable: true
@@ -86,9 +86,9 @@ MiniView {
 
                     readonly property bool isDefault: dev.model.is_default
 
-                    color: isDefault ? Design.tint(Design.sapphire, 0.15)
+                    color: isDefault ? Design.tint(Design.accent, 0.15)
                                      : (rowMa.containsMouse ? Design.glassHover : "transparent")
-                    border.color: isDefault ? Design.tint(Design.sapphire, 0.35) : "transparent"
+                    border.color: isDefault ? Design.tint(Design.accent, 0.35) : "transparent"
                     border.width: Design.border
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -102,7 +102,7 @@ MiniView {
                         Icon {
                             text: dev.model.icon || "\u{f057e}"
                             role: "body"
-                            color: dev.isDefault ? Design.sapphire : Design.textDim
+                            color: dev.isDefault ? Design.accent : Design.textDim
                         }
 
                         Label {
@@ -116,14 +116,14 @@ MiniView {
                         Label {
                             text: dev.isDefault ? "" : (rowMa.containsMouse ? I18n.tr("Use this") : "")
                             role: "caption"
-                            color: Design.sapphire
+                            color: Design.accent
                         }
 
                         Icon {
                             visible: dev.isDefault
                             text: "\u{f012c}"
                             role: "caption"
-                            color: Design.sapphire
+                            color: Design.accent
                         }
                     }
 
@@ -150,7 +150,7 @@ MiniView {
             Layout.preferredHeight: Design.s(Design.size.ctl)
             value: root.source ? root.source.volume : 0
             muted: root.source ? root.source.mute : false
-            tone: Design.teal
+            tone: Design.accent
             icon: (root.source && root.source.mute) ? "\u{f036d}" : "\u{f036c}"
             label: root.source ? (root.source.description || root.source.name) : ""
             iconClickable: true
@@ -167,7 +167,7 @@ MiniView {
             Icon {
                 text: "\u{f05a9}"
                 role: "caption"
-                color: Design.teal
+                color: Design.textDim
             }
 
             Label {
@@ -208,7 +208,7 @@ MiniView {
                 Icon {
                     text: "\u{f001}"
                     role: "caption"
-                    color: Design.sapphire
+                    color: Design.textDim
                 }
 
                 Label {
@@ -223,7 +223,7 @@ MiniView {
                     Layout.preferredHeight: Design.s(28)
                     value: appStreamRow.model.volume
                     muted: appStreamRow.model.mute
-                    tone: Design.sapphire
+                    tone: Design.accent
                     onMoved: pct => Audio.applyVolume("sink-input", appStreamRow.model, pct)
                 }
             }

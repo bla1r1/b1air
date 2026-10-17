@@ -18,7 +18,7 @@ MiniView {
 
     title: I18n.tr("Bluetooth")
     icon: "\u{f00af}"
-    tone: Design.mauve
+    tone: Design.accent
     footerLabel: I18n.tr("Bluetooth Settings…")
 
     readonly property bool isOn: Network.bluetooth.power === "on"
@@ -39,7 +39,6 @@ MiniView {
 
     trailing: Switch {
         checked: root.isOn
-        activeColor: Design.mauve
         onToggled: Network.toggleBluetooth()
     }
 
@@ -83,8 +82,8 @@ MiniView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
-                color: connMa.containsMouse ? Design.tint(Design.mauve, 0.22) : Design.tint(Design.mauve, 0.15)
-                border.color: Design.tint(Design.mauve, 0.35)
+                color: connMa.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.accent, 0.15)
+                border.color: Design.tint(Design.accent, 0.35)
                 border.width: Design.border
 
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -98,7 +97,7 @@ MiniView {
                     Icon {
                         text: root.glyphFor(root.connectedDev ? root.connectedDev.icon : "")
                         role: "body"
-                        color: Design.mauve
+                        color: Design.accent
                     }
 
                     Label {
@@ -120,14 +119,14 @@ MiniView {
                     Label {
                         text: connMa.containsMouse ? I18n.tr("Disconnect") : ""
                         role: "caption"
-                        color: Design.mauve
+                        color: Design.accent
                     }
 
                     Icon {
                         visible: !connMa.containsMouse
                         text: "\u{f012c}"
                         role: "caption"
-                        color: Design.mauve
+                        color: Design.accent
                     }
                 }
 
@@ -191,7 +190,7 @@ MiniView {
                         : (devRow.modelData.paired ? I18n.tr("Paired") : I18n.tr("Pair"))
                     role: "caption"
                     dim: !rowMa.containsMouse
-                    color: rowMa.containsMouse ? Design.mauve : Design.textDim
+                    color: rowMa.containsMouse ? Design.accent : Design.textDim
                 }
             }
 

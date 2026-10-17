@@ -30,7 +30,6 @@ ColumnLayout {
         title: I18n.tr("Screenshot Destination & Format")
         subtitle: I18n.tr("Configure where captured images are stored and their file formats")
         icon: "\u{f016d}"
-        accentColor: Design.pink
 
         RowLayout {
             Layout.fillWidth: true
@@ -121,7 +120,6 @@ ColumnLayout {
         title: I18n.tr("Capture Actions & Delay")
         subtitle: I18n.tr("Test capture triggers or adjust delay for dropdown menus")
         icon: "\u{f002}"
-        accentColor: Design.teal
 
         Stepper {
             label: I18n.tr("Capture Delay")
@@ -145,14 +143,12 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f0b2}"
                 label: I18n.tr("Capture Area")
-                tone: Design.pink
                 onActivated: section.takeScreenshot("area")
             }
 
             ActionButton {
                 icon: "\u{f065}"
                 label: I18n.tr("Capture Full Screen")
-                tone: Design.teal
                 onActivated: section.takeScreenshot("full")
             }
         }

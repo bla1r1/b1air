@@ -179,9 +179,8 @@ ColumnLayout {
     Card {
         visible: !section.shortcutsOnly
         title: I18n.tr("Input layouts")
-        subtitle: I18n.tr("The first one is what every login starts in")
+        note: I18n.tr("The first one is what every login starts in")
         icon: "\u{f030c}"
-        accentColor: Design.peach
 
         Flow {
             Layout.fillWidth: true
@@ -199,8 +198,8 @@ ColumnLayout {
                     width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
                     height: Design.s(36)
                     radius: Design.s(Design.radius.ctl)
-                    color: chip.first ? Design.tint(Design.peach, 0.14) : Design.raised
-                    border.color: chip.first ? Design.tint(Design.peach, 0.5) : Design.line
+                    color: chip.first ? Design.tint(Design.accent, 0.14) : Design.raised
+                    border.color: chip.first ? Design.tint(Design.accent, 0.5) : Design.line
                     border.width: 1
 
                     RowLayout {
@@ -211,8 +210,8 @@ ColumnLayout {
                         Label {
                             text: chip.modelData.toUpperCase()
                             isMono: true
-                            weight: Design.weight.bold
-                            color: chip.first ? Design.peach : Design.text
+                            weight: Design.weight.semibold
+                            color: chip.first ? Design.accent : Design.text
                         }
 
                         Label {
@@ -224,14 +223,13 @@ ColumnLayout {
                         Badge {
                             visible: chip.first
                             text: I18n.tr("default")
-                            tone: Design.peach
+                            tone: Design.warn
                         }
 
                         IconButton {
                             visible: !chip.first
                             icon: "\u{f005d}" // arrow up: make it the first
                             role: "caption"
-                            hoverTone: Design.peach
                             onClicked: section.makeFirst(chip.modelData)
                         }
 
@@ -282,7 +280,7 @@ ColumnLayout {
                 : 0
             visible: (layoutField.focused || section.layoutQuery !== "") && section.layoutResults.length > 0
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
+            color: Design.well
             border.color: Design.line
             border.width: 1
             clip: true
@@ -345,7 +343,6 @@ ColumnLayout {
             ? I18n.tr("The key that cycles through the layouts above")
             : I18n.tr("Only matters once there is more than one layout")
         icon: "\u{f04e1}"
-        accentColor: Design.peach
 
         FormRow {
             title: I18n.tr("Switch with")
@@ -387,7 +384,6 @@ ColumnLayout {
         title: I18n.tr("Desktop shortcuts")
         subtitle: I18n.tr("Change the key for any of these. Every binding is listed below.")
         icon: "\u{f11c}"
-        accentColor: Design.sapphire
 
         property string filter: ""
         property string editingId: ""
@@ -561,8 +557,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: bindCol.implicitHeight + Design.s(Design.space.sm) * 2
                 radius: Design.s(Design.radius.ctl)
-                color: bindRow.editing ? Design.tint(Design.sapphire, 0.1) : Design.sunken
-                border.color: bindRow.editing ? Design.sapphire : "transparent"
+                color: bindRow.editing ? Design.tint(Design.accent, 0.1) : Design.well
+                border.color: bindRow.editing ? Design.accent : "transparent"
                 border.width: 1
 
                 ColumnLayout {
@@ -586,21 +582,19 @@ ColumnLayout {
                         Badge {
                             visible: bindRow.changed
                             text: "changed"
-                            tone: Design.sapphire
                         }
 
                         Label {
                             text: bindCard.pretty(bindCard.keysOf(bindRow.modelData))
                             role: "caption"
                             isMono: true
-                            weight: Design.weight.bold
-                            color: Design.sapphire
+                            weight: Design.weight.semibold
+                            color: Design.accent
                         }
 
                         IconButton {
                             icon: "\u{f03eb}" // pencil
                             role: "caption"
-                            hoverTone: Design.sapphire
                             onClicked: {
                                 if (bindRow.editing) {
                                     bindCard.editingId = "";
@@ -629,7 +623,6 @@ ColumnLayout {
                             Layout.fillWidth: false
                             icon: "\u{f012c}"
                             label: I18n.tr("Save")
-                            tone: Design.sapphire
                             onActivated: bindCard.save(bindRow.modelData, keyField.text)
                         }
 

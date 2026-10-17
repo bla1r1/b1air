@@ -179,7 +179,6 @@ ColumnLayout {
         title: I18n.tr("Fingerprint")
         subtitle: section.fp.available ? section.fp.device : I18n.tr("Open the lock screen with a touch")
         icon: "\u{f0237}"
-        accentColor: Design.teal
 
         EmptyState {
             visible: !section.fp.available
@@ -201,7 +200,7 @@ ColumnLayout {
                 required property var modelData
                 required property int index
                 Layout.fillWidth: true
-                Icon { text: "\u{f0237}"; color: Design.teal }
+                Icon { text: "\u{f0237}"; color: Design.textDim }
                 Label { text: I18n.tr("Fingerprint %1", index + 1); Layout.fillWidth: true }
                 ActionButton {
                     icon: "\u{f0a7a}"
@@ -277,7 +276,7 @@ ColumnLayout {
                     Rectangle {
                         required property int index
                         width: Design.s(14); height: width; radius: width / 2
-                        color: index < section.fpDone ? Design.teal : Design.hover
+                        color: index < section.fpDone ? Design.accent : Design.hover
                         Behavior on color { ColorAnimation { duration: Design.duration.base } }
                     }
                 }
@@ -304,7 +303,7 @@ ColumnLayout {
             visible: section.fp.available && section.fpLogin.supported === true
             enabled: !fpLoginSet.running
             label: I18n.tr("Fingerprint at the login screen")
-            subtitle: I18n.tr("Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.")
+            note: I18n.tr("Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.")
             checked: section.fpLogin.enabled === true
             onToggled: {
                 fpLoginSet.command = ["pkexec", section.daemonCmd, "fingerprint", "login", checked ? "off" : "on"];
@@ -319,7 +318,6 @@ ColumnLayout {
         title: I18n.tr("Account Details & Shell")
         subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
-        accentColor: Design.blue
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -361,7 +359,6 @@ ColumnLayout {
                     Layout.fillWidth: false
                     icon: "\u{f00c}"
                     label: I18n.tr("Save")
-                    tone: Design.sapphire
                     onActivated: {
                         if (nameField.text.trim().length > 0) {
                             Quickshell.execDetached([section.daemonCmd, "user", "set-name", nameField.text.trim()]);
@@ -446,7 +443,7 @@ ColumnLayout {
         title: I18n.tr("Passkeys")
         Toggle {
             label: I18n.tr("Sign in to websites with your phone")
-            subtitle: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
+            note: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
             checked: Settings.passkeyPhone !== false
             onToggled: Settings.set("passkeyPhone", Settings.passkeyPhone === false)
         }
@@ -457,18 +454,17 @@ ColumnLayout {
         title: I18n.tr("Session & Login Screen")
         subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"
-        accentColor: Design.green
 
         RowLayout {
             Layout.fillWidth: true
             Label { text: I18n.tr("Compositor"); Layout.fillWidth: true }
-            Badge { text: section.compositorName; color: Design.green }
+            Badge { text: section.compositorName; color: Design.textDim }
         }
 
         RowLayout {
             Layout.fillWidth: true
             Label { text: I18n.tr("Login screen theme"); Layout.fillWidth: true }
-            Badge { text: section.greeterTheme; color: Design.sapphire }
+            Badge { text: section.greeterTheme; color: Design.textDim }
         }
     }
 

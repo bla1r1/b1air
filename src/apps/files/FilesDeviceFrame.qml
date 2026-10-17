@@ -91,7 +91,7 @@ Item {
                         Label {
                             text: frame.name
                             font.pixelSize: Design.s(26)
-                            weight: Design.weight.bold
+                            weight: Design.weight.semibold
                             elide: Text.ElideRight
                             Layout.maximumWidth: Design.s(520)
                         }

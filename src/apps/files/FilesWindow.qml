@@ -1962,8 +1962,6 @@ C.ApplicationWindow {
                         color: window.tagColor(modelData)
                         border.color: dot.on ? Design.text : "transparent"
                         border.width: Design.s(2)
-                        scale: dotMa.containsMouse ? 1.15 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
                         Text {
                             anchors.centerIn: parent
                             visible: dot.on

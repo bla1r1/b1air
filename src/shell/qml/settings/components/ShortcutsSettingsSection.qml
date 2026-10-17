@@ -30,7 +30,6 @@ ColumnLayout {
         {
             title: I18n.tr("Launchers & Apps"),
             icon: "\u{f0e59}",
-            color: Design.sapphire,
             items: [
                 { key: "Mod + Space", label: I18n.tr("Launchpad"), desc: I18n.tr("Full-screen grid of every installed application") },
                 { key: "Mod + K", label: I18n.tr("Spotlight"), desc: I18n.tr("Fuzzy app search, clipboard history and inline math") },
@@ -50,7 +49,6 @@ ColumnLayout {
         {
             title: I18n.tr("Panels & Popups"),
             icon: "\u{f0335}",
-            color: Design.blue,
             items: [
                 { key: "Mod + C", label: I18n.tr("Control Center"), desc: I18n.tr("Quick tiles, volume, brightness and media") },
                 { key: "Mod + Shift + N", label: I18n.tr("Notification Center"), desc: I18n.tr("Everything that has arrived, and the per-app mutes") },
@@ -74,7 +72,6 @@ ColumnLayout {
         {
             title: I18n.tr("Windows & Workspaces"),
             icon: "\u{f05b0}",
-            color: Design.mauve,
             items: [
                 { key: "Mod + Q", label: I18n.tr("Close Window"), desc: I18n.tr("Close the focused window") },
                 { key: "Alt + Tab", label: I18n.tr("Next Window"), desc: I18n.tr("Focus the next window on the workspace") },
@@ -106,7 +103,6 @@ ColumnLayout {
         {
             title: I18n.tr("Capture & Tools"),
             icon: "\u{f0100}",
-            color: Design.pink,
             items: [
                 { key: "Print", label: I18n.tr("Region Screenshot"), desc: I18n.tr("Select an area, copy and save it") },
                 { key: "Shift + Print", label: I18n.tr("Region + Annotate"), desc: I18n.tr("Same, then open the annotation editor") },
@@ -128,7 +124,6 @@ ColumnLayout {
         {
             title: I18n.tr("Media & Hardware Keys"),
             icon: "\u{f075a}",
-            color: Design.teal,
             items: [
                 { key: "Volume Up / Down", label: I18n.tr("Volume"), desc: I18n.tr("Raise or lower the master output by 5%") },
                 { key: "Mute", label: I18n.tr("Mute Output"), desc: I18n.tr("Toggle speakers and headphones") },
@@ -146,7 +141,6 @@ ColumnLayout {
         title: I18n.tr("Keyboard Shortcuts Reference")
         subtitle: I18n.tr("Complete cheatsheet of desktop keybindings and global triggers")
         icon: "\u{f11c}"
-        accentColor: Design.sapphire
 
         Field {
             Layout.fillWidth: true
@@ -168,7 +162,6 @@ ColumnLayout {
             Card {
                 title: catCol.modelData.title
                 icon: catCol.modelData.icon
-                accentColor: catCol.modelData.color
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -195,7 +188,7 @@ ColumnLayout {
                                 Layout.preferredHeight: Design.s(28)
                                 radius: Design.s(Design.radius.pill)
                                 color: Design.raised
-                                border.color: Design.tint(catCol.modelData.color || Design.accent, 0.4)
+                                border.color: Design.line
                                 border.width: 1
 
                                 Label {
@@ -203,7 +196,7 @@ ColumnLayout {
                                     text: modelData.key
                                     role: "caption"
                                     weight: Design.weight.semibold
-                                    color: catCol.modelData.color || Design.accent
+                                    color: Design.text
                                 }
                             }
 

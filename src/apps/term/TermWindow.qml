@@ -105,7 +105,7 @@ Window {
                         text: "\u{f120}" // 
                         font.family: "JetBrainsMono Nerd Font"
                         font.pixelSize: Design.s(14)
-                        color: Design.sapphire
+                        color: Design.textDim
                         Layout.alignment: Qt.AlignVCenter
                     }
 

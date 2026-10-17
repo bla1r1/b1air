@@ -32,9 +32,6 @@ PopupShell {
     // accent everything else follows.
     readonly property color lavender: Design.accent
     readonly property color mauve: Design.accent
-    readonly property color pink: Design.pink
-    readonly property color red: Design.red
-    readonly property color yellow: Design.yellow
 
     // Data State Properties
     property var musicData: {
@@ -644,7 +641,7 @@ PopupShell {
                                             color: root.dynamicTextColor
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(20)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             Behavior on color { ColorAnimation { duration: root.tintDuration } }
 
                                             // Only animate if the text is physically wider than our container
@@ -664,7 +661,7 @@ PopupShell {
                                             color: root.dynamicTextColor
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(20)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             visible: titleTextMain.implicitWidth > titleClipRect.width
                                         }
                                     }
@@ -696,7 +693,7 @@ PopupShell {
                                 color: Design.textDim // Better matugen match
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(14)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 elide: Text.ElideRight
                                 maximumLineCount: 1 // Strict 1 line
                                 Layout.fillWidth: true
@@ -714,7 +711,7 @@ PopupShell {
                                         anchors.centerIn: parent
                                         spacing: Design.s(6)
                                         Icon { role: "body"; text: root.musicData.deviceIcon || "󰓃"; color: Design.accent }
-                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(12); font.bold: true }
+                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(12); font.weight: Design.weight.semibold }
                                     }
                                 }
                                 Text {
@@ -722,7 +719,7 @@ PopupShell {
                                     color: Design.textFaint // Better matugen match
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(12)
-                                    font.bold: true
+                                    font.weight: Design.weight.semibold
                                     font.italic: true
                                 }
                             }
@@ -867,9 +864,9 @@ PopupShell {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: root.musicData.positionStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.bold: true; font.pixelSize: Design.s(13) }
+                                Text { text: root.musicData.positionStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(13) }
                                 Item { Layout.fillWidth: true }
-                                Text { text: root.musicData.lengthStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.bold: true; font.pixelSize: Design.s(13) }
+                                Text { text: root.musicData.lengthStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(13) }
                             }
                         }
 
@@ -939,9 +936,7 @@ PopupShell {
                                     color: parent.pressed ? Design.accent : Design.accent
                                     font.family: Design.font.icon
                                     font.pixelSize: Design.s(42) 
-                                    scale: parent.pressed ? 0.8 : 1.0
                                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutBack } }
                                 }
                             }
                             MouseArea {
@@ -982,7 +977,7 @@ PopupShell {
                         opacity: root.introEqHeader
                         transform: Translate { y: Design.s(15) * (1 - root.introEqHeader) }
 
-                        Text { text: I18n.tr("Equalizer"); color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.bold: true; Layout.fillWidth: true }
+                        Text { text: I18n.tr("Equalizer"); color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.weight: Design.weight.semibold; Layout.fillWidth: true }
                         
                         // Ui/ActionButton, like every other button in the
                         // shell. This was a bespoke rectangle with its own
@@ -1275,7 +1270,7 @@ PopupShell {
                                             color: Design.textFaint
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(10)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             Layout.alignment: Qt.AlignHCenter
                                         }
                                     }

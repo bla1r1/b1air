@@ -24,7 +24,7 @@ Rectangle {
     implicitHeight: Design.s(small ? 26 : 30)
     implicitWidth: label ? (glyphText.visible ? glyphText.implicitWidth + row.spacing : 0) + labelText.implicitWidth + Design.s(24) : implicitHeight + Design.s(4)
     radius: height / 2
-    opacity: enabled ? 1.0 : 0.38
+    opacity: enabled ? 1.0 : Design.opacity.disabled
     color: primary ? (ma.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent)
          : checked ? Design.tint(Design.accent, 0.24)
          : ma.containsMouse ? (danger ? Design.tint(Design.danger, 0.18) : Design.hover)

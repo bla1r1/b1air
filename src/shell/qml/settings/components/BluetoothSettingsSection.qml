@@ -39,7 +39,6 @@ ColumnLayout {
             ? (Network.bluetooth.connected ? I18n.tr("Connected to %1", Network.bluetooth.connected.name) : I18n.tr("Bluetooth is on, ready to connect"))
             : I18n.tr("Bluetooth adapter is disabled")
         icon: "\u{f00af}"
-        accentColor: Design.mauve
 
         // Master Switch
         RowLayout {
@@ -66,8 +65,8 @@ ColumnLayout {
             Layout.preferredHeight: adapterBody.implicitHeight + Design.s(Design.space.md) * 2
 
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
-            border.color: Design.tint(Design.mauve, 0.3)
+            color: Design.well
+            border.color: Design.line
             border.width: 1
 
             ColumnLayout {
@@ -83,7 +82,7 @@ ColumnLayout {
                     Icon {
                         text: "\u{f00af}"
                         role: "body"
-                        color: Design.mauve
+                        color: Design.accent
                     }
 
                     ColumnLayout {
@@ -135,7 +134,6 @@ ColumnLayout {
         title: I18n.tr("Paired devices")
         subtitle: I18n.tr("Devices trusted by this machine")
         icon: "\u{f00af}"
-        accentColor: Design.mauve
 
         Repeater {
             model: section.paired
@@ -148,7 +146,7 @@ ColumnLayout {
                 Icon {
                     text: modelData.icon || "\u{f00af}"
                     role: "body"
-                    color: modelData.connected ? Design.mauve : Design.textFaint
+                    color: modelData.connected ? Design.accent : Design.textFaint
                 }
 
                 ColumnLayout {
@@ -207,7 +205,6 @@ ColumnLayout {
         title: I18n.tr("Available devices")
         subtitle: I18n.tr("Discovered Bluetooth accessories in range")
         icon: "\u{f002f}"
-        accentColor: Design.sapphire
 
         Repeater {
             model: section.available
@@ -220,7 +217,7 @@ ColumnLayout {
                 Icon {
                     text: modelData.icon || "\u{f00af}"
                     role: "body"
-                    color: Design.sapphire
+                    color: Design.accent
                 }
 
                 ColumnLayout {

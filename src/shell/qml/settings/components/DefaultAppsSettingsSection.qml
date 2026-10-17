@@ -47,31 +47,31 @@ ColumnLayout {
     // in a row; matching the whole Exec line offered qrencode as a code editor.
     readonly property var rows: [
         { kind: "browser", title: I18n.tr("Web Browser"), subtitle: I18n.tr("Links, web pages and Mod+F"),
-          icon: "\u{f0ac}", tone: Design.sapphire,
+          icon: "\u{f0ac}",
           mimes: ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"],
           names: ["firefox", "chrome", "google-chrome", "google-chrome-stable", "chromium", "brave",
                   "brave-browser", "zen", "zen-browser", "vivaldi", "librewolf", "floorp",
                   "qutebrowser", "epiphany"],
           missing: I18n.tr("No web browser found. Install one (e.g. Firefox) with your package manager.") },
         { kind: "terminal", title: I18n.tr("Terminal"), subtitle: I18n.tr("What Mod+T opens"),
-          icon: "\u{f120}", tone: Design.green,
+          icon: "\u{f120}",
           mimes: ["x-scheme-handler/terminal"],
           names: ["b1air-term", "foot", "alacritty", "ghostty", "wezterm", "konsole", "xterm",
                   "kitty", "gnome-terminal"],
           missing: I18n.tr("No terminal found. b1air-term is built with the rest of the desktop.") },
         { kind: "files", title: I18n.tr("File Manager"), subtitle: I18n.tr("Folders, and what Mod+E opens"),
-          icon: "\u{f07c}", tone: Design.peach,
+          icon: "\u{f07c}",
           mimes: ["inode/directory"],
           names: ["b1air-files", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm", "pcmanfm-qt"],
           missing: I18n.tr("No file manager found. b1air-files is built with the rest of the desktop.") },
         { kind: "editor", title: I18n.tr("Text Editor"), subtitle: I18n.tr("Plain text, Markdown and JSON files"),
-          icon: "\u{f121}", tone: Design.mauve,
+          icon: "\u{f121}",
           mimes: ["text/plain", "text/markdown", "application/json"],
           names: ["b1air-text", "code", "codium", "vscodium", "cursor", "gvim", "zed", "kate",
                   "gedit", "gnome-text-editor", "subl", "sublime_text"],
           missing: I18n.tr("No graphical text editor found.") },
         { kind: "player", title: I18n.tr("Media Player"), subtitle: I18n.tr("Video and audio files"),
-          icon: "\u{f008}", tone: Design.teal,
+          icon: "\u{f008}",
           mimes: ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac"],
           names: ["mpv", "vlc", "celluloid", "audacious", "totem", "haruna"],
           missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") }
@@ -167,7 +167,6 @@ ColumnLayout {
             title: rowCard.modelData.title
             subtitle: rowCard.modelData.subtitle
             icon: rowCard.modelData.icon
-            accentColor: rowCard.modelData.tone
 
             Label {
                 visible: rowCard.apps.length === 0
@@ -211,7 +210,6 @@ ColumnLayout {
                     Layout.fillWidth: false
                     icon: "\u{f012c}"
                     label: I18n.tr("Set")
-                    tone: rowCard.modelData.tone
                     onActivated: if (section.chooseTyped(rowCard.modelData, customField.text)) customField.text = ""
                 }
             }

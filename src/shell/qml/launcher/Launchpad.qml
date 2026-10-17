@@ -113,17 +113,6 @@ PopupShell {
 
     function iconSource(icon) { return Services.Apps.iconSource(icon); }
 
-    function categoryColor(category) {
-        switch (categoryName(category)) {
-        case "System": return Design.blue;
-        case "Development": return Design.teal;
-        case "Graphics": return Design.peach;
-        case "Multimedia": return Design.mauve;
-        case "Games": return Design.red;
-        case "Office": return Design.yellow;
-        default: return Design.sapphire;
-        }
-    }
 
     readonly property var allApps: {
         let combined = [];
@@ -457,8 +446,6 @@ PopupShell {
                         border.color: gridCell.selected ? Design.accent : "transparent"
                         border.width: Design.border
 
-                        scale: itemHover.containsMouse ? 1.04 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
                         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                         ColumnLayout {
@@ -493,7 +480,7 @@ PopupShell {
                                     height: Design.s(12)
                                     radius: width / 2
                                     visible: PinnedApps.isPinned(modelData.name)
-                                    color: Design.sapphire
+                                    color: Design.accent
                                     border.color: window.background
                                     border.width: Design.s(2)
                                 }
@@ -535,7 +522,7 @@ PopupShell {
                                 anchors.centerIn: parent
                                 text: PinnedApps.isPinned(modelData.name) ? "\u{f0932}" : "\u{f0931}"
                                 role: "caption"
-                                color: PinnedApps.isPinned(modelData.name) ? Design.sapphire : Design.textDim
+                                color: PinnedApps.isPinned(modelData.name) ? Design.accent : Design.textDim
                             }
 
                             MouseArea {

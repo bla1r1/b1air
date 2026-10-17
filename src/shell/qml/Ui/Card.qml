@@ -23,6 +23,9 @@ Rectangle {
     // title and the glyph on a tinted tile beside it said again what the rows
     // say, and made every page read as a brochure.
     property string subtitle: ""
+    // A consequence the whole card shares, drawn under the title — see
+    // Toggle.note. Not an explanation of the rows.
+    property string note: ""
     property string icon: ""
     property color accentColor: "transparent"
     readonly property color tone: card.accentColor.a > 0 ? card.accentColor : Design.accent
@@ -62,7 +65,14 @@ Rectangle {
                     elide: Text.ElideRight
                 }
 
-
+                Label {
+                    text: card.note
+                    visible: text.length > 0
+                    role: "caption"
+                    dim: true
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
             }
         }
 

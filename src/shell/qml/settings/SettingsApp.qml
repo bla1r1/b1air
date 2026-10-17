@@ -135,7 +135,12 @@ Item {
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: Design.s(224)
-            color: Design.glassSidebar
+            // In the shell the whole panel is already glass, and a second,
+            // darker glass on it read as a black slab beside the page: the
+            // rail is the panel itself there, set apart by the hairline. In
+            // its own window the page is opaque and the rail is the window's
+            // one pane of glass, as in Files, Git and Monitor.
+            color: app.standalone ? Design.glassSidebar : "transparent"
             radius: app.standalone ? 0 : Design.s(Design.radius.panel)
 
             // Square the right-hand corners: only the window's outer corners
@@ -238,7 +243,13 @@ Item {
                 // The rail beside it shows an always-on bar and this pane did not,
                 // so the longer half of the window was the one with no sign that
                 // it scrolled — every page here is taller than the window.
-                ScrollBar.vertical: OverflowBar { view: pageScroll }
+                // From the first card down, not from the window's top: the
+                // page's name above the cards is not part of what scrolls by.
+                ScrollBar.vertical: OverflowBar {
+                    view: pageScroll
+                    startOffset: pageHead.height + pageHead.Layout.topMargin
+                              + pageHead.Layout.bottomMargin + pageCol.spacing - inset
+                }
 
             // A column of readable width, centred. Cards used to span the
             // whole pane: on a 1280 px window a row of three switches ran
@@ -257,6 +268,7 @@ Item {
                 // dropped: it took a band of every page to say what the rail,
                 // with the same icon highlighted, already said.
                 ColumnLayout {
+                    id: pageHead
                     Layout.fillWidth: true
                     Layout.topMargin: Design.s(Design.space.xl)
                     Layout.bottomMargin: Design.s(Design.space.xs)
@@ -271,8 +283,10 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: app.current.label || ""
-                        role: "display"
-                        weight: Design.weight.bold
+                        // Title size and semibold: the page name was set as
+                        // a 24 px bold headline, louder than anything on it.
+                        role: "title"
+                        weight: Design.weight.semibold
                         elide: Text.ElideRight
                     }
 

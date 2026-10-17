@@ -61,7 +61,7 @@ PopupShell {
             Label {
                 text: I18n.tr("File Staging Shelf")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Badge {
@@ -154,7 +154,7 @@ PopupShell {
                             Label {
                                 text: fileCard.name
                                 role: "body"
-                                weight: Design.weight.bold
+                                weight: Design.weight.semibold
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -211,7 +211,7 @@ PopupShell {
                 Label {
                     text: I18n.tr("Drag files here to stage")
                     role: "body"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     dim: true
                     Layout.alignment: Qt.AlignHCenter
                 }

@@ -37,7 +37,7 @@ Rectangle {
         Label {
             text: tray.items.length > 0 ? I18n.tr("Add a widget") : I18n.tr("Every widget is on the panel")
             role: "caption"
-            weight: Design.weight.bold
+            weight: Design.weight.semibold
             color: tray.items.length > 0 ? Design.accent : Design.textDim
         }
 

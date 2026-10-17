@@ -153,7 +153,6 @@ ColumnLayout {
         title: I18n.tr("Language")
         subtitle: I18n.tr("What this desktop and other programs speak")
         icon: "\u{f05ca}"
-        accentColor: Design.blue
 
         FormRow {
             title: I18n.tr("Interface language")
@@ -221,7 +220,6 @@ ColumnLayout {
         title: I18n.tr("Region")
         subtitle: I18n.tr("Dates, times, numbers, money and units, here and in other programs")
         icon: "\u{f00f0}"
-        accentColor: Design.peach
 
         FormRow {
             title: I18n.tr("Formats")

@@ -75,7 +75,6 @@ ColumnLayout {
             ? I18n.tr("Server active on port %1 — local session only", section.vncPort)
             : (section.devMode ? I18n.tr("Development mode: available to the local network") : I18n.tr("Stopped — starts on localhost in production mode"))
         icon: "\u{f0379}"
-        accentColor: Design.blue
 
         // Ui/Toggle rather than a hand-built row around a bare Ui/Switch, for
         // the same reason as Appearance: the shared row is what ten other
@@ -154,7 +153,6 @@ ColumnLayout {
         title: I18n.tr("Unattended Remote Access & Permissions")
         subtitle: I18n.tr("Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS")
         icon: "\u{f016d}"
-        accentColor: Design.teal
 
         // Prompt-Free Screencast Toggle
         Toggle {
@@ -192,7 +190,7 @@ ColumnLayout {
 
             Badge {
                 text: section.uinputReady ? I18n.tr("Ready") : I18n.tr("Inactive")
-                color: section.uinputReady ? Design.green : Design.red
+                color: section.uinputReady ? Design.ok : Design.danger
             }
         }
 

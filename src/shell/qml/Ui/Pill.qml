@@ -29,11 +29,9 @@ Rectangle {
     radius: height / 2
 
     color: button.active ? Design.tint(button.activeColor, area.containsMouse ? 0.32 : 0.24)
-                         : (area.containsMouse ? Design.glassHover : Design.glassCard)
+                         : (area.pressed ? Design.veilBold
+                            : area.containsMouse ? Design.glassHover : Design.glassCard)
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-
-    scale: area.pressed ? 0.96 : 1.0
-    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
 
     Row {
         id: contentRow

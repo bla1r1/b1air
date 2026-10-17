@@ -29,29 +29,29 @@ Singleton {
     // Freedesktop icon names, as the daemon sends them, and our own short
     // names, to a glyph and a colour. Anything else gets the info glyph.
     readonly property var _kinds: ({
-        "caffeine":                ["\u{f0f4}",  "peach"],
-        "weather-clear-night":     ["\u{f0594}", "mauve"],
-        "night-light":             ["\u{f0594}", "mauve"],
-        "weather-clear":           ["\u{f0599}", "yellow"],
-        "input-gaming":            ["\u{f11b}",  "green"],
-        "input-keyboard":          ["\u{f030c}", "yellow"],
-        "color-picker":            ["\u{f0592}", "pink"],
-        "edit-copy":               ["\u{f018f}", "sapphire"],
-        "audio-speakers":          ["\u{f04c3}", "sapphire"],
-        "audio-input-microphone":  ["\u{f036c}", "peach"],
-        "media-record":            ["\u{f044a}", "red"],
-        "media-playback-stop":     ["\u{f04db}", "red"],
-        "window":                  ["\u{f05b6}", "teal"],
-        "window-close":            ["\u{f05ad}", "red"],
-        "cursor":                  ["\u{f01bf}", "sapphire"],
-        "display":                 ["\u{f0379}", "blue"]
+        "caffeine":                ["\u{f0f4}",  "accent"],
+        "weather-clear-night":     ["\u{f0594}", "accent"],
+        "night-light":             ["\u{f0594}", "accent"],
+        "weather-clear":           ["\u{f0599}", "accent"],
+        "input-gaming":            ["\u{f11b}",  "accent"],
+        "input-keyboard":          ["\u{f030c}", "accent"],
+        "color-picker":            ["\u{f0592}", "accent"],
+        "edit-copy":               ["\u{f018f}", "accent"],
+        "audio-speakers":          ["\u{f04c3}", "accent"],
+        "audio-input-microphone":  ["\u{f036c}", "accent"],
+        "media-record":            ["\u{f044a}", "danger"],
+        "media-playback-stop":     ["\u{f04db}", "accent"],
+        "window":                  ["\u{f05b6}", "accent"],
+        "window-close":            ["\u{f05ad}", "accent"],
+        "cursor":                  ["\u{f01bf}", "accent"],
+        "display":                 ["\u{f0379}", "accent"]
     })
 
     function show(icon, title, detail, value) {
         // notify-send -i sends the icon as an image ("image://icon/caffeine").
         const name = String(icon || "").replace(/^image:\/\/icon\//, "").replace(/\?.*$/, "");
-        const kind = root._kinds[name] || ["\u{f02fc}", "sapphire"];
-        root.shown(kind[0], title || "", detail || "", Design[kind[1]] || Design.sapphire,
+        const kind = root._kinds[name] || ["\u{f02fc}", "accent"];
+        root.shown(kind[0], title || "", detail || "", Design[kind[1]] || Design.accent,
                    value === undefined || value === null ? -1 : value);
     }
 }

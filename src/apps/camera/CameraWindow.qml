@@ -259,7 +259,7 @@ ApplicationWindow {
                                 NumberAnimation { to: 1.0; duration: 600 }
                             }
                         }
-                        Label { text: I18n.tr("REC"); weight: Design.weight.bold; color: Design.accentText; isMono: true }
+                        Label { text: I18n.tr("REC"); weight: Design.weight.semibold; color: Design.accentText; isMono: true }
                     }
                 }
 

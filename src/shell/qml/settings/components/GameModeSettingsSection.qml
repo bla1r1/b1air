@@ -34,7 +34,6 @@ ColumnLayout {
         title: I18n.tr("Game Mode Performance")
         subtitle: I18n.tr("Optimize system responsiveness, disable desktop overhead, and maximize FPS")
         icon: "\u{f11b}"
-        accentColor: Design.danger
 
         RowLayout {
             Layout.fillWidth: true
@@ -58,7 +57,6 @@ ColumnLayout {
         title: I18n.tr("Display & Desktop Overlays")
         subtitle: I18n.tr("Configurable behaviors applied when Game Mode is active")
         icon: "\u{f108}"
-        accentColor: Design.sapphire
 
         ColumnLayout {
             Layout.fillWidth: true

@@ -33,11 +33,10 @@ ColumnLayout {
         title: I18n.tr("Screen time")
         subtitle: I18n.tr("Which app was in front and for how long, kept on this computer only")
         icon: "\u{f051e}"
-        accentColor: Design.teal
 
         Toggle {
             label: I18n.tr("Record screen time")
-            subtitle: I18n.tr("Off: nothing is recorded from the next login, and Screen Time & Focus stays empty")
+            note: I18n.tr("Off: nothing is recorded from the next login, and Screen Time & Focus stays empty")
             checked: Settings.focusDaemonAutoStart !== false
             onToggled: Settings.set("focusDaemonAutoStart", !(Settings.focusDaemonAutoStart !== false))
         }
@@ -70,7 +69,6 @@ ColumnLayout {
         title: I18n.tr("Clipboard history")
         subtitle: I18n.tr("What was copied, kept so it can be pasted again (Mod+Ctrl+V)")
         icon: "\u{f014c}"
-        accentColor: Design.sapphire
 
         RowLayout {
             Layout.fillWidth: true
@@ -141,9 +139,8 @@ ColumnLayout {
 
     Card {
         title: I18n.tr("Trash")
-        subtitle: I18n.tr("Deleted files are kept this long, then removed for good at login")
+        note: I18n.tr("Deleted files are kept this long, then removed for good at login")
         icon: "\u{f0a7a}"
-        accentColor: Design.peach
 
         Stepper {
             label: I18n.tr("Keep deleted files for")
@@ -158,7 +155,6 @@ ColumnLayout {
         title: I18n.tr("Location")
         subtitle: I18n.tr("Places typed into Settings, used for the weather and for sunset and sunrise")
         icon: "\u{f034e}"
-        accentColor: Design.green
 
         RowLayout {
             Layout.fillWidth: true
@@ -212,6 +208,5 @@ ColumnLayout {
         title: I18n.tr("Camera and microphone")
         subtitle: I18n.tr("The top bar shows a red dot while the microphone records and an orange one while the camera does — always, so it cannot be missed")
         icon: "\u{f036c}"
-        accentColor: Design.red
     }
 }

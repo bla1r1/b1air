@@ -426,7 +426,7 @@ Item {
                                     Layout.preferredWidth: Design.s(28)
                                     Layout.preferredHeight: Design.s(28)
                                     radius: Design.s(4)
-                                    color: Design.tint(Design.pink, 0.18)
+                                    color: Design.well
                                     clip: true
                                     Text {
                                         anchors.centerIn: parent
@@ -434,7 +434,7 @@ Item {
                                         text: song.modelData.video ? "\u{f0567}" : "\u{f075a}"
                                         font.family: Design.font.icon
                                         font.pixelSize: Design.s(15)
-                                        color: Design.pink
+                                        color: Design.textDim
                                     }
                                     Image {
                                         id: art

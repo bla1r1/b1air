@@ -57,7 +57,7 @@ PopupShell {
             Label {
                 text: I18n.tr("Screen Ruler & Dimension Inspector")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Item { Layout.fillWidth: true }
@@ -116,7 +116,7 @@ PopupShell {
                     anchors.centerIn: parent
                     text: I18n.tr("%1 × %2 px", root.measureW, root.measureH)
                     role: "body"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     color: Design.accent
                 }
             }
@@ -155,25 +155,25 @@ PopupShell {
             RowLayout {
                 spacing: Design.s(Design.space.xs)
                 Label { text: I18n.tr("Width:"); role: "caption"; dim: true }
-                Label { text: I18n.tr("%1 px", root.measureW); role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("%1 px", root.measureW); role: "body"; weight: Design.weight.semibold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
                 Label { text: I18n.tr("Height:"); role: "caption"; dim: true }
-                Label { text: I18n.tr("%1 px", root.measureH); role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("%1 px", root.measureH); role: "body"; weight: Design.weight.semibold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
                 Label { text: I18n.tr("Diagonal:"); role: "caption"; dim: true }
-                Label { text: I18n.tr("%1 px", root.diagonal); role: "body"; weight: Design.weight.bold }
+                Label { text: I18n.tr("%1 px", root.diagonal); role: "body"; weight: Design.weight.semibold }
             }
 
             RowLayout {
                 spacing: Design.s(Design.space.xs)
                 Label { text: I18n.tr("Aspect:"); role: "caption"; dim: true }
-                Label { text: root.aspect; role: "body"; weight: Design.weight.bold }
+                Label { text: root.aspect; role: "body"; weight: Design.weight.semibold }
             }
 
             Item { Layout.fillWidth: true }

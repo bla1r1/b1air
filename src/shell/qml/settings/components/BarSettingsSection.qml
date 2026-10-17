@@ -32,7 +32,6 @@ ColumnLayout {
         title: I18n.tr("Clock")
         subtitle: I18n.tr("How the time in the bar is written")
         icon: "\u{f0954}"
-        accentColor: Design.blue
 
         Toggle {
             label: I18n.tr("24-hour time")
@@ -46,7 +45,6 @@ ColumnLayout {
         title: I18n.tr("Workspaces")
         subtitle: I18n.tr("How many workspace numbers the bar shows")
         icon: "\u{f0b60}"
-        accentColor: Design.blue
 
         Stepper {
             label: I18n.tr("Workspace count")
@@ -65,7 +63,6 @@ ColumnLayout {
         title: I18n.tr("Multiple Monitors")
         subtitle: I18n.tr("Which screen carries the full bar, and what the others show")
         icon: "\u{f0379}"
-        accentColor: Design.blue
 
         RowLayout {
             Layout.fillWidth: true

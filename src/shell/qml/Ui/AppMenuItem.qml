@@ -20,7 +20,7 @@ C.MenuItem {
 
     contentItem: RowLayout {
         spacing: Design.s(Design.space.sm)
-        opacity: root.enabled ? 1.0 : 0.45
+        opacity: root.enabled ? 1.0 : Design.opacity.disabled
         Text {
             Layout.preferredWidth: Design.s(18)
             text: root.checkable ? (root.checked ? "\u{f012c}" : "") : root.glyph

@@ -89,8 +89,6 @@ ApplicationWindow {
     readonly property color colBorder: Design.glassBorder
     readonly property color colBorderSubtle: Design.line
     readonly property color colBlue: Design.accent
-    readonly property color colPurple: Design.mauve
-    readonly property color colCyan: Design.sapphire
     readonly property color colGreen: Design.ok
     readonly property color colOrange: Design.warn
     readonly property color colFg: Design.text
@@ -274,8 +272,8 @@ ApplicationWindow {
                             rotation: window.rotationAngle
                             scale: window.zoomFactor
 
-                            Behavior on scale { NumberAnimation { duration: 120 } }
-                            Behavior on rotation { NumberAnimation { duration: 150 } }
+                            Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
+                            Behavior on rotation { NumberAnimation { duration: Design.duration.fast } }
                         }
                         // A GIF or an animated WebP, played; Image showed the
                         // first frame and stopped there.
@@ -290,8 +288,8 @@ ApplicationWindow {
                             cache: false
                             rotation: window.rotationAngle
                             scale: window.zoomFactor
-                            Behavior on scale { NumberAnimation { duration: 120 } }
-                            Behavior on rotation { NumberAnimation { duration: 150 } }
+                            Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
+                            Behavior on rotation { NumberAnimation { duration: Design.duration.fast } }
                         }
                     }
 

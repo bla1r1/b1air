@@ -165,7 +165,6 @@ ColumnLayout {
         subtitle: section.dotRemote ? I18n.tr("This desktop's own code and configuration, from %1", section.dotRemote)
                                      : I18n.tr("This desktop's own code and configuration")
         icon: "\u{f021}"
-        accentColor: section.dotfilesUpdateAvail ? Design.ok : Design.sapphire
 
         RowLayout {
             Layout.fillWidth: true
@@ -254,7 +253,6 @@ ColumnLayout {
         title: I18n.tr("Settings Backup & Transfer")
         subtitle: I18n.tr("One file holding this desktop's settings, themes, pinned apps and bookmarks")
         icon: "\u{f0193}"
-        accentColor: Design.teal
 
         Label {
             Layout.fillWidth: true
@@ -280,14 +278,12 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f0552}"
                 label: I18n.tr("Export to Home Folder")
-                tone: Design.teal
                 onActivated: section.exportConfig()
             }
 
             ActionButton {
                 icon: "\u{f0552}"
                 label: I18n.tr("Import from Home Folder")
-                tone: Design.sapphire
                 onActivated: section.importConfig()
             }
         }
@@ -299,7 +295,6 @@ ColumnLayout {
         title: I18n.tr("System Packages")
         subtitle: I18n.tr("Kernel, drivers and applications, managed by %1", section.managerName)
         icon: "\u{f0187}"
-        accentColor: section.updateCount > 0 ? Design.peach : Design.green
 
         RowLayout {
             Layout.fillWidth: true
@@ -331,7 +326,7 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f0187}"
                 label: section.updateCount > 0 ? I18n.trn("Upgrade %1 Package", "Upgrade %1 Packages", section.updateCount) : I18n.tr("Run Full System Upgrade")
-                tone: section.updateCount > 0 ? Design.peach : Design.green
+                tone: Design.warn
                 destructive: true
                 confirmLabel: I18n.tr("Start upgrade?")
                 onActivated: section.runSystemUpdate()
@@ -343,9 +338,8 @@ ColumnLayout {
     Card {
         visible: section.part === ""
         title: I18n.tr("Disk Sweeper & Storage Maintenance")
-        subtitle: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
+        note: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
         icon: "\u{f014}"
-        accentColor: Design.mauve
 
         ButtonRow {
             Layout.fillWidth: true
@@ -354,7 +348,7 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f014}"
                 label: I18n.tr("Clean All Caches & Logs")
-                tone: Design.sapphire
+                tone: Design.danger
                 destructive: true
                 confirmLabel: I18n.tr("Delete them?")
                 onActivated: Daemon.sweeperClean()
@@ -363,7 +357,7 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f128}"
                 label: I18n.tr("Remove Orphan Packages")
-                tone: Design.mauve
+                tone: Design.danger
                 destructive: true
                 confirmLabel: I18n.tr("Uninstall them?")
                 onActivated: section.cleanOrphanPackages()
@@ -384,7 +378,6 @@ ColumnLayout {
                   ? I18n.tr("Snapshot the system with %1 before a big update", section.snapshotTool)
                   : I18n.tr("Snapshots need timeshift, or snapper on a Btrfs root — neither is installed")
         icon: "\u{f0c7}"
-        accentColor: Design.teal
 
         ButtonRow {
             Layout.fillWidth: true
@@ -393,7 +386,6 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f0c7}"
                 label: I18n.tr("Create Restore Point")
-                tone: Design.teal
                 enabled: section.snapshotTool !== ""
                 onActivated: Cmd.run(["b1air-daemon", "snapshot", "create", "Manual user snapshot"], "Create snapshot")
             }
@@ -406,7 +398,6 @@ ColumnLayout {
         title: I18n.tr("Encrypted Security Vaults")
         subtitle: I18n.tr("Mount and secure confidential directories using client-side encryption")
         icon: "\u{f023}"
-        accentColor: Design.peach
 
         ButtonRow {
             Layout.fillWidth: true
@@ -415,7 +406,6 @@ ColumnLayout {
             ActionButton {
                 icon: "\u{f07c}"
                 label: I18n.tr("Open Secure Vaults Location")
-                tone: Design.peach
                 onActivated: {
                     Sys.makeDir("~/.vaults");
                     Quickshell.execDetached(["xdg-open", Quickshell.env("HOME") + "/.vaults"]);
@@ -431,7 +421,6 @@ ColumnLayout {
         title: I18n.tr("Desktop")
         subtitle: I18n.tr("Reload the desktop, or put every setting back to its default")
         icon: "\u{f0493}"
-        accentColor: Design.mauve
 
         ButtonRow {
             Layout.fillWidth: true

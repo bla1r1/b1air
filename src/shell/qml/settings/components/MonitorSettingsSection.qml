@@ -223,13 +223,12 @@ ColumnLayout {
             ? I18n.tr("Select a screen to change its settings. Drag it to rearrange.")
             : I18n.tr("Select a screen to change its settings.")
         icon: "\u{f0379}"
-        accentColor: section.selectedResAccent
 
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(260)
             radius: Design.s(Design.radius.card)
-            color: Design.sunken
+            color: Design.well
             border.color: Design.tint(Design.line, 0.5)
             border.width: Design.border
             clip: true
@@ -530,7 +529,6 @@ ColumnLayout {
             ? I18n.tr("Apply a layout and it is kept for this set of screens")
             : I18n.tr("Put back automatically whenever the same screens are connected")
         icon: "\u{f0379}"
-        accentColor: Design.teal
 
         Repeater {
             model: section.profiles
@@ -583,14 +581,12 @@ ColumnLayout {
             : (Monitors.hasBrightness ? I18n.tr("External screens that take brightness over DDC/CI")
                                       : I18n.tr("No external screen answered over DDC/CI"))
         icon: "\u{f00df}"
-        accentColor: Design.yellow
 
         Slider {
             visible: Power.hasBacklight
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.ctl)
             value: Power.brightness
-            tone: Design.yellow
             icon: "\u{f00df}"
             label: I18n.tr("Built-in screen")
             onMoved: pct => Power.setBrightness(pct)
@@ -603,7 +599,6 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.ctl)
                 value: modelData.brightness
-                tone: Design.yellow
                 icon: "\u{f00df}"
                 label: modelData.name
                 onMoved: pct => Monitors.setBrightness(modelData.id, pct)
@@ -640,7 +635,6 @@ ColumnLayout {
                || I18n.tr("Settings for the selected screen"))
             : ""
         icon: "\u{f0379}"
-        accentColor: section.selectedRateAccent
 
         // The main display: full bar, workspace 1, the focus at login.
         Toggle {
@@ -717,9 +711,6 @@ ColumnLayout {
 
                     Behavior on color { ColorAnimation { duration: Design.duration.base } }
 
-                    scale: resMa.pressed ? 0.96 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutSine } }
-
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: 0
@@ -795,7 +786,7 @@ ColumnLayout {
                 anchors.topMargin: Design.s(Design.space.sm)
                 height: Design.s(12)
                 radius: Design.s(6)
-                color: Design.sunken
+                color: Design.well
                 border.color: Design.ground
                 border.width: Design.border
 
@@ -940,7 +931,7 @@ ColumnLayout {
                 text: section.dirty ? I18n.tr("Unapplied changes") : I18n.tr("Matches what sway is running")
                 role: "caption"
                 dim: !section.dirty
-                color: section.dirty ? Design.peach : Design.textDim
+                color: section.dirty ? Design.warn : Design.textDim
                 Layout.fillWidth: true
             }
 
@@ -1037,7 +1028,6 @@ ColumnLayout {
         title: I18n.tr("A tablet as a second screen")
         subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
         icon: "\u{f004b}"
-        accentColor: Design.mauve
 
         RowLayout {
             Layout.fillWidth: true

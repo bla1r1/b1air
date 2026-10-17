@@ -50,7 +50,6 @@ ColumnLayout {
         title: I18n.tr("Energy & performance")
         subtitle: I18n.tr("Tune system performance and power consumption")
         icon: "\u{f0084}"
-        accentColor: Design.green
 
         // The mini view in the Control Center has always had this empty state;
         // the full page drew three live-looking tiles that silently did nothing
@@ -93,7 +92,6 @@ ColumnLayout {
         title: I18n.tr("Battery")
         subtitle: Power.charging ? I18n.tr("Currently charging") : Power.pluggedIn ? I18n.tr("Plugged in, not charging") : I18n.tr("Running on battery power")
         icon: Power.charging ? "\u{f0084}" : "\u{f0079}"
-        accentColor: Power.charging ? Design.ok : Design.accent
 
         RowLayout {
             Layout.fillWidth: true
@@ -120,7 +118,7 @@ ColumnLayout {
                 Label {
                     text: Power.capacity + "%"
                     role: "subhead"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                 }
 
                 // The mini view showed the time estimate and the full settings
@@ -191,12 +189,11 @@ ColumnLayout {
         title: I18n.tr("Charge control")
         subtitle: I18n.tr("Keep the battery off a full charge, so it ages more slowly")
         icon: "\u{f0084}"
-        accentColor: Design.teal
 
         Toggle {
             visible: Power.hasChargeLimit
             label: I18n.tr("Limit the charge")
-            subtitle: I18n.tr("Stop charging below full. 100% means no limit.")
+            note: I18n.tr("Stop charging below full. 100% means no limit.")
             checked: Power.chargeLimit < 100
             onToggled: Power.setChargeLimit(Power.chargeLimit < 100 ? 100 : 80)
         }
@@ -258,7 +255,6 @@ ColumnLayout {
         title: I18n.tr("Low battery")
         subtitle: I18n.tr("What happens as the charge runs out")
         icon: "\u{f0084}"
-        accentColor: Design.warn
 
         Toggle {
             label: I18n.tr("Warn me when the battery is low")
@@ -278,7 +274,7 @@ ColumnLayout {
 
         Toggle {
             label: I18n.tr("Suspend before the battery dies")
-            subtitle: I18n.tr("A suspend with a few percent left keeps the session; a flat battery does not.")
+            note: I18n.tr("A suspend with a few percent left keeps the session; a flat battery does not.")
             checked: Settings.batteryCriticalAction !== "none"
             onToggled: Settings.set("batteryCriticalAction",
                                     Settings.batteryCriticalAction === "none" ? "suspend" : "none")
@@ -366,7 +362,6 @@ ColumnLayout {
             ? I18n.tr("Plugged in and on battery each their own; the one in use is marked")
             : I18n.tr("What happens when the computer is left alone")
         icon: "\u{f033e}"
-        accentColor: Design.peach
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -395,7 +390,7 @@ ColumnLayout {
                         Label {
                             text: colHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
                             role: "caption"
-                            weight: colHead.now ? Design.weight.bold : Design.weight.regular
+                            weight: colHead.now ? Design.weight.semibold : Design.weight.regular
                             color: colHead.now ? Design.accent : Design.textDim
                         }
                         Item { Layout.fillWidth: true }
@@ -468,7 +463,6 @@ ColumnLayout {
         title: I18n.tr("Closing the lid")
         subtitle: I18n.tr("Plugged in and on battery each their own")
         icon: "\u{f0322}"
-        accentColor: Design.peach
 
         RowLayout {
             Layout.fillWidth: true
@@ -492,7 +486,7 @@ ColumnLayout {
                     Label {
                         text: lidHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
                         role: "caption"
-                        weight: lidHead.now ? Design.weight.bold : Design.weight.regular
+                        weight: lidHead.now ? Design.weight.semibold : Design.weight.regular
                         color: lidHead.now ? Design.accent : Design.textDim
                     }
                     Item { Layout.fillWidth: true }
@@ -536,7 +530,6 @@ ColumnLayout {
         title: I18n.tr("Power button")
         subtitle: I18n.tr("What it does, instead of the system default")
         icon: "\u{f0425}"
-        accentColor: Design.accent
 
         Flow {
             Layout.fillWidth: true
@@ -558,11 +551,10 @@ ColumnLayout {
         title: I18n.tr("Locking")
         subtitle: I18n.tr("When the screen locks, and what the lock screen looks like. How soon after idling is on Power & Battery")
         icon: "\u{f033e}"
-        accentColor: Design.blue
 
         Toggle {
             label: I18n.tr("Lock when the screen turns off")
-            subtitle: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
+            note: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
             checked: Settings.lockWithScreenOff
             onToggled: Settings.set("lockWithScreenOff", !Settings.lockWithScreenOff)
         }

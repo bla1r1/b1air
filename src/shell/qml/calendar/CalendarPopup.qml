@@ -402,7 +402,7 @@ PopupShell {
 
                     Label {
                         text: window.editing ? I18n.tr("Arrange") : (window.monthNames[window.viewMonth] + " " + window.viewYear)
-                        weight: Design.weight.bold
+                        weight: Design.weight.semibold
                         role: "body"
                         color: window.editing ? Design.accent : Design.text
                         Layout.fillWidth: true
@@ -487,7 +487,7 @@ PopupShell {
                             text: modelData
                             horizontalAlignment: Text.AlignHCenter
                             role: "caption"
-                            weight: Design.weight.bold
+                            weight: Design.weight.semibold
                             color: (index >= 5) ? Design.accent : Design.textDim
                         }
                     }
@@ -527,7 +527,7 @@ PopupShell {
                                 anchors.centerIn: parent
                                 text: modelData.day.toString()
                                 role: "caption"
-                                weight: (isTod || isSel) ? Design.weight.bold : Design.weight.regular
+                                weight: (isTod || isSel) ? Design.weight.semibold : Design.weight.regular
                                 isMono: true
                                 color: isTod ? Design.surface : (modelData.isCurrentMonth ? Design.text : Design.textDim)
                                 opacity: modelData.isCurrentMonth ? 1.0 : 0.35
@@ -772,11 +772,11 @@ PopupShell {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
                             spacing: Design.s(6)
-                            Icon { text: "\u{f0590}"; role: "caption"; color: Design.teal }
+                            Icon { text: "\u{f0590}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
                                 Label { text: I18n.tr("Wind"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " " + I18n.tr("mph") : " " + I18n.tr("km/h"))) : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " " + I18n.tr("mph") : " " + I18n.tr("km/h"))) : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
                     }
@@ -792,11 +792,11 @@ PopupShell {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
                             spacing: Design.s(6)
-                            Icon { text: "\u{f043}"; role: "caption"; color: Design.sapphire }
+                            Icon { text: "\u{f043}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
                                 Label { text: I18n.tr("Humidity"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: window.todayForecast ? (window.todayForecast.humidity + "%") : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: window.todayForecast ? (window.todayForecast.humidity + "%") : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
                     }
@@ -813,11 +813,11 @@ PopupShell {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
                             spacing: Design.s(6)
-                            Icon { text: "\u{f0597}"; role: "caption"; color: Design.blue }
+                            Icon { text: "\u{f0597}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
                                 Label { text: I18n.tr("Rain"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: (window.todayForecast && window.todayForecast.rain_chance !== undefined) ? (window.todayForecast.rain_chance + "%") : "0%"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: (window.todayForecast && window.todayForecast.rain_chance !== undefined) ? (window.todayForecast.rain_chance + "%") : "0%"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
                     }
@@ -834,11 +834,11 @@ PopupShell {
                             anchors.fill: parent
                             anchors.margins: Design.s(6)
                             spacing: Design.s(6)
-                            Icon { text: "\u{f2c9}"; role: "caption"; color: Design.peach }
+                            Icon { text: "\u{f2c9}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
                                 Label { text: I18n.tr("Range"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
-                                Label { text: window.todayForecast ? (window.todayForecast.min + "° - " + window.todayForecast.max + "°") : "--"; role: "caption"; weight: Design.weight.bold; color: Design.text }
+                                Label { text: window.todayForecast ? (window.todayForecast.min + "° - " + window.todayForecast.max + "°") : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
                     }
@@ -889,7 +889,7 @@ PopupShell {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: I18n.tr(modelData.day || "")
                                     role: "caption"
-                                    weight: Design.weight.bold
+                                    weight: Design.weight.semibold
                                     color: (index === 0) ? Design.accent : Design.text
                                 }
 

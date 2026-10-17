@@ -105,7 +105,7 @@ PanelWindow {
                     Icon {
                         anchors.centerIn: parent
                         text: "\u{f099d}" // a shield with a lock
-                        color: Design.sapphire
+                        color: Design.accent
                         role: "title"
                     }
                 }
@@ -116,7 +116,7 @@ PanelWindow {
 
                     Label {
                         text: I18n.tr("Authentication Required")
-                        weight: Design.weight.bold
+                        weight: Design.weight.semibold
                         role: "subhead"
                     }
 
@@ -187,7 +187,6 @@ PanelWindow {
 
                     Badge {
                         text: I18n.tr("Admin")
-                        tone: Design.sapphire
                     }
                 }
             }
@@ -203,7 +202,7 @@ PanelWindow {
                     implicitHeight: Design.s(44)
                     radius: Design.s(10)
                     color: Design.ground
-                    border.color: pwdInput.activeFocus ? Design.sapphire : (polkitWin.errorMessage !== "" ? Design.red : Design.glassBorder)
+                    border.color: pwdInput.activeFocus ? Design.accent : (polkitWin.errorMessage !== "" ? Design.danger : Design.glassBorder)
                     border.width: pwdInput.activeFocus ? 2 : 1
 
                     RowLayout {
@@ -245,7 +244,7 @@ PanelWindow {
                 Label {
                     visible: polkitWin.errorMessage !== ""
                     text: polkitWin.errorMessage
-                    color: Design.red
+                    color: Design.danger
                     role: "caption"
                 }
             }
@@ -263,7 +262,6 @@ PanelWindow {
 
                 ActionButton {
                     label: polkitWin.isSubmitting ? I18n.tr("Authenticating...") : I18n.tr("Authenticate")
-                    tone: Design.sapphire
                     Layout.fillWidth: true
                     enabled: pwdInput.text.length > 0 && !polkitWin.isSubmitting
                     onActivated: polkitWin.submitAuth()

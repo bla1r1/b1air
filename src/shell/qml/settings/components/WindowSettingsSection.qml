@@ -98,7 +98,6 @@ ColumnLayout {
         title: I18n.tr("Tiling")
         subtitle: I18n.tr("How a new window finds its place")
         icon: "\u{f0e5e}"
-        accentColor: Design.sapphire
 
         Toggle {
             label: I18n.tr("Automatic split (like Hyprland)")
@@ -114,7 +113,6 @@ ColumnLayout {
         title: I18n.tr("Window Spacing (Gaps)")
         subtitle: I18n.tr("Adjust the inner and outer spacing between tiled windows")
         icon: "\u{f0379}"
-        accentColor: Design.sapphire
 
         Stepper {
             label: I18n.tr("Inner Gaps (between windows)")
@@ -136,7 +134,6 @@ ColumnLayout {
         title: I18n.tr("Borders & Layout Rules")
         subtitle: I18n.tr("Window border styling and smart fullscreen/single window behaviors")
         icon: "\u{f016d}"
-        accentColor: Design.mauve
 
         Stepper {
             label: I18n.tr("Border Width")
@@ -186,7 +183,6 @@ ColumnLayout {
                   ? I18n.tr("Rounded corners, blur and shadows")
                   : I18n.tr("Needs swayFX — this session runs plain sway, which has no rounding, blur or shadows")
         icon: "\u{f0068}"
-        accentColor: Design.teal
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -229,7 +225,6 @@ ColumnLayout {
         title: I18n.tr("Unfocused windows")
         subtitle: I18n.tr("Darker or see-through, so the focused one stands out")
         icon: "\u{f0208}"
-        accentColor: Design.blue
 
         Toggle {
             label: I18n.tr("Dim Inactive Windows")
@@ -250,7 +245,6 @@ ColumnLayout {
             minimum: 20
             maximum: 95
             value: Settings.inactiveOpacityPercent
-            tone: Design.blue
             onMoved: pct => Settings.set("inactiveOpacityPercent", pct)
         }
     }
@@ -259,7 +253,6 @@ ColumnLayout {
         title: I18n.tr("Special workspace")
         subtitle: I18n.tr("A workspace of its own, called up over the one in front of you")
         icon: "\u{f0328}"
-        accentColor: Design.peach
 
         Toggle {
             label: I18n.tr("Mod+S calls up the special workspace")
@@ -275,7 +268,6 @@ ColumnLayout {
         title: I18n.tr("Workspace overview")
         subtitle: I18n.tr("Every workspace of the screen side by side, live")
         icon: "\u{f0570}"
-        accentColor: Design.green
 
         Toggle {
             label: I18n.tr("Mod+O shows the overview")
@@ -289,6 +281,6 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !Sway.swayfx
         text: I18n.tr("The compositor running now is plain sway: effects and the special workspace and overview take effect with b1air's own swayFX.")
-        role: "caption"; color: Design.peach; wrapMode: Text.WordWrap
+        role: "caption"; color: Design.warn; wrapMode: Text.WordWrap
     }
 }

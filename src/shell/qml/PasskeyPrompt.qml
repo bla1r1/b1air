@@ -107,7 +107,7 @@ PanelWindow {
                 Label {
                     Layout.fillWidth: true
                     text: win.creating ? I18n.tr("Save a passkey on your phone") : I18n.tr("Sign in with your phone")
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     role: "subhead"
                     wrapMode: Text.WordWrap
                 }

@@ -47,7 +47,7 @@ RowLayout {
             anchors.centerIn: parent
             text: step.glyph
             role: "subhead"
-            weight: Design.weight.bold
+            weight: Design.weight.semibold
         }
 
         Clickable { id: stepArea; onClicked: step.activated() }
@@ -60,8 +60,10 @@ RowLayout {
 
     Label {
         text: row.valueText
-        weight: Design.weight.bold
-        color: Design.accent
+        // In the text colour: the accent marks what is chosen or in focus,
+        // and a number in a stepper is neither.
+        weight: Design.weight.medium
+        tabular: true
         horizontalAlignment: Text.AlignHCenter
         Layout.minimumWidth: Design.s(44)
     }

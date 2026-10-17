@@ -8,7 +8,7 @@ Rectangle {
     id: root
 
     property bool checked: false
-    property color activeColor: Design.blue
+    property color activeColor: Design.accent
     signal toggled()
 
     implicitWidth: Design.s(42)

@@ -135,14 +135,14 @@ PanelWindow {
                                 anchors.centerIn: parent
                                 visible: !toastIcon.visible
                                 text: "\u{f009a}"
-                                color: Design.sapphire
+                                color: Design.textDim
                                 role: "caption"
                             }
                         }
 
                         Label {
                             text: toastCard.model.appName
-                            weight: Design.weight.bold
+                            weight: Design.weight.semibold
                             role: "caption"
                             dim: true
                             elide: Text.ElideRight

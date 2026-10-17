@@ -60,8 +60,8 @@ Rectangle {
 
     radius: height / 2
     color: root._armed ? Design.tint(root.tone, 0.28)
-                       : (ma.containsMouse ? (root.destructive ? Design.tint(root.tone, 0.18) : Design.glassHover)
-                                           : Design.glassCard)
+                       : (ma.pressed ? Design.veilBold
+                          : ma.containsMouse ? Design.glassHover : Design.glassCard)
     // The same capsule as BarButton and Pill: no outline, the fill is the shape.
     border.color: root._armed ? Design.tint(root.tone, 0.7) : "transparent"
     border.width: Design.border
@@ -69,14 +69,11 @@ Rectangle {
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
 
-    scale: ma.pressed ? 0.97 : 1.0
-    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
-
     // `enabled` already stops the click — Item.enabled cascades to the
     // MouseArea below — but nothing showed it, so a button that would do
     // nothing looked exactly like one that would. QuickLook had two of them
     // sitting over an empty preview, offering to copy a path that was "".
-    opacity: root.enabled ? 1.0 : 0.45
+    opacity: root.enabled ? 1.0 : Design.opacity.disabled
     Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
 
     Timer {

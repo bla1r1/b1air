@@ -72,12 +72,11 @@ PopupShell {
             Label {
                 text: I18n.tr("Clipboard History")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Badge {
                 text: String(root.filteredItems.length)
-                tone: Design.sapphire
             }
 
             Item { Layout.fillWidth: true }
@@ -166,7 +165,7 @@ PopupShell {
                             Label {
                                 text: clipCard.modelData.title ? clipCard.modelData.title : clipCard.modelData.type.toUpperCase()
                                 role: "caption"
-                                weight: Design.weight.bold
+                                weight: Design.weight.semibold
                                 color: Design.accent
                             }
                             Label {

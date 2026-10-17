@@ -160,7 +160,6 @@ ColumnLayout {
             ? I18n.trn("%1 wallpaper found. Click any thumbnail to apply.", "%1 wallpapers found. Click any thumbnail to apply.", section.wallpaperList.length)
             : I18n.tr("Choose and preview wallpapers from your collection")
         icon: "\u{f02ca}"
-        accentColor: Design.pink
 
         // Actions & Source bar
         RowLayout {
@@ -260,17 +259,14 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(120)
                     radius: Design.s(Design.radius.card)
-                    color: Design.sunken
+                    color: Design.well
                     clip: true
 
                     readonly property bool isSelected: section.activeWallpaper === wallCard.modelData.path
-                    border.color: wallCard.isSelected ? Design.pink : (wallMa.containsMouse ? Design.hover : Design.line)
+                    border.color: wallCard.isSelected ? Design.accent : (wallMa.containsMouse ? Design.hover : Design.line)
                     border.width: wallCard.isSelected ? 2 : 1
 
                     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-                    scale: wallMa.pressed ? 0.97 : (wallMa.containsMouse ? 1.02 : 1.0)
-                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutSine } }
 
                     Image {
                         anchors.fill: parent
@@ -317,7 +313,7 @@ ColumnLayout {
                         width: Design.s(22)
                         height: width
                         radius: width / 2
-                        color: Design.pink
+                        color: Design.accent
 
                         Icon {
                             anchors.centerIn: parent
@@ -349,7 +345,6 @@ ColumnLayout {
         title: I18n.tr("Source folder")
         subtitle: I18n.tr("The directory where wallpapers are scanned and saved")
         icon: "\u{f024b}"
-        accentColor: Design.pink
 
         ColumnLayout {
             Layout.fillWidth: true

@@ -127,7 +127,7 @@ Item {
                     anchors.centerIn: parent
                     text: frame.sizeLabel
                     role: "caption"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     color: Design.accent
                 }
                 MouseArea {

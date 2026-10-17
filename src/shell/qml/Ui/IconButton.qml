@@ -31,15 +31,12 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: ma.containsMouse ? root.fill : "transparent"
+        color: ma.pressed ? Design.veilBold : ma.containsMouse ? root.fill : "transparent"
         border.color: (root.bordered && ma.containsMouse) ? Design.glassBorder : "transparent"
         border.width: Design.border
 
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
         Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-        scale: ma.pressed ? 0.92 : 1.0
-        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
 
         Icon {
             anchors.centerIn: parent

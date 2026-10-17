@@ -80,7 +80,6 @@ ColumnLayout {
             ? I18n.tr("Connected via %1", Network.ethernet.ifname)
             : I18n.tr("No active wired connection detected")
         icon: "\u{f0200}" // ethernet icon
-        accentColor: Design.green
 
         RowLayout {
             Layout.fillWidth: true
@@ -92,14 +91,14 @@ ColumnLayout {
                 height: width
                 radius: width / 2
                 color: (Network.ethernet && Network.ethernet.connected)
-                    ? Design.tint(Design.green, 0.15) : Design.sunken
+                    ? Design.tint(Design.accent, 0.15) : Design.well
 
                 Icon {
                     anchors.centerIn: parent
                     text: "\u{f0200}"
                     role: "body"
                     color: (Network.ethernet && Network.ethernet.connected)
-                        ? Design.green : Design.textDim
+                        ? Design.accent : Design.textDim
                 }
             }
 
@@ -133,8 +132,8 @@ ColumnLayout {
                 width: Design.s(32)
                 height: Design.s(32)
                 radius: Design.s(Design.radius.ctl)
-                color: section.showEthConfig ? Design.tint(Design.green, 0.25) : (gearMa.containsMouse ? Design.raised : Design.sunken)
-                border.color: section.showEthConfig ? Design.green : (gearMa.containsMouse ? Design.hover : "transparent")
+                color: section.showEthConfig ? Design.tint(Design.accent, 0.25) : (gearMa.containsMouse ? Design.raised : Design.well)
+                border.color: section.showEthConfig ? Design.accent : (gearMa.containsMouse ? Design.hover : "transparent")
                 border.width: 1
 
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -144,7 +143,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: "\u{f0493}"
                     role: "body"
-                    color: section.showEthConfig ? Design.green : Design.textDim
+                    color: section.showEthConfig ? Design.accent : Design.textDim
                 }
 
                 Clickable {
@@ -181,8 +180,8 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: ethConfigCol.implicitHeight + Design.s(Design.space.lg)
             radius: Design.s(Design.radius.card)
-            color: Design.sunken
-            border.color: Design.tint(Design.green, 0.3)
+            color: Design.well
+            border.color: Design.line
             border.width: 1
 
             ColumnLayout {
@@ -195,8 +194,8 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Label {
                         text: I18n.tr("IPv4 Configuration")
-                        weight: Design.weight.bold
-                        color: Design.green
+                        weight: Design.weight.semibold
+                        color: Design.text
                     }
                     Item { Layout.fillWidth: true }
                     Pill {
@@ -307,7 +306,6 @@ ColumnLayout {
             ? (section.connectedWifi ? I18n.tr("Connected to %1", section.connectedWifi.ssid) : I18n.tr("Wi-Fi is on, not connected"))
             : I18n.tr("Wi-Fi adapter is turned off")
         icon: "\u{f0928}"
-        accentColor: Design.blue
 
         // Master Switch
         RowLayout {
@@ -334,8 +332,8 @@ ColumnLayout {
             Layout.preferredHeight: activeBody.implicitHeight + Design.s(Design.space.md) * 2
 
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
-            border.color: Design.tint(Design.blue, 0.3)
+            color: Design.well
+            border.color: Design.line
             border.width: 1
 
             ColumnLayout {
@@ -351,7 +349,7 @@ ColumnLayout {
                     Icon {
                         text: section.connectedWifi ? section.connectedWifi.icon : "\u{f0928}"
                         role: "body"
-                        color: Design.blue
+                        color: Design.accent
                     }
 
                     ColumnLayout {
@@ -361,7 +359,7 @@ ColumnLayout {
                         Label {
                             text: section.connectedWifi ? section.connectedWifi.ssid : ""
                             weight: Design.weight.semibold
-                            color: Design.blue
+                            color: Design.text
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -518,7 +516,7 @@ ColumnLayout {
                 Icon {
                     text: "\u{f0928}"
                     role: "body"
-                    color: section._isNear(modelData.name) ? Design.blue : Design.textFaint
+                    color: section._isNear(modelData.name) ? Design.accent : Design.textFaint
                 }
 
                 ColumnLayout {

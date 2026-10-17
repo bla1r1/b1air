@@ -17,7 +17,7 @@ MiniView {
 
     title: I18n.tr("Wi-Fi")
     icon: "\u{f0928}"
-    tone: Design.blue
+    tone: Design.accent
     footerLabel: I18n.tr("Network Settings…")
 
     // Connecting to a secured network needs a password field. It lived only in
@@ -33,7 +33,6 @@ MiniView {
 
     trailing: Switch {
         checked: root.isOn
-        activeColor: Design.blue
         onToggled: Network.toggleWifi()
     }
 
@@ -79,8 +78,8 @@ MiniView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
-                color: connMa.containsMouse ? Design.tint(Design.blue, 0.22) : Design.tint(Design.blue, 0.15)
-                border.color: Design.tint(Design.blue, 0.35)
+                color: connMa.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.accent, 0.15)
+                border.color: Design.tint(Design.accent, 0.35)
                 border.width: Design.border
 
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -94,7 +93,7 @@ MiniView {
                     Icon {
                         text: "\u{f0928}"
                         role: "body"
-                        color: Design.blue
+                        color: Design.accent
                     }
 
                     Label {
@@ -119,14 +118,14 @@ MiniView {
                         visible: connMa.containsMouse
                         text: I18n.tr("Disconnect")
                         role: "caption"
-                        color: Design.blue
+                        color: Design.accent
                     }
 
                     Icon {
                         visible: !connMa.containsMouse
                         text: "\u{f012c}"   // check
                         role: "caption"
-                        color: Design.blue
+                        color: Design.accent
                     }
                 }
 
@@ -227,14 +226,14 @@ MiniView {
                 Layout.alignment: Qt.AlignHCenter
                 text: "\u{f033e}"
                 role: "display"
-                color: Design.blue
+                color: Design.textDim
             }
 
             Label {
                 Layout.fillWidth: true
                 text: root.askingFor
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
             }

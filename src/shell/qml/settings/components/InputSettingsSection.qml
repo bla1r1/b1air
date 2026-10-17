@@ -143,7 +143,6 @@ ColumnLayout {
         title: I18n.tr("Touchpad Basics")
         subtitle: I18n.tr("Scrolling direction and tapping behavior")
         icon: "\u{f0523}"
-        accentColor: Design.peach
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -229,7 +228,6 @@ ColumnLayout {
         title: I18n.tr("Multi-Touch Gestures")
         subtitle: I18n.tr("Three- and four-finger swipes")
         icon: "\u{f0048}"
-        accentColor: Design.teal
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -312,7 +310,6 @@ ColumnLayout {
         title: I18n.tr("Mouse & Pointer")
         subtitle: I18n.tr("Tracking speed, acceleration profiles, and primary button")
         icon: "\u{f037d}"
-        accentColor: Design.sapphire
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -327,7 +324,6 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.ctl)
                 value: Math.round((section.pointerAccel + 1.0) * 50)
-                tone: Design.sapphire
                 icon: "\u{f037d}"
                 label: I18n.tr("Pointer Speed / Sensitivity")
                 onMoved: pct => {
@@ -394,7 +390,6 @@ ColumnLayout {
         title: I18n.tr("Magic Mouse")
         subtitle: section.magicMouseStatus
         icon: "\u{f037d}"
-        accentColor: Design.teal
 
         Toggle {
             label: I18n.tr("Gestures on the mouse's surface")
@@ -410,7 +405,6 @@ ColumnLayout {
         title: I18n.tr("Hot corners")
         subtitle: I18n.tr("Push the pointer into a corner of the screen and hold it there a moment")
         icon: "\u{f0293}"
-        accentColor: Design.blue
 
         readonly property var actions: [
             { id: "none", label: I18n.tr("Nothing") },

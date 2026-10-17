@@ -49,7 +49,7 @@ PopupShell {
             Label {
                 text: I18n.tr("FancyZones Snapping Grid")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Item { Layout.fillWidth: true }
@@ -117,7 +117,7 @@ PopupShell {
                         Label {
                             text: zoneTile.modelData.name
                             role: "body"
-                            weight: Design.weight.bold
+                            weight: Design.weight.semibold
                             Layout.alignment: Qt.AlignHCenter
                         }
 

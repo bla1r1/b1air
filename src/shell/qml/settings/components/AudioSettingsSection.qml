@@ -36,7 +36,7 @@ ColumnLayout {
 
         property string type: "sink"
         property var row: null
-        property color tone: Design.sapphire
+        property color tone: Design.accent
         property bool selectable: false
         property bool isDevice: false
 
@@ -109,7 +109,6 @@ ColumnLayout {
         title: I18n.tr("Application volume")
         subtitle: I18n.tr("Each stream keeps its own level. Turning one down here does not touch the master.")
         icon: "\u{f075a}"
-        accentColor: Design.mauve
 
         Repeater {
             model: Audio.apps
@@ -117,7 +116,6 @@ ColumnLayout {
                 required property var model
                 type: "sink-input"
                 row: model
-                tone: Design.mauve
                 isDevice: false
             }
         }
@@ -135,14 +133,13 @@ ColumnLayout {
         title: I18n.tr("Sound")
         subtitle: I18n.tr("The master switch for everything this computer plays")
         icon: Audio.masterMute ? "\u{f075f}" : "\u{f057e}"
-        accentColor: Design.teal
 
         // One Toggle row, as everywhere else — this was a hand-built row
         // around a bare Toggle, with "Enabled" under the label repeating what
         // the switch already shows.
         Toggle {
             label: I18n.tr("Sound output")
-            subtitle: Audio.masterMute ? I18n.tr("Muted — the volume levels below are kept") : I18n.tr("Off mutes everything; volume levels are kept")
+            note: Audio.masterMute ? I18n.tr("Muted — the volume levels below are kept") : I18n.tr("Off mutes everything; volume levels are kept")
             checked: !Audio.masterMute
             onToggled: Audio.toggleMasterMute()
         }
@@ -152,7 +149,6 @@ ColumnLayout {
         title: I18n.tr("Output devices")
         subtitle: I18n.tr("Per-device level, independent of the master slider")
         icon: "\u{f057e}"
-        accentColor: Design.sapphire
 
         Repeater {
             model: Audio.outputs
@@ -160,7 +156,6 @@ ColumnLayout {
                 required property var model
                 type: "sink"
                 row: model
-                tone: Design.sapphire
                 selectable: true
                 isDevice: true
             }
@@ -179,7 +174,6 @@ ColumnLayout {
         title: I18n.tr("Input devices")
         subtitle: I18n.tr("Microphones and capture sources")
         icon: "\u{f036c}"
-        accentColor: Design.teal
 
         Repeater {
             model: Audio.inputs
@@ -187,7 +181,6 @@ ColumnLayout {
                 required property var model
                 type: "source"
                 row: model
-                tone: Design.teal
                 selectable: true
                 isDevice: true
             }
@@ -207,7 +200,7 @@ ColumnLayout {
             Icon {
                 text: "\u{f05a9}"
                 role: "caption"
-                color: Design.teal
+                color: Design.textDim
             }
 
             ColumnLayout {
@@ -253,7 +246,6 @@ ColumnLayout {
         title: I18n.tr("Volume keys")
         subtitle: I18n.tr("What a press of the volume keys does")
         icon: "\u{f04c3}"
-        accentColor: Design.peach
 
         Stepper {
             label: I18n.tr("Volume step")
@@ -281,7 +273,6 @@ ColumnLayout {
         title: I18n.tr("System sounds")
         subtitle: I18n.tr("Sounds the desktop itself plays")
         icon: "\u{f0028}"
-        accentColor: Design.cyan
 
         Toggle {
             label: I18n.tr("Screenshot Shutter Sound")

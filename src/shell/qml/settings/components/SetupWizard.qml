@@ -189,7 +189,7 @@ Item {
                     Layout.fillWidth: true
                     text: wizard.index === 0 && wizard.step.id === "keyboard" ? I18n.tr("Welcome to b1air") + " — " + wizard.step.title : wizard.step.title
                     role: "display"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     elide: Text.ElideRight
                 }
                 Label {
@@ -285,7 +285,6 @@ Item {
                             width: parent ? parent.width : 0
                             title: I18n.tr("In Settings")
                             icon: "\u{f0394}"
-                            accentColor: Design.accent
                             Repeater {
                                 model: wizard.news
                                 delegate: RowLayout {

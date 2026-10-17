@@ -21,7 +21,12 @@ Text {
         case "body":    return Design.font.body;
         case "title":   return Design.font.title;
         case "display": return Design.font.display;
-        default:        return Design.font.subhead;
+        case "subhead": return Design.font.subhead;
+        default:
+            // SessionMenu asked for "hero", which never existed: its icons
+            // came out at subhead size and nothing said so.
+            console.warn("Icon: unknown role \"" + root.role + "\", drawn as subhead");
+            return Design.font.subhead;
         }
     }
 

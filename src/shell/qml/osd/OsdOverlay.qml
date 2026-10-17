@@ -47,7 +47,7 @@ PanelWindow {
     property string osdTitle: "Volume"
     property int osdValue: 0
     property bool osdMuted: false
-    property color osdColor: Design.sapphire
+    property color osdColor: Design.accent
     property string osdDetail: ""       // a status line's second line
     property bool osdHasLevel: true     // false: a status line without a bar
 
@@ -77,7 +77,7 @@ PanelWindow {
         osdWindow.osdTitle = title;
         osdWindow.osdValue = Math.max(0, Math.min(100, Math.round(value)));
         osdWindow.osdMuted = muted;
-        osdWindow.osdColor = color || Design.sapphire;
+        osdWindow.osdColor = color || Design.accent;
         osdWindow.osdDetail = "";
         osdWindow.osdHasLevel = true;
         osdWindow.osdOpacity = 1.0;
@@ -114,14 +114,14 @@ PanelWindow {
         if (currentMute || v === 0) ic = "\u{f0581}";
         else if (v < 35) ic = "\u{f057f}";
         else if (v < 70) ic = "\u{f0580}";
-        showOsd(ic, "Volume", v, currentMute, currentMute ? Design.red : Design.sapphire);
+        showOsd(ic, "Volume", v, currentMute, currentMute ? Design.danger : Design.accent);
     }
 
     onCurrentMuteChanged: {
         if (!osdWindow._ready) return;
         let v = Math.round(currentVol * 100);
         let ic = currentMute ? "\u{f0581}" : "\u{f057e}";
-        showOsd(ic, currentMute ? "Muted" : "Volume", v, currentMute, currentMute ? Design.red : Design.sapphire);
+        showOsd(ic, currentMute ? "Muted" : "Volume", v, currentMute, currentMute ? Design.danger : Design.accent);
     }
 
     // ── Track Microphone Changes ─────────────────────────────────────────────
@@ -133,14 +133,14 @@ PanelWindow {
         if (!osdWindow._ready) return;
         let v = Math.round(currentMicVol * 100);
         let ic = currentMicMute ? "\u{f036d}" : "\u{f036c}";
-        showOsd(ic, "Microphone", v, currentMicMute, currentMicMute ? Design.red : Design.peach);
+        showOsd(ic, "Microphone", v, currentMicMute, currentMicMute ? Design.danger : Design.accent);
     }
 
     onCurrentMicMuteChanged: {
         if (!osdWindow._ready) return;
         let v = Math.round(currentMicVol * 100);
         let ic = currentMicMute ? "\u{f036d}" : "\u{f036c}";
-        showOsd(ic, currentMicMute ? "Mic Muted" : "Microphone", v, currentMicMute, currentMicMute ? Design.red : Design.peach);
+        showOsd(ic, currentMicMute ? "Mic Muted" : "Microphone", v, currentMicMute, currentMicMute ? Design.danger : Design.accent);
     }
 
     // ── Track Brightness Changes ─────────────────────────────────────────────
@@ -148,7 +148,7 @@ PanelWindow {
 
     onCurrentBrightnessChanged: {
         if (!osdWindow._ready || !Power.hasBacklight) return;
-        showOsd("\u{f00df}", "Brightness", currentBrightness, false, Design.yellow);
+        showOsd("\u{f00df}", "Brightness", currentBrightness, false, Design.accent);
     }
 
     Timer {
@@ -166,8 +166,8 @@ PanelWindow {
         opacity: osdWindow.osdOpacity
         scale: osdWindow.osdOpacity > 0 ? 1.0 : 0.92
 
-        Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
 
         implicitWidth: osdWindow.osdHasLevel ? Design.s(260)
             : Math.min(Design.s(440), Math.max(Design.s(260), statusText.implicitWidth + Design.s(84)))
@@ -237,9 +237,9 @@ PanelWindow {
                     }
                     Label {
                         text: osdWindow.osdMuted ? I18n.tr("MUTED") : (osdWindow.osdValue + "%")
-                        weight: Design.weight.bold
+                        weight: Design.weight.semibold
                         role: "caption"
-                        color: osdWindow.osdMuted ? Design.red : Design.text
+                        color: osdWindow.osdMuted ? Design.danger : Design.text
                     }
                 }
 

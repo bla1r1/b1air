@@ -19,7 +19,7 @@ MiniView {
 
     title: I18n.tr("Notifications")
     icon: "\u{f009a}"
-    tone: Design.lavender
+    tone: Design.accent
     footerLabel: I18n.tr("Notification Settings…")
 
     // While this list is on screen, a toast repeating one of its lines is
@@ -299,7 +299,7 @@ MiniView {
                     RowLayout {
                         Label { text: Weather.temp; font.pixelSize: Design.s(28); weight: Design.weight.medium; tabular: true }
                         Item { Layout.fillWidth: true }
-                        Icon { text: Weather.icon; role: "title"; color: Design.yellow }
+                        Icon { text: Weather.icon; role: "title"; color: Design.textDim }
                     }
                     Label { text: Weather.condition; role: "caption"; dim: true; elide: Text.ElideRight; Layout.fillWidth: true }
                 }

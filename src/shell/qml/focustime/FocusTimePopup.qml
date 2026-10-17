@@ -29,19 +29,6 @@ PopupShell {
 
     // --- Responsive Scaling Logic ---
     
-   // -------------------------------------------------------------------------
-    // COLORS (Dynamic Matugen Palette)
-    // -------------------------------------------------------------------------
-    
-    readonly property color mauve: Design.mauve
-    readonly property color pink: Design.pink
-    readonly property color red: Design.red
-    readonly property color peach: Design.peach
-    readonly property color yellow: Design.yellow
-    readonly property color green: Design.green
-    readonly property color sapphire: Design.sapphire
-    readonly property color blue: Design.blue
-
     readonly property var monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => I18n.tr(m))
 
     // -------------------------------------------------------------------------
@@ -763,7 +750,7 @@ PopupShell {
                                         role: "caption"
                                         dim: window.totalSeconds < window.focusTimer.dailyGoalHours * 3600
                                         color: window.totalSeconds >= window.focusTimer.dailyGoalHours * 3600
-                                               ? window.peach : Design.textDim
+                                               ? Design.ok : Design.textDim
                                         visible: window.selectedAppClass === "" && window.focusTimer.dailyGoalHours > 0
                                         text: window.totalSeconds >= window.focusTimer.dailyGoalHours * 3600
                                               ? I18n.tr("over the %1h goal", window.focusTimer.dailyGoalHours)
@@ -857,7 +844,7 @@ PopupShell {
                                 // Progress ring around the remaining time.
                                 Item {
                                     id: pomoRing
-                                    readonly property color tone: window.focusTimer.onBreak ? window.green : window.sapphire
+                                    readonly property color tone: window.focusTimer.onBreak ? Design.ok : Design.accent
                                     Layout.preferredWidth: Design.s(44)
                                     Layout.preferredHeight: Design.s(44)
 

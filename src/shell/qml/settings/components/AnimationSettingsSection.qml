@@ -28,7 +28,6 @@ ColumnLayout {
         title: I18n.tr("Motion")
         subtitle: section.off ? I18n.tr("Animations are off") : I18n.tr("How long every animation takes")
         icon: "\u{f0e1e}"
-        accentColor: Design.mauve
 
         Toggle {
             label: I18n.tr("Animations")
@@ -45,7 +44,6 @@ ColumnLayout {
             minimum: 80
             maximum: 600
             value: Math.max(80, Settings.animationDuration)
-            tone: Design.mauve
             onMoved: pct => Settings.set("animationDuration", pct)
         }
         Label {
@@ -59,7 +57,6 @@ ColumnLayout {
         title: I18n.tr("Workspaces")
         subtitle: I18n.tr("Switching from one workspace to another")
         icon: "\u{f0570}"
-        accentColor: Design.sapphire
 
         Flow {
             Layout.fillWidth: true
@@ -90,7 +87,6 @@ ColumnLayout {
         title: I18n.tr("Windows")
         subtitle: I18n.tr("Opening and closing a window")
         icon: "\u{f05b6}"
-        accentColor: Design.teal
 
         Flow {
             Layout.fillWidth: true
@@ -128,7 +124,6 @@ ColumnLayout {
             minimum: 40
             maximum: 95
             value: Settings.popinPercent
-            tone: Design.teal
             onMoved: pct => Settings.set("popinPercent", pct)
         }
     }
@@ -137,6 +132,6 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !Sway.swayfx
         text: I18n.tr("The compositor running now is plain sway: these settings take effect with b1air's own swayFX.")
-        role: "caption"; color: Design.peach; wrapMode: Text.WordWrap
+        role: "caption"; color: Design.warn; wrapMode: Text.WordWrap
     }
 }

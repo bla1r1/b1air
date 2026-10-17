@@ -606,7 +606,7 @@ ApplicationWindow {
             text: window.initials(av.name)
             font.family: Design.font.sans
             font.pixelSize: Math.max(8, Math.round(av.width * 0.45))
-            font.bold: true
+            font.weight: Design.weight.semibold
             color: Design.accentText
         }
         Canvas {
@@ -713,7 +713,7 @@ ApplicationWindow {
                         height: parent.height
                         width: parent.width * Math.max(0, GitBackend.progress) / 100
                         color: window.colBlue
-                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                        Behavior on width { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
                     }
                     Rectangle {
                         id: slider
@@ -938,7 +938,7 @@ Item {
                                                     visible: parent.staged > 0
                                                     text: parent.staged === parent.total ? "✓" : "–"
                                                     font.pixelSize: Design.s(Design.font.caption)
-                                                    font.bold: true
+                                                    font.weight: Design.weight.semibold
                                                     color: Design.accentText
                                                 }
                                                 MouseArea {
@@ -953,7 +953,7 @@ Item {
                                                     : GitBackend.changedFiles.length + (GitBackend.changedFiles.length === 1 ? " changed file" : " changed files")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: window.colDim
                                                 Layout.fillWidth: true
                                                 elide: Text.ElideRight
@@ -1010,7 +1010,7 @@ Item {
                                                              : I18n.tr("ready"))
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: parent.parent.conflicts > 0 ? window.colRed : window.colGreen
                                                 elide: Text.ElideRight
                                             }
@@ -1020,7 +1020,7 @@ Item {
                                                 enabled: !window.busy
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: window.colGreen
                                                 MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.commitMerge() }
                                             }
@@ -1055,7 +1055,7 @@ Item {
                                                     : I18n.tr("Stashed changes (%1)", GitBackend.branchStash.files || 0)
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: parent.parent.confirmDiscard ? window.colRed : window.colBlue
                                                 elide: Text.ElideRight
                                             }
@@ -1063,7 +1063,7 @@ Item {
                                                 text: parent.parent.confirmDiscard ? I18n.tr("Delete") : I18n.tr("Restore")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: parent.parent.confirmDiscard ? window.colRed : window.colGreen
                                                 MouseArea {
                                                     anchors.fill: parent
@@ -1131,7 +1131,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         text: "✓"
                                                         font.pixelSize: Design.s(Design.font.caption)
-                                                        font.bold: true
+                                                        font.weight: Design.weight.semibold
                                                         color: Design.accentText
                                                         visible: modelData.isStaged
                                                     }
@@ -1255,7 +1255,7 @@ Item {
                                                             text: GitBackend.lastCommit.subject || ""
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
-                                                            font.bold: true
+                                                            font.weight: Design.weight.semibold
                                                             color: window.colFg
                                                             elide: Text.ElideRight
                                                         }
@@ -1274,7 +1274,7 @@ Item {
                                                             text: GitBackend.busy === "undo" ? I18n.tr("Undoing…") : I18n.tr("Undo")
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
-                                                            font.bold: true
+                                                            font.weight: Design.weight.semibold
                                                             color: window.colFg
                                                         }
                                                         MouseArea {
@@ -1421,7 +1421,7 @@ Item {
                                                         text: I18n.tr("Committing…")
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.caption)
-                                                        font.bold: true
+                                                        font.weight: Design.weight.semibold
                                                         color: window.colFg
                                                     }
                                                 }
@@ -1439,7 +1439,7 @@ Item {
                                                             : I18n.tr("Commit to %1", GitBackend.branchName)
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.body)
-                                                    font.bold: true
+                                                    font.weight: Design.weight.semibold
                                                     color: parent.ready ? Design.accentText : window.colDim
                                                 }
 
@@ -1494,7 +1494,7 @@ Item {
                                                     text: model.message || I18n.tr("Commit")
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.caption)
-                                                    font.bold: true
+                                                    font.weight: Design.weight.semibold
                                                     color: window.colFg
                                                     elide: Text.ElideRight
                                                 }
@@ -1680,7 +1680,7 @@ Item {
                                         text: GitBackend.selectedFile
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(Design.font.body)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colFg
                                         Layout.fillWidth: true
                                         elide: Text.ElideMiddle
@@ -1723,7 +1723,7 @@ Item {
                                         text: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(14)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colFg
                                     }
                                     Text {
@@ -1781,7 +1781,7 @@ Item {
                                                             text: modelData.title
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.body)
-                                                            font.bold: true
+                                                            font.weight: Design.weight.semibold
                                                             color: window.colFg
                                                         }
                                                         Text {
@@ -1809,7 +1809,7 @@ Item {
                                                             text: modelData.button
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
-                                                            font.bold: true
+                                                            font.weight: Design.weight.semibold
                                                             color: parent.primary ? Design.accentText : window.colFg
                                                         }
                                                         MouseArea {
@@ -1882,7 +1882,7 @@ Item {
                                         text: GitBackend.commitInfo.subject || ""
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(13)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colFg
                                         wrapMode: Text.Wrap
                                     }
@@ -2099,7 +2099,7 @@ Item {
                                             text: GitBackend.commitFile
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             color: window.colFg
                                             elide: Text.ElideMiddle
                                         }
@@ -2154,7 +2154,7 @@ Item {
                                     text: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(14)
-                                    font.bold: true
+                                    font.weight: Design.weight.semibold
                                     color: window.colFg
                                 }
                                 Text {
@@ -2223,7 +2223,7 @@ Item {
                                 text: I18n.tr("Repositories")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: window.colBlue
                             }
                             // No "rescan": the list is what has been opened
@@ -2257,7 +2257,7 @@ Item {
                                     text: I18n.tr("Open repository…")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(11)
-                                    font.bold: true
+                                    font.weight: Design.weight.semibold
                                     color: window.colFg
                                 }
                             }
@@ -2366,7 +2366,7 @@ Item {
                                             text: repoRowItem.modelData.name
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             color: window.colFg
                                         }
                                         Text {
@@ -2490,7 +2490,7 @@ Item {
                                         text: I18n.tr("Move to trash")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colRed
                                         MouseArea {
                                             anchors.fill: parent
@@ -2537,7 +2537,7 @@ Item {
                             text: I18n.tr("Branches")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
-                            font.bold: true
+                            font.weight: Design.weight.semibold
                             color: window.colGreen
                         }
 
@@ -2600,7 +2600,7 @@ Item {
                                         text: I18n.tr("New")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colBg
                                     }
                                     MouseArea {
@@ -2703,7 +2703,7 @@ Item {
                                     Text {
                                         text: "✓"
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colGreen
                                         visible: branchRowItem.isCurrent
                                     }
@@ -2755,7 +2755,7 @@ Item {
                                 text: I18n.tr("Worktrees")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
-                                font.bold: true
+                                font.weight: Design.weight.semibold
                                 color: window.colGreen
                                 bottomPadding: Design.s(4)
                             }
@@ -2852,7 +2852,7 @@ Item {
                                         text: I18n.tr("Remove")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colRed
                                         MouseArea {
                                             anchors.fill: parent
@@ -2894,7 +2894,7 @@ Item {
                                                    GitBackend.changedFiles.length, GitBackend.branchName)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    font.bold: true
+                                    font.weight: Design.weight.semibold
                                     color: window.colFg
                                     wrapMode: Text.WordWrap
                                 }
@@ -2928,7 +2928,7 @@ Item {
                                                 text: parent.parent.title
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                font.bold: true
+                                                font.weight: Design.weight.semibold
                                                 color: window.colFg
                                                 elide: Text.ElideRight
                                             }
@@ -3016,7 +3016,7 @@ Item {
                                         text: I18n.tr("Delete anyway")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        font.bold: true
+                                        font.weight: Design.weight.semibold
                                         color: window.colRed
                                         MouseArea {
                                             anchors.fill: parent
@@ -3064,7 +3064,7 @@ Item {
                             text: I18n.tr("Accounts")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
-                            font.bold: true
+                            font.weight: Design.weight.semibold
                             color: window.colBlue
                         }
 
@@ -3102,7 +3102,7 @@ Item {
                                             text: accItem.modelData.name
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.body)
-                                            font.bold: true
+                                            font.weight: Design.weight.semibold
                                             color: window.colFg
                                         }
                                         Text {
@@ -3192,7 +3192,7 @@ Item {
                     text: window.dialog ? window.dialog.title : ""
                     font.family: Design.font.sans
                     font.pixelSize: Design.s(14)
-                    font.bold: true
+                    font.weight: Design.weight.semibold
                     color: window.colFg
                 }
                 Text {
@@ -3308,8 +3308,8 @@ Item {
         opacity: shown ? 1 : 0
         visible: opacity > 0
 
-        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on y { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
 
         Timer { id: hideTimer; onTriggered: toast.shown = false }
 

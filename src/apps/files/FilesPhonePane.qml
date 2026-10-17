@@ -310,8 +310,8 @@ Item {
                                 Rectangle {
                                     Layout.preferredWidth: Design.s(28); Layout.preferredHeight: Design.s(28)
                                     radius: Design.s(7)
-                                    color: Design.tint(Design.blue, 0.2)
-                                    Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.blue }
+                                    color: Design.well
+                                    Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.textDim }
                                 }
                                 Label { Layout.fillWidth: true; text: appRow.modelData.name; elide: Text.ElideRight }
                                 Label { visible: !!appRow.modelData.version; text: appRow.modelData.version || ""; dim: true; role: "caption" }

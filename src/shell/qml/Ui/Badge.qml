@@ -34,7 +34,7 @@ Item {
             id: label
             anchors.centerIn: parent
             font.family: Design.font.mono
-            font.weight: Design.weight.bold
+            font.weight: Design.weight.semibold
             font.pixelSize: Design.s(Design.font.caption)
             color: root.tone
         }

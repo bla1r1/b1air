@@ -56,7 +56,7 @@ Rectangle {
         Label {
             text: row.value
             role: "caption"
-            weight: Design.weight.bold
+            weight: Design.weight.semibold
             color: row.valueTone
         }
     }

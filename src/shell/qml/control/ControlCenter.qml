@@ -502,7 +502,7 @@ PopupShell {
             Label {
                 text: center.editing ? I18n.tr("Arrange") : I18n.tr("Control Center")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 color: center.editing ? Design.accent : Design.text
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -669,9 +669,6 @@ PopupShell {
                 on: false
                 detail: Power.profile === "performance" ? I18n.tr("Performance")
                       : (Power.profile === "power-saver" ? I18n.tr("Power Saver") : I18n.tr("Balanced"))
-
-                readonly property color profileTone: Power.profile === "performance" ? Design.red
-                    : (Power.profile === "power-saver" ? Design.green : Design.sapphire)
 
                 onToggled: Power.setProfile(Power.profile === "balanced" ? "performance"
                                           : (Power.profile === "performance" ? "power-saver" : "balanced"))
@@ -863,7 +860,6 @@ PopupShell {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.ctl)
                 value: Power.brightness
-                tone: Design.yellow
                 icon: "\u{f00df}"
                 label: I18n.tr("Brightness")
                 onMoved: pct => Power.setBrightness(pct)
@@ -933,18 +929,15 @@ PopupShell {
                 anchors.rightMargin: Design.s(Design.space.md)
                 spacing: Design.s(Design.space.md)
 
-                Rectangle {
+                // The weather's own glyph, in the text colour: it was on a
+                // yellow tile, with a green "Live" badge at the end of the
+                // row that told nothing the row did not.
+                Icon {
                     Layout.preferredWidth: Design.s(34)
-                    Layout.preferredHeight: Design.s(34)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.tint(Design.yellow, 0.15)
-
-                    Icon {
-                        anchors.centerIn: parent
-                        text: Weather.icon
-                        role: "subhead"
-                        color: Design.yellow
-                    }
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Weather.icon
+                    role: "subhead"
+                    color: Design.textDim
                 }
 
                 ColumnLayout {
@@ -965,11 +958,6 @@ PopupShell {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
-                }
-
-                Badge {
-                    text: I18n.tr("Live")
-                    tone: Design.ok
                 }
             }
         }
@@ -1070,8 +1058,7 @@ PopupShell {
                         radius: width / 2
                         color: Design.accent
 
-                        scale: playMa.pressed ? 0.92 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
+                        opacity: playMa.pressed ? 0.85 : 1.0
 
                         Icon {
                             anchors.centerIn: parent
@@ -1141,8 +1128,9 @@ PopupShell {
                 snug: sessionRow.snug
                 icon: "\u{f0709}"
                 label: I18n.tr("Reboot")
-                iconTone: Design.peach
-                tone: Design.peach
+                // Red only on the "Sure?" step: until then these read as
+                // the actions beside them, as in the session menu.
+                tone: Design.danger
                 destructive: true
                 onActivated: Daemon.power("reboot")
             }
@@ -1152,8 +1140,7 @@ PopupShell {
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f0425}"
-                label: I18n.tr("Off")
-                iconTone: Design.danger
+                label: I18n.tr("Shut Down")
                 tone: Design.danger
                 destructive: true
                 onActivated: Daemon.power("shutdown")

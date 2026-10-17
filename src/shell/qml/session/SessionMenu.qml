@@ -15,11 +15,11 @@ PopupShell {
     property int selectedIndex: 0
 
     readonly property var actions: [
-        { id: "lock",     icon: "\u{f023}", label: I18n.tr("Lock"),     key: "1", color: Design.sapphire, cmd: ["b1air-daemon", "power", "lock"] },
-        { id: "suspend",  icon: "\u{f186}", label: I18n.tr("Sleep"),    key: "2", color: Design.teal,     cmd: ["b1air-daemon", "power", "suspend"] },
-        { id: "reboot",   icon: "\u{f021}", label: I18n.tr("Restart"),  key: "3", color: Design.yellow,   cmd: ["b1air-daemon", "power", "reboot"] },
-        { id: "poweroff", icon: "\u{f011}", label: I18n.tr("Shut Down"),key: "4", color: Design.red,      cmd: ["b1air-daemon", "power", "shutdown"] },
-        { id: "logout",   icon: "\u{f08b}", label: I18n.tr("Log Out"),  key: "5", color: Design.mauve,    cmd: ["b1air-daemon", "power", "logout"] }
+        { id: "lock",     icon: "\u{f023}", label: I18n.tr("Lock"),     key: "1", cmd: ["b1air-daemon", "power", "lock"] },
+        { id: "suspend",  icon: "\u{f186}", label: I18n.tr("Sleep"),    key: "2", cmd: ["b1air-daemon", "power", "suspend"] },
+        { id: "reboot",   icon: "\u{f021}", label: I18n.tr("Reboot"),   key: "3", cmd: ["b1air-daemon", "power", "reboot"] },
+        { id: "poweroff", icon: "\u{f011}", label: I18n.tr("Shut Down"),key: "4", cmd: ["b1air-daemon", "power", "shutdown"] },
+        { id: "logout",   icon: "\u{f08b}", label: I18n.tr("Log Out"),  key: "5", cmd: ["b1air-daemon", "power", "logout"] }
     ]
 
     function executeAction(idx) {
@@ -54,7 +54,7 @@ PopupShell {
                 Layout.alignment: Qt.AlignHCenter
                 text: I18n.tr("Power & Session")
                 role: "title"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Label {
@@ -83,14 +83,16 @@ PopupShell {
                     radius: Design.s(Design.radius.card)
 
                     readonly property bool isHovered: tileMa.containsMouse || window.selectedIndex === tile.index
-                    color: tile.isHovered ? Design.tint(tile.modelData.color, 0.18) : Design.sunken
-                    border.color: tile.isHovered ? tile.modelData.color : Design.raised
-                    border.width: tile.isHovered ? 2 : 1
-                    scale: tile.isHovered ? 1.04 : 1.0
+                    // One look for every action. Each used to light up in a
+                    // colour of its own (sapphire, teal, yellow, red, mauve)
+                    // and grow on hover; the colour said nothing about the
+                    // action and the red one read as an error.
+                    color: tile.isHovered ? Design.tint(Design.accent, 0.22) : Design.sunken
+                    border.color: tile.isHovered ? Design.accent : Design.raised
+                    border.width: 1
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutBack } }
 
                     ColumnLayout {
                         anchors.centerIn: parent
@@ -100,14 +102,14 @@ PopupShell {
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             width: Design.s(22); height: Design.s(22); radius: Design.s(11)
-                            color: tile.isHovered ? tile.modelData.color : Design.raised
+                            color: Design.raised
 
                             Label {
                                 anchors.centerIn: parent
                                 text: tile.modelData.key
                                 role: "caption"
-                                weight: Design.weight.bold
-                                color: tile.isHovered ? Design.surface : Design.textDim
+                                tabular: true
+                                color: Design.textDim
                             }
                         }
 
@@ -115,15 +117,14 @@ PopupShell {
                         Icon {
                             Layout.alignment: Qt.AlignHCenter
                             text: tile.modelData.icon
-                            role: "hero"
-                            color: tile.isHovered ? tile.modelData.color : Design.text
+                            role: "display"
+                            color: tile.isHovered ? Design.accent : Design.text
                         }
 
                         // Label
                         Label {
                             Layout.alignment: Qt.AlignHCenter
                             text: tile.modelData.label
-                            weight: Design.weight.semibold
                             color: tile.isHovered ? Design.text : Design.textDim
                         }
                     }
