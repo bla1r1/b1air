@@ -32,7 +32,6 @@ add_executable(b1air-shot
     ${SHOT_GEN}/xdg-shell-client-protocol.h
     ${SHOT_GEN}/xdg-shell-protocol.c)
 target_include_directories(b1air-shot PRIVATE ${SHOT_GEN} ${PROJECT_SOURCE_DIR}/common)
-target_include_directories(b1air-shot SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
 target_link_libraries(b1air-shot PRIVATE b1air-core PkgConfig::SHOT_DEPS m)
 b1air_warnings(b1air-shot)
 install(TARGETS b1air-shot RUNTIME DESTINATION bin)

@@ -6,6 +6,7 @@
 #include <QSocketNotifier>
 #include <QByteArray>
 #include <QColor>
+#include <QVariantList>
 #include <QTimer>
 #include <vterm.h>
 #include <sys/types.h>
@@ -22,16 +23,15 @@ class TerminalItem : public QQuickPaintedItem {
     Q_PROPERTY(int cols READ cols NOTIFY sizeChanged)
     Q_PROPERTY(int rows READ rows NOTIFY sizeChanged)
 
-    // The terminal's own two colours, so it can follow the desktop theme.
-    //
-    // They were file-scope constants named MochaBase and MochaText —
-    // Catppuccin, hardcoded — while the shipped desktop is Tokyo Night and
-    // Settings has offered themes, import and export since this suite gained
-    // them. So the one window that fills its whole area with a single colour
-    // was the one window that ignored the palette. TermWindow binds these to
-    // Ui/Design, which reads the active theme in every process.
+    // The terminal's own two colours, so it follows the desktop theme:
+    // TermWindow binds these to Ui/Design, which reads the active theme in
+    // every process.
     Q_PROPERTY(QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY paletteChanged)
     Q_PROPERTY(QColor foregroundColor READ foregroundColor WRITE setForegroundColor NOTIFY paletteChanged)
+    // The sixteen ANSI colours, black to bright white, from the desktop
+    // theme (TermWindow builds them from Ui/Design). Empty: the built-in
+    // sets below, one for a dark background and one for a light.
+    Q_PROPERTY(QVariantList ansiColors READ ansiColors WRITE setAnsiColors NOTIFY paletteChanged)
 
 public:
     explicit TerminalItem(QQuickItem *parent = nullptr);
@@ -50,6 +50,8 @@ public:
     QColor backgroundColor() const { return m_background; }
     void setBackgroundColor(const QColor &c);
     QColor foregroundColor() const { return m_foreground; }
+    QVariantList ansiColors() const;
+    void setAnsiColors(const QVariantList &colors);
     void setForegroundColor(const QColor &c);
 
     Q_INVOKABLE void sendText(const QString &text);
@@ -107,8 +109,10 @@ private:
 
     // Defaults match the constants these replaced, so a build that never binds
     // them looks exactly as it did.
-    QColor m_background{30, 30, 46};
-    QColor m_foreground{205, 214, 244};
+    QColor m_background{0x20, 0x23, 0x26};   // Breeze Dark, until bound
+    QColor m_foreground{0xfc, 0xfc, 0xfc};
+    QColor m_ansi[16];
+    bool m_hasAnsi = false;
 
     // libvterm callbacks
     static int cbDamage(VTermRect rect, void *user);

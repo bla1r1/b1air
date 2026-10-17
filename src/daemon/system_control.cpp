@@ -1681,16 +1681,18 @@ std::string SystemControl::window_list_open_json() {
 //
 // The shell and our own apps follow the theme picker; nothing else did. The
 // session set `gtk-theme Tokyonight-Dark`, a theme that is not installed, and
-// the shipped settings.ini names adw-gtk3-dark, also not installed — so GTK
-// apps drew stock Adwaita, dark only because of prefer-dark. Qt apps used
-// Kvantum's Tokyo-Night, fixed. Changing the theme changed none of them.
+// the shipped settings.ini named adw-gtk3-dark, then not installed either —
+// so GTK apps drew stock Adwaita, dark only because of prefer-dark. Qt apps
+// used a Kvantum theme of someone else's, fixed. Changing the theme changed
+// none of them.
 //
-// This makes them follow: GTK through Adwaita (built into GTK, always there)
-// plus @define-color overrides in gtk.css; Qt through a Kvantum theme
-// generated from the palette. `appColorScheme` can pin them dark or light
-// instead; when that disagrees with the palette, they get the stock dark or
-// light look with only the accent carried over, since a dark palette cannot
-// be used as a light one.
+// This makes them follow: GTK 3 through adw-gtk3 (libadwaita's look for
+// GTK 3, a package of the suite) or else Adwaita, built into GTK, plus
+// @define-color overrides in gtk.css; GTK 4 and libadwaita through the same
+// colours; Qt through a Kvantum theme written here from the palette.
+// `appColorScheme` can pin them dark or light instead; when that disagrees
+// with the palette, they get the stock dark or light look with only the
+// accent carried over, since a dark palette cannot be used as a light one.
 namespace {
 
 double channel(int v) {
@@ -1765,9 +1767,10 @@ bool SystemControl::appearance_apply() {
     auto c = [&](const char* key, const char* fallback) {
         return json_str(pal, key, fallback);
     };
-    const std::string ground = c("ground", "#1a1b26");
-    const std::string accent = c("primary", c("blue", "#7aa2f7").c_str());
-    const std::string accentText = c("primaryText", "#16161e");
+    // Fallbacks: Breeze Dark, the built-in palette (Ui/Design.qml).
+    const std::string ground = c("ground", "#202326");
+    const std::string accent = c("primary", c("blue", "#3daee9").c_str());
+    const std::string accentText = c("primaryText", "#0d1b24");
 
     const bool paletteDark = luminance(ground) < 0.4;
     std::string scheme = SettingsManager::get_json_string("appColorScheme");
@@ -1779,15 +1782,19 @@ bool SystemControl::appearance_apply() {
     // which is what browsers, Electron and libadwaita apps read.
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "color-scheme",
                            dark ? "prefer-dark" : "prefer-light"});
-    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme",
-                           dark ? "Adwaita-dark" : "Adwaita"});
+    // adw-gtk3 where it is installed: GTK 3 apps then look like the GTK 4 ones.
+    const bool adw = std::filesystem::exists("/usr/share/themes/adw-gtk3")
+                  || std::filesystem::exists(home + "/.local/share/themes/adw-gtk3")
+                  || std::filesystem::exists(home + "/.themes/adw-gtk3");
+    const std::string gtkTheme = adw ? (dark ? "adw-gtk3-dark" : "adw-gtk3") : (dark ? "Adwaita-dark" : "Adwaita");
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", gtkTheme});
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "icon-theme",
                            dark ? "Papirus-Dark" : "Papirus"});
     // The desktop's own cursor (src/cursors). gsettings is what GTK 4 and
     // libadwaita apps read; sway takes it from input.conf.
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", "b1air-cursors"});
     for (const char* dir : {"/.config/gtk-3.0/settings.ini", "/.config/gtk-4.0/settings.ini"}) {
-        set_ini_keys(home + dir, {{"gtk-theme-name", dark ? "Adwaita-dark" : "Adwaita"},
+        set_ini_keys(home + dir, {{"gtk-theme-name", gtkTheme},
                                   {"gtk-icon-theme-name", dark ? "Papirus-Dark" : "Papirus"},
                                   {"gtk-application-prefer-dark-theme", dark ? "1" : "0"},
                                   {"gtk-cursor-theme-name", "b1air-cursors"}});
@@ -1808,7 +1815,7 @@ bool SystemControl::appearance_apply() {
     if (usePalette) {
         const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
         const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
-        const std::string text = c("text", "#c0caf5"), dim = c("textDim", text.c_str());
+        const std::string text = c("text", "#fcfcfc"), dim = c("textDim", text.c_str());
         const std::string outline = c("outlineVariant", high.c_str());
         def("window_bg_color", ground);   def("window_fg_color", text);
         def("view_bg_color", lowest);     def("view_fg_color", text);
@@ -1818,7 +1825,7 @@ bool SystemControl::appearance_apply() {
         def("card_bg_color", mid);        def("card_fg_color", text);
         def("popover_bg_color", low);     def("popover_fg_color", text);
         def("dialog_bg_color", ground);   def("dialog_fg_color", text);
-        def("destructive_bg_color", c("red", "#f7768e"));
+        def("destructive_bg_color", c("red", "#ed4b5b"));
         def("theme_bg_color", ground);    def("theme_fg_color", text);
         def("theme_base_color", lowest);  def("theme_text_color", text);
         def("theme_unfocused_bg_color", ground); def("theme_unfocused_fg_color", dim);
@@ -1830,11 +1837,11 @@ bool SystemControl::appearance_apply() {
     // Window borders from the palette: written for the next start, and sent to
     // the running sway so they change now. look-and-feel.conf had them fixed.
     {
-        const std::string text = c("text", "#c0caf5");
-        const std::string dim = c("textDim", "#a9b1d6");
-        const std::string low = c("lowest", "#16161e");
-        const std::string alt = c("tertiary", "#bb9af7");
-        const std::string err = c("error", "#f7768e");
+        const std::string text = c("text", "#fcfcfc");
+        const std::string dim = c("textDim", "#b4bbc2");
+        const std::string low = c("lowest", "#141618");
+        const std::string alt = c("tertiary", "#b07ad9");
+        const std::string err = c("error", "#ed4b5b");
         const std::vector<std::vector<std::string>> rules = {
             {"client.focused", accent, ground, text, alt, accent},
             {"client.focused_inactive", low, low, dim, low, low},
@@ -1852,22 +1859,50 @@ bool SystemControl::appearance_apply() {
         write_file(home + "/.config/sway/conf.d/custom_theme_colors.conf", conf);
     }
 
-    // Qt, through Kvantum (qt6ct is set to style=kvantum).
+    // Qt, through Kvantum (qt6ct is set to style=kvantum): a theme of b1air's
+    // own, its colours from the palette and its widgets Kvantum's built-in
+    // ones (a theme with no SVG of its own is drawn with the default's).
     std::string kvTheme = dark ? "KvGnomeDark" : "KvGnome";
     if (usePalette) {
         kvTheme = "b1air";
         const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
         const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
-        const std::string highest = c("highest", high.c_str()), text = c("text", "#c0caf5");
+        const std::string highest = c("highest", high.c_str()), text = c("text", "#fcfcfc");
         const std::string outline = c("outline", c("textDim", text.c_str()).c_str());
-        // The shipped Tokyo-Night.kvconfig is the template: its widget
-        // settings stay, and only [GeneralColors] is written from the palette.
-        std::string base;
-        {
-            std::ifstream in(home + "/.config/Kvantum/Tokyo-Night/Tokyo-Night.kvconfig");
-            std::stringstream ss; ss << in.rdbuf(); base = ss.str();
-        }
-        const std::string colors =
+        const std::string out =
+            "# Written by b1air-daemon (appearance apply) from the theme; rewritten\n"
+            "# whenever it changes.\n\n"
+            "[%General]\n"
+            "author=b1air\n"
+            "comment=The desktop's palette\n"
+            // Rounded, quiet, the shell's spacing: menus and tooltips with a
+            // shadow, scroll bars that show while scrolling, no frames drawn
+            // round every toolbar.
+            "composite=true\n"
+            "menu_shadow_depth=6\n"
+            "tooltip_shadow_depth=4\n"
+            "spread_menuitems=true\n"
+            "transient_scrollbar=true\n"
+            "scroll_width=8\n"
+            "animate_states=true\n"
+            "slim_toolbars=false\n"
+            "toolbutton_style=0\n"
+            "iconless_pushbutton=true\n"
+            "button_icon_size=16\n"
+            "small_icon_size=16\n"
+            "large_icon_size=32\n"
+            "layout_spacing=6\n"
+            "layout_margin=8\n"
+            "inline_spin_indicators=true\n"
+            "combo_menu=true\n"
+            "respect_DE=true\n"
+            "alt_mnemonic=true\n"
+            "tree_branch_line=false\n"
+            "progressbar_thickness=6\n"
+            "slider_width=4\n"
+            "slider_handle_width=16\n"
+            "slider_handle_length=16\n"
+            "check_size=16\n\n"
             "[GeneralColors]\n"
             "window.color=" + low + "\nbase.color=" + lowest + "\nalt.base.color=" + ground + "\n"
             "button.color=" + mid + "\nlight.color=" + highest + "\nmid.light.color=" + high + "\n"
@@ -1876,15 +1911,7 @@ bool SystemControl::appearance_apply() {
             "text.color=" + text + "\nwindow.text.color=" + text + "\nbutton.text.color=" + text + "\n"
             "disabled.text.color=" + outline + "\ntooltip.text.color=" + text + "\n"
             "highlight.text.color=" + accentText + "\n"
-            "link.color=" + c("sapphire", accent.c_str()) + "\nlink.visited.color=" + c("mauve", accent.c_str()) + "\n\n";
-        std::string out;
-        const size_t gc = base.find("[GeneralColors]");
-        if (gc == std::string::npos) {
-            out = "[%General]\nauthor=b1air\n\n" + colors + base;
-        } else {
-            const size_t next = base.find("\n[", gc + 1);
-            out = base.substr(0, gc) + colors + (next == std::string::npos ? "" : base.substr(next + 1));
-        }
+            "link.color=" + c("sapphire", accent.c_str()) + "\nlink.visited.color=" + c("mauve", accent.c_str()) + "\n";
         write_file(home + "/.config/Kvantum/b1air/b1air.kvconfig", out);
     }
     set_ini_keys(home + "/.config/Kvantum/kvantum.kvconfig", {{"theme", kvTheme}});

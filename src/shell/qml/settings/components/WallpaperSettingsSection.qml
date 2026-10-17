@@ -41,7 +41,8 @@ ColumnLayout {
     function categoryLabel(c) {
         if (c === "") return I18n.tr("Other");
         const known = { Mountains: I18n.tr("Mountains"), Water: I18n.tr("Water"), Nature: I18n.tr("Nature"),
-                        Forest: I18n.tr("Forest"), Art: I18n.tr("Art"), City: I18n.tr("City"), Sky: I18n.tr("Sky") };
+                        Forest: I18n.tr("Forest"), Art: I18n.tr("Art"), City: I18n.tr("City"), Sky: I18n.tr("Sky"),
+                        Abstract: I18n.tr("Abstract") };
         return known[c] || c;
     }
     property string activeWallpaper: ""

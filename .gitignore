@@ -26,3 +26,5 @@ packaging/arch/*/*.pkg.tar.*
 packaging/arch/b1air-swayfx/swayfx/
 packaging/arch/b1air-swayfx/scenefx/
 packaging/arch/b1air-swayfx/wlroots/
+__pycache__/
+*.pyc

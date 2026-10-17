@@ -30,7 +30,6 @@
 
 namespace b1air {
 
-// Default Catppuccin Mocha Palette
 // All of it to the pty, which is non-blocking: a long paste fills its
 // buffer, and what did not fit was dropped (write's result went unread).
 // Waits for room, up to a second at a time, while the shell drains it.
@@ -50,20 +49,6 @@ static void writeAll(int fd, const char *data, size_t len) {
         }
     }
 }
-
-static const QColor MochaBase(30, 30, 46);         // #1e1e2e
-static const QColor MochaText(205, 214, 244);       // #cdd6f4
-static const QColor MochaSubtext0(166, 173, 200);   // #a6adc8
-static const QColor MochaSurface0(49, 50, 68);      // #313244
-static const QColor MochaSurface2(88, 91, 112);     // #585b70
-static const QColor MochaBlue(137, 180, 250);       // #89b4fa
-static const QColor MochaRed(243, 139, 168);        // #f38ba8
-static const QColor MochaGreen(166, 227, 161);      // #a6e3a1
-static const QColor MochaYellow(249, 226, 175);     // #f9e2af
-static const QColor MochaPeach(250, 179, 135);      // #fab387
-static const QColor MochaTeal(148, 226, 213);       // #94e2d5
-static const QColor MochaSapphire(116, 199, 236);   // #74c7ec
-static const QColor MochaLavender(180, 190, 254);   // #b4befe
 
 TerminalItem::TerminalItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
@@ -413,6 +398,27 @@ void TerminalItem::setForegroundColor(const QColor &c) {
     update();
 }
 
+QVariantList TerminalItem::ansiColors() const {
+    QVariantList out;
+    if (m_hasAnsi)
+        for (const QColor &c : m_ansi) out << c;
+    return out;
+}
+
+void TerminalItem::setAnsiColors(const QVariantList &colors) {
+    bool ok = colors.size() == 16;
+    QColor next[16];
+    for (int i = 0; ok && i < 16; ++i) {
+        next[i] = colors[i].value<QColor>();
+        ok = next[i].isValid();
+    }
+    if (ok == m_hasAnsi && (!ok || std::equal(next, next + 16, m_ansi))) return;
+    m_hasAnsi = ok;
+    if (ok) std::copy(next, next + 16, m_ansi);
+    emit paletteChanged();
+    update();
+}
+
 QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColor) const {
     if (VTERM_COLOR_IS_RGB(&color)) {
         return QColor(color.rgb.red, color.rgb.green, color.rgb.blue);
@@ -423,8 +429,7 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
         // Black is a grey that shows on the background (Breeze's equals
         // it, so text printed in black vanished), and the bright eight are
         // brighter than the normal eight, which Breeze's red and magenta
-        // were not. They were Catppuccin Mocha's pastels, a few shades from
-        // each other and from the default text.
+        // were not.
         static const QColor ansi16[16] = {
             QColor(0x4d, 0x53, 0x59), // 0: Black (a visible grey)
             QColor(0xed, 0x4b, 0x5b), // 1: Red
@@ -445,30 +450,32 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
         };
         // On a light background (Breeze or Adwaita Light) the set above is
         // too pale, and "white" — what programs use for plain bright text,
-        // fastfetch's values among them — vanished. Catppuccin Latte's
-        // deeper colours instead, with black and white swapped the way light
-        // terminal themes do, so "white" text is the dark one.
-        static const QColor latte16[16] = {
-            QColor(188, 192, 204), // 0: Black → Surface1 (the light end)
-            QColor(210, 15, 57),   // 1: Red
-            QColor(64, 160, 43),   // 2: Green
-            QColor(223, 142, 29),  // 3: Yellow
-            QColor(30, 102, 245),  // 4: Blue
-            QColor(234, 118, 203), // 5: Magenta
-            QColor(23, 146, 153),  // 6: Cyan
-            QColor(92, 95, 119),   // 7: White → Subtext1
-            QColor(140, 143, 161), // 8: Bright Black → Overlay1
-            QColor(210, 15, 57),   // 9: Bright Red
-            QColor(64, 160, 43),   // 10: Bright Green
-            QColor(223, 142, 29),  // 11: Bright Yellow
-            QColor(32, 159, 181),  // 12: Bright Blue → Sapphire
-            QColor(136, 57, 239),  // 13: Bright Magenta → Mauve
-            QColor(23, 146, 153),  // 14: Bright Cyan
-            QColor(76, 79, 105)    // 15: Bright White → Text
+        // fastfetch's values among them — vanished. The same hues deeper,
+        // with black and white swapped the way light terminal themes do, so
+        // "white" text is the dark one. (Only when TermWindow has not handed
+        // over the theme's own sixteen, which it does.)
+        static const QColor light16[16] = {
+            QColor(0xc4, 0xc8, 0xcd), // 0: Black → a light grey
+            QColor(0xc6, 0x28, 0x3a), // 1: Red
+            QColor(0x1f, 0x8f, 0x4e), // 2: Green
+            QColor(0xb8, 0x6e, 0x0a), // 3: Yellow
+            QColor(0x13, 0x6f, 0xc0), // 4: Blue
+            QColor(0x8a, 0x4f, 0xb5), // 5: Magenta
+            QColor(0x12, 0x86, 0x70), // 6: Cyan
+            QColor(0x4d, 0x53, 0x59), // 7: White → a dark grey
+            QColor(0x8a, 0x91, 0x98), // 8: Bright Black
+            QColor(0xa8, 0x1c, 0x2c), // 9: Bright Red
+            QColor(0x17, 0x73, 0x3e), // 10: Bright Green
+            QColor(0x95, 0x58, 0x05), // 11: Bright Yellow
+            QColor(0x0e, 0x5a, 0x9e), // 12: Bright Blue
+            QColor(0x6f, 0x3a, 0x96), // 13: Bright Magenta
+            QColor(0x0c, 0x6b, 0x59), // 14: Bright Cyan
+            QColor(0x23, 0x26, 0x29)  // 15: Bright White → the text
         };
         if (color.indexed.idx < 16) {
+            if (m_hasAnsi) return m_ansi[color.indexed.idx];
             const bool light = m_background.lightnessF() > 0.5;
-            return (light ? latte16 : ansi16)[color.indexed.idx];
+            return (light ? light16 : ansi16)[color.indexed.idx];
         }
     }
     return defaultColor;
@@ -579,7 +586,7 @@ void TerminalItem::paint(QPainter *painter) {
             // matters: it is how a terminal program says "this part", and
             // without it there was no difference between selected and not.
             // libvterm hands the default colour over as RGB with a flag on
-            // it — the Mocha text it was created with — so asking only
+            // it — the text colour it was created with — so asking only
             // IS_RGB drew "default" text light-on-light under a light theme.
             // The background already checked the flag; the foreground now too.
             QColor fg = VTERM_COLOR_IS_DEFAULT_FG(&cell.fg) ? m_foreground

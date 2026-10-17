@@ -12,7 +12,7 @@ if status is-interactive
     # ── Syntax highlighting ──────────────────────────────────────────────────
     # Named colours, not hex: they come from the terminal's palette, which
     # follows the desktop theme (Breeze or Adwaita, dark or light). Fixed
-    # Tokyo Night hex values were pale pastels on a light terminal.
+    # Hex values from one theme were pale pastels on a light terminal.
     set -g fish_color_normal normal
     set -g fish_color_command blue --bold
     set -g fish_color_keyword magenta

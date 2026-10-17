@@ -171,13 +171,23 @@ Window {
                             anchors.margins: Design.s(Design.space.sm)
                             focus: window.currentTabIndex === index
 
-                            // Follow the desktop theme. The terminal painted
-                            // itself Catppuccin from two hardcoded constants,
-                            // so the one window that fills its whole area with
-                            // a single colour was the one that ignored the
-                            // theme picker.
+                            // The desktop theme's colours.
                             backgroundColor: Qt.alpha(Design.ground, 0)
                             foregroundColor: Design.text
+                            // The sixteen from the theme's own colours, so a
+                            // program's red is the desktop's red. The bright
+                            // eight are a step away from the background: lighter
+                            // on a dark theme, deeper on a light one; black and
+                            // white are the theme's faint and plain text.
+                            ansiColors: {
+                                const dark = Design.darkTheme;
+                                const step = c => dark ? Qt.lighter(c, 1.25) : Qt.darker(c, 1.2);
+                                const base = [dark ? Design.textFaint : Design.textDim, Design.red, Design.green,
+                                              Design.yellow, Design.blue, Design.mauve, Design.teal,
+                                              dark ? Design.textDim : Design.text];
+                                return base.concat([dark ? Design.textDim : Design.textFaint].concat(
+                                                   base.slice(1, 7).map(step)).concat([Design.text]));
+                            }
 
                             Component.onCompleted: {
                                 var cmd = model.initialCmd || ((typeof InitialCommand !== "undefined" && index === 0) ? InitialCommand : "");

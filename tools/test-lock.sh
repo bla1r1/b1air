@@ -5,12 +5,12 @@
 #
 #   tools/test-lock.sh OUTDIR [WALLPAPER]
 #
-# Needs g++ and cairo's headers; the fonts are the desktop's (Inter, b1air
+# Needs g++ and the headers of cairo, libjpeg and libpng; the fonts are the desktop's (Inter, b1air
 # Symbols) where fontconfig finds them.
 set -euo pipefail
 OUT="${1:?usage: test-lock.sh OUTDIR [WALLPAPER]}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WALL="${2:-$ROOT/.wallpapers/Mountains/alpine-meadow-sunset.jpg}"
+WALL="${2:-$ROOT/.wallpapers/Mountains/dawn-ranges.jpg}"
 mkdir -p "$OUT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -67,8 +67,8 @@ int main(int argc, char** argv) {
 }
 CPP
 
-g++ -std=c++20 -O1 -w -I"$ROOT/src/lock" -I"$ROOT/src/bg" -isystem "$ROOT/src/third_party" \
-    $(pkg-config --cflags cairo) "$TMP/preview.cpp" "$ROOT/src/lock/look.cpp" "$ROOT/src/bg/image.cpp" \
-    $(pkg-config --libs cairo) $(pkg-config --exists libwebp && echo -DB1AIR_HAVE_WEBP $(pkg-config --libs libwebp)) \
+g++ -std=c++20 -O1 -w -I"$ROOT/src/lock" -I"$ROOT/src/bg" \
+    $(pkg-config --cflags cairo libjpeg libpng) "$TMP/preview.cpp" "$ROOT/src/lock/look.cpp" "$ROOT/src/bg/image.cpp" \
+    $(pkg-config --libs cairo libjpeg libpng) $(pkg-config --exists libwebp && echo -DB1AIR_HAVE_WEBP $(pkg-config --libs libwebp)) \
     -o "$TMP/preview"
 "$TMP/preview" "$OUT" "$WALL"

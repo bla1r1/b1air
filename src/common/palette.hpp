@@ -1,7 +1,7 @@
 #pragma once
 // The desktop theme's colours for native programs (cairo): what Settings →
 // Themes writes to ~/.config/b1air/theme.json for the whole suite, with
-// Catppuccin Mocha, the built-in palette, wherever the file says nothing.
+// Breeze Dark, the built-in palette, wherever the file says nothing.
 
 #include <cstdio>
 #include <fstream>

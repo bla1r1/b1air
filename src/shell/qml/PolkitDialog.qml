@@ -10,7 +10,7 @@ import "Services"
 // =============================================================================
 // Native Polkit Authentication Dialog
 //
-// Modal Tokyo Night privilege escalation dialog for root / administrative tasks.
+// Modal privilege escalation dialog for root / administrative tasks.
 // =============================================================================
 
 PanelWindow {

@@ -13,6 +13,7 @@ libopenssl-devel systemd-devel polkit-devel libarchive-devel polkit
 # Qt 6 development
 qt6-base-devel qt6-declarative-devel qt6-wayland-devel qt6-multimedia-devel
 qt6-svg-devel layer-shell-qt6-devel wayland-devel wayland-protocols-devel cairo-devel libxkbcommon-devel pam-devel
+sqlite3-devel nlohmann_json-devel libvterm-devel libjpeg8-devel libpng16-devel
 
 # Qt 6 runtime
 qt6-wayland libQt6Svg6 qt6-declarative-imports qt6-multimedia-imports qt6-virtualkeyboard-imports

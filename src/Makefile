@@ -126,9 +126,12 @@ install:
 	install -m 755 pam/b1air-empty-password $(DESTDIR)$(DATADIR)/b1air/pam/
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
-	# The icon font (tools/build-symbols.py builds it).
+	# The icon font (tools/build-symbols.py builds it), with the licences of
+	# the fonts its glyphs come from: the OFL asks that its text go with them.
 	mkdir -p $(DESTDIR)$(DATADIR)/fonts/b1air
-	install -m 644 ../.local/share/fonts/b1air-symbols.ttf $(DESTDIR)$(DATADIR)/fonts/b1air/
+	install -m 644 ../.local/share/fonts/b1air-symbols.ttf ../.local/share/fonts/LICENSE-OFL.txt \
+		../.local/share/fonts/LICENSE-nerd-fonts.md ../.local/share/fonts/LICENSE-lucide.txt \
+		$(DESTDIR)$(DATADIR)/fonts/b1air/
 	-[ -n "$(DESTDIR)" ] || fc-cache -f $(DATADIR)/fonts/b1air >/dev/null 2>&1
 	rm -rf $(DESTDIR)$(DATADIR)/icons/b1air-cursors
 	cp -a ../.local/share/icons/b1air-cursors $(DESTDIR)$(DATADIR)/icons/
@@ -168,6 +171,6 @@ clean:
 	rm -rf $(BUILD) $(TARGET_CONTROLLER)
 	# What the hand-written daemon build and the old per-shell CMake tree left.
 	rm -rf shell/build b1air-daemon b1air-polkit-agent b1air-secret-service \
-		daemon/*.o daemon/*.d third_party/sqlite/sqlite3.o
+		daemon/*.o daemon/*.d
 
 .PHONY: all suite controller daemon apps shell daemon-target shell-target install smoke clean

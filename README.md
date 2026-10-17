@@ -58,10 +58,12 @@ from GNOME — chosen for text, dim text and borders that are clearly apart
 rather than a few shades of one tint. A theme can also be made from the
 wallpaper, created, edited and shared as a file (Settings → Appearance).
 
-The wallpapers are sorted into folders — Art, Forest, Mountains, Nature, Sky,
-Water — which Settings → Wallpaper offers as categories; a folder of your own
-in `~/.wallpapers` becomes one too. A first login starts on the daytime
-clouds (`Sky/clouds-day.jpg`).
+The wallpapers are b1air's own, drawn by `tools/make-wallpapers.py` — skies,
+mountains, forests, water and soft abstract gradients — and GPL-2.0-only like
+the rest (`.wallpapers/CREDITS.md`). They are sorted into folders —
+Abstract, Forest, Mountains, Sky, Water — which Settings → Wallpaper
+offers as categories; a folder of your own in `~/.wallpapers` becomes one too.
+A first login starts on the daytime clouds (`Sky/clouds-day.jpg`).
 
 ---
 
@@ -308,8 +310,7 @@ DotsFiles/
 │   ├── shot/                  # b1air-shot: the Print overlay — region, record, QR
 │   ├── pam/                   # Fingerprint PAM file for the lock screens; the login screen's helper
 │   ├── compat/                # Quickshell stand-in that lets b1air-settings run on its own
-│   ├── cursors/               # Sources of the b1air cursor theme
-│   └── third_party/           # Vendored SQLite, nlohmann/json, libvterm
+│   └── cursors/               # Sources of the b1air cursor theme
 ├── usr/                       # System session files
 │   ├── bin/b1air-session      # Wayland session launch wrapper
 │   └── share/                 # SDDM greeter, wayland-sessions, and portal configs

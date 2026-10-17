@@ -1,9 +1,9 @@
 # b1air-lock — the session's lock screen, in place of swaylock (and of the
-# shell's QML one). Plain wayland-client with ext-session-lock-v1 (protocol/,
-# from wayland-protocols, MIT), cairo to draw, xkbcommon for the keys, PAM to
+# shell's QML one). Plain wayland-client with ext-session-lock-v1 (from the
+# wayland-protocols package), cairo to draw, xkbcommon for the keys, PAM to
 # check the password; b1air-bg's decoder for the wallpaper and b1air-core for
 # which wallpaper and which language.
-pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon)
+pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client wayland-cursor cairo xkbcommon libjpeg libpng)
 # PAM by its library and header, not pkg-config: Debian's pam.pc requires
 # audit.pc, which only libaudit-dev has.
 find_library(PAM_LIBRARY pam REQUIRED)
@@ -18,7 +18,8 @@ unset(CMAKE_REQUIRED_LIBRARIES)
 unset(CMAKE_REQUIRED_INCLUDES)
 find_program(LOCK_WAYLAND_SCANNER wayland-scanner REQUIRED)
 
-set(LOCK_XML ${CMAKE_CURRENT_SOURCE_DIR}/protocol/ext-session-lock-v1.xml)
+pkg_get_variable(LOCK_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+set(LOCK_XML ${LOCK_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml)
 set(LOCK_GEN ${CMAKE_CURRENT_BINARY_DIR}/protocol)
 file(MAKE_DIRECTORY ${LOCK_GEN})
 add_custom_command(
@@ -36,7 +37,6 @@ add_executable(b1air-lock
     ${LOCK_GEN}/ext-session-lock-v1-client-protocol.h
     ${LOCK_GEN}/ext-session-lock-v1-protocol.c)
 target_include_directories(b1air-lock PRIVATE ${LOCK_GEN} ${PROJECT_SOURCE_DIR}/bg ${PAM_INCLUDE_DIR})
-target_include_directories(b1air-lock SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
 target_link_libraries(b1air-lock PRIVATE b1air-core PkgConfig::LOCK_DEPS ${PAM_LIBRARY} m)
 pkg_check_modules(LOCK_WEBP IMPORTED_TARGET libwebp)
 if(LOCK_WEBP_FOUND)
@@ -47,7 +47,4 @@ if(B1AIR_HAVE_PAM_CONFDIR)
     target_compile_definitions(b1air-lock PRIVATE B1AIR_HAVE_PAM_CONFDIR)
 endif()
 b1air_warnings(b1air-lock)
-# As in bg/: stb_image is not warning-clean under -Wextra.
-set_source_files_properties(${PROJECT_SOURCE_DIR}/bg/image.cpp TARGET_DIRECTORY b1air-lock
-    PROPERTIES COMPILE_OPTIONS "-Wno-unused-function;-Wno-missing-field-initializers")
 install(TARGETS b1air-lock RUNTIME DESTINATION bin)
