@@ -858,7 +858,7 @@ PopupShell {
             Slider {
                 visible: Power.hasBacklight
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: Power.brightness
                 icon: "\u{f00df}"
                 label: I18n.tr("Brightness")
@@ -874,7 +874,7 @@ PopupShell {
 
                 Slider {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(Design.size.ctl)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     value: Audio.volumePercent
                     muted: Audio.muted
                     icon: Audio.muted ? "\u{f075f}" : "\u{f057f}"
@@ -885,8 +885,8 @@ PopupShell {
                 }
 
                 Rectangle {
-                    Layout.preferredWidth: Design.s(Design.size.ctl)
-                    Layout.preferredHeight: Design.s(Design.size.ctl)
+                    Layout.preferredWidth: Design.s(Design.size.md)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
                     color: soundBtnMa.containsMouse ? Design.glassHover : Design.glassCard
                     border.color: Design.glassBorder
@@ -1104,8 +1104,9 @@ PopupShell {
             readonly property bool tight: lockBtn.snugWidth + sleepBtn.snugWidth + rebootBtn.snugWidth
                                           + offBtn.snugWidth + spacing * 3 > width
 
-            ActionButton {
+            Button {
                 id: lockBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f033e}"
@@ -1113,8 +1114,9 @@ PopupShell {
                 onActivated: Daemon.lock()
             }
 
-            ActionButton {
+            Button {
                 id: sleepBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f04b2}"
@@ -1122,26 +1124,26 @@ PopupShell {
                 onActivated: Daemon.power("suspend")
             }
 
-            ActionButton {
+            Button {
                 id: rebootBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f0709}"
                 label: I18n.tr("Reboot")
                 // Red only on the "Sure?" step: until then these read as
                 // the actions beside them, as in the session menu.
-                tone: Design.danger
                 destructive: true
                 onActivated: Daemon.power("reboot")
             }
 
-            ActionButton {
+            Button {
                 id: offBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f0425}"
                 label: I18n.tr("Shut Down")
-                tone: Design.danger
                 destructive: true
                 onActivated: Daemon.power("shutdown")
             }

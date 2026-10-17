@@ -6,7 +6,7 @@ import QtQuick.Layouts
 Rectangle {
     id: root
     default property alias content: row.data
-    implicitHeight: Design.s(32)
+    implicitHeight: Design.s(Design.size.md)
     // The window's own colour shows through, rounded corners and all.
     color: "transparent"
     Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }

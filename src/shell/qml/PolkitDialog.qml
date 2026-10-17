@@ -254,13 +254,13 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Design.s(10)
 
-                ActionButton {
+                Button {
                     label: I18n.tr("Cancel")
                     Layout.fillWidth: true
                     onActivated: polkitWin.cancelAuth()
                 }
 
-                ActionButton {
+                Button {
                     label: polkitWin.isSubmitting ? I18n.tr("Authenticating...") : I18n.tr("Authenticate")
                     Layout.fillWidth: true
                     enabled: pwdInput.text.length > 0 && !polkitWin.isSubmitting

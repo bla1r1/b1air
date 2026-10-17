@@ -979,7 +979,7 @@ PopupShell {
 
                         Text { text: I18n.tr("Equalizer"); color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.weight: Design.weight.semibold; Layout.fillWidth: true }
                         
-                        // Ui/ActionButton, like every other button in the
+                        // Ui/Button, like every other button in the
                         // shell. This was a bespoke rectangle with its own
                         // radius, a mauve fill and a drop shadow, sitting
                         // beside a bare word for the current preset — so the
@@ -992,7 +992,7 @@ PopupShell {
                             Layout.rightMargin: Design.s(Design.space.sm)
                         }
 
-                        ActionButton {
+                        Button {
                             Layout.fillWidth: false
                             enabled: root.eqData.pending
                             icon: "\u{f012c}"
@@ -1442,7 +1442,7 @@ PopupShell {
     // is made of. This was a hand-built rectangle with its own radius, its own
     // mono type, its own 1.05 hover pop and Design.accent for the selected
     // state — eight buttons that matched nothing else on screen.
-    component PresetButton : Pill {
+    component PresetButton : Chip {
         property string name: ""
         Layout.fillWidth: true
         label: I18n.tr(name)

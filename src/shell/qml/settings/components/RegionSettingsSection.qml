@@ -147,39 +147,45 @@ ColumnLayout {
     readonly property var installedChoices: section.installed.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
 
     // ── Language ─────────────────────────────────────────────────────────────
-    // Rows with a list each, as Windows and KDE lay it out. These were three
-    // cards of pills, one per installed locale every time.
-    Card {
+    SettingsGroup {
         title: I18n.tr("Language")
-        subtitle: I18n.tr("What this desktop and other programs speak")
-        icon: "\u{f05ca}"
+        description: I18n.tr("What this desktop and other programs speak")
 
-        FormRow {
-            title: I18n.tr("Interface language")
-            subtitle: I18n.tr("Menus, settings and apps of this desktop; the shell restarts to switch")
-            Dropdown {
+        SettingsRow {
+            label: I18n.tr("Interface language")
+            note: I18n.tr("The shell restarts to switch")
+
+            SegmentedControl {
+                size: "sm"
                 model: [
-                    { id: "auto", label: I18n.tr("Like the system") },
-                    { id: "en",   label: "English",    detail: "en" },
-                    { id: "uk",   label: "Українська", detail: "uk" },
-                    { id: "ru",   label: "Русский",    detail: "ru" }
+                    { id: "auto", label: I18n.tr("Auto") },
+                    { id: "en",   label: "EN" },
+                    { id: "uk",   label: "UK" },
+                    { id: "ru",   label: "RU" }
                 ]
                 current: Settings.uiLanguage || "auto"
-                onPicked: id => section.setUiLanguage(id)
+                onPicked: function(id) { section.setUiLanguage(id); }
             }
         }
+
         Label {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
             readonly property string sys: I18n.systemLanguage
             visible: (Settings.uiLanguage || "auto") === "auto" && I18n.translated.indexOf(sys) < 0 && sys !== "en"
             text: I18n.tr("The system is in %1, which has no translation here: English is used, dates included.", Qt.locale(sys).nativeLanguageName || sys)
-            role: "caption"; dim: true; wrapMode: Text.WordWrap
+            role: "footnote"
+            dim: true
+            wrapMode: Text.WordWrap
         }
 
-        FormRow {
-            title: I18n.tr("System language")
-            subtitle: I18n.tr("What other programs speak: the browser, GTK and Qt apps. From the next login")
-            Dropdown {
+        SettingsRow {
+            label: I18n.tr("System language")
+            note: I18n.tr("What other programs speak. From the next login")
+
+            Select {
                 model: [{
                     id: "__system",
                     label: section.defaultLang
@@ -187,66 +193,88 @@ ColumnLayout {
                         : I18n.tr("As the system")
                 }].concat(section.installedChoices)
                 current: section.systemLang === "" ? "__system" : section.systemLang
-                onPicked: id => section.setSystemLanguage(id)
+                onPicked: function(id) { section.setSystemLanguage(id); }
             }
         }
 
-        FormRow {
-            title: I18n.tr("Add a language")
-            subtitle: I18n.tr("A language has to be added to the system before it can be picked above. Needs the administrator password")
+        SettingsRow {
             visible: section.missing.length > 0 || section.adding !== ""
-            Dropdown {
+            label: I18n.tr("Add a language")
+            note: I18n.tr("Needs administrator password")
+
+            Select {
                 model: section.missing.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
                 current: ""
                 placeholder: section.adding !== ""
                     ? I18n.tr("Adding %1…", section.nameOf(section.adding))
                     : I18n.tr("Choose a language…")
                 enabled: section.adding === ""
-                onPicked: id => section.add(id)
+                onPicked: function(id) { section.add(id); }
             }
-            Label {
-                visible: section.addError !== "" && section.adding === ""
-                Layout.fillWidth: true
-                text: section.addError
-                color: Design.danger
-                role: "caption"; wrapMode: Text.WordWrap
-            }
+        }
+
+        Label {
+            visible: section.addError !== "" && section.adding === ""
+            Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            text: section.addError
+            color: Design.danger
+            role: "footnote"
+            wrapMode: Text.WordWrap
         }
     }
 
     // ── Region ───────────────────────────────────────────────────────────────
-    Card {
-        id: formatsCard
+    SettingsGroup {
+        id: formatsGroup
         title: I18n.tr("Region")
-        subtitle: I18n.tr("Dates, times, numbers, money and units, here and in other programs")
-        icon: "\u{f00f0}"
+        description: I18n.tr("Dates, times, numbers, money and units")
 
-        FormRow {
-            title: I18n.tr("Formats")
-            subtitle: I18n.tr("Independent of the language: English menus with German dates is fine")
-            Dropdown {
+        SettingsRow {
+            label: I18n.tr("Formats")
+            note: I18n.tr("Independent of interface language")
+
+            Select {
                 model: [{ id: "__interface", label: I18n.tr("Like the interface language") }].concat(section.installedChoices)
                 current: (Settings.formatsLocale || "") === "" ? "__interface" : Settings.formatsLocale
-                onPicked: id => section.setFormats(id)
+                onPicked: function(id) { section.setFormats(id); }
             }
         }
 
-        // What it looks like, in the formats picked (before the restart too).
-        readonly property var preview: Qt.locale(Settings.formatsLocale || I18n.locale.name)
-        readonly property var now: new Date()
-        GridLayout {
+        // Live preview of formats
+        Item {
+            id: previewBox
             Layout.fillWidth: true
-            columns: 2
-            columnSpacing: Design.s(Design.space.lg)
-            rowSpacing: Design.s(2)
-            Label { text: I18n.tr("Date"); role: "caption"; dim: true }
-            Label { text: formatsCard.preview.toString(formatsCard.now, formatsCard.preview.dateFormat(Locale.LongFormat)); role: "caption" }
-            Label { text: I18n.tr("Short date and time"); role: "caption"; dim: true }
-            Label { text: formatsCard.preview.toString(formatsCard.now, formatsCard.preview.dateTimeFormat(Locale.ShortFormat)); role: "caption" }
-            Label { text: I18n.tr("Number"); role: "caption"; dim: true }
-            Label { text: Number(1234567.89).toLocaleString(formatsCard.preview, "f", 2); role: "caption" }
-            Label { text: I18n.tr("Money"); role: "caption"; dim: true }
-            Label { text: Number(1234.5).toLocaleCurrencyString(formatsCard.preview); role: "caption" }
+            implicitHeight: previewGrid.implicitHeight + Design.s(Design.space.md) * 2
+
+            readonly property var preview: Qt.locale(Settings.formatsLocale || I18n.locale.name)
+            readonly property var now: new Date()
+
+            GridLayout {
+                id: previewGrid
+                anchors.fill: parent
+                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
+                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
+                anchors.topMargin: Design.s(Design.space.sm)
+                anchors.bottomMargin: Design.s(Design.space.sm)
+                columns: 2
+                columnSpacing: Design.s(Design.space.lg)
+                rowSpacing: Design.s(Design.space.xs)
+
+                Label { text: I18n.tr("Date"); role: "footnote"; dim: true }
+                Label { text: previewBox.preview.toString(previewBox.now, previewBox.preview.dateFormat(Locale.LongFormat)); role: "footnote" }
+
+                Label { text: I18n.tr("Short date and time"); role: "footnote"; dim: true }
+                Label { text: previewBox.preview.toString(previewBox.now, previewBox.preview.dateTimeFormat(Locale.ShortFormat)); role: "footnote" }
+
+                Label { text: I18n.tr("Number"); role: "footnote"; dim: true }
+                Label { text: Number(1234567.89).toLocaleString(previewBox.preview, "f", 2); role: "footnote"; tabular: true }
+
+                Label { text: I18n.tr("Money"); role: "footnote"; dim: true }
+                Label { text: Number(1234.5).toLocaleCurrencyString(previewBox.preview); role: "footnote"; tabular: true }
+            }
         }
     }
 }

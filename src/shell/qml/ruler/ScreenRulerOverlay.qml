@@ -178,7 +178,7 @@ PopupShell {
 
             Item { Layout.fillWidth: true }
 
-            ActionButton {
+            Button {
                 icon: "\u{f0c5}"
                 label: I18n.tr("Copy Dimensions")
                 onActivated: root.copyDimensions()

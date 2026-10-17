@@ -56,11 +56,11 @@ ScrollBar {
     // across its padding as well, and grows while the pointer is on it. At
     // 4px and nothing around it, dragging it meant finding a 4px target.
     hoverEnabled: true
-    padding: Design.s(3)
+    padding: Design.s(Design.space.xxs)
     minimumSize: 0.08
 
     contentItem: Rectangle {
-        implicitWidth: root.hovered || root.pressed ? Design.s(8) : Design.s(4)
+        implicitWidth: root.hovered || root.pressed ? Design.s(Design.space.sm) : Design.s(Design.space.xs)
         implicitHeight: implicitWidth
         radius: width / 2
         color: root.pressed ? Design.textDim : Design.textFaint

@@ -88,7 +88,7 @@ PopupShell {
                     // and grow on hover; the colour said nothing about the
                     // action and the red one read as an error.
                     color: tile.isHovered ? Design.tint(Design.accent, 0.22) : Design.sunken
-                    border.color: tile.isHovered ? Design.accent : Design.raised
+                    border.color: tile.isHovered ? Design.accent : Design.glassBorder
                     border.width: 1
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -102,7 +102,7 @@ PopupShell {
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             width: Design.s(22); height: Design.s(22); radius: Design.s(11)
-                            color: Design.raised
+                            color: Design.well
 
                             Label {
                                 anchors.centerIn: parent
@@ -143,7 +143,7 @@ PopupShell {
             Layout.alignment: Qt.AlignHCenter
             spacing: Design.s(Design.space.sm)
 
-            Pill {
+            Button {
                 label: I18n.tr("Cancel (Esc)")
                 icon: "\u{f00d}"
                 onClicked: window.close()

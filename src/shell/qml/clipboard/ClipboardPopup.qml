@@ -81,7 +81,7 @@ PopupShell {
 
             Item { Layout.fillWidth: true }
 
-            ActionButton {
+            Button {
                 visible: Clipboard.items.count > 0
                 icon: "\u{f0156}"
                 label: I18n.tr("Clear All")
@@ -270,7 +270,7 @@ PopupShell {
         id: clearConfirm
         title: I18n.tr("Clear clipboard history?")
         message: I18n.tr("All unpinned clipboard entries will be removed.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: Clipboard.clearHistory()
         buttonText: ({ [Dialog.Ok]: I18n.tr("Clear") })

@@ -373,7 +373,7 @@ PopupShell {
 
                 Repeater {
                     model: window.categories
-                    delegate: Pill {
+                    delegate: Chip {
                         required property var modelData
                         label: I18n.tr(modelData.key) + "  " + modelData.count
                         active: window.activeCategory === modelData.key

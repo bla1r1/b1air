@@ -33,7 +33,7 @@ ColumnLayout {
     readonly property var available: allDevices.filter(d => !d.paired)
 
     // ── 1. Bluetooth Adapter Card ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Bluetooth")
         subtitle: Network.bluetooth.power === "on"
             ? (Network.bluetooth.connected ? I18n.tr("Connected to %1", Network.bluetooth.connected.name) : I18n.tr("Bluetooth is on, ready to connect"))
@@ -41,22 +41,20 @@ ColumnLayout {
         icon: "\u{f00af}"
 
         // Master Switch
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            Toggle {
-                label: I18n.tr("Bluetooth")
-                subtitle: I18n.tr("Turn the adapter on to find, pair and connect devices")
-                checked: Network.bluetooth.power === "on"
-                onToggled: Network.toggleBluetooth()
-            }
+        SwitchRow {
+            title: I18n.tr("Bluetooth")
+            note: I18n.tr("Turn the adapter on to find, pair and connect devices")
+            checked: Network.bluetooth.power === "on"
+            onToggled: Network.toggleBluetooth()
         }
 
         // Adapter Info & Discoverability
         Rectangle {
             visible: Network.bluetooth.power === "on"
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.sm)
 
             // Its contents are anchored, and anchored children give a parent no
             // implicit height, so this box measured zero and the "Paired
@@ -114,10 +112,11 @@ ColumnLayout {
                         }
                     }
 
-                    Pill {
-                        label: Network.scanning ? I18n.tr("Scanning...") : I18n.tr("Scan for devices")
+                    Button {
+                        size: "sm"
+                        variant: Network.scanning ? "primary" : "secondary"
                         icon: Network.scanning ? "\u{f0110}" : "\u{f002f}"
-                        active: Network.scanning
+                        text: Network.scanning ? I18n.tr("Scanning...") : I18n.tr("Scan for devices")
                         onClicked: {
                             if (Network.scanning) Network.stopScan();
                             else Network.startScan();
@@ -129,7 +128,7 @@ ColumnLayout {
     }
 
     // ── 2. Paired Devices Card ───────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: Network.bluetooth.power === "on"
         title: I18n.tr("Paired devices")
         subtitle: I18n.tr("Devices trusted by this machine")
@@ -141,6 +140,8 @@ ColumnLayout {
             RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
+                Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+                Layout.rightMargin: Design.s(Design.space.rowPaddingX)
                 spacing: Design.s(Design.space.sm)
 
                 Icon {
@@ -170,21 +171,27 @@ ColumnLayout {
                     }
                 }
 
-                Pill {
+                Button {
                     visible: !modelData.connected
-                    label: I18n.tr("Connect")
+                    size: "sm"
+                    variant: "primary"
+                    text: I18n.tr("Connect")
                     onClicked: Network.connectDevice(modelData.mac)
                 }
 
-                Pill {
+                Button {
                     visible: modelData.connected
-                    label: I18n.tr("Disconnect")
+                    size: "sm"
+                    variant: "secondary"
+                    text: I18n.tr("Disconnect")
                     onClicked: Network.disconnectDevice(modelData.mac)
                 }
 
-                Pill {
-                    label: I18n.tr("Forget")
+                Button {
+                    size: "sm"
+                    variant: "ghost"
                     icon: "\u{f01b4}"
+                    text: I18n.tr("Forget")
                     onClicked: Network.forgetDevice(modelData.mac)
                 }
             }
@@ -192,6 +199,9 @@ ColumnLayout {
 
         EmptyState {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.sm)
             visible: section.paired.length === 0
             icon: "\u{f00b0}"
             title: I18n.tr("Nothing paired")
@@ -200,7 +210,7 @@ ColumnLayout {
     }
 
     // ── 3. Available Devices Card ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: Network.bluetooth.power === "on" && (Network.scanning || section.available.length > 0)
         title: I18n.tr("Available devices")
         subtitle: I18n.tr("Discovered Bluetooth accessories in range")
@@ -212,6 +222,8 @@ ColumnLayout {
             RowLayout {
                 required property var modelData
                 Layout.fillWidth: true
+                Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+                Layout.rightMargin: Design.s(Design.space.rowPaddingX)
                 spacing: Design.s(Design.space.sm)
 
                 Icon {
@@ -238,9 +250,11 @@ ColumnLayout {
                     }
                 }
 
-                Pill {
-                    label: I18n.tr("Pair")
+                Button {
+                    size: "sm"
+                    variant: "primary"
                     icon: "\u{f00af}"
+                    text: I18n.tr("Pair")
                     onClicked: Network.pairDevice(modelData.mac)
                 }
             }
@@ -248,6 +262,9 @@ ColumnLayout {
 
         EmptyState {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.sm)
             visible: section.available.length === 0
             icon: "\u{f002f}"
             title: I18n.tr("Scanning for accessories...")

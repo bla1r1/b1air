@@ -225,7 +225,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.base
+        color: Design.surface
         clip: true
 
         ColumnLayout {
@@ -238,13 +238,15 @@ Window {
             AppToolbar {
                 Layout.fillWidth: true
 
-                BarGroup {
-                    BarButton { glyph: "\u{f0128}"; label: I18n.tr("Overview"); tip: I18n.tr("Ctrl+1"); checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
-                    BarButton { glyph: "\u{f0279}"; label: I18n.tr("Processes"); tip: I18n.tr("Ctrl+2"); checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
+                    Button { variant: "secondary"; icon: "\u{f0128}"; label: I18n.tr("Overview"); tip: I18n.tr("Ctrl+1"); checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
+                    Button { variant: "secondary"; icon: "\u{f0279}"; label: I18n.tr("Processes"); tip: I18n.tr("Ctrl+2"); checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
                 }
                 Item { Layout.fillWidth: true }
-                BarGroup {
-                    BarButton { glyph: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
                 }
             }
 
@@ -511,13 +513,16 @@ Window {
                     }
                     Item { Layout.fillWidth: true }
                     Label { text: I18n.tr("Sort by"); role: "caption"; color: Design.textFaint }
-                    BarGroup {
-                        BarButton {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button {
+                            variant: "secondary"
                             label: "CPU"
                             checked: window.procSortBy === "cpu"
                             onClicked: { window.procSortBy = "cpu"; if (isNative) MonitorBackend.setProcessSort("cpu"); }
                         }
-                        BarButton {
+                        Button {
+                            variant: "secondary"
                             label: "RAM"
                             checked: window.procSortBy === "mem"
                             onClicked: { window.procSortBy = "mem"; if (isNative) MonitorBackend.setProcessSort("mem"); }
@@ -530,7 +535,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: Design.s(30)
-                color: Design.crust
+                color: Design.ground
 
                 RowLayout {
                     anchors.fill: parent
@@ -717,7 +722,7 @@ Window {
                                     anchors.centerIn: parent
                                     text: "\u{f057}" // skull / force kill
                                     font.family: Design.font.icon
-                                    color: forceHover.containsMouse ? Design.crust : Design.textDim
+                                    color: forceHover.containsMouse ? Design.ground : Design.textDim
                                     font.pixelSize: Design.s(11)
                                 }
 
@@ -771,7 +776,7 @@ Window {
         message: force
             ? I18n.tr("Process %1 is stopped at once (SIGKILL). Anything unsaved in it is lost.", pid)
             : I18n.tr("Process %1 is asked to quit (SIGTERM).", pid)
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: Dialog.Cancel | Dialog.Ok
         buttonText: ({ [Dialog.Ok]: I18n.tr("End Process") })
         onAccepted: MonitorBackend.killProcess(pid, force)

@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
+import "."
 
 // =============================================================================
 // First-run setup: the settings page called "setup".
@@ -281,7 +282,7 @@ Item {
                     active: wizard.step.id === "news"
                     visible: active
                     sourceComponent: Component {
-                        Card {
+                        SettingsGroup {
                             width: parent ? parent.width : 0
                             title: I18n.tr("In Settings")
                             icon: "\u{f0394}"
@@ -296,7 +297,7 @@ Item {
                                         text: I18n.tr(modelData.text)
                                         wrapMode: Text.WordWrap
                                     }
-                                    Pill {
+                                    Button {
                                         visible: !!modelData.page
                                         label: I18n.tr("Open")
                                         icon: "\u{f0054}"
@@ -315,19 +316,19 @@ Item {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Pill {
+            Button {
                 label: I18n.tr("Skip setup")
                 onClicked: wizard.finish()
             }
             Item { Layout.fillWidth: true }
-            Pill {
+            Button {
                 visible: wizard.index > 0
                 label: I18n.tr("Back")
                 icon: "\u{f004d}"
                 onClicked: wizard.index--
             }
-            Pill {
-                active: true
+            Button {
+                variant: "primary"
                 label: wizard.last ? I18n.tr("Finish") : I18n.tr("Next")
                 icon: wizard.last ? "\u{f012c}" : "\u{f0054}"
                 onClicked: {

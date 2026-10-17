@@ -86,34 +86,35 @@ Item {
         onStopRequested: Devices.cancelTask(pane.id)
 
         actions: [
-            Pill {
+            Chip {
                 visible: pane.state === "trust"
                 active: true
                 icon: "\u{f0565}"
                 label: I18n.tr("Trust")
                 onClicked: Devices.pair(pane.id)
             },
-            BarButton {
-                glyph: "\u{f01ea}"
+            Button {
+                variant: "secondary"
+                icon: "\u{f01ea}"
                 label: I18n.tr("Eject")
                 enabled: !pane.task
                 onClicked: Devices.eject(pane.id)
             }
         ]
         footer: [
-            BarButton {
+            Button {
+                variant: (!pane.iphone) ? "primary" : "secondary"
                 visible: pane.ready
-                glyph: "\u{f01da}"
+                icon: "\u{f01da}"
                 label: I18n.tr("Import Photos")
-                primary: !pane.iphone
                 enabled: !pane.task
                 onClicked: Devices.importPhotos(pane.id)
             },
-            BarButton {
+            Button {
+                variant: "primary"
                 visible: pane.ready && pane.iphone
-                glyph: "\u{f006f}"
+                icon: "\u{f006f}"
                 label: I18n.tr("Back Up Now")
-                primary: true
                 enabled: !pane.task
                 onClicked: Devices.backup(pane.id)
             }
@@ -183,13 +184,18 @@ Item {
                         ? I18n.tr("Last backup to this computer: %1", I18n.date(new Date(pane.device.lastBackup), "d MMMM yyyy, HH:mm"))
                         : I18n.tr("Never backed up to this computer")
                 }
-                ButtonRow {
-                    BarButton {
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        variant: "secondary"
                         visible: !!pane.device.lastBackup
                         label: I18n.tr("Show Backups")
                         onClicked: pane.openFolder(pane.device.backupDir)
                     }
-                    BarButton {
+                    Button {
+                        variant: "secondary"
                         label: I18n.tr("Back Up Now")
                         enabled: !pane.task
                         onClicked: Devices.backup(pane.id)
@@ -232,9 +238,12 @@ Item {
                     dim: true
                     text: I18n.tr("An iPhone takes photos as HEIC; they open here like any other picture.")
                 }
-                ButtonRow {
-                    BarButton { label: I18n.tr("Show Imported"); onClicked: pane.openFolder(FilesBackend.homePath + "/Pictures/" + (pane.device.name || "")) }
-                    BarButton { label: I18n.tr("Import Photos"); enabled: !pane.task; onClicked: Devices.importPhotos(pane.id) }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button { variant: "secondary"; label: I18n.tr("Show Imported"); onClicked: pane.openFolder(FilesBackend.homePath + "/Pictures/" + (pane.device.name || "")) }
+                    Button { variant: "secondary"; label: I18n.tr("Import Photos"); enabled: !pane.task; onClicked: Devices.importPhotos(pane.id) }
                 }
             }
             Divider {}
@@ -246,8 +255,11 @@ Item {
                     dim: true
                     text: I18n.tr("Its camera folder, as it is: to pick a few by hand, or copy some back.")
                 }
-                ButtonRow {
-                    BarButton { label: I18n.tr("Browse"); onClicked: Devices.browse(pane.id, "media") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button { variant: "secondary"; label: I18n.tr("Browse"); onClicked: Devices.browse(pane.id, "media") }
                 }
             }
         }

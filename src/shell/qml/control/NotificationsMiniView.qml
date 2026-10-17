@@ -28,7 +28,7 @@ MiniView {
     Component.onCompleted: Notifications.acquireList()
     Component.onDestruction: Notifications.releaseList()
 
-    trailing: ActionButton {
+    trailing: Button {
         visible: Notifications.history.count > 0
         icon: "\u{f0156}"
         label: I18n.tr("Clear")
@@ -41,10 +41,10 @@ MiniView {
         spacing: Design.s(Design.space.md)
 
         // ── DND toggle ───────────────────────────────────────────────────────
-        Card {
+        SettingsGroup {
             Layout.fillWidth: true
 
-            Toggle {
+            SwitchRow {
                 label: I18n.tr("Do Not Disturb")
                 subtitle: I18n.tr("Silence popups and store them in history")
                 checked: Notifications.dnd
@@ -114,7 +114,7 @@ MiniView {
                         dim: true
                         elide: Text.ElideRight
                     }
-                    Pill {
+                    Button {
                         visible: group.open
                         label: I18n.tr("Show less")
                         onClicked: page.toggleGroup(group.modelData.app)
@@ -247,7 +247,7 @@ MiniView {
                                                  && cell.modelData.obj.actions.length > 0
                                         Repeater {
                                             model: cell.modelData.obj && cell.modelData.obj.actions ? cell.modelData.obj.actions : []
-                                            delegate: Pill {
+                                            delegate: Button {
                                                 required property var modelData
                                                 label: modelData.text || I18n.tr("Open")
                                                 onClicked: if (typeof modelData.invoke === "function") modelData.invoke()

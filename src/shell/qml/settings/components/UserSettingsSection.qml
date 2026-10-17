@@ -94,7 +94,7 @@ ColumnLayout {
     // The person, not the account record: the picture, the name and the
     // login. The UID and the home directory that were the subtitle here are
     // nothing anyone changes from this page.
-    Card {
+    SettingsGroup {
         visible: section.part === "" || section.part === "account"
         RowLayout {
             Layout.fillWidth: true
@@ -154,14 +154,14 @@ ColumnLayout {
                     Layout.topMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.sm)
 
-                    ActionButton {
+                    Button {
                         Layout.fillWidth: false
                         icon: "\u{f03e}"
                         label: I18n.tr("Change Avatar")
                         onActivated: avatarFileDialog.open()
                     }
 
-                    ActionButton {
+                    Button {
                         Layout.fillWidth: false
                         icon: "\u{f084}"
                         label: I18n.tr("Change Password")
@@ -172,7 +172,7 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         // No reader that fprintd can drive: no card, rather than one saying
         // what is missing on a machine that has nothing to put a finger on.
         visible: (section.part === "lock" || section.part === "fingerprint") && section.fp.available
@@ -202,11 +202,11 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Icon { text: "\u{f0237}"; color: Design.textDim }
                 Label { text: I18n.tr("Fingerprint %1", index + 1); Layout.fillWidth: true }
-                ActionButton {
+                Button {
                     icon: "\u{f0a7a}"
                     label: I18n.tr("Remove")
                     destructive: true
-                    confirmLabel: I18n.tr("Remove?")
+                    confirmText: I18n.tr("Remove?")
                     onActivated: {
                         fpDelete.command = [section.daemonCmd, "fingerprint", "delete", modelData];
                         fpDelete.running = true;
@@ -226,7 +226,7 @@ ColumnLayout {
             visible: section.fp.available
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
-            ActionButton {
+            Button {
                 visible: !section.fpEnrolling && section.fpFinger !== ""
                 icon: "\u{f0415}"
                 label: I18n.tr("Add a fingerprint")
@@ -239,13 +239,13 @@ ColumnLayout {
                     fpEnroll.running = true;
                 }
             }
-            ActionButton {
+            Button {
                 visible: section.fpEnrolling
                 icon: "\u{f0156}"
                 label: I18n.tr("Cancel")
                 onActivated: fpEnroll.running = false
             }
-            ActionButton {
+            Button {
                 visible: !section.fpEnrolling && (section.fp.enrolled || []).length > 0
                 icon: "\u{f0237}"
                 label: section.fpTest === "listening" ? I18n.tr("Touch the reader…") : I18n.tr("Test")
@@ -289,7 +289,7 @@ ColumnLayout {
             }
         }
 
-        Toggle {
+        SwitchRow {
             visible: section.fp.available
             label: I18n.tr("Unlock with a fingerprint")
             subtitle: I18n.tr("On the lock screen, a touch on the reader works as well as the password")
@@ -299,7 +299,7 @@ ColumnLayout {
 
         // The login screen: a system file (/etc/pam.d/sddm, and only that
         // one), so it asks for the administrator password.
-        Toggle {
+        SwitchRow {
             visible: section.fp.available && section.fpLogin.supported === true
             enabled: !fpLoginSet.running
             label: I18n.tr("Fingerprint at the login screen")
@@ -313,7 +313,7 @@ ColumnLayout {
     }
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === "" || section.part === "account"
         title: I18n.tr("Account Details & Shell")
         subtitle: I18n.tr("System user configurations and login preferences")
@@ -355,7 +355,7 @@ ColumnLayout {
                     }
                 }
 
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f00c}"
                     label: I18n.tr("Save")
@@ -399,7 +399,7 @@ ColumnLayout {
                     Repeater {
                         model: section.availableShells
 
-                        Pill {
+                        Chip {
                             label: modelData.label
                             active: section.userInfo.shell && (section.userInfo.shell === modelData.path || section.userInfo.shell.endsWith("/" + modelData.label))
                             onClicked: {
@@ -438,10 +438,10 @@ ColumnLayout {
     // passkey get a QR code, and the phone that scans it signs in. On by
     // default, as on other desktops; only where there is Bluetooth, which
     // the phone needs to show it is nearby.
-    Card {
+    SettingsGroup {
         visible: section.part === "lock" && !!Network.adapter
         title: I18n.tr("Passkeys")
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Sign in to websites with your phone")
             note: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
             checked: Settings.passkeyPhone !== false
@@ -449,7 +449,7 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         visible: section.part === "lock"
         title: I18n.tr("Session & Login Screen")
         subtitle: I18n.tr("What draws this desktop, and what greets you before it")

@@ -45,11 +45,11 @@ ColumnLayout {
     Component.onDestruction: Power.release()
 
     // ── 1. Energy Profiles Card ──────────────────────────────────────────────
-    Card {
+    // ── 1. Energy Profiles Card ──────────────────────────────────────────────
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Energy & performance")
-        subtitle: I18n.tr("Tune system performance and power consumption")
-        icon: "\u{f0084}"
+        description: I18n.tr("Tune system performance and power consumption")
 
         // The mini view in the Control Center has always had this empty state;
         // the full page drew three live-looking tiles that silently did nothing
@@ -62,40 +62,42 @@ ColumnLayout {
             hint: I18n.tr("power-profiles-daemon is not running, so there is nothing to switch between.")
         }
 
-        RowLayout {
+        Item {
             visible: Power.hasProfiles
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
+            implicitHeight: profileSeg.implicitHeight + Design.s(Design.space.sm) * 2
 
-            Repeater {
+            SegmentedControl {
+                id: profileSeg
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
+                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
                 model: [
                     { id: "performance", label: I18n.tr("Performance"), icon: "\u{f0e4}" },
                     { id: "balanced",    label: I18n.tr("Balanced"),    icon: "\u{f0241}" },
                     { id: "power-saver", label: I18n.tr("Power Saver"), icon: "\u{f0084}" }
                 ]
-
-                Pill {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    icon: modelData.icon
-                    label: modelData.label
-                    active: Power.profile === modelData.id
-                    onClicked: Power.setProfile(modelData.id)
-                }
+                current: Power.profile
+                onPicked: function(id) { Power.setProfile(id); }
             }
         }
     }
 
-    // ── 3. Battery ───────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Battery")
-        subtitle: Power.charging ? I18n.tr("Currently charging") : Power.pluggedIn ? I18n.tr("Plugged in, not charging") : I18n.tr("Running on battery power")
-        icon: Power.charging ? "\u{f0084}" : "\u{f0079}"
+        description: Power.charging ? I18n.tr("Currently charging") : Power.pluggedIn ? I18n.tr("Plugged in, not charging") : I18n.tr("Running on battery power")
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
 
             Rectangle {
                 width: Design.s(44)
@@ -178,19 +180,19 @@ ColumnLayout {
             valueTone: Power.batteryCount === 1 && Power.healthOf(Power.batteries[0]) < 70 ? Design.warn : Design.ok
         }
     }
+}
 
     // ── 3.2 Charge control ───────────────────────────────────────────────────
     // A laptop that lives on mains sits at 100% and ages for it. The kernel has
     // had a charge limit and a charge behaviour for this hardware all along —
     // two sysfs files per pack — and nothing in this desktop exposed either, so
     // the only way to use them was to echo into /sys as root.
-    Card {
+    SettingsGroup {
         visible: (section.part === "") && (Power.hasChargeLimit || Power.hasChargeBehaviour)
         title: I18n.tr("Charge control")
-        subtitle: I18n.tr("Keep the battery off a full charge, so it ages more slowly")
-        icon: "\u{f0084}"
+        description: I18n.tr("Keep the battery off a full charge, so it ages more slowly")
 
-        Toggle {
+        SwitchRow {
             visible: Power.hasChargeLimit
             label: I18n.tr("Limit the charge")
             note: I18n.tr("Stop charging below full. 100% means no limit.")
@@ -198,81 +200,76 @@ ColumnLayout {
             onToggled: Power.setChargeLimit(Power.chargeLimit < 100 ? 100 : 80)
         }
 
-        Stepper {
+        SettingsRow {
             visible: Power.hasChargeLimit && Power.chargeLimit < 100
             label: I18n.tr("Stop charging at")
-            valueText: Power.chargeLimit + "%"
-            // Not below 50: the pack would spend its life nearly empty, which
-            // trades one kind of wear for another.
-            onDecrement: Power.setChargeLimit(Math.max(50, Power.chargeLimit - 5))
-            onIncrement: Power.setChargeLimit(Math.min(100, Power.chargeLimit + 5))
+            Stepper {
+                valueText: Power.chargeLimit + "%"
+                onDecrement: Power.setChargeLimit(Math.max(50, Power.chargeLimit - 5))
+                onIncrement: Power.setChargeLimit(Math.min(100, Power.chargeLimit + 5))
+            }
         }
 
-        SectionLabel {
-            visible: Power.hasChargeBehaviour
-            text: I18n.tr("While plugged in")
-            Layout.topMargin: Design.s(Design.space.sm)
-        }
-
-        RowLayout {
+        Item {
             visible: Power.hasChargeBehaviour
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
+            implicitHeight: chargeSeg.implicitHeight + Design.s(Design.space.sm) * 2
 
-            Repeater {
+            SegmentedControl {
+                id: chargeSeg
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
+                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
                 model: [
                     { id: "auto",            label: I18n.tr("Charge") },
                     { id: "inhibit-charge",  label: I18n.tr("Hold") },
                     { id: "force-discharge", label: I18n.tr("Discharge") }
-                ]
-
-                Pill {
-                    required property var modelData
-                    // Only what this hardware actually offers: the file lists
-                    // its own options, and a button for one the kernel would
-                    // refuse is a control that does nothing.
-                    visible: Power.chargeBehaviourOptions.indexOf(modelData.id) >= 0
-                    label: modelData.label
-                    active: Power.chargeBehaviour === modelData.id
-                    onClicked: Power.setChargeBehaviour(modelData.id)
-                }
+                ].filter(m => Power.chargeBehaviourOptions.indexOf(m.id) >= 0)
+                current: Power.chargeBehaviour
+                onPicked: function(id) { Power.setChargeBehaviour(id); }
             }
         }
 
         Label {
             visible: (Power.hasChargeLimit || Power.hasChargeBehaviour) && !Power.chargeWritable
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
             wrapMode: Text.WordWrap
-            role: "caption"
+            role: "footnote"
             dim: true
             text: I18n.tr("These files belong to root on this machine, so a change will ask for a password. Re-running the installer puts you in the `power` group and installs the udev rule that makes it direct.")
         }
     }
 
     // ── 3.5 Low battery ──────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Low battery")
-        subtitle: I18n.tr("What happens as the charge runs out")
-        icon: "\u{f0084}"
+        description: I18n.tr("What happens as the charge runs out")
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Warn me when the battery is low")
-            subtitle: I18n.tr("A notification at the level below. Nothing warned about the charge before — the machine simply went off.")
+            note: I18n.tr("A notification at the level below")
             checked: Settings.batteryLowWarning !== false
             onToggled: Settings.set("batteryLowWarning", !(Settings.batteryLowWarning !== false))
         }
 
-        Stepper {
+        SettingsRow {
             visible: Settings.batteryLowWarning !== false
             label: I18n.tr("Warn at")
-            valueText: Power.lowThreshold + "%"
-            onDecrement: Settings.set("batteryLowPercent",
-                                      Math.max(Power.criticalThreshold + 5, Power.lowThreshold - 5))
-            onIncrement: Settings.set("batteryLowPercent", Math.min(50, Power.lowThreshold + 5))
+            Stepper {
+                valueText: Power.lowThreshold + "%"
+                onDecrement: Settings.set("batteryLowPercent",
+                                          Math.max(Power.criticalThreshold + 5, Power.lowThreshold - 5))
+                onIncrement: Settings.set("batteryLowPercent", Math.min(50, Power.lowThreshold + 5))
+            }
         }
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Suspend before the battery dies")
             note: I18n.tr("A suspend with a few percent left keeps the session; a flat battery does not.")
             checked: Settings.batteryCriticalAction !== "none"
@@ -280,13 +277,15 @@ ColumnLayout {
                                     Settings.batteryCriticalAction === "none" ? "suspend" : "none")
         }
 
-        Stepper {
+        SettingsRow {
             visible: Settings.batteryCriticalAction !== "none"
             label: I18n.tr("Suspend at")
-            valueText: Power.criticalThreshold + "%"
-            onDecrement: Settings.set("batteryCriticalPercent", Math.max(2, Power.criticalThreshold - 1))
-            onIncrement: Settings.set("batteryCriticalPercent",
-                                      Math.min(Power.lowThreshold - 5, Power.criticalThreshold + 1))
+            Stepper {
+                valueText: Power.criticalThreshold + "%"
+                onDecrement: Settings.set("batteryCriticalPercent", Math.max(2, Power.criticalThreshold - 1))
+                onIncrement: Settings.set("batteryCriticalPercent",
+                                          Math.min(Power.lowThreshold - 5, Power.criticalThreshold + 1))
+            }
         }
     }
 
@@ -355,16 +354,19 @@ ColumnLayout {
         { base: "suspendTimeout", label: I18n.tr("Sleep after") }
     ]
 
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("When idle")
-        subtitle: Power.hasBattery
+        description: Power.hasBattery
             ? I18n.tr("Plugged in and on battery each their own; the one in use is marked")
             : I18n.tr("What happens when the computer is left alone")
-        icon: "\u{f033e}"
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.topMargin: Design.s(Design.space.sm)
+            Layout.bottomMargin: Design.s(Design.space.sm)
             spacing: Design.s(Design.space.sm)
 
             // Header: which column is which, and which one applies now.
@@ -428,18 +430,14 @@ ColumnLayout {
                     }
                 }
             }
-
         }
 
-
-
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Other screens off when idle")
-            subtitle: I18n.tr("When the main screen dims, the others go dark; any input brings them back")
+            note: I18n.tr("When main screen dims, others go dark; input brings them back")
             checked: Settings.idleSecondaryOff
             onToggled: Settings.set("idleSecondaryOff", !Settings.idleSecondaryOff)
         }
-
     }
 
     // ── 5. Lid and power button ──────────────────────────────────────────────
@@ -456,126 +454,122 @@ ColumnLayout {
         { id: "nothing",    label: I18n.tr("Do nothing") }
     ]
 
-    // The lid and the power button, each its own card: one card with the
-    // two read as one setting.
-    Card {
+    SettingsGroup {
         visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Closing the lid")
-        subtitle: I18n.tr("Plugged in and on battery each their own")
-        icon: "\u{f0322}"
+        description: I18n.tr("Plugged in and on battery each their own")
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            Item { Layout.fillWidth: true }
-            Repeater {
-                model: [false, true]
-                RowLayout {
-                    id: lidHead
-                    required property bool modelData
-                    readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
-                    Layout.fillWidth: false
-                    Layout.preferredWidth: Design.s(170)
-                    spacing: Design.s(Design.space.xs)
-                    Item { Layout.fillWidth: true }
-                    Icon {
-                        text: lidHead.modelData ? "\u{f0079}" : "\u{f06a5}"
-                        role: "caption"
-                        color: lidHead.now ? Design.accent : Design.textDim
-                    }
-                    Label {
-                        text: lidHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
-                        role: "caption"
-                        weight: lidHead.now ? Design.weight.semibold : Design.weight.regular
-                        color: lidHead.now ? Design.accent : Design.textDim
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-            }
-        }
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            Label {
+            RowLayout {
                 Layout.fillWidth: true
-                text: I18n.tr("When the lid closes")
-                role: "caption"
-                dim: true
-                elide: Text.ElideRight
+                spacing: Design.s(Design.space.md)
+                Item { Layout.fillWidth: true }
+                Repeater {
+                    model: [false, true]
+                    RowLayout {
+                        id: lidHead
+                        required property bool modelData
+                        readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: Design.s(170)
+                        spacing: Design.s(Design.space.xs)
+                        Item { Layout.fillWidth: true }
+                        Icon {
+                            text: lidHead.modelData ? "\u{f0079}" : "\u{f06a5}"
+                            role: "caption"
+                            color: lidHead.now ? Design.accent : Design.textDim
+                        }
+                        Label {
+                            text: lidHead.modelData ? I18n.tr("On battery") : I18n.tr("Plugged in")
+                            role: "caption"
+                            weight: lidHead.now ? Design.weight.semibold : Design.weight.regular
+                            color: lidHead.now ? Design.accent : Design.textDim
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
             }
-            Repeater {
-                model: [false, true]
-                Stepper {
-                    required property bool modelData
-                    Layout.fillWidth: false
-                    Layout.preferredWidth: Design.s(170)
-                    valueText: section.lidChoices[section.lidIndex(modelData)].label
-                    onDecrement: section.stepLid(modelData, -1)
-                    onIncrement: section.stepLid(modelData, 1)
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.md)
+                Label {
+                    Layout.fillWidth: true
+                    text: I18n.tr("When the lid closes")
+                    role: "caption"
+                    dim: true
+                    elide: Text.ElideRight
+                }
+                Repeater {
+                    model: [false, true]
+                    Stepper {
+                        required property bool modelData
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: Design.s(170)
+                        valueText: section.lidChoices[section.lidIndex(modelData)].label
+                        onDecrement: section.stepLid(modelData, -1)
+                        onIncrement: section.stepLid(modelData, 1)
+                    }
                 }
             }
         }
 
-        Toggle {
-            label: I18n.tr("With another screen connected, only turn off the built-in one")
-            subtitle: I18n.tr("Closing the lid while docked keeps working on the other screen")
+        SwitchRow {
+            label: I18n.tr("With another screen connected, only turn off built-in one")
+            note: I18n.tr("Closing lid while docked keeps working on external screen")
             checked: Settings.lidIgnoreDocked
             onToggled: Settings.set("lidIgnoreDocked", !Settings.lidIgnoreDocked)
         }
     }
 
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Power button")
-        subtitle: I18n.tr("What it does, instead of the system default")
-        icon: "\u{f0425}"
+        description: I18n.tr("Action taken when pressing the physical power key")
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
+        SettingsRow {
+            label: I18n.tr("Power button action")
+            Select {
                 model: [{ id: "ask", label: I18n.tr("Ask what to do") }].concat(section.lidChoices)
-                Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: (Settings.powerKeyAction || "ask") === modelData.id
-                    onClicked: Settings.set("powerKeyAction", modelData.id)
-                }
+                current: Settings.powerKeyAction || "ask"
+                onPicked: function(id) { Settings.set("powerKeyAction", id); }
             }
         }
     }
 
-    Card {
+    SettingsGroup {
         visible: section.part === "lock"
         title: I18n.tr("Locking")
-        subtitle: I18n.tr("When the screen locks, and what the lock screen looks like. How soon after idling is on Power & Battery")
-        icon: "\u{f033e}"
+        description: I18n.tr("When screen locks and behaviour on lock")
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Lock when the screen turns off")
-            note: I18n.tr("Off: the screen can go dark without locking, and lock only on its own timer")
+            note: I18n.tr("Off: screen goes dark without locking; locks on timer")
             checked: Settings.lockWithScreenOff
             onToggled: Settings.set("lockWithScreenOff", !Settings.lockWithScreenOff)
         }
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Lock before sleep")
-            subtitle: I18n.tr("Waking up shows the lock screen, not the desktop")
+            note: I18n.tr("Waking up shows the lock screen, not the desktop")
             checked: Settings.lockOnSleep
             onToggled: Settings.set("lockOnSleep", !Settings.lockOnSleep)
         }
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Dim screen on lock")
-            subtitle: I18n.tr("Lower display brightness immediately when screen is locked")
+            note: I18n.tr("Lower display brightness immediately when screen is locked")
             checked: Settings.dimOnLock
             onToggled: Settings.set("dimOnLock", !Settings.dimOnLock)
         }
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Only the main screen while locked")
-            subtitle: I18n.tr("The lock screen shows on the main screen; the others stay off until it is opened")
+            note: I18n.tr("Secondary monitors stay off until unlocked")
             checked: Settings.lockSecondaryOff
             onToggled: Settings.set("lockSecondaryOff", !Settings.lockSecondaryOff)
         }

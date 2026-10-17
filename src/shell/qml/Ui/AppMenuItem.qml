@@ -12,7 +12,7 @@ C.MenuItem {
     property bool showDisabled: false
     property color tone: Design.text
 
-    implicitHeight: visible ? Design.s(32) : 0
+    implicitHeight: visible ? Design.s(Design.size.md) : 0
     visible: enabled || showDisabled
     height: visible ? implicitHeight : 0
     leftPadding: Design.s(Design.space.sm)
@@ -22,10 +22,10 @@ C.MenuItem {
         spacing: Design.s(Design.space.sm)
         opacity: root.enabled ? 1.0 : Design.opacity.disabled
         Text {
-            Layout.preferredWidth: Design.s(18)
+            Layout.preferredWidth: Design.s(Design.font.glyph + Design.space.xxs)
             text: root.checkable ? (root.checked ? "\u{f012c}" : "") : root.glyph
             font.family: Design.font.icon
-            font.pixelSize: Design.s(14)
+            font.pixelSize: Design.s(Design.font.glyphSm)
             color: root.checked ? Design.accent : (root.tone === Design.text ? Design.textDim : root.tone)
             horizontalAlignment: Text.AlignHCenter
         }
@@ -48,7 +48,7 @@ C.MenuItem {
     arrow: null
     indicator: null
     background: Rectangle {
-        radius: Design.s(Design.radius.sm)
-        color: root.highlighted ? Design.tint(Design.accent, 0.22) : "transparent"
+        radius: Math.max(0, Design.s(Design.radius.ctl) - Design.s(Design.space.xs))
+        color: root.highlighted ? Design.selection : "transparent"
     }
 }

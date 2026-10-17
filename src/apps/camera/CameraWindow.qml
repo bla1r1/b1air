@@ -163,11 +163,13 @@ ApplicationWindow {
                 Layout.fillWidth: true
 
                 Item { Layout.fillWidth: true }
-                BarGroup {
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
                     // Which camera, when the machine has more than one.
-                    BarButton {
+                    Button {
+                        variant: "secondary"
                         visible: devices.videoInputs.length > 1
-                        glyph: "\u{f0567}"
+                        icon: "\u{f0567}"
                         label: camera.cameraDevice.description || I18n.tr("Camera")
                         tip: I18n.tr("Switch camera")
                         onClicked: {
@@ -178,8 +180,9 @@ ApplicationWindow {
                             camera.cameraDevice = list[(i + 1) % list.length];
                         }
                     }
-                    BarButton {
-                        glyph: "\u{f024b}"
+                    Button {
+                        variant: "secondary"
+                        icon: "\u{f024b}"
                         label: I18n.tr("Open folder")
                         tip: I18n.tr("Where photos and videos go (Ctrl+O)")
                         onClicked: Qt.openUrlExternally(Paths.fileUrl(window.shotsDir))
@@ -381,23 +384,29 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     // Self-timer, mirror, grid.
-                    BarGroup {
-                        BarButton {
-                            glyph: "\u{f051b}"
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button {
+                            variant: "secondary"
+                            icon: "\u{f051b}"
                             label: window.timerSeconds === 0 ? I18n.tr("Off") : window.timerSeconds + "s"
                             tip: I18n.tr("Self-timer: off, 3 s, 10 s")
                             checked: window.timerSeconds > 0
                             onClicked: window.timerSeconds = window.timerSeconds === 0 ? 3
                                      : (window.timerSeconds === 3 ? 10 : 0)
                         }
-                        BarButton {
-                            glyph: "\u{f10e7}"
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
+                            icon: "\u{f10e7}"
                             tip: I18n.tr("Mirror (M)")
                             checked: window.mirrored
                             onClicked: window.mirrored = !window.mirrored
                         }
-                        BarButton {
-                            glyph: "\u{f02c1}"
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
+                            icon: "\u{f02c1}"
                             tip: I18n.tr("Grid (G)")
                             checked: window.showGrid
                             onClicked: window.showGrid = !window.showGrid

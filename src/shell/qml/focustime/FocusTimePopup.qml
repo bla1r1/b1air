@@ -555,7 +555,7 @@ PopupShell {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Design.s(20)
-                                color: backMa.containsMouse ? Design.raised : "transparent"
+                                color: backMa.containsMouse ? Design.glassHover : "transparent"
                                 opacity: (window.selectedAppClass !== "" || window.isWeekView) ? 1.0 : 0.0
                                 visible: opacity > 0
                                 Behavior on opacity { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
@@ -581,7 +581,7 @@ PopupShell {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Design.s(20)
-                                color: weekMa.containsMouse ? Design.raised : "transparent"
+                                color: weekMa.containsMouse ? Design.glassHover : "transparent"
                                 opacity: (window.selectedAppClass === "" && !window.isWeekView) ? 1.0 : 0.0
                                 visible: opacity > 0
                                 Behavior on opacity { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
@@ -597,7 +597,7 @@ PopupShell {
                             Layout.preferredWidth: Design.s(40)
                             Layout.preferredHeight: Design.s(40)
                             radius: Design.s(20)
-                            color: prevWeekMa.containsMouse ? Design.raised : "transparent"
+                            color: prevWeekMa.containsMouse ? Design.glassHover : "transparent"
                             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                             Icon { anchors.centerIn: parent; text: "󰅁" }
                             Clickable { id: prevWeekMa; onClicked: changeDay(window.isWeekView ? -7 : -1) }
@@ -644,7 +644,7 @@ PopupShell {
                         Layout.preferredWidth: Design.s(40)
                         Layout.preferredHeight: Design.s(40)
                         radius: Design.s(20)
-                        color: nextWeekMa.containsMouse ? Design.raised : "transparent"
+                        color: nextWeekMa.containsMouse ? Design.glassHover : "transparent"
                         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                         Icon { anchors.centerIn: parent; text: "󰅂" }
                         Clickable { id: nextWeekMa; onClicked: changeDay(window.isWeekView ? 7 : 1) }
@@ -908,7 +908,7 @@ PopupShell {
                                     text: window.focusTimer.active ? window.focusTimer.remainingText : "--:--"
                                 }
 
-                                ActionButton {
+                                Button {
                                     // Without this the button takes the row's
                                     // spare width and the timer becomes a
                                     // banner with a caption.
@@ -919,7 +919,7 @@ PopupShell {
                                     onActivated: window.focusTimer.toggle()
                                 }
 
-                                ActionButton {
+                                Button {
                                     Layout.fillWidth: false
                                     visible: window.focusTimer.active
                                     icon: "\u{f04ad}"
@@ -927,7 +927,7 @@ PopupShell {
                                     onActivated: window.focusTimer.skip()
                                 }
 
-                                ActionButton {
+                                Button {
                                     Layout.fillWidth: false
                                     visible: window.focusTimer.active
                                     icon: "\u{f04db}"
@@ -1102,7 +1102,7 @@ PopupShell {
                                                 width: Design.s(18) 
                                                 height: Design.s(18) 
                                                 radius: Design.s(4)
-                                                color: model.total === -1 ? "transparent" : (model.total === 0 ? Design.raised : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, Math.min(1.0, 0.3 + 0.7 * (model.total / window.maxMonthTotal))))
+                                                color: model.total === -1 ? "transparent" : (model.total === 0 ? Design.well : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, Math.min(1.0, 0.3 + 0.7 * (model.total / window.maxMonthTotal))))
                                                 Behavior on color { ColorAnimation { duration: window.tintDuration; easing.type: Easing.OutQuint } }
 
                                                 border.color: model.isTarget ? Design.text : "transparent"
@@ -1190,7 +1190,7 @@ PopupShell {
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: Design.s(10)
-                                            color: rowMa.containsMouse ? Design.raised : "transparent"
+                                            color: rowMa.containsMouse ? Design.glassHover : "transparent"
                                             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                                         }
 
@@ -1313,7 +1313,7 @@ PopupShell {
                                                     // Actively grow from ground up tied to introAppBars
                                                     height: Math.max(Design.s(4), parent.height * (window.hourlyData[index] / Math.max(window.maxHourlyTotal, 1)) * window.introAppBars)
                                                     radius: Design.s(2)
-                                                    color: window.hourlyData[index] > 0 ? Design.accent : Design.raised
+                                                    color: window.hourlyData[index] > 0 ? Design.accent : Design.well
                                                     
                                                     Behavior on height { 
                                                         enabled: window.introAppBars === 1.0
@@ -1434,7 +1434,7 @@ PopupShell {
                                                                 
                                                                 property real val: (window.weekHeatmapData[dayIndex] && window.weekHeatmapData[dayIndex][index]) ? window.weekHeatmapData[dayIndex][index] : 0
                                                                 property real intensity: Math.min(1.0, 0.2 + 0.8 * (val / Math.max(window.maxWeekHour, 1)))
-                                                                color: val === 0 ? Design.raised : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, intensity)
+                                                                color: val === 0 ? Design.well : Qt.rgba(Design.accentAlt.r, Design.accentAlt.g, Design.accentAlt.b, intensity)
 
                                                                 // Staggered animated popup matrix effect for the heatmap cells
                                                                 scale: window.isWeekView ? 1.0 : 0.5
@@ -1574,7 +1574,7 @@ PopupShell {
                                     Rectangle {
                                         anchors.fill: parent
                                         radius: Design.s(10)
-                                        color: weekRowMa.containsMouse ? Design.raised : "transparent"
+                                        color: weekRowMa.containsMouse ? Design.glassHover : "transparent"
                                         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                                     }
 

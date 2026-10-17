@@ -73,7 +73,7 @@ ColumnLayout {
     property string ethDns: "1.1.1.1, 8.8.8.8"
 
     // ── 1. Ethernet Card ─────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: !section.essentials
         title: I18n.tr("Ethernet (Wired)")
         subtitle: Network.ethernet && Network.ethernet.connected
@@ -132,7 +132,7 @@ ColumnLayout {
                 width: Design.s(32)
                 height: Design.s(32)
                 radius: Design.s(Design.radius.ctl)
-                color: section.showEthConfig ? Design.tint(Design.accent, 0.25) : (gearMa.containsMouse ? Design.raised : Design.well)
+                color: section.showEthConfig ? Design.tint(Design.accent, 0.25) : (gearMa.containsMouse ? Design.glassHover : Design.well)
                 border.color: section.showEthConfig ? Design.accent : (gearMa.containsMouse ? Design.hover : "transparent")
                 border.width: 1
 
@@ -198,15 +198,14 @@ ColumnLayout {
                         color: Design.text
                     }
                     Item { Layout.fillWidth: true }
-                    Pill {
-                        label: I18n.tr("Automatic (DHCP)")
-                        active: section.ethMethod === "auto"
-                        onClicked: section.ethMethod = "auto"
-                    }
-                    Pill {
-                        label: I18n.tr("Manual (Static IP)")
-                        active: section.ethMethod === "manual"
-                        onClicked: section.ethMethod = "manual"
+                    SegmentedControl {
+                        size: "sm"
+                        model: [
+                            { id: "auto", label: I18n.tr("Automatic (DHCP)") },
+                            { id: "manual", label: I18n.tr("Manual (Static IP)") }
+                        ]
+                        current: section.ethMethod
+                        onPicked: id => section.ethMethod = id
                     }
                 }
 
@@ -270,15 +269,18 @@ ColumnLayout {
                     spacing: Design.s(Design.space.sm)
                     Item { Layout.fillWidth: true }
 
-                    Pill {
-                        label: I18n.tr("Cancel")
+                    Button {
+                        size: "sm"
+                        variant: "secondary"
+                        text: I18n.tr("Cancel")
                         onClicked: section.showEthConfig = false
                     }
 
-                    Pill {
-                        label: I18n.tr("Apply Changes")
+                    Button {
+                        size: "sm"
+                        variant: "primary"
                         icon: "\u{f012c}"
-                        active: true
+                        text: I18n.tr("Apply Changes")
                         onClicked: {
                             if (Network.ethernet) {
                                 Network.applyEthernetConfig(
@@ -299,7 +301,7 @@ ColumnLayout {
     }
 
     // ── 2. Wi-Fi Card ────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: Network.hasWifi
         title: I18n.tr("Wi-Fi")
         subtitle: Network.wifi.power === "on"
@@ -308,16 +310,11 @@ ColumnLayout {
         icon: "\u{f0928}"
 
         // Master Switch
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            Toggle {
-                label: I18n.tr("Wi-Fi")
-                subtitle: I18n.tr("Scan for and join wireless networks")
-                checked: Network.wifi.power === "on"
-                onToggled: Network.toggleWifi()
-            }
+        SwitchRow {
+            title: I18n.tr("Wi-Fi")
+            note: I18n.tr("Scan for and join wireless networks")
+            checked: Network.wifi.power === "on"
+            onToggled: Network.toggleWifi()
         }
 
         // Active Connection Diagnostics
@@ -375,8 +372,10 @@ ColumnLayout {
                         }
                     }
 
-                    Pill {
-                        label: I18n.tr("Disconnect")
+                    Button {
+                        size: "sm"
+                        variant: "secondary"
+                        text: I18n.tr("Disconnect")
                         onClicked: Network.disconnectWifi()
                     }
                 }
@@ -474,9 +473,11 @@ ColumnLayout {
                         color: Design.textFaint
                     }
 
-                    Pill {
-                        label: netEntry.asking ? I18n.tr("Cancel") : I18n.tr("Connect")
-                        icon: "\u{f0928}"
+                    Button {
+                        size: "sm"
+                        variant: netEntry.asking ? "secondary" : "primary"
+                        text: netEntry.asking ? I18n.tr("Cancel") : I18n.tr("Connect")
+                        icon: netEntry.asking ? "" : "\u{f0928}"
                         onClicked: {
                             if (netEntry.asking) {
                                 section.askingFor = "";
@@ -539,9 +540,11 @@ ColumnLayout {
                     }
                 }
 
-                Pill {
-                    label: I18n.tr("Forget")
+                Button {
+                    size: "sm"
+                    variant: "ghost"
                     icon: "\u{f01b4}"
+                    text: I18n.tr("Forget")
                     onClicked: Network.forgetWifi(modelData.name)
                 }
             }

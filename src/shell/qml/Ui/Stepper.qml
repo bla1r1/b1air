@@ -22,8 +22,9 @@ RowLayout {
 
     // Like a switch's label: the row's name, in the text colour.
     Label {
+        visible: row.label !== ""
         text: row.label
-        Layout.fillWidth: true
+        Layout.fillWidth: row.label !== ""
         elide: Text.ElideRight
     }
 
@@ -32,11 +33,13 @@ RowLayout {
         property string glyph: ""
         signal activated()
 
-        Layout.preferredWidth: Design.s(30)
-        Layout.preferredHeight: Design.s(Design.size.field)
+        Layout.preferredWidth: Design.s(Design.size.md)
+        Layout.preferredHeight: Design.s(Design.size.md)
         radius: Design.s(Design.radius.ctl)
 
-        color: stepArea.pressed ? Design.active : Design.raised
+        color: Design.translucent
+               ? (stepArea.pressed ? Design.tint(Design.text, 0.20) : (stepArea.containsMouse ? Design.veilBold : Design.well))
+               : (stepArea.pressed ? Design.active : Design.raised)
         border.color: stepArea.containsMouse ? Design.accent : "transparent"
         border.width: Design.border
 
@@ -51,6 +54,13 @@ RowLayout {
         }
 
         Clickable { id: stepArea; onClicked: step.activated() }
+
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: step.glyph
+        Keys.onReturnPressed: event => { step.activated(); event.accepted = true; }
+        Keys.onSpacePressed: event => { step.activated(); event.accepted = true; }
+        FocusRing { target: step }
     }
 
     StepButton {
@@ -65,7 +75,7 @@ RowLayout {
         weight: Design.weight.medium
         tabular: true
         horizontalAlignment: Text.AlignHCenter
-        Layout.minimumWidth: Design.s(44)
+        Layout.minimumWidth: Design.s(Design.size.md + Design.space.md)
     }
 
     StepButton {

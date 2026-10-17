@@ -21,7 +21,7 @@ Item {
         : (Power.capacity <= 20 ? Design.danger : Design.text)
 
     visible: Power.hasBattery
-    implicitHeight: Design.s(Design.size.iconBtn)   // same height as the gear beside it
+    implicitHeight: Design.s(Design.size.sm)   // same height as the gear beside it
     implicitWidth: pill.implicitWidth
 
     Rectangle {

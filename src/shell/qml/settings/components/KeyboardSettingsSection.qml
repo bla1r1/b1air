@@ -176,15 +176,19 @@ ColumnLayout {
     // ── Layouts ──────────────────────────────────────────────────────────────
     // The interface language moved to Language & Region, with the system
     // language and the formats.
-    Card {
+    SettingsGroup {
         visible: !section.shortcutsOnly
         title: I18n.tr("Input layouts")
-        note: I18n.tr("The first one is what every login starts in")
-        icon: "\u{f030c}"
+        description: I18n.tr("The first one is what every login starts in")
 
-        Flow {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
 
             Repeater {
                 model: section.layouts
@@ -198,7 +202,7 @@ ColumnLayout {
                     width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
                     height: Design.s(36)
                     radius: Design.s(Design.radius.ctl)
-                    color: chip.first ? Design.tint(Design.accent, 0.14) : Design.raised
+                    color: chip.first ? Design.tint(Design.accent, 0.14) : Design.well
                     border.color: chip.first ? Design.tint(Design.accent, 0.5) : Design.line
                     border.width: 1
 
@@ -223,7 +227,6 @@ ColumnLayout {
                         Badge {
                             visible: chip.first
                             text: I18n.tr("default")
-                            tone: Design.warn
                         }
 
                         IconButton {
@@ -335,29 +338,32 @@ ColumnLayout {
             }
         }
     }
+}
 
-    Card {
+    SettingsGroup {
         visible: !section.shortcutsOnly
         title: I18n.tr("Switching layouts")
-        subtitle: section.layouts.length > 1
+        description: section.layouts.length > 1
             ? I18n.tr("The key that cycles through the layouts above")
             : I18n.tr("Only matters once there is more than one layout")
-        icon: "\u{f04e1}"
 
-        FormRow {
-            title: I18n.tr("Switch with")
-            Dropdown {
+        SettingsRow {
+            label: I18n.tr("Switch with")
+            Select {
                 // "" is a real choice here (no shortcut), so it gets a name of its own.
                 model: section.switchOptions.map(o => ({ id: o.val === "" ? "__none" : o.val, label: o.label }))
                 current: section.switchOption === "" ? "__none" : section.switchOption
-                onPicked: id => section.setSwitch(id === "__none" ? "" : id)
+                onPicked: function(id) { section.setSwitch(id === "__none" ? "" : id); }
             }
         }
 
         Label {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
             wrapMode: Text.WordWrap
-            role: "caption"
+            role: "footnote"
             dim: true
             text: I18n.tr("The layout indicator in the bar switches too, with a click.")
         }
@@ -378,12 +384,11 @@ ColumnLayout {
     // A change can be put back with Reset, and "Super+Shift+T" is understood
     // as well as sway's own spelling.
 
-    Card {
+    SettingsGroup {
         id: bindCard
         visible: section.shortcutsOnly
         title: I18n.tr("Desktop shortcuts")
-        subtitle: I18n.tr("Change the key for any of these. Every binding is listed below.")
-        icon: "\u{f11c}"
+        description: I18n.tr("Change the key for any of these. Every binding is listed below.")
 
         property string filter: ""
         property string editingId: ""
@@ -526,11 +531,16 @@ ColumnLayout {
             onTriggered: bindCard.status = ""
         }
 
-        Field {
+        ColumnLayout {
             Layout.fillWidth: true
-            placeholder: I18n.tr("Filter — terminal, settings, window…")
-            onEdited: v => bindCard.filter = v.toLowerCase()
-        }
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
+
+            Field {
+                Layout.fillWidth: true
+                placeholder: I18n.tr("Filter — terminal, settings, window…")
+                onEdited: v => bindCard.filter = v.toLowerCase()
+            }
 
         Label {
             visible: bindCard.status !== ""
@@ -619,19 +629,21 @@ ColumnLayout {
                             onAccepted: v => bindCard.save(bindRow.modelData, v)
                         }
 
-                        ActionButton {
-                            Layout.fillWidth: false
+                        Button {
+                            size: "sm"
+                            variant: "primary"
                             icon: "\u{f012c}"
-                            label: I18n.tr("Save")
-                            onActivated: bindCard.save(bindRow.modelData, keyField.text)
+                            text: I18n.tr("Save")
+                            onClicked: bindCard.save(bindRow.modelData, keyField.text)
                         }
 
-                        ActionButton {
-                            Layout.fillWidth: false
+                        Button {
+                            size: "sm"
+                            variant: "ghost"
                             visible: bindRow.changed
                             icon: "\u{f0450}"
-                            label: I18n.tr("Reset")
-                            onActivated: {
+                            text: I18n.tr("Reset")
+                            onClicked: {
                                 bindCard.reset(bindRow.modelData);
                                 bindCard.editingId = "";
                             }
@@ -641,4 +653,5 @@ ColumnLayout {
             }
         }
     }
+}
 }

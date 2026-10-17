@@ -159,7 +159,7 @@ ColumnLayout {
     // "Sync UI & Packages" ran an update that did not pull. It now says what
     // the check found once it has, lists what an update would bring, and the
     // button pulls (and says why it cannot, when it cannot).
-    Card {
+    SettingsGroup {
         visible: section.part === "updates"
         title: I18n.tr("Desktop Updates")
         subtitle: section.dotRemote ? I18n.tr("This desktop's own code and configuration, from %1", section.dotRemote)
@@ -190,7 +190,7 @@ ColumnLayout {
                 }
             }
 
-            Pill {
+            Button {
                 label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
@@ -226,29 +226,28 @@ ColumnLayout {
             wrapMode: Text.WordWrap
         }
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f06b0}"
                 label: section.dotCanUpdate ? I18n.tr("Update now") : I18n.tr("Nothing to update")
-                tone: section.dotCanUpdate ? Design.ok : Design.textDim
                 enabled: section.dotCanUpdate
                 onActivated: section.runDotfilesUpdate()
             }
 
-            ActionButton {
+            Button {
                 icon: "\u{f07c}"
                 label: I18n.tr("View Backups")
-                tone: Design.textDim
                 onActivated: section.viewBackups()
             }
         }
     }
 
     // ── Moving this configuration to another machine ─────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Settings Backup & Transfer")
         subtitle: I18n.tr("One file holding this desktop's settings, themes, pinned apps and bookmarks")
@@ -271,17 +270,18 @@ ColumnLayout {
             wrapMode: Text.WordWrap
         }
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f0552}"
                 label: I18n.tr("Export to Home Folder")
                 onActivated: section.exportConfig()
             }
 
-            ActionButton {
+            Button {
                 icon: "\u{f0552}"
                 label: I18n.tr("Import from Home Folder")
                 onActivated: section.importConfig()
@@ -290,7 +290,7 @@ ColumnLayout {
     }
 
     // ── 2. System Packages Updates ───────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === "updates"
         title: I18n.tr("System Packages")
         subtitle: I18n.tr("Kernel, drivers and applications, managed by %1", section.managerName)
@@ -306,60 +306,59 @@ ColumnLayout {
                 Label { text: I18n.tr("Update Status") }
             }
 
-            Pill {
+            Button {
                 label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
             }
         }
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
             // The three actions on this page and the next remove packages, wipe
             // caches or start a full system upgrade, and each was a single
-            // click in a page people scroll through. ActionButton already has
+            // click in a page people scroll through. Button already has
             // the arm-then-confirm step — "Reset Defaults" in About and the
             // power row in the Control Center use it — and these deserve it at
             // least as much.
-            ActionButton {
+            Button {
                 icon: "\u{f0187}"
                 label: section.updateCount > 0 ? I18n.trn("Upgrade %1 Package", "Upgrade %1 Packages", section.updateCount) : I18n.tr("Run Full System Upgrade")
-                tone: Design.warn
                 destructive: true
-                confirmLabel: I18n.tr("Start upgrade?")
+                confirmText: I18n.tr("Start upgrade?")
                 onActivated: section.runSystemUpdate()
             }
         }
     }
 
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Disk Sweeper & Storage Maintenance")
         note: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
         icon: "\u{f014}"
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f014}"
                 label: I18n.tr("Clean All Caches & Logs")
-                tone: Design.danger
                 destructive: true
-                confirmLabel: I18n.tr("Delete them?")
+                confirmText: I18n.tr("Delete them?")
                 onActivated: Daemon.sweeperClean()
             }
 
-            ActionButton {
+            Button {
                 icon: "\u{f128}"
                 label: I18n.tr("Remove Orphan Packages")
-                tone: Design.danger
                 destructive: true
-                confirmLabel: I18n.tr("Uninstall them?")
+                confirmText: I18n.tr("Uninstall them?")
                 onActivated: section.cleanOrphanPackages()
             }
         }
@@ -371,7 +370,7 @@ ColumnLayout {
     readonly property string snapshotTool: Sys.commandExists("timeshift") ? "timeshift"
                                          : Sys.commandExists("snapper") ? "snapper" : ""
 
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Restore Points")
         subtitle: section.snapshotTool !== ""
@@ -379,11 +378,12 @@ ColumnLayout {
                   : I18n.tr("Snapshots need timeshift, or snapper on a Btrfs root — neither is installed")
         icon: "\u{f0c7}"
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f0c7}"
                 label: I18n.tr("Create Restore Point")
                 enabled: section.snapshotTool !== ""
@@ -393,17 +393,18 @@ ColumnLayout {
     }
 
     // ── 5. Encrypted Vaults Manager (M4) ──────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Encrypted Security Vaults")
         subtitle: I18n.tr("Mount and secure confidential directories using client-side encryption")
         icon: "\u{f023}"
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f07c}"
                 label: I18n.tr("Open Secure Vaults Location")
                 onActivated: {
@@ -416,23 +417,24 @@ ColumnLayout {
 
     // The desktop itself: reload it, or put every setting back. These were
     // on About, a page otherwise only about what this computer is.
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Desktop")
         subtitle: I18n.tr("Reload the desktop, or put every setting back to its default")
         icon: "\u{f0493}"
 
-        ButtonRow {
+        RowLayout {
+            Item { Layout.fillWidth: true }
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            ActionButton {
+            Button {
                 icon: "\u{f0709}"
                 label: I18n.tr("Reload Sway & Quickshell")
                 onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
             }
 
-            ActionButton {
+            Button {
                 icon: "\u{f0450}"
                 label: I18n.tr("Reset Defaults")
                 destructive: true

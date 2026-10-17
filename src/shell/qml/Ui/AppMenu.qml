@@ -20,7 +20,7 @@ C.Menu {
         return w;
     }
     background: Rectangle {
-        implicitWidth: Math.min(Design.s(440), Math.max(Design.s(240), root._widest + root.leftPadding + root.rightPadding))
+        implicitWidth: Math.min(Design.s(Design.width.menuMax), Math.max(Design.s(Design.width.menuMin), root._widest + root.leftPadding + root.rightPadding))
         radius: Design.s(Design.radius.ctl)
         color: Design.raised
         border.color: Design.line

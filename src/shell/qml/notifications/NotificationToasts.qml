@@ -195,7 +195,7 @@ PanelWindow {
                         Repeater {
                             model: toastCard.model.obj ? (toastCard.model.obj.actions || []) : []
 
-                            delegate: ActionButton {
+                            delegate: Button {
                                 required property var modelData
                                 label: modelData.text || modelData.id || I18n.tr("Action")
                                 onActivated: {

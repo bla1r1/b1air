@@ -96,7 +96,7 @@ ColumnLayout {
     // (The page title is in the Settings header bar now.)
 
     // ── 2. System Specifications Card ────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("System Specifications")
         subtitle: I18n.tr("%1 on %2", section.osName, section.hostName)
         icon: "\u{f035b}"
@@ -153,7 +153,7 @@ ColumnLayout {
     }
 
     // ── 3. Component Health & Diagnostics ────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Service Health & Subsystems")
         subtitle: I18n.tr("Live status of background communication daemons")
         icon: "\u{f02ce}"

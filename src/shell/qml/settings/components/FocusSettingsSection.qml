@@ -123,7 +123,7 @@ ColumnLayout {
     // (The page title is in the Settings header bar now.)
 
     // ── 2. Today's Wellbeing Overview ────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Today's Activity")
         subtitle: I18n.tr("Real-time summary of your computer usage and focus intervals")
@@ -212,7 +212,7 @@ ColumnLayout {
     }
 
     // ── 3. Application Notification Filters ──────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === "notifications"
         title: I18n.tr("Application Notification Filters")
         subtitle: I18n.tr("Control banner popups and sound alerts for individual apps")
@@ -262,7 +262,7 @@ ColumnLayout {
                             }
                         }
 
-                        Toggle {
+                        SwitchRow {
                             checked: section.isRuleEnabled(modelData.name)
                             onToggled: section.toggleRule(modelData.name)
                         }
@@ -280,7 +280,7 @@ ColumnLayout {
     }
 
     // ── 4. Pomodoro & Interval Durations ─────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Focus & Break Intervals")
         subtitle: I18n.tr("Customize work cycles and rest duration for FocusTime timer")
@@ -290,63 +290,71 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Stepper {
+            SettingsRow {
                 label: I18n.tr("Focus Work Duration")
-                valueText: section.workDuration + " min"
-                onDecrement: {
-                    const v = Math.max(5, section.workDuration - 5);
-                    section.workDuration = v;
-                    Settings.set("focusWorkDuration", v);
-                }
-                onIncrement: {
-                    const v = Math.min(120, section.workDuration + 5);
-                    section.workDuration = v;
-                    Settings.set("focusWorkDuration", v);
+                Stepper {
+                    valueText: section.workDuration + " min"
+                    onDecrement: {
+                        const v = Math.max(5, section.workDuration - 5);
+                        section.workDuration = v;
+                        Settings.set("focusWorkDuration", v);
+                    }
+                    onIncrement: {
+                        const v = Math.min(120, section.workDuration + 5);
+                        section.workDuration = v;
+                        Settings.set("focusWorkDuration", v);
+                    }
                 }
             }
 
-            Stepper {
+            SettingsRow {
                 label: I18n.tr("Short Break Duration")
-                valueText: section.shortBreakDuration + " min"
-                onDecrement: {
-                    const v = Math.max(1, section.shortBreakDuration - 1);
-                    section.shortBreakDuration = v;
-                    Settings.set("focusShortBreak", v);
-                }
-                onIncrement: {
-                    const v = Math.min(30, section.shortBreakDuration + 1);
-                    section.shortBreakDuration = v;
-                    Settings.set("focusShortBreak", v);
+                Stepper {
+                    valueText: section.shortBreakDuration + " min"
+                    onDecrement: {
+                        const v = Math.max(1, section.shortBreakDuration - 1);
+                        section.shortBreakDuration = v;
+                        Settings.set("focusShortBreak", v);
+                    }
+                    onIncrement: {
+                        const v = Math.min(30, section.shortBreakDuration + 1);
+                        section.shortBreakDuration = v;
+                        Settings.set("focusShortBreak", v);
+                    }
                 }
             }
 
-            Stepper {
+            SettingsRow {
                 label: I18n.tr("Long Break Duration")
-                valueText: section.longBreakDuration + " min"
-                onDecrement: {
-                    const v = Math.max(5, section.longBreakDuration - 5);
-                    section.longBreakDuration = v;
-                    Settings.set("focusLongBreak", v);
-                }
-                onIncrement: {
-                    const v = Math.min(60, section.longBreakDuration + 5);
-                    section.longBreakDuration = v;
-                    Settings.set("focusLongBreak", v);
+                Stepper {
+                    valueText: section.longBreakDuration + " min"
+                    onDecrement: {
+                        const v = Math.max(5, section.longBreakDuration - 5);
+                        section.longBreakDuration = v;
+                        Settings.set("focusLongBreak", v);
+                    }
+                    onIncrement: {
+                        const v = Math.min(60, section.longBreakDuration + 5);
+                        section.longBreakDuration = v;
+                        Settings.set("focusLongBreak", v);
+                    }
                 }
             }
 
-            Stepper {
+            SettingsRow {
                 label: I18n.tr("Daily Screen Time Limit Goal")
-                valueText: section.dailyGoalHours + " hours"
-                onDecrement: {
-                    const v = Math.max(1, section.dailyGoalHours - 1);
-                    section.dailyGoalHours = v;
-                    Settings.set("dailyScreenTimeGoal", v);
-                }
-                onIncrement: {
-                    const v = Math.min(24, section.dailyGoalHours + 1);
-                    section.dailyGoalHours = v;
-                    Settings.set("dailyScreenTimeGoal", v);
+                Stepper {
+                    valueText: section.dailyGoalHours + " hours"
+                    onDecrement: {
+                        const v = Math.max(1, section.dailyGoalHours - 1);
+                        section.dailyGoalHours = v;
+                        Settings.set("dailyScreenTimeGoal", v);
+                    }
+                    onIncrement: {
+                        const v = Math.min(24, section.dailyGoalHours + 1);
+                        section.dailyGoalHours = v;
+                        Settings.set("dailyScreenTimeGoal", v);
+                    }
                 }
             }
         }
@@ -362,7 +370,7 @@ ColumnLayout {
     }
 
     // ── Focus modes ──────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         id: modesCard
         visible: section.part === "notifications"
         title: I18n.tr("Focus modes")
@@ -375,7 +383,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Repeater {
                 model: Notifications.modes
-                delegate: Pill {
+                delegate: Chip {
                     required property var modelData
                     icon: modelData.glyph
                     label: modelData.name + (Notifications.mode === modelData.id ? " · " + I18n.tr("on") : "")
@@ -399,7 +407,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Repeater {
                 model: section.activeApps
-                delegate: Pill {
+                delegate: Chip {
                     required property var modelData
                     readonly property bool on: ((Settings.focusAllow || {})[modesCard.editing] || [])
                         .some(a => String(a).toLowerCase() === String(modelData.name).toLowerCase())
@@ -418,7 +426,7 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         visible: section.part === "notifications"
         title: I18n.tr("Quiet hours")
         subtitle: I18n.tr("Do Not Disturb on a schedule, every day")
@@ -426,32 +434,36 @@ ColumnLayout {
         note: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd)) : ""
         icon: "\u{f00a0}"
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Quiet hours")
             note: I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
             checked: Settings.dndScheduleEnabled === true
             onToggled: Settings.set("dndScheduleEnabled", !(Settings.dndScheduleEnabled === true))
         }
 
-        Stepper {
+        SettingsRow {
             visible: Settings.dndScheduleEnabled === true
             label: I18n.tr("From")
-            valueText: section._hhmm(Settings.dndScheduleStart)
-            onDecrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, -30)
-            onIncrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, 30)
+            Stepper {
+                valueText: section._hhmm(Settings.dndScheduleStart)
+                onDecrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, -30)
+                onIncrement: section._stepTime("dndScheduleStart", Settings.dndScheduleStart, 30)
+            }
         }
 
-        Stepper {
+        SettingsRow {
             visible: Settings.dndScheduleEnabled === true
             label: I18n.tr("Until")
-            valueText: section._hhmm(Settings.dndScheduleEnd)
-            onDecrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, -30)
-            onIncrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, 30)
+            Stepper {
+                valueText: section._hhmm(Settings.dndScheduleEnd)
+                onDecrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, -30)
+                onIncrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, 30)
+            }
         }
     }
 
     // ── 5. Focus Automation & Distraction Control ────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Focus Automation")
         subtitle: I18n.tr("Do Not Disturb while focusing, and break reminders. Recording screen time is on Privacy")
@@ -461,7 +473,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Toggle {
+            SwitchRow {
                 label: I18n.tr("Auto-Silence Notifications in Focus Mode")
                 subtitle: I18n.tr("Automatically activate Do Not Disturb during active focus sessions")
                 checked: section.autoDnd
@@ -472,7 +484,7 @@ ColumnLayout {
                 }
             }
 
-            Toggle {
+            SwitchRow {
                 label: I18n.tr("Hourly Eye Care & Break Reminders")
                 subtitle: I18n.tr("Send a gentle notification when continuous screen time reaches 60 minutes")
                 checked: section.breakReminders

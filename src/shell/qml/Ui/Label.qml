@@ -24,11 +24,12 @@ Text {
 
     readonly property int _size: {
         switch (root.role) {
-        case "caption": return Design.font.caption;
-        case "subhead": return Design.font.subhead;
-        case "title":   return Design.font.title;
-        case "display": return Design.font.display;
-        case "body":    return Design.font.body;
+        case "caption":  return Design.font.caption;
+        case "footnote": return Design.font.footnote;
+        case "subhead":  return Design.font.subhead;
+        case "title":    return Design.font.title;
+        case "display":  return Design.font.display;
+        case "body":     return Design.font.body;
         default:
             // An unknown role used to fall through to body without a word.
             console.warn("Label: unknown role \"" + root.role + "\", drawn as body");

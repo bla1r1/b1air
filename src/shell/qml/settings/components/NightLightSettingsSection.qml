@@ -122,176 +122,189 @@ ColumnLayout {
     }
 
     // ── 1. Master Control ────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Night Light")
-        subtitle: section.nightLightEnabled
+        description: section.nightLightEnabled
             ? I18n.tr("Active at %1K color temperature", section.tempK)
             : I18n.tr("Reduce blue light in evening hours to protect sleep")
-        icon: "\u{f0599}"
 
-        Toggle {
-            label: I18n.tr("Night Light")
-            subtitle: I18n.tr("Shift the screen towards warm colours to go easier on the eyes at night")
+        SwitchRow {
+            title: I18n.tr("Night Light")
+            note: I18n.tr("Shift the screen towards warm colours to go easier on the eyes at night")
             checked: section.nightLightEnabled
             onToggled: section.applyTemp(!section.nightLightEnabled, section.tempK)
         }
     }
 
     // ── 2. Color Temperature Slider & Presets ────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.nightLightEnabled
         title: I18n.tr("Color Temperature")
-        subtitle: I18n.tr("Lower values produce warmer, amber tones with less blue light")
-        icon: "\u{f0590}"
+        description: I18n.tr("Lower values produce warmer, amber tones with less blue light")
 
-        ColumnLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.topMargin: Design.s(Design.space.xs)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            implicitHeight: tempCol.implicitHeight
 
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Color Warmth"); weight: Design.weight.semibold }
-                Item { Layout.fillWidth: true }
-                Label { text: section.tempK + " K"; role: "caption"; isMono: true; color: Design.textDim }
-            }
+            ColumnLayout {
+                id: tempCol
+                anchors.fill: parent
+                spacing: Design.s(Design.space.sm)
 
-            // Slider: 1900K (a candle flame, as warm as f.lux and gammastep
-            // go) to 6500K, mapped to 0..100.
-            Slider {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
-                value: Math.round(((section.tempK - 1900) / 4600) * 100)
-                icon: "\u{f0590}"
-                onMoved: pct => {
-                    section.dragTemp = Math.round((1900 + (pct / 100) * 4600) / 100) * 100;
-                    dragSettle.restart();
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: I18n.tr("Color Warmth"); weight: Design.weight.semibold }
+                    Item { Layout.fillWidth: true }
+                    Label { text: section.tempK + " K"; role: "caption"; isMono: true; color: Design.textDim }
+                }
+
+                // Slider: 1900K to 6500K
+                Slider {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Design.s(Design.size.md)
+                    value: Math.round(((section.tempK - 1900) / 4600) * 100)
+                    icon: "\u{f0590}"
+                    onMoved: pct => {
+                        section.dragTemp = Math.round((1900 + (pct / 100) * 4600) / 100) * 100;
+                        dragSettle.restart();
+                    }
                 }
             }
+        }
 
-            Label { text: I18n.tr("Quick Warmth Presets"); role: "caption"; dim: true }
+        SettingsRow {
+            title: I18n.tr("Quick Warmth Presets")
 
-            Flow {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.xs)
-
-                Pill {
-                    label: I18n.tr("Candle (1900K)")
-                    active: section.tempK === 1900
-                    onClicked: section.applyTemp(true, 1900)
-                }
-
-                Pill {
-                    label: I18n.tr("Incandescent (2700K)")
-                    active: section.tempK === 2700
-                    onClicked: section.applyTemp(true, 2700)
-                }
-
-                Pill {
-                    label: I18n.tr("Halogen (3400K)")
-                    active: section.tempK === 3400
-                    onClicked: section.applyTemp(true, 3400)
-                }
-
-                Pill {
-                    label: I18n.tr("Sunset (4500K)")
-                    active: section.tempK === 4500
-                    onClicked: section.applyTemp(true, 4500)
-                }
-
-                Pill {
-                    label: I18n.tr("Daylight (6500K)")
-                    active: section.tempK === 6500
-                    onClicked: section.applyTemp(true, 6500)
-                }
+            SegmentedControl {
+                size: "sm"
+                model: [
+                    { id: "1900", label: "1900K" },
+                    { id: "2700", label: "2700K" },
+                    { id: "3400", label: "3400K" },
+                    { id: "4500", label: "4500K" },
+                    { id: "6500", label: "6500K" }
+                ]
+                current: String(section.tempK)
+                onPicked: id => section.applyTemp(true, parseInt(id))
             }
         }
     }
 
     // ── 3. Schedule ──────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.nightLightEnabled
         title: I18n.tr("Schedule")
-        subtitle: section.schedule === "always"
+        description: section.schedule === "always"
             ? I18n.tr("Warm all the time while Night Light is on")
             : preview.night === "none" ? I18n.tr("The sun does not set here today")
             : preview.night === "all" ? I18n.tr("The sun does not rise here today")
             : preview.night === "unknown" ? I18n.tr("No location: enter one below")
             : preview.night !== "" ? I18n.tr("Warm from %1 to %2", preview.night.split("-")[0], preview.night.split("-")[1])
             : ""
-        icon: "\u{f0150}"
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
+        SettingsRow {
+            title: I18n.tr("Mode")
 
-            Pill {
-                label: I18n.tr("Always")
-                active: section.schedule === "always"
-                onClicked: section.applyAll({ nightLightSchedule: "always" })
-            }
-            Pill {
-                label: I18n.tr("Set hours")
-                active: section.schedule === "hours"
-                onClicked: section.applyAll({ nightLightSchedule: "hours" })
-            }
-            Pill {
-                label: I18n.tr("Sunset to sunrise")
-                active: section.schedule === "sun"
-                onClicked: section.applyAll({ nightLightSchedule: "sun" })
+            SegmentedControl {
+                size: "sm"
+                model: [
+                    { id: "always", label: I18n.tr("Always") },
+                    { id: "hours",  label: I18n.tr("Set hours") },
+                    { id: "sun",    label: I18n.tr("Sunset to sunrise") }
+                ]
+                current: section.schedule
+                onPicked: id => section.applyAll({ nightLightSchedule: id })
             }
         }
 
-        Stepper {
+        SettingsRow {
             visible: section.schedule === "hours"
-            label: I18n.tr("From")
-            valueText: Settings.nightLightFrom || "20:00"
-            onDecrement: section.applyAll({ nightLightFrom: section.shiftTime(Settings.nightLightFrom || "20:00", -15) })
-            onIncrement: section.applyAll({ nightLightFrom: section.shiftTime(Settings.nightLightFrom || "20:00", 15) })
+            title: I18n.tr("Active hours")
+
+            RowLayout {
+                spacing: Design.s(Design.space.md)
+
+                SettingsRow {
+                    label: I18n.tr("From")
+                    Stepper {
+                        valueText: Settings.nightLightFrom || "20:00"
+                        onDecrement: section.applyAll({ nightLightFrom: section.shiftTime(Settings.nightLightFrom || "20:00", -15) })
+                        onIncrement: section.applyAll({ nightLightFrom: section.shiftTime(Settings.nightLightFrom || "20:00", 15) })
+                    }
+                }
+
+                SettingsRow {
+                    label: I18n.tr("Until")
+                    Stepper {
+                        valueText: Settings.nightLightTo || "07:00"
+                        onDecrement: section.applyAll({ nightLightTo: section.shiftTime(Settings.nightLightTo || "07:00", -15) })
+                        onIncrement: section.applyAll({ nightLightTo: section.shiftTime(Settings.nightLightTo || "07:00", 15) })
+                    }
+                }
+            }
         }
 
-        Stepper {
-            visible: section.schedule === "hours"
-            label: I18n.tr("Until")
-            valueText: Settings.nightLightTo || "07:00"
-            onDecrement: section.applyAll({ nightLightTo: section.shiftTime(Settings.nightLightTo || "07:00", -15) })
-            onIncrement: section.applyAll({ nightLightTo: section.shiftTime(Settings.nightLightTo || "07:00", 15) })
-        }
-
-        Label {
+        Item {
             visible: section.schedule === "sun"
             Layout.fillWidth: true
-            text: Settings.nightLightLocation
-                ? I18n.tr("Sun times for %1.", Settings.nightLightLocation)
-                : preview.location !== ""
-                    ? I18n.tr("Sun times for your time zone (%1). For a closer match, enter your location.",
-                              preview.location.split(" ").slice(1).join(" ") || preview.location)
-                    : I18n.tr("Your time zone has no known location. Enter yours to follow the sun.")
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
-        }
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.topMargin: Design.s(Design.space.xs)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            implicitHeight: sunCol.implicitHeight
 
-        Field {
-            visible: section.schedule === "sun"
-            Layout.fillWidth: true
-            mono: true
-            text: Settings.nightLightLocation || ""
-            placeholder: I18n.tr("Latitude, longitude — e.g. 50.45, 30.52. Empty: from the time zone")
-            validator: RegularExpressionValidator { regularExpression: /^\s*(-?[0-9]{1,2}(\.[0-9]+)?\s*,\s*-?[0-9]{1,3}(\.[0-9]+)?)?\s*$/ }
-            onCommitted: v => {
-                const t = v.trim();
-                if (t === (Settings.nightLightLocation || "")) return;
-                section.applyAll({ nightLightLocation: t });
+            ColumnLayout {
+                id: sunCol
+                anchors.fill: parent
+                spacing: Design.s(Design.space.xs)
+
+                Label {
+                    Layout.fillWidth: true
+                    text: Settings.nightLightLocation
+                        ? I18n.tr("Sun times for %1.", Settings.nightLightLocation)
+                        : preview.location !== ""
+                            ? I18n.tr("Sun times for your time zone (%1). For a closer match, enter your location.",
+                                      preview.location.split(" ").slice(1).join(" ") || preview.location)
+                            : I18n.tr("Your time zone has no known location. Enter yours to follow the sun.")
+                    role: "caption"
+                    dim: true
+                    wrapMode: Text.WordWrap
+                }
+
+                Field {
+                    Layout.fillWidth: true
+                    mono: true
+                    text: Settings.nightLightLocation || ""
+                    placeholder: I18n.tr("Latitude, longitude — e.g. 50.45, 30.52. Empty: from the time zone")
+                    validator: RegularExpressionValidator { regularExpression: /^\s*(-?[0-9]{1,2}(\.[0-9]+)?\s*,\s*-?[0-9]{1,3}(\.[0-9]+)?)?\s*$/ }
+                    onCommitted: v => {
+                        const t = v.trim();
+                        if (t === (Settings.nightLightLocation || "")) return;
+                        section.applyAll({ nightLightLocation: t });
+                    }
+                }
             }
         }
 
-        Label {
-            Layout.fillWidth: true
+        Item {
             visible: section.schedule !== "always"
-            text: I18n.tr("Colours change over half an hour at each end.")
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            implicitHeight: noteLbl.implicitHeight
+
+            Label {
+                id: noteLbl
+                anchors.fill: parent
+                text: I18n.tr("Colours change over half an hour at each end.")
+                role: "caption"
+                dim: true
+                wrapMode: Text.WordWrap
+            }
         }
     }
 }

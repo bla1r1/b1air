@@ -95,9 +95,11 @@ Item {
                             elide: Text.ElideRight
                             Layout.maximumWidth: Design.s(520)
                         }
-                        BarButton {
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
                             visible: frame.renamable
-                            glyph: "\u{f03eb}"; small: true
+                            icon: "\u{f03eb}"; size: "sm"
                             tip: I18n.tr("Rename")
                             onClicked: frame.renameRequested()
                         }
@@ -214,9 +216,11 @@ Item {
                         Behavior on width { NumberAnimation { duration: Design.duration.fast } }
                     }
                 }
-                BarButton {
+                Button {
+                    variant: "ghost"
+                    iconOnly: true
                     visible: frame.stoppable
-                    glyph: "\u{f0156}"; small: true; tip: I18n.tr("Stop")
+                    icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Stop")
                     onClicked: frame.stopRequested()
                 }
             }

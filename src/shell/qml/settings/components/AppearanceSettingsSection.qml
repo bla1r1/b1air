@@ -34,17 +34,21 @@ ColumnLayout {
     // swaymsg changes this session; SwayConfig writes conf.d/custom_look.conf
     // so the change is still there after a logout. All four of these were
     // applied and then forgotten — see Services/SwayConfig.
-    Card {
+    SettingsGroup {
         title: I18n.tr("Accent colour")
-        subtitle: I18n.tr("Buttons, selection and focus. The theme's own, or one of its other colours")
-        icon: "\u{f0376}"
+        description: I18n.tr("Buttons, selection and focus. The theme's own, or one of its other colours")
 
-        ColumnLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.topMargin: Design.s(Design.space.xs)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            implicitHeight: swatchRow.implicitHeight
 
             RowLayout {
-                Layout.fillWidth: true
+                id: swatchRow
+                anchors.fill: parent
                 spacing: Design.s(Design.space.sm)
 
                 Repeater {
@@ -77,6 +81,15 @@ ColumnLayout {
                         border.color: (Settings.accentName || "") === accentDot.modelData.name ? Design.text : "transparent"
                         border.width: 2
 
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: accentDot.modelData.name || I18n.tr("Default Accent")
+
+                        FocusRing {
+                            target: accentDot
+                            visible: accentDot.activeFocus
+                            radius: accentDot.radius + 2
+                        }
 
                         Icon {
                             visible: (Settings.accentName || "") === accentDot.modelData.name
@@ -90,12 +103,14 @@ ColumnLayout {
                             id: accentDotMa
                             onClicked: Settings.set("accentName", accentDot.modelData.name)
                         }
+
+                        Keys.onSpacePressed: Settings.set("accentName", accentDot.modelData.name)
+                        Keys.onReturnPressed: Settings.set("accentName", accentDot.modelData.name)
                     }
                 }
             }
         }
     }
-
 
     // ── 2. Compositor Effects ────────────────────────────────────────────────
     // Other applications: GTK and Qt programs are not drawn by the shell, and
@@ -104,30 +119,25 @@ ColumnLayout {
     // the palette, or pins them dark or light so nothing flashes white on a
     // dark desktop (or the reverse). Programs already open need a restart to
     // pick it up; GTK apps mostly follow at once.
-    Card {
+    SettingsGroup {
         title: I18n.tr("Other Applications")
-        subtitle: I18n.tr("Browsers, GTK and Qt programs: follow the theme, or stay dark or light")
-        icon: "\u{f08c6}"
+        description: I18n.tr("Browsers, GTK and Qt programs: follow the theme, or stay dark or light")
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
+        SettingsRow {
+            title: I18n.tr("Color scheme")
+            note: I18n.tr("Programs already running may need to be restarted to pick up the change")
 
-            Repeater {
+            SegmentedControl {
+                size: "sm"
                 model: [
                     { id: "auto",  label: I18n.tr("Follow theme") },
                     { id: "dark",  label: I18n.tr("Always dark") },
                     { id: "light", label: I18n.tr("Always light") }
                 ]
-                Pill {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    label: modelData.label
-                    active: (Settings.appColorScheme || "auto") === modelData.id
-                    onClicked: {
-                        Settings.set("appColorScheme", modelData.id);
-                        appsApply.restart();
-                    }
+                current: Settings.appColorScheme || "auto"
+                onPicked: id => {
+                    Settings.set("appColorScheme", id);
+                    appsApply.restart();
                 }
             }
         }

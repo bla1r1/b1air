@@ -324,24 +324,15 @@ PopupShell {
     // Arrange on / off. It lived only in the month's header, so hiding the
     // month hid the one way back into arrange mode — and with it every way
     // to put anything back.
-    component EditToggle: Rectangle {
-        width: Design.s(26); height: Design.s(26)
-        radius: Design.s(Design.radius.ctl)
-        color: toggleMa.containsMouse ? Design.glassHover : Design.glassCard
-        border.color: window.editing ? Design.accent : Design.line
-        border.width: 1
-
-        Icon {
-            anchors.centerIn: parent
-            text: window.editing ? "\u{f012c}" : "\u{f03eb}"
-            role: "caption"
-            color: window.editing ? Design.accent : Design.text
-        }
-        Clickable {
-            id: toggleMa
-            hoverEnabled: true
-            onClicked: window.editing = !window.editing
-        }
+    // The pencil that arranges the calendar's parts; a check while arranging.
+    component EditToggle: Button {
+        variant: "ghost"
+        size: "sm"
+        iconOnly: true
+        checked: window.editing
+        icon: window.editing ? "\u{f012c}" : "\u{f03eb}"
+        tip: window.editing ? I18n.tr("Done") : I18n.tr("Arrange")
+        onClicked: window.editing = !window.editing
     }
 
     ColumnLayout {

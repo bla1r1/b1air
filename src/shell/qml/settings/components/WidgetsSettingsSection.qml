@@ -54,7 +54,7 @@ ColumnLayout {
         }
 
 
-        Toggle {
+        SwitchRow {
             checked: row.shown
             onToggled: Settings.set(row.boolKey, !row.shown)
         }
@@ -64,40 +64,42 @@ ColumnLayout {
 
 
     // ── Dock ─────────────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Dock")
         subtitle: I18n.tr("Pinned and open apps along the bottom of the screen; a dot under the ones running")
         icon: "\u{f0db}"
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Show the dock")
             subtitle: I18n.tr("Right-click an app in it to keep it there or let it go")
             checked: Settings.dockEnabled === true
             onToggled: Settings.set("dockEnabled", Settings.dockEnabled !== true)
         }
-        Toggle {
+        SwitchRow {
             visible: Settings.dockEnabled === true
             label: I18n.tr("Hide it until the pointer reaches the bottom edge")
             checked: Settings.dockAutohide === true
             onToggled: Settings.set("dockAutohide", Settings.dockAutohide !== true)
         }
-        Toggle {
+        SwitchRow {
             visible: Settings.dockEnabled === true
             label: I18n.tr("Magnify icons under the pointer")
             checked: Settings.dockMagnify !== false
             onToggled: Settings.set("dockMagnify", Settings.dockMagnify === false)
         }
-        Stepper {
+        SettingsRow {
             visible: Settings.dockEnabled === true
             label: I18n.tr("Icon size")
-            valueText: (Settings.dockIconSize || 48) + " px"
-            onDecrement: Settings.set("dockIconSize", Math.max(32, (Settings.dockIconSize || 48) - 4))
-            onIncrement: Settings.set("dockIconSize", Math.min(72, (Settings.dockIconSize || 48) + 4))
+            Stepper {
+                valueText: (Settings.dockIconSize || 48) + " px"
+                onDecrement: Settings.set("dockIconSize", Math.max(32, (Settings.dockIconSize || 48) - 4))
+                onIncrement: Settings.set("dockIconSize", Math.min(72, (Settings.dockIconSize || 48) + 4))
+            }
         }
     }
 
     // ── Top bar ──────────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Top Bar Modules")
         subtitle: I18n.tr("Which islands the bar draws")
 
@@ -145,13 +147,13 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Design.s(Design.space.md)
         Label { Layout.fillWidth: true; text: ccRow.title; weight: Design.weight.semibold }
-        Toggle {
+        SwitchRow {
             checked: ccRow.shown
             onToggled: Settings.setWidgetHidden(ccRow.listKey, ccRow.itemId, ccRow.shown)
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Control Center")
         subtitle: I18n.tr("Which tiles and cards the panel shows. Their order is changed in the panel itself, with the pencil")
         icon: "\u{f062e}"

@@ -69,7 +69,7 @@ ColumnLayout {
     }
 
     // ── 1. WayVNC Native Remote Desktop ──────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Remote Desktop (WayVNC)")
         subtitle: section.vncRunning
             ? I18n.tr("Server active on port %1 — local session only", section.vncPort)
@@ -80,7 +80,7 @@ ColumnLayout {
         // the same reason as Appearance: the shared row is what ten other
         // settings pages use, and rolling it by hand produced a smaller switch
         // pinned to the label instead of one at the end of the row.
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Remote Desktop Server")
             subtitle: section.vncRunning
                 ? I18n.tr("Active (Listening on %1:%2)", (section.devMode ? section.localIp : "127.0.0.1"), section.vncPort)
@@ -126,9 +126,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
             visible: section.vncRunning
 
-            Pill {
-                label: "vnc://" + section.localIp + ":" + section.vncPort
-                active: true
+            Badge {
+                text: "vnc://" + section.localIp + ":" + section.vncPort
             }
 
             Label {
@@ -138,7 +137,7 @@ ColumnLayout {
                 dim: true
             }
 
-            ActionButton {
+            Button {
                 label: I18n.tr("Copy Address")
                 icon: "\u{f00c5}"
                 onActivated: {
@@ -149,13 +148,13 @@ ColumnLayout {
     }
 
     // ── 2. Unattended Screen Sharing & Permissions ───────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Unattended Remote Access & Permissions")
         subtitle: I18n.tr("Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS")
         icon: "\u{f016d}"
 
         // Prompt-Free Screencast Toggle
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Silent Screencast Sharing")
             subtitle: section.devMode
                 ? I18n.tr("Allow trusted remote tools to capture screen without interactive popup confirmation")

@@ -71,14 +71,14 @@ PopupShell {
 
             Item { Layout.fillWidth: true }
 
-            ActionButton {
+            Button {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0c5}"
                 label: I18n.tr("Copy Paths")
                 onActivated: root.copyAllPaths()
             }
 
-            ActionButton {
+            Button {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0156}"
                 label: I18n.tr("Clear All")
@@ -131,7 +131,7 @@ PopupShell {
                     width: ListView.view ? ListView.view.width : 0
                     height: Design.s(44)
                     radius: Design.s(Design.radius.ctl)
-                    color: fileHover.containsMouse ? Design.raised : Design.glassCard
+                    color: fileHover.containsMouse ? Design.glassHover : Design.glassCard
                     border.color: fileHover.containsMouse ? Design.accent : Design.glassBorder
                     border.width: 1
 

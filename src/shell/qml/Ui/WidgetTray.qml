@@ -51,17 +51,17 @@ Rectangle {
 
                 Rectangle {
                     required property var modelData
-                    height: Design.s(26)
-                    width: chipRow.implicitWidth + Design.s(16)
+                    height: Design.s(Design.size.xs)
+                    width: chipRow.implicitWidth + Design.s(Design.space.lg)
                     radius: height / 2
-                    color: chipMa.containsMouse ? Design.tint(Design.accent, 0.30) : Design.raised
+                    color: chipMa.containsMouse ? Design.tint(Design.accent, 0.30) : Design.well
                     border.color: Design.tint(Design.accent, 0.5)
                     border.width: 1
 
                     Row {
                         id: chipRow
                         anchors.centerIn: parent
-                        spacing: Design.s(6)
+                        spacing: Design.s(Design.space.xs + Design.space.xxs)
                         Icon { text: "\u{f0415}"; role: "caption"; color: Design.accent; anchors.verticalCenter: parent.verticalCenter }
                         Icon {
                             visible: text !== ""

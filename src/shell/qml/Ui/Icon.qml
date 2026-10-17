@@ -17,11 +17,12 @@ Text {
 
     readonly property int _size: {
         switch (root.role) {
-        case "caption": return Design.font.caption;
-        case "body":    return Design.font.body;
-        case "title":   return Design.font.title;
-        case "display": return Design.font.display;
-        case "subhead": return Design.font.subhead;
+        case "caption":  return Design.font.caption;
+        case "footnote": return Design.font.footnote;
+        case "body":     return Design.font.body;
+        case "title":    return Design.font.title;
+        case "display":  return Design.font.display;
+        case "subhead":  return Design.font.subhead;
         default:
             // SessionMenu asked for "hero", which never existed: its icons
             // came out at subhead size and nothing said so.

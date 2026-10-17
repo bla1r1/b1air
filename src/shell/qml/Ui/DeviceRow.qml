@@ -21,7 +21,7 @@ Rectangle {
     Layout.preferredHeight: Design.s(Design.size.rowTall)
 
     radius: Design.s(Design.radius.ctl)
-    color: Design.sunken
+    color: Design.well
     border.color: Design.line
     border.width: Design.border
 

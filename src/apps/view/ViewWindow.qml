@@ -198,7 +198,8 @@ ApplicationWindow {
                         color: Design.textFaint
                     }
                 }
-                BarGroup {
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
                     visible: !window.isMedia
                     CtrlBtn { icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
                     Label {
@@ -211,16 +212,18 @@ ApplicationWindow {
                     }
                     CtrlBtn { icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
                 }
-                BarGroup {
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
                     visible: !window.isMedia
                     CtrlBtn { icon: "\u{f0450}"; tip: I18n.tr("Reset view (0)"); onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
                     CtrlBtn { icon: "\u{f0467}"; tip: I18n.tr("Rotate 90° (R)"); onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
                 }
-                BarGroup {
+                RowLayout {
+                    spacing: Design.s(Design.space.xxs)
                     CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
                     CtrlBtn { icon: "\u{f0293}"; tip: I18n.tr("Full screen (F)"); active: window.visibility === Window.FullScreen; onClicked: window.toggleFullScreen() }
                 }
-                BarButton { visible: !window.isMedia; glyph: "\u{f0e09}"; label: I18n.tr("Set as wallpaper"); onClicked: ViewBackend.setWallpaper() }
+                Button { variant: "secondary"; visible: !window.isMedia; icon: "\u{f0e09}"; label: I18n.tr("Set as wallpaper"); onClicked: ViewBackend.setWallpaper() }
             }
 
             // ── Main Image Canvas ────────────────────────────────────────────
@@ -455,7 +458,8 @@ ApplicationWindow {
                     anchors.rightMargin: Design.s(Design.space.md)
                     spacing: Design.s(Design.space.sm)
 
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         CtrlBtn { icon: "\u{f04ae}"; tip: I18n.tr("Previous (Page Up)"); enabled: ViewBackend.hasPrevious; onClicked: ViewBackend.previous() }
                         CtrlBtn {
                             icon: player.playbackState === MediaPlayer.PlayingState ? "\u{f03e4}" : "\u{f040a}"
@@ -677,10 +681,10 @@ ApplicationWindow {
     }
 
     // The suite's toolbar button; `tip` was declared here and never shown.
-    component CtrlBtn: BarButton {
-        property string icon: ""
+    component CtrlBtn: Button {
+        variant: "ghost"
+        iconOnly: true
         property bool active: false
-        glyph: icon
         checked: active
     }
 }

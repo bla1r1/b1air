@@ -69,24 +69,27 @@ ColumnLayout {
                 color: line.tone
             }
 
-            Pill {
+            Button {
                 visible: line.isDevice && line.type === "sink" && line.row && !line.row.disabled
-                label: I18n.tr("Test")
+                size: "sm"
+                text: I18n.tr("Test")
                 icon: "\u{f0025}"
                 onClicked: Audio.testAudio(line.row.id)
             }
 
-            Pill {
+            Button {
                 visible: line.selectable && line.row && !line.row.is_default && !line.row.disabled
-                label: I18n.tr("Use this")
+                size: "sm"
+                variant: "ghost"
+                text: I18n.tr("Use this")
                 onClicked: Audio.setDefault(line.type, line.row.name)
             }
 
-            Pill {
+            Button {
                 visible: line.isDevice && line.row
-                label: line.row && line.row.disabled ? I18n.tr("Enable") : I18n.tr("Disable")
-                active: line.row && line.row.disabled
-                activeColor: Design.danger
+                size: "sm"
+                variant: line.row && line.row.disabled ? "secondary" : "ghost"
+                text: line.row && line.row.disabled ? I18n.tr("Enable") : I18n.tr("Disable")
                 onClicked: if (line.row) Audio.toggleDeviceDisabled(line.row.name)
             }
         }
@@ -94,7 +97,7 @@ ColumnLayout {
         Slider {
             visible: !(line.row && line.row.disabled)
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: line.row ? line.row.volume : 0
             muted: line.row ? line.row.mute : false
             tone: line.tone
@@ -105,50 +108,21 @@ ColumnLayout {
         }
     }
 
-    Card {
-        title: I18n.tr("Application volume")
-        subtitle: I18n.tr("Each stream keeps its own level. Turning one down here does not touch the master.")
-        icon: "\u{f075a}"
-
-        Repeater {
-            model: Audio.apps
-            MixerRow {
-                required property var model
-                type: "sink-input"
-                row: model
-                isDevice: false
-            }
-        }
-
-        EmptyState {
-            Layout.fillWidth: true
-            visible: Audio.apps.count === 0
-            icon: "\u{f075a}"
-            title: I18n.tr("Nothing is playing")
-            hint: I18n.tr("Applications appear here while they hold an audio stream.")
-        }
-    }
-
-    Card {
+    SettingsGroup {
         title: I18n.tr("Sound")
-        subtitle: I18n.tr("The master switch for everything this computer plays")
-        icon: Audio.masterMute ? "\u{f075f}" : "\u{f057e}"
+        description: I18n.tr("Master switch for system audio")
 
-        // One Toggle row, as everywhere else — this was a hand-built row
-        // around a bare Toggle, with "Enabled" under the label repeating what
-        // the switch already shows.
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Sound output")
-            note: Audio.masterMute ? I18n.tr("Muted — the volume levels below are kept") : I18n.tr("Off mutes everything; volume levels are kept")
+            note: Audio.masterMute ? I18n.tr("Muted — volume levels below are kept") : I18n.tr("Off mutes everything; volume levels are kept")
             checked: !Audio.masterMute
             onToggled: Audio.toggleMasterMute()
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Output devices")
-        subtitle: I18n.tr("Per-device level, independent of the master slider")
-        icon: "\u{f057e}"
+        description: I18n.tr("Per-device level, independent of master slider")
 
         Repeater {
             model: Audio.outputs
@@ -170,10 +144,9 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Input devices")
-        subtitle: I18n.tr("Microphones and capture sources")
-        icon: "\u{f036c}"
+        description: I18n.tr("Microphones and capture sources")
 
         Repeater {
             model: Audio.inputs
@@ -186,15 +159,13 @@ ColumnLayout {
             }
         }
 
-        // The Control Center's Sound page has had this since it was written and
-        // the full page never did — the same way brightness lived only in the
-        // battery popup. This file's own header says it holds "the parts that
-        // did not fit" in the mini view, so the popup being strictly more
-        // capable is backwards.
         RowLayout {
             visible: Audio.inputs.count > 0
             Layout.fillWidth: true
             Layout.topMargin: Design.s(Design.space.sm)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             spacing: Design.s(Design.space.sm)
 
             Icon {
@@ -216,17 +187,18 @@ ColumnLayout {
 
                 Label {
                     text: I18n.tr("Filters keyboard clatter and room noise out of the microphone")
-                    role: "caption"
+                    role: "footnote"
                     dim: true
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
             }
 
-            ActionButton {
+            Button {
+                size: "sm"
                 icon: "\u{f021}"
-                label: I18n.tr("Toggle Filter")
-                onActivated: Daemon.micRnnoiseToggle()
+                text: I18n.tr("Toggle Filter")
+                onClicked: Daemon.micRnnoiseToggle()
             }
         }
 
@@ -239,51 +211,71 @@ ColumnLayout {
         }
     }
 
-    // The volume keys in one place: how far a press moves, the popup and
-    // the click. They were split over "Audio Feedback & Sound Effects" and
-    // "Audio preferences", both partly about the same keys.
-    Card {
-        title: I18n.tr("Volume keys")
-        subtitle: I18n.tr("What a press of the volume keys does")
-        icon: "\u{f04c3}"
+    SettingsGroup {
+        title: I18n.tr("Application volume")
+        description: I18n.tr("Individual stream levels")
 
-        Stepper {
-            label: I18n.tr("Volume step")
-            valueText: Settings.audioStep + "%"
-            onDecrement: Settings.set("audioStep", Math.max(1, Settings.audioStep - 1))
-            onIncrement: Settings.set("audioStep", Math.min(25, Settings.audioStep + 1))
+        Repeater {
+            model: Audio.apps
+            MixerRow {
+                required property var model
+                type: "sink-input"
+                row: model
+                isDevice: false
+            }
         }
 
-        Toggle {
+        EmptyState {
+            Layout.fillWidth: true
+            visible: Audio.apps.count === 0
+            icon: "\u{f075a}"
+            title: I18n.tr("Nothing is playing")
+            hint: I18n.tr("Applications appear here while they hold an audio stream.")
+        }
+    }
+
+    SettingsGroup {
+        title: I18n.tr("Volume keys")
+        description: I18n.tr("What a press of the media keys does")
+
+        SettingsRow {
+            label: I18n.tr("Volume step")
+            Stepper {
+                valueText: Settings.audioStep + "%"
+                onDecrement: Settings.set("audioStep", Math.max(1, Settings.audioStep - 1))
+                onIncrement: Settings.set("audioStep", Math.min(25, Settings.audioStep + 1))
+            }
+        }
+
+        SwitchRow {
             label: I18n.tr("Volume notifications")
-            subtitle: I18n.tr("Show the volume popup when media keys are pressed")
+            note: I18n.tr("Show popup overlay when media keys are pressed")
             checked: Settings.audioNotifications
             onToggled: Settings.set("audioNotifications", !Settings.audioNotifications)
         }
 
-        Toggle {
-            label: I18n.tr("Volume Step Feedback Click")
-            subtitle: I18n.tr("Play a subtle audio tick when adjusting volume level with keys")
+        SwitchRow {
+            label: I18n.tr("Volume feedback click")
+            note: I18n.tr("Play an audio tick when adjusting volume level with keys")
             checked: Settings.soundVolumeFeedback !== false
             onToggled: Settings.set("soundVolumeFeedback", !(Settings.soundVolumeFeedback !== false))
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("System sounds")
-        subtitle: I18n.tr("Sounds the desktop itself plays")
-        icon: "\u{f0028}"
+        description: I18n.tr("Audio feedback played by desktop")
 
-        Toggle {
-            label: I18n.tr("Screenshot Shutter Sound")
-            subtitle: I18n.tr("Play a camera shutter sound when saving or copying a screenshot")
+        SwitchRow {
+            label: I18n.tr("Screenshot sound")
+            note: I18n.tr("Play a shutter sound when capturing screenshot")
             checked: Settings.soundScreenshotFeedback !== false
             onToggled: Settings.set("soundScreenshotFeedback", !(Settings.soundScreenshotFeedback !== false))
         }
 
-        Toggle {
-            label: I18n.tr("Peripheral & Device Connect Chime")
-            subtitle: I18n.tr("Play a chime when a headset, USB audio interface, dock or Bluetooth audio device connects")
+        SwitchRow {
+            label: I18n.tr("Device connect chime")
+            note: I18n.tr("Play chime when headset, dock or Bluetooth device connects")
             checked: Settings.soundDeviceFeedback !== false
             onToggled: Settings.set("soundDeviceFeedback", !(Settings.soundDeviceFeedback !== false))
         }

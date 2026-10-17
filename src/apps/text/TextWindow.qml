@@ -118,7 +118,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.base
+        color: Design.surface
         clip: true
 
         ColumnLayout {
@@ -131,9 +131,10 @@ Window {
         AppToolbar {
             Layout.fillWidth: true
 
-            BarGroup {
-                BarButton { glyph: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
-                BarButton { glyph: "\u{f0193}"; label: I18n.tr("Save"); primary: TextBackend.isModified; tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
+            RowLayout {
+                spacing: Design.s(Design.space.xxs)
+                Button { variant: "secondary"; icon: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
+                Button { variant: (TextBackend.isModified) ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save");  tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
             }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -155,8 +156,9 @@ Window {
                     elide: Text.ElideMiddle
                 }
             }
-            BarGroup {
-                BarButton { glyph: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+            RowLayout {
+                spacing: Design.s(Design.space.xxs)
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
             }
         }
 
@@ -166,7 +168,7 @@ Window {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Design.base
+            color: Design.surface
 
             RowLayout {
                 anchors.fill: parent
@@ -176,7 +178,7 @@ Window {
                 Rectangle {
                     Layout.fillHeight: true
                     Layout.preferredWidth: Design.s(52)
-                    color: Design.crust
+                    color: Design.ground
 
                     ListView {
                         id: lineNumbersView

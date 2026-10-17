@@ -137,7 +137,7 @@ ColumnLayout {
     ]
 
     // ── Search & Filter ──────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Keyboard Shortcuts Reference")
         subtitle: I18n.tr("Complete cheatsheet of desktop keybindings and global triggers")
         icon: "\u{f11c}"
@@ -159,7 +159,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
             visible: categoryItems.count > 0
 
-            Card {
+            SettingsGroup {
                 title: catCol.modelData.title
                 icon: catCol.modelData.icon
 
@@ -187,7 +187,7 @@ ColumnLayout {
                                 Layout.preferredWidth: Design.s(160)
                                 Layout.preferredHeight: Design.s(28)
                                 radius: Design.s(Design.radius.pill)
-                                color: Design.raised
+                                color: Design.well
                                 border.color: Design.line
                                 border.width: 1
 

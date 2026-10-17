@@ -140,18 +140,17 @@ PopupShell {
             Layout.alignment: Qt.AlignHCenter
             spacing: Design.s(Design.space.sm)
 
-            Pill {
-                label: window.behind > 0 ? I18n.tr("Desktop · %1", window.behind) : I18n.tr("Desktop")
-                icon: "󰚰"
-                active: window.currentTab === "dotfiles"
-                onClicked: window.currentTab = "dotfiles"
-            }
-            Pill {
-                label: (window.sysCount + window.aurCount) > 0
-                       ? I18n.tr("System") + " · " + (window.sysCount + window.aurCount) : I18n.tr("System")
-                icon: "󰏗"
-                active: window.currentTab === "system"
-                onClicked: window.currentTab = "system"
+            SegmentedControl {
+                size: "sm"
+                model: [
+                    { id: "dotfiles", icon: "󰚰",
+                      label: window.behind > 0 ? I18n.tr("Desktop · %1", window.behind) : I18n.tr("Desktop") },
+                    { id: "system", icon: "󰏗",
+                      label: (window.sysCount + window.aurCount) > 0
+                             ? I18n.tr("System") + " · " + (window.sysCount + window.aurCount) : I18n.tr("System") }
+                ]
+                current: window.currentTab
+                onPicked: id => window.currentTab = id
             }
         }
 
@@ -235,11 +234,10 @@ PopupShell {
                 wrapMode: Text.WordWrap
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 icon: "\u{f06b0}"
                 label: window.canUpdate ? I18n.tr("Update now") : I18n.tr("Up to date")
-                tone: window.canUpdate ? Design.ok : Design.textDim
                 enabled: window.canUpdate
                 onActivated: {
                     // Opens a terminal that shows each step and asks for sudo
@@ -285,11 +283,10 @@ PopupShell {
                 wrapMode: Text.WordWrap
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 icon: "\u{f04e6}"
                 label: I18n.tr("Upgrade with %1", window.managerName)
-                tone: Design.accent
                 onActivated: {
                     Daemon.dotfilesSys();
                     window.close();

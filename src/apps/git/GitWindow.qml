@@ -81,7 +81,6 @@ ApplicationWindow {
         property string target: ""
         delegate: AppMenuItem { showDisabled: true }
     }
-    component MenuLine: AppMenuSeparator {}
 
     function showMenu(menu, target) {
         window.repoDropdownOpen = false;
@@ -96,7 +95,7 @@ ApplicationWindow {
         id: repoMenu
         Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(repoMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(repoMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? I18n.tr("View on GitLab") : I18n.tr("View on GitHub")
             enabled: GitBackend.webUrl !== ""
@@ -107,7 +106,7 @@ ApplicationWindow {
             enabled: window.canOpenPr
             onTriggered: GitBackend.openPullRequest()
         }
-        MenuLine {}
+        AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(repoMenu.target)) }
     }
     // A repository in the list, which may not be the open one: target is
@@ -117,7 +116,7 @@ ApplicationWindow {
         Action { text: I18n.tr("Open"); onTriggered: { GitBackend.openRepo(repoListMenu.target); } }
         Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(repoListMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(repoListMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(repoListMenu.target) }
     }
     // A changed file. Stage and unstage are already a click on the checkbox;
@@ -129,10 +128,10 @@ ApplicationWindow {
         Action { text: I18n.tr("Open"); onTriggered: GitBackend.openFile(fileMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(fileMenu.target) }
         Action { text: I18n.tr("Open folder in Terminal"); onTriggered: GitBackend.openTerminal(fileMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(fileMenu.target)) }
         Action { text: I18n.tr("Copy relative path"); onTriggered: GitBackend.copyText(fileMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: fileMenu.conflicted ? I18n.tr("Mark as resolved") : fileMenu.staged ? I18n.tr("Unstage") : I18n.tr("Stage")
             onTriggered: fileMenu.staged ? GitBackend.unstageFile(fileMenu.target) : GitBackend.stageFile(fileMenu.target)
@@ -151,7 +150,7 @@ ApplicationWindow {
             enabled: ext !== ""
             onTriggered: GitBackend.ignorePattern("*" + ext)
         }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: I18n.tr("Discard changes…")
             onTriggered: {
@@ -170,7 +169,7 @@ ApplicationWindow {
         id: changesMenu
         Action { text: I18n.tr("Stage all"); onTriggered: GitBackend.stageAll() }
         Action { text: I18n.tr("Unstage all"); onTriggered: GitBackend.unstageAll() }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: I18n.tr("Discard all changes…")
             enabled: GitBackend.changedFiles.length > 0
@@ -187,7 +186,7 @@ ApplicationWindow {
         id: commitFileMenu
         Action { text: I18n.tr("Open"); onTriggered: GitBackend.openFile(commitFileMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(commitFileMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(commitFileMenu.target)) }
         Action { text: I18n.tr("Copy relative path"); onTriggered: GitBackend.copyText(commitFileMenu.target) }
     }
@@ -196,7 +195,7 @@ ApplicationWindow {
         property string subject: ""
         Action { text: I18n.tr("Copy SHA"); onTriggered: GitBackend.copyText(commitMenu.target) }
         Action { text: I18n.tr("Copy message"); onTriggered: GitBackend.copyText(commitMenu.subject) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: I18n.tr("Revert changes in commit")
             enabled: !window.busy
@@ -268,7 +267,7 @@ ApplicationWindow {
                              accept: v => GitBackend.renameBranch(from, v) });
             }
         }
-        MenuLine {}
+        AppMenuSeparator {}
         Action {
             text: branchMenu.worktree !== "" ? I18n.tr("Open its worktree") : I18n.tr("Open in new worktree")
             enabled: !branchMenu.isCurrent
@@ -286,7 +285,7 @@ ApplicationWindow {
         Action { text: I18n.tr("Open"); onTriggered: { window.branchDropdownOpen = false; GitBackend.openRepo(worktreeMenu.target); } }
         Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(worktreeMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(worktreeMenu.target) }
-        MenuLine {}
+        AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(worktreeMenu.target) }
         Action {
             text: I18n.tr("Remove worktree…")
@@ -295,6 +294,10 @@ ApplicationWindow {
         }
     }
 
+    // One cell of the toolbar: the repository, the branch, the sync, and the
+    // compact tools on the right. One line at a control's height, as every
+    // button in the suite; what each cell is ("Current repository") is its
+    // tooltip — the two-line 60 px cells were GitHub Desktop's, not ours.
     component ToolbarCell: Rectangle {
         id: cell
         property string icon: ""
@@ -304,81 +307,63 @@ ApplicationWindow {
         property bool spinning: false
         property bool dropdown: false
         property bool open: false
-        // compact: icon and one line, sized to its text — for the tools on
-        // the right, which are not the three cells of the original.
+        // compact: sized to its text — for the tools on the right.
         property bool compact: false
         property bool leftDivider: false
         signal clicked()
         signal rightClicked()
 
-        Layout.fillHeight: true
+        Layout.alignment: Qt.AlignVCenter
+        Layout.preferredHeight: Design.s(Design.size.md)
         // The three main cells share the bar's width up to their natural
-        // size, rather than holding a fixed 250 each: in a window tiled to half
-        // a 1920 screen they did not fit, and the last one was cut off.
-        Layout.preferredWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(250)
-        Layout.maximumWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(250)
-        Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(24) : Design.s(110)
+        // size: in a window tiled to half a screen they still fit.
+        Layout.preferredWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.select)
+        Layout.maximumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.select)
+        Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.field)
         Layout.fillWidth: !compact
-        radius: Design.s(Design.radius.card)
+        radius: Design.s(Design.radius.ctl)
         border.width: 1
-        border.color: open ? Design.accent : Design.tint(Design.text, 0.06)
-        color: open ? Design.tint(Design.accent, 0.22)
-             : cellArea.pressed && enabled ? Design.active
-             : cellArea.containsMouse && enabled ? Design.hover : Design.raised
-        opacity: enabled || spinning ? 1.0 : 0.5
+        border.color: open ? Design.tint(Design.accent, 0.35) : Design.glassBorder
+        color: open ? Design.selection
+             : Design.translucent
+               ? (cellArea.pressed && enabled ? Design.tint(Design.text, 0.20)
+                  : cellArea.containsMouse && enabled ? Design.veilBold : Design.well)
+               : (cellArea.pressed && enabled ? Design.active
+                  : cellArea.containsMouse && enabled ? Design.hover : Design.raised)
+        opacity: enabled || spinning ? 1.0 : Design.opacity.disabled
 
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-
-        // Right divider, and a left one where a group starts after a gap.
-        Rectangle {
-            visible: false
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 1
-            color: window.colBorder
-        }
-        Rectangle {
-            visible: false && cell.leftDivider
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 1
-            color: window.colBorder
-        }
 
         // Not anchors.fill: a compact cell takes its width from this row, and
         // a row that also filled the cell would make that width depend on
         // itself.
         RowLayout {
             id: cellRow
-            x: Design.s(cell.compact ? 12 : 14)
-            width: cell.compact ? implicitWidth : cell.width - Design.s(26)
+            x: Design.s(Design.space.md)
+            width: cell.compact ? implicitWidth : cell.width - Design.s(Design.space.md) * 2
             height: parent.height
-            spacing: Design.s(cell.compact ? 7 : 12)
+            spacing: Design.s(Design.space.sm)
 
             Item {
                 Layout.alignment: Qt.AlignVCenter
                 implicitWidth: cellIcon.implicitWidth
                 implicitHeight: cellIcon.implicitHeight
-                Text {
+                Icon {
                     id: cellIcon
                     anchors.centerIn: parent
                     visible: !cell.spinning
                     text: cell.icon
-                    font.family: Design.font.icon
-                    font.pixelSize: Design.s(cell.compact ? 14 : 17)
-                    color: cell.open ? window.colBlue : window.colFg
+                    role: "body"
+                    color: cell.open ? Design.accent : Design.text
                 }
                 // A separate glyph, so the icon is never left at an angle.
-                Text {
+                Icon {
                     id: cellSpinner
                     anchors.centerIn: parent
                     visible: cell.spinning
                     text: "󰝲"
-                    font.family: Design.font.icon
-                    font.pixelSize: cellIcon.font.pixelSize
-                    color: window.colBlue
+                    role: "body"
+                    color: Design.accent
                     RotationAnimator on rotation {
                         running: cellSpinner.visible
                         from: 0; to: 360; duration: 900
@@ -387,57 +372,26 @@ ApplicationWindow {
                 }
             }
 
-            ColumnLayout {
+            Label {
                 Layout.fillWidth: !cell.compact
                 Layout.alignment: Qt.AlignVCenter
-                spacing: Design.s(1)
-
-                Text {
-                    visible: !cell.compact
-                    Layout.fillWidth: true
-                    text: cell.caption
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(Design.font.caption)
-                    color: window.colDim
-                    elide: Text.ElideRight
-                }
-                RowLayout {
-                    Layout.fillWidth: !cell.compact
-                    spacing: Design.s(6)
-                    Text {
-                        Layout.fillWidth: !cell.compact
-                        text: cell.title
-                        font.family: Design.font.sans
-                        font.pixelSize: Design.s(cell.compact ? 12 : 13)
-                        font.weight: cell.compact ? Font.Normal : Font.DemiBold
-                        color: window.colFg
-                        elide: Text.ElideRight
-                    }
-                    Rectangle {
-                        visible: cell.badge !== ""
-                        Layout.preferredWidth: badgeText.implicitWidth + Design.s(10)
-                        Layout.preferredHeight: Design.s(16)
-                        radius: height / 2
-                        color: Design.tint(Design.text, 0.14)
-                        Text {
-                            id: badgeText
-                            anchors.centerIn: parent
-                            text: cell.badge
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(Design.font.caption)
-                            font.weight: Font.DemiBold
-                            color: window.colFg
-                        }
-                    }
-                }
+                text: cell.title
+                weight: cell.compact ? Design.weight.regular : Design.weight.medium
+                elide: Text.ElideRight
             }
 
-            Text {
+            Badge {
+                visible: cell.badge !== ""
+                Layout.alignment: Qt.AlignVCenter
+                text: cell.badge
+                tone: Design.textDim
+            }
+
+            Icon {
                 visible: cell.dropdown
                 text: cell.open ? "󰅃" : "󰅀"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(12)
-                color: window.colDim
+                role: "caption"
+                color: Design.textDim
                 Layout.alignment: Qt.AlignVCenter
             }
         }
@@ -454,6 +408,17 @@ ApplicationWindow {
                 else cell.clicked();
             }
         }
+
+        ToolTip.visible: cellArea.containsMouse && cell.caption !== ""
+        ToolTip.delay: 600
+        ToolTip.text: cell.caption
+
+        activeFocusOnTab: cell.enabled
+        Accessible.role: Accessible.Button
+        Accessible.name: cell.caption !== "" ? cell.caption + ": " + cell.title : cell.title
+        Keys.onReturnPressed: event => { cell.clicked(); event.accepted = true; }
+        Keys.onSpacePressed: event => { cell.clicked(); event.accepted = true; }
+        FocusRing { target: cell }
     }
 
     Shortcut {
@@ -692,7 +657,7 @@ ApplicationWindow {
             // controls, and still open the same dropdowns.
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(60)
+                Layout.preferredHeight: Design.s(Design.size.rowTall)
                 color: "transparent"
                 z: 20
 
@@ -863,17 +828,20 @@ ApplicationWindow {
 Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.s(48)
-                                BarGroup {
+                                RowLayout {
+                                    spacing: Design.s(Design.space.xxs)
                                     anchors.centerIn: parent
-                                    BarButton {
+                                    Button {
+                                        variant: "secondary"
                                         label: I18n.tr("Changes") + (GitBackend.changedFiles.length ? "  " + GitBackend.changedFiles.length : "")
-                                        glyph: "\u{f0279}"
+                                        icon: "\u{f0279}"
                                         checked: window.currentTab === 0
                                         onClicked: window.currentTab = 0
                                     }
-                                    BarButton {
+                                    Button {
+                                        variant: "secondary"
                                         label: I18n.tr("History")
-                                        glyph: "\u{f02da}"
+                                        icon: "\u{f02da}"
                                         checked: window.currentTab === 1
                                         onClicked: {
                                             window.currentTab = 1;
@@ -2204,16 +2172,16 @@ Item {
                     anchors.leftMargin: repoBtn.x
                     width: Math.min(Design.s(420), parent.width - repoBtn.x - Design.s(8))
                     height: Design.s(330)
-                    radius: Design.s(8)
-                    color: window.colHeader
-                    border.color: window.colBlue
+                    radius: Design.s(Design.radius.panel)
+                    color: Design.raised
+                    border.color: Design.line
                     border.width: 1
                     z: 50
                     visible: window.repoDropdownOpen
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: Design.s(10)
+                        anchors.margins: Design.s(Design.space.md)
                         spacing: Design.s(8)
 
                         RowLayout {
@@ -2521,16 +2489,16 @@ Item {
                                      + (window.pendingSwitch !== "" ? Design.s(140) : 0)
                                      + (window.pendingRemoveWorktree !== "" ? Design.s(60) : 0)
                                      + (GitBackend.worktrees.length > 1 ? Design.s(30 + 30 * GitBackend.worktrees.length) : 0))
-                    radius: Design.s(8)
-                    color: window.colHeader
-                    border.color: window.colGreen
+                    radius: Design.s(Design.radius.panel)
+                    color: Design.raised
+                    border.color: Design.line
                     border.width: 1
                     z: 50
                     visible: window.branchDropdownOpen
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: Design.s(10)
+                        anchors.margins: Design.s(Design.space.md)
                         spacing: Design.s(8)
 
                         Text {
@@ -3045,9 +3013,9 @@ Item {
                     anchors.leftMargin: Math.max(0, Math.min(accountsBtn.x, parent.width - width))
                     width: Design.s(300)
                     height: accCol.implicitHeight + Design.s(20)
-                    radius: Design.s(8)
-                    color: window.colHeader
-                    border.color: window.colBlue
+                    radius: Design.s(Design.radius.panel)
+                    color: Design.raised
+                    border.color: Design.line
                     border.width: 1
                     z: 50
                     visible: window.accountsDropdownOpen

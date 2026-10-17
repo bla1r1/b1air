@@ -575,7 +575,7 @@ C.ApplicationWindow {
                     width: parent.width
                     spacing: Design.s(2)
 
-                    SideHeading { text: I18n.tr("Places") }
+                    SidebarHeading { text: I18n.tr("Places") }
                     SideRow { label: I18n.tr("Home"); glyph: "\u{f02dc}"; path: window.homeDir }
                     Repeater {
                         model: [
@@ -601,7 +601,7 @@ C.ApplicationWindow {
                         badge: FilesBackend.trashCount > 0 ? String(FilesBackend.trashCount) : ""
                     }
 
-                    SideHeading { text: I18n.tr("Devices") }
+                    SidebarHeading { text: I18n.tr("Devices") }
                     // The system disk's own free space: diskFreeSpace is the
                     // folder's, so this read a phone's or a stick's while in it.
                     SideRow {
@@ -657,15 +657,17 @@ C.ApplicationWindow {
                                     }
                                 }
                             ]
-                            BarButton {
+                            Button {
+                                variant: "ghost"
+                                iconOnly: true
                                 visible: !devRow.phone || !!devRow.modelData.mountPath
-                                glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Eject")
+                                icon: "\u{f01ea}"; size: "sm"; tip: I18n.tr("Eject")
                                 onClicked: Devices.eject(devRow.modelData.id)
                             }
                         }
                     }
 
-                    SideHeading {
+                    SidebarHeading {
                         text: I18n.tr("Network")
                         action: "\u{f0415}"
                         actionTip: I18n.tr("Connect to Server…")
@@ -690,7 +692,7 @@ C.ApplicationWindow {
                         onClicked: serverDialog.ask("")
                     }
 
-                    SideHeading {
+                    SidebarHeading {
                         text: I18n.tr("Bookmarks")
                         action: "\u{f0415}"
                         actionTip: I18n.tr("Bookmark this folder (Ctrl+D)")
@@ -732,7 +734,7 @@ C.ApplicationWindow {
                         }
                     }
 
-                    SideHeading { text: I18n.tr("Tags") }
+                    SidebarHeading { text: I18n.tr("Tags") }
                     Repeater {
                         model: window.tagNames
                         delegate: SideRow {
@@ -803,8 +805,8 @@ C.ApplicationWindow {
                         Label { text: I18n.tr("Choose a folder"); role: "caption"; dim: true }
                         Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
                     }
-                    BarButton { label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
-                    BarButton { label: I18n.tr("Choose this folder"); primary: true; onClicked: FilesBackend.confirmPick() }
+                    Button { variant: "secondary"; label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
+                    Button { variant: "primary"; label: I18n.tr("Choose this folder");  onClicked: FilesBackend.confirmPick() }
                 }
             }
 
@@ -824,10 +826,11 @@ C.ApplicationWindow {
                     Qt.callLater(searchField.focusInput);
                 }
 
-                    BarGroup {
-                        BarButton { glyph: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                        BarButton { glyph: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                        BarButton { glyph: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
                     }
 
                     // Path: clickable segments; a click on the empty part of the
@@ -900,13 +903,14 @@ C.ApplicationWindow {
 
                         // The start of a path too long for the bar: one button
                         // in place of the folders cut off, listing them.
-                        BarButton {
+                        Button {
+                            variant: "secondary"
                             id: crumbMore
                             visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(64) + 1
                             anchors.left: placeIcon.right
                             anchors.leftMargin: Design.s(Design.space.xs)
                             anchors.verticalCenter: parent.verticalCenter
-                            small: true
+                            size: "sm"
                             label: "…"
                             tip: I18n.tr("Whole path")
                             onClicked: crumbMenu.popup()
@@ -1026,39 +1030,45 @@ C.ApplicationWindow {
                         // Opened from the button: shut again once left empty.
                         onFocusedChanged: if (!focused && text === "") toolbar.searchOpen = false
                     }
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         visible: !toolbar.searchShown
-                        BarButton { glyph: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
                     }
 
-                    BarButton {
+                    Button {
+                        variant: "danger"
                         visible: FilesBackend.inTrash
-                        glyph: "\u{f0a7a}"
+                        icon: "\u{f0a7a}"
                         label: I18n.tr("Empty Trash")
-                        danger: true
                         enabled: FilesBackend.trashCount > 0
                         onClicked: confirmEmpty.open()
                     }
                     // New folder lives in the right-click menu and on
                     // Ctrl+Shift+N, not on the bar.
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         visible: !toolbar.compactViews
-                        BarButton { glyph: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
-                        BarButton { glyph: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
-                        BarButton { glyph: "\u{f056d}"; tip: I18n.tr("Columns (Ctrl+3)"); checked: window.viewMode === "columns"; onClicked: window.viewMode = "columns" }
-                        BarButton { glyph: "\u{f056c}"; tip: I18n.tr("Gallery (Ctrl+4)"); checked: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f056d}"; tip: I18n.tr("Columns (Ctrl+3)"); checked: window.viewMode === "columns"; onClicked: window.viewMode = "columns" }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f056c}"; tip: I18n.tr("Gallery (Ctrl+4)"); checked: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
                     }
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         visible: toolbar.compactViews
-                        BarButton {
-                            glyph: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
+                            icon: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
                             tip: I18n.tr("View (Ctrl+1 … Ctrl+4)")
                             onClicked: viewModeMenu.popup()
                         }
                     }
-                    BarGroup {
-                        BarButton { glyph: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                        BarButton { glyph: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
                     }
             }
 
@@ -1089,7 +1099,7 @@ C.ApplicationWindow {
                             onCloseRequested: window.closeTab(index)
                         }
                     }
-                    BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
+                    Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
                 }
             }
 
@@ -1722,8 +1732,8 @@ C.ApplicationWindow {
                 RowLayout {
                     visible: window.viewMode === "grid"
                     spacing: Design.s(Design.space.xs)
-                    BarButton { glyph: "\u{f0374}"; small: true; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
-                    BarButton { glyph: "\u{f0415}"; small: true; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; size: "sm"; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; size: "sm"; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                 }
             }
         }
@@ -2180,9 +2190,11 @@ C.ApplicationWindow {
                         glyph: "\u{f0200}"
                         detail: modelData.user || I18n.tr("Guest")
                         onClicked: serverDialog.fill(modelData)
-                        BarButton {
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
                             visible: recentRow.hovered || hovered
-                            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Forget")
+                            icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Forget")
                             onClicked: FilesBackend.forgetServer(recentRow.modelData.uri)
                         }
                     }
@@ -2248,7 +2260,7 @@ C.ApplicationWindow {
         title: paths.length === 1 ? I18n.tr("Delete “%1” permanently?", String(paths[0]).split("/").pop())
                                   : I18n.trn("Delete %1 item permanently?", "Delete %1 items permanently?", paths.length)
         message: I18n.tr("This cannot be undone. Nothing goes to the trash.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: FilesBackend.deletePermanently(paths)
@@ -2327,10 +2339,12 @@ C.ApplicationWindow {
                 id: batchBody
                 width: parent.width
                 spacing: Design.s(Design.space.sm)
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
-                    Pill { label: I18n.tr("Pattern"); active: batchDialog.mode === "pattern"; onClicked: batchDialog.mode = "pattern" }
-                    Pill { label: I18n.tr("Find & replace"); active: batchDialog.mode === "replace"; onClicked: batchDialog.mode = "replace" }
+                SegmentedControl {
+                    size: "sm"
+                    model: [{ id: "pattern", label: I18n.tr("Pattern") },
+                            { id: "replace", label: I18n.tr("Find & replace") }]
+                    current: batchDialog.mode
+                    onPicked: id => batchDialog.mode = id
                 }
                 ColumnLayout {
                     visible: batchDialog.mode === "pattern"
@@ -2356,7 +2370,7 @@ C.ApplicationWindow {
                     Repeater {
                         model: [{ id: "keep", label: I18n.tr("As is") }, { id: "lower", label: "lower" },
                                 { id: "upper", label: I18n.tr("UPPER") }, { id: "title", label: I18n.tr("Title") }]
-                        delegate: Pill {
+                        delegate: Chip {
                             required property var modelData
                             label: modelData.label
                             active: batchDialog.caseMode === modelData.id
@@ -2452,7 +2466,7 @@ C.ApplicationWindow {
                             { id: "tar.zst", label: I18n.tr("TAR.ZST") },
                             { id: "7z", label: "7Z" }
                         ]
-                        delegate: Pill {
+                        delegate: Chip {
                             required property var modelData
                             label: modelData.label
                             active: compressDialog.format === modelData.id
@@ -2478,7 +2492,7 @@ C.ApplicationWindow {
         id: confirmEmpty
         title: I18n.tr("Empty the trash?")
         message: I18n.trn("%1 item is deleted for good.", "%1 items are deleted for good.", FilesBackend.trashCount)
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Empty Trash") })
         onAccepted: FilesBackend.emptyTrash()
@@ -2501,7 +2515,6 @@ C.ApplicationWindow {
         Drag.keys: ["text/uri-list"]
     }
 
-    component SideHeading: SidebarHeading {}
 
     component SideRow: SidebarItem {
         id: sr
@@ -2521,14 +2534,18 @@ C.ApplicationWindow {
                 onDropped: drop => window.dropInto(drop, sr.path)
             }
         ]
-        BarButton {
+        Button {
+            variant: "ghost"
+            iconOnly: true
             visible: sr.removable && (sr.hovered || hovered)
-            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Remove bookmark")
+            icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Remove bookmark")
             onClicked: sr.remove()
         }
-        BarButton {
+        Button {
+            variant: "ghost"
+            iconOnly: true
             visible: sr.ejectable
-            glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Unmount")
+            icon: "\u{f01ea}"; size: "sm"; tip: I18n.tr("Unmount")
             onClicked: sr.eject()
         }
     }

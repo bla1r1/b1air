@@ -217,7 +217,7 @@ ColumnLayout {
     // =========================================================================
     // 1. THE SCREENS
     // =========================================================================
-    Card {
+    SettingsGroup {
         title: I18n.tr("Displays")
         subtitle: monitorsModel.count > 1
             ? I18n.tr("Select a screen to change its settings. Drag it to rearrange.")
@@ -486,7 +486,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Pill {
+            Button {
                 label: I18n.tr("Identify Displays")
                 icon: "\u{f0379}"
                 onClicked: Monitors.identify()
@@ -523,7 +523,7 @@ ColumnLayout {
     Process { id: profileForget; onExited: profileReader.running = true }
     Timer { id: profileRecheck; interval: 1500; onTriggered: profileReader.running = true }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Remembered layouts")
         subtitle: section.profiles.length === 0
             ? I18n.tr("Apply a layout and it is kept for this set of screens")
@@ -552,7 +552,7 @@ ColumnLayout {
                         color: modelData.current ? Design.accent : Design.textDim
                     }
                 }
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f0a7a}"
                     label: I18n.tr("Forget")
@@ -573,7 +573,7 @@ ColumnLayout {
     // =========================================================================
     // The built-in panel too: it was on Power & Battery, so brightness was
     // on two pages depending on which screen it was for.
-    Card {
+    SettingsGroup {
         title: I18n.tr("Brightness")
         subtitle: Power.hasBacklight
             ? (Monitors.hasBrightness ? I18n.tr("The built-in screen, and external ones over DDC/CI")
@@ -585,7 +585,7 @@ ColumnLayout {
         Slider {
             visible: Power.hasBacklight
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: Power.brightness
             icon: "\u{f00df}"
             label: I18n.tr("Built-in screen")
@@ -597,7 +597,7 @@ ColumnLayout {
             delegate: Slider {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: modelData.brightness
                 icon: "\u{f00df}"
                 label: modelData.name
@@ -614,8 +614,11 @@ ColumnLayout {
             text: I18n.tr("Most monitors do, over the same cable as the picture. It needs ddcutil and the i2c-dev module; some panels have DDC/CI switched off in their own menu.")
         }
 
-        ButtonRow {
-            ActionButton {
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+            Item { Layout.fillWidth: true }
+            Button {
                 icon: "\u{f0450}"
                 label: I18n.tr("Detect again")
                 onActivated: Monitors.redetect()
@@ -626,7 +629,7 @@ ColumnLayout {
     // =========================================================================
     // 2. THE SELECTED SCREEN
     // =========================================================================
-    Card {
+    SettingsGroup {
         visible: section.activeMonitor !== null
         title: section.activeMonitor
             ? (section.activeEditIndex + 1) + ". " + section.activeMonitor.name : ""
@@ -637,7 +640,7 @@ ColumnLayout {
         icon: "\u{f0379}"
 
         // The main display: full bar, workspace 1, the focus at login.
-        Toggle {
+        SwitchRow {
             visible: monitorsModel.count > 1
             label: I18n.tr("Main display")
             subtitle: I18n.tr("Carries the full bar and workspace 1, and has the focus at login")
@@ -650,7 +653,7 @@ ColumnLayout {
             }
         }
 
-        Toggle {
+        SwitchRow {
             visible: monitorsModel.count > 1 && section.activeMonitor !== null
                 && Screens.primaryName === section.activeMonitor.name
             label: I18n.tr("Notifications on the main display")
@@ -662,7 +665,7 @@ ColumnLayout {
         }
 
         // Display power / state toggle
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Enable display")
             subtitle: I18n.tr("Turn this video output on or off in Sway")
             checked: section.activeMonitor ? (section.activeMonitor.active !== false) : true
@@ -865,11 +868,13 @@ ColumnLayout {
         }
 
         // Scale stepper
-        Stepper {
+        SettingsRow {
             label: I18n.tr("Scale")
-            valueText: (Math.round(section.currentSysScale * 100) / 100) + "×"
-            onDecrement: section.setSysScale(section.currentSysScale - 0.25)
-            onIncrement: section.setSysScale(section.currentSysScale + 0.25)
+            Stepper {
+                valueText: (Math.round(section.currentSysScale * 100) / 100) + "×"
+                onDecrement: section.setSysScale(section.currentSysScale - 0.25)
+                onIncrement: section.setSysScale(section.currentSysScale + 0.25)
+            }
         }
 
         // Orientation row
@@ -890,7 +895,7 @@ ColumnLayout {
                     { id: "270",    label: "270°", tip: "Portrait (Flipped)" }
                 ]
 
-                Pill {
+                Chip {
                     required property var modelData
                     label: modelData.label
                     active: section.activeMonitor && (section.activeMonitor.transform || "normal") === modelData.id
@@ -935,19 +940,17 @@ ColumnLayout {
                 Layout.fillWidth: true
             }
 
-            Pill {
+            Button {
                 label: I18n.tr("Reset")
                 enabled: section.dirty
-                opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.reload()
             }
 
-            Pill {
+            Button {
+                variant: section.dirty ? "primary" : "secondary"
                 label: monitorsModel.count > 1 ? I18n.tr("Apply All") : I18n.tr("Apply")
                 icon: "\u{f012c}"
-                active: section.dirty
                 enabled: section.dirty
-                opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.applyLayout()
             }
         }
@@ -1024,7 +1027,7 @@ ColumnLayout {
 
     // A virtual screen a tablet shows over VNC. It was on Remote Desktop;
     // it is a screen, and arranged with the others here.
-    Card {
+    SettingsGroup {
         title: I18n.tr("A tablet as a second screen")
         subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
         icon: "\u{f004b}"
@@ -1047,10 +1050,12 @@ ColumnLayout {
                 }
             }
 
-            ButtonRow {
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
                 spacing: Design.s(Design.space.sm)
 
-                ActionButton {
+                Button {
                     label: I18n.tr("Create Display")
                     icon: "\u{f0079}"
                     onActivated: {
@@ -1058,7 +1063,7 @@ ColumnLayout {
                     }
                 }
 
-                ActionButton {
+                Button {
                     label: I18n.tr("Remove")
                     icon: "\u{f00d}"
                     onActivated: {

@@ -34,7 +34,7 @@ Item {
     property int settleDelay: 600       // poller round-trip allowance
     property int cornerRadius: Design.radius.ctl
 
-    implicitHeight: Design.s(Design.size.ctl)
+    implicitHeight: Design.s(Design.size.md)
 
     // ── Internals ────────────────────────────────────────────────────────────
     property int _local: 0
@@ -218,5 +218,21 @@ Item {
             finishDrag();
         }
     }
-}
 
+    // The arrows move it in steps of five, as a drag would, with the same
+    // settle so the poller's next reading does not snap it back.
+    activeFocusOnTab: root.enabled
+    Accessible.role: Accessible.Slider
+    Accessible.name: root.label
+    function _keyStep(d) {
+        const v = Math.max(root.minimum, Math.min(root.maximum, root.shown + d));
+        root._local = v;
+        root.moved(v);
+        settle.restart();
+    }
+    Keys.onLeftPressed: event => { root._keyStep(-5); event.accepted = true; }
+    Keys.onDownPressed: event => { root._keyStep(-5); event.accepted = true; }
+    Keys.onRightPressed: event => { root._keyStep(5); event.accepted = true; }
+    Keys.onUpPressed: event => { root._keyStep(5); event.accepted = true; }
+    FocusRing { target: root }
+}

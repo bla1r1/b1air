@@ -7,13 +7,6 @@ import "../../Services"
 
 // =============================================================================
 // Animations & Effects
-//
-// The compositor's own motion: how workspaces and windows come and go, how
-// long that takes, how faded unfocused windows are, the special workspace
-// on Mod+S and the overview on Mod+O. Each control writes settings.json; the
-// daemon sees the change and sends it to sway over IPC at once
-// (apply_compositor_extras), so nothing here needs a reload. These are our swayfx's (src/swayfx/patches);
-// any other sway refuses them and keeps its own behaviour.
 // =============================================================================
 
 ColumnLayout {
@@ -24,114 +17,104 @@ ColumnLayout {
 
     readonly property bool off: Settings.animationDuration === 0
 
-    Card {
+    // ── Motion ───────────────────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Motion")
-        subtitle: section.off ? I18n.tr("Animations are off") : I18n.tr("How long every animation takes")
-        icon: "\u{f0e1e}"
+        description: section.off ? I18n.tr("Animations are off") : I18n.tr("How long every animation takes")
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Animations")
-            subtitle: I18n.tr("Off makes every change instant: windows, workspaces, the swipe")
+            note: I18n.tr("Off makes every change instant: windows, workspaces, the swipe")
             checked: !section.off
             onToggled: Settings.set("animationDuration", section.off ? 200 : 0)
         }
 
-        Slider {
-            Layout.fillWidth: true
+        SettingsRow {
             visible: !section.off
             label: I18n.tr("Duration")
-            showPercent: false
-            minimum: 80
-            maximum: 600
-            value: Math.max(80, Settings.animationDuration)
-            onMoved: pct => Settings.set("animationDuration", pct)
-        }
-        Label {
-            visible: !section.off
-            text: I18n.tr("%1 ms", Settings.animationDuration)
-            role: "caption"; dim: true
+            note: I18n.tr("%1 ms", Settings.animationDuration)
+
+            Slider {
+                Layout.preferredWidth: Design.s(220)
+                minimum: 80
+                maximum: 600
+                value: Math.max(80, Settings.animationDuration)
+                onMoved: pct => Settings.set("animationDuration", Math.round(pct))
+            }
         }
     }
 
-    Card {
+    // ── Workspaces ───────────────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Workspaces")
-        subtitle: I18n.tr("Switching from one workspace to another")
-        icon: "\u{f0570}"
+        description: I18n.tr("Switching from one workspace to another")
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
+        SettingsRow {
+            label: I18n.tr("Transition")
+            note: Settings.workspaceAnimation === "fade"
+                ? I18n.tr("The old workspace fades into the new one")
+                : I18n.tr("Both slide sideways; the touchpad swipe moves them with your fingers")
+
+            SegmentedControl {
+                size: "sm"
+                Layout.preferredWidth: Design.s(180)
                 model: [
                     { id: "slide", label: I18n.tr("Slide") },
                     { id: "fade",  label: I18n.tr("Fade") }
                 ]
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: Settings.workspaceAnimation === modelData.id
-                    onClicked: Settings.set("workspaceAnimation", modelData.id)
-                }
+                current: Settings.workspaceAnimation
+                onPicked: id => Settings.set("workspaceAnimation", id)
             }
-        }
-        Label {
-            Layout.fillWidth: true
-            text: Settings.workspaceAnimation === "fade"
-                ? I18n.tr("The old workspace fades into the new one")
-                : I18n.tr("Both slide sideways, the new one in from the side it lies on; the touchpad swipe moves them with your fingers")
-            role: "caption"; dim: true; wrapMode: Text.WordWrap
         }
     }
 
-    Card {
+    // ── Windows ──────────────────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Windows")
-        subtitle: I18n.tr("Opening and closing a window")
-        icon: "\u{f05b6}"
+        description: I18n.tr("Opening and closing a window")
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: [
-                    { id: "popin", label: I18n.tr("Pop in") },
-                    { id: "fade",  label: I18n.tr("Fade") },
-                    { id: "slide", label: I18n.tr("Slide") },
-                    { id: "none",  label: I18n.tr("No animation") }
-                ]
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: Settings.windowAnimation === modelData.id
-                    onClicked: Settings.set("windowAnimation", modelData.id)
-                }
-            }
-        }
-        Label {
-            Layout.fillWidth: true
-            text: ({
+        SettingsRow {
+            label: I18n.tr("Opening animation")
+            note: ({
                 popin: I18n.tr("Grows from the middle while fading in, and shrinks away"),
                 fade: I18n.tr("Fades in and out where it stands"),
                 slide: I18n.tr("Comes in from the nearest edge of the workspace, and leaves by it"),
                 none: I18n.tr("Appears and vanishes at once; moving and resizing still animate")
             })[Settings.windowAnimation] || ""
-            role: "caption"; dim: true; wrapMode: Text.WordWrap
+
+            SegmentedControl {
+                size: "sm"
+                Layout.preferredWidth: Design.s(280)
+                model: [
+                    { id: "popin", label: I18n.tr("Pop in") },
+                    { id: "fade",  label: I18n.tr("Fade") },
+                    { id: "slide", label: I18n.tr("Slide") },
+                    { id: "none",  label: I18n.tr("None") }
+                ]
+                current: Settings.windowAnimation
+                onPicked: id => Settings.set("windowAnimation", id)
+            }
         }
 
-        Slider {
-            Layout.fillWidth: true
+        SettingsRow {
             visible: Settings.windowAnimation === "popin"
             label: I18n.tr("Grows from")
-            minimum: 40
-            maximum: 95
-            value: Settings.popinPercent
-            onMoved: pct => Settings.set("popinPercent", pct)
+            note: I18n.tr("%1%", Settings.popinPercent)
+
+            Slider {
+                Layout.preferredWidth: Design.s(220)
+                minimum: 40
+                maximum: 95
+                showPercent: false
+                value: Settings.popinPercent
+                onMoved: pct => Settings.set("popinPercent", Math.round(pct))
+            }
         }
     }
 
-    Label {
-        Layout.fillWidth: true
+    InlineStatus {
         visible: !Sway.swayfx
+        status: "warning"
         text: I18n.tr("The compositor running now is plain sway: these settings take effect with b1air's own swayFX.")
-        role: "caption"; color: Design.warn; wrapMode: Text.WordWrap
     }
 }

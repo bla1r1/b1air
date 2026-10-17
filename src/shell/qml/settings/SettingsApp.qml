@@ -5,6 +5,7 @@ import Quickshell
 import "../Ui"
 import "../Services"
 import "components" as Sections
+import "."
 
 Item {
     id: app
@@ -175,7 +176,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(36)
                     radius: height / 2
-                    color: Design.raised
+                    color: Design.well
                     placeholder: I18n.tr("Search settings (Ctrl+F)")
                     text: app.searchQuery
                     onEdited: value => app.searchQuery = value
@@ -274,7 +275,7 @@ Item {
                     Layout.bottomMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.xs)
                     // Back to the news this page was opened from.
-                    Pill {
+                    Button {
                         visible: app.returnPage !== ""
                         icon: "\u{f0141}"
                         label: I18n.tr("What's new")

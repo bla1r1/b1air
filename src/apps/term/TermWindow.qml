@@ -80,7 +80,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.base
+        color: Design.surface
         clip: true
 
         ColumnLayout {
@@ -128,7 +128,7 @@ Window {
                         }
 
                         // Add Tab Button (+)
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
                     }
 
                     Item { Layout.fillWidth: true } // Spacer
@@ -137,12 +137,12 @@ Window {
                     Row {
                         spacing: Design.s(Design.space.xs)
                         Layout.alignment: Qt.AlignVCenter
-                        BarButton { small: true; glyph: "\u{f0374}"; tip: I18n.tr("Smaller text (Ctrl+−)"); onClicked: currentTermView().zoomOut() }
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("Larger text (Ctrl+=)"); onClicked: currentTermView().zoomIn() }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0374}"; tip: I18n.tr("Smaller text (Ctrl+−)"); onClicked: currentTermView().zoomOut() }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("Larger text (Ctrl+=)"); onClicked: currentTermView().zoomIn() }
                         Rectangle { width: 1; height: Design.s(16); color: Design.line; anchors.verticalCenter: parent.verticalCenter }
-                        BarButton { small: true; glyph: "\u{f018f}"; tip: I18n.tr("Copy (Ctrl+Shift+C)"); onClicked: currentTermView().copySelection() }
-                        BarButton { small: true; glyph: "\u{f0192}"; tip: I18n.tr("Paste (Ctrl+Shift+V)"); onClicked: currentTermView().pasteClipboard() }
-                        BarButton { small: true; glyph: "\u{f00e2}"; tip: I18n.tr("Clear"); onClicked: currentTermView().clear() }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f018f}"; tip: I18n.tr("Copy (Ctrl+Shift+C)"); onClicked: currentTermView().copySelection() }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0192}"; tip: I18n.tr("Paste (Ctrl+Shift+V)"); onClicked: currentTermView().pasteClipboard() }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f00e2}"; tip: I18n.tr("Clear"); onClicked: currentTermView().clear() }
                     }
                 }
             }

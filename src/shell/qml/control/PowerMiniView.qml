@@ -146,7 +146,7 @@ MiniView {
         Slider {
             visible: Power.hasBacklight
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: Power.brightness
             icon: "\u{f00df}"
             label: I18n.tr("Brightness")
@@ -159,7 +159,7 @@ MiniView {
             delegate: Slider {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: modelData.brightness
                 icon: "\u{f0379}"
                 label: modelData.name

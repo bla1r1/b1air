@@ -151,7 +151,7 @@ PopupShell {
                     readonly property bool isActive: window.activeIndex === row.index
                     readonly property var info: window.getLangInfo(row.modelData)
 
-                    color: rowMa.containsMouse ? Design.raised : (row.isActive ? Design.tint(Design.accent, 0.12) : "transparent")
+                    color: rowMa.containsMouse ? Design.glassHover : (row.isActive ? Design.tint(Design.accent, 0.12) : "transparent")
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
@@ -165,7 +165,7 @@ PopupShell {
                         Rectangle {
                             width: Design.s(32); height: Design.s(20); radius: Design.s(4)
                             color: row.isActive ? Design.accent : Design.sunken
-                            border.color: row.isActive ? Design.accent : Design.raised
+                            border.color: row.isActive ? Design.accent : Design.glassBorder
                             border.width: 1
 
                             Label {
@@ -217,7 +217,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(32)
             radius: Design.s(Design.radius.ctl)
-            color: settMa.containsMouse ? Design.raised : "transparent"
+            color: settMa.containsMouse ? Design.glassHover : "transparent"
 
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 

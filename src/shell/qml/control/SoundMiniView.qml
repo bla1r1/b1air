@@ -39,7 +39,7 @@ MiniView {
         Slider {
             visible: root.sink !== null
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: root.sink ? root.sink.volume : 0
             muted: root.sink ? root.sink.mute : false
             tone: Design.accent
@@ -147,7 +147,7 @@ MiniView {
         Slider {
             visible: root.source !== null
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: root.source ? root.source.volume : 0
             muted: root.source ? root.source.mute : false
             tone: Design.accent
@@ -177,7 +177,7 @@ MiniView {
                 Layout.fillWidth: true
             }
 
-            ActionButton {
+            Button {
                 icon: "\u{f021}"
                 label: I18n.tr("Toggle Filter")
                 onActivated: Daemon.micRnnoiseToggle()

@@ -184,7 +184,7 @@ PanelWindow {
                 color: win.problem !== "" ? Design.dangerText : Design.text
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 label: win.problem !== "" ? I18n.tr("Close") : I18n.tr("Cancel")
                 onActivated: win.cancel()

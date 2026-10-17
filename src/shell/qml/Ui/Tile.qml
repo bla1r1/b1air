@@ -43,4 +43,10 @@ Rectangle {
         cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: root.activated()
     }
+
+    // Tab reaches it; Enter and Space do what a click does.
+    activeFocusOnTab: root.interactive
+    Keys.onReturnPressed: event => { root.activated(); event.accepted = true; }
+    Keys.onSpacePressed: event => { root.activated(); event.accepted = true; }
+    FocusRing { target: root }
 }

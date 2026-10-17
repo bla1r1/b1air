@@ -138,191 +138,80 @@ ColumnLayout {
                      + "; bindgesture swipe:3:right workspace " + (natural ? "next" : "prev"));
     }
 
-    // ── 1. Touchpad Card ─────────────────────────────────────────────────────
-    Card {
+    // ── 1. Touchpad Basics ───────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Touchpad Basics")
-        subtitle: I18n.tr("Scrolling direction and tapping behavior")
-        icon: "\u{f0523}"
+        description: I18n.tr("Scrolling direction and tapping behavior")
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+        SwitchRow {
+            title: I18n.tr("Natural Scrolling")
+            checked: section.naturalScroll
+            onToggled: section.setNaturalScroll(!section.naturalScroll)
+        }
 
-            // Natural Scrolling
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
+        SwitchRow {
+            title: I18n.tr("Tap to Click")
+            checked: section.tapToClick
+            onToggled: section.setTapToClick(!section.tapToClick)
+        }
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Natural Scrolling") }
-                }
+        SwitchRow {
+            title: I18n.tr("Two-Finger Click for Right Click")
+            checked: section.clickfinger
+            onToggled: section.setClickfinger(!section.clickfinger)
+        }
 
-                Toggle {
-                    checked: section.naturalScroll
-                    onToggled: section.setNaturalScroll(!section.naturalScroll)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            // Tap to click
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Tap to Click") }
-                }
-
-                Toggle {
-                    checked: section.tapToClick
-                    onToggled: section.setTapToClick(!section.tapToClick)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Two-Finger Click for Right Click") }
-                }
-
-                Toggle {
-                    checked: section.clickfinger
-                    onToggled: section.setClickfinger(!section.clickfinger)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            // Disable while typing
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Disable While Typing (DWT)") }
-                }
-
-                Toggle {
-                    checked: section.dwt
-                    onToggled: section.setDwt(!section.dwt)
-                }
-            }
+        SwitchRow {
+            title: I18n.tr("Disable While Typing (DWT)")
+            checked: section.dwt
+            onToggled: section.setDwt(!section.dwt)
         }
     }
 
     // ── 2. Multi-Touch Gestures ──────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Multi-Touch Gestures")
-        subtitle: I18n.tr("Three- and four-finger swipes")
-        icon: "\u{f0048}"
+        description: I18n.tr("Three- and four-finger swipes")
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+        SwitchRow {
+            title: I18n.tr("3-Finger Workspace Swipe")
+            checked: section.touchpadSwipeWorkspace
+            onToggled: section.setSwipeWorkspace(!section.touchpadSwipeWorkspace)
+        }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
+        SwitchRow {
+            title: I18n.tr("Natural Gesture Direction")
+            enabled: section.touchpadSwipeWorkspace || Settings.touchpadFourFinger
+            checked: section.touchpadNaturalSwipe
+            onToggled: section.setNaturalSwipe(!section.touchpadNaturalSwipe)
+        }
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("3-Finger Workspace Swipe") }
-                }
-
-                Toggle {
-                    checked: section.touchpadSwipeWorkspace
-                    onToggled: section.setSwipeWorkspace(!section.touchpadSwipeWorkspace)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Natural Gesture Direction") }
-                }
-
-                Toggle {
-                    checked: section.touchpadNaturalSwipe
-                    enabled: section.touchpadSwipeWorkspace || Settings.touchpadFourFinger
-                    onToggled: section.setNaturalSwipe(!section.touchpadNaturalSwipe)
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("4-Finger Gestures") }
-                    Label {
-                        visible: false
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        text: Sway.swayfx && Settings.workspaceOverview
-                              ? I18n.tr("Up brings in the workspace overview with your fingers, down takes it away; pinch for the Launchpad; left and right carry the window to the next workspace")
-                              : I18n.tr("Up opens the Launchpad, down closes it; left and right carry the window to the next workspace")
-                        role: "caption"
-                        dim: true
-                    }
-                }
-
-                Toggle {
-                    checked: Settings.touchpadFourFinger === true
-                    onToggled: section.setFourFinger(!(Settings.touchpadFourFinger === true))
-                }
-            }
-
-            // "Pinch to Zoom — allow 2-finger pinch in browsers and document
-            // viewers" was here. It wrote a setting nothing read, and there was
-            // nothing for it to read: a compositor forwards pinch to the
-            // focused client unless something binds it, and nothing binds it
-            // here, so pinch already reaches the browser and the toggle
-            // described a state that is simply always on.
+        SwitchRow {
+            title: I18n.tr("4-Finger Gestures")
+            note: Sway.swayfx && Settings.workspaceOverview
+                  ? I18n.tr("Up brings in the workspace overview with your fingers, down takes it away; pinch for the Launchpad; left and right carry the window to the next workspace")
+                  : I18n.tr("Up opens the Launchpad, down closes it; left and right carry the window to the next workspace")
+            checked: Settings.touchpadFourFinger === true
+            onToggled: section.setFourFinger(!(Settings.touchpadFourFinger === true))
         }
     }
 
-    // ── 3. Mouse & Pointer Card ──────────────────────────────────────────────
-    Card {
+    // ── 3. Mouse & Pointer ───────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Mouse & Pointer")
-        subtitle: I18n.tr("Tracking speed, acceleration profiles, and primary button")
-        icon: "\u{f037d}"
+        description: I18n.tr("Tracking speed, acceleration profiles, and primary button")
 
-        ColumnLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.topMargin: Design.s(Design.space.xs)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            implicitHeight: slider.implicitHeight
 
-            // Ui/Slider carries its own label and percentage — that is how the
-            // Control Center's brightness and volume rows are built. This one
-            // put a hand-made header above it with the same number in it, so
-            // the page showed "50%" twice, once over the slider and once
-            // inside it.
             Slider {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                id: slider
+                anchors.fill: parent
                 value: Math.round((section.pointerAccel + 1.0) * 50)
                 icon: "\u{f037d}"
                 label: I18n.tr("Pointer Speed / Sensitivity")
@@ -331,80 +220,47 @@ ColumnLayout {
                     section.setPointerAccel(parseFloat(val));
                 }
             }
+        }
 
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
+        SettingsRow {
+            title: I18n.tr("Acceleration Profile")
 
-            // Acceleration Profile
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Acceleration Profile") }
-                }
-
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
-
-                    Pill {
-                        label: I18n.tr("Flat (Linear)")
-                        active: section.accelProfile === "flat"
-                        onClicked: section.setAccelProfile("flat")
-                    }
-
-                    Pill {
-                        label: I18n.tr("Adaptive")
-                        active: section.accelProfile === "adaptive"
-                        onClicked: section.setAccelProfile("adaptive")
-                    }
-                }
+            SegmentedControl {
+                size: "sm"
+                model: [
+                    { id: "flat", label: I18n.tr("Flat (Linear)") },
+                    { id: "adaptive", label: I18n.tr("Adaptive") }
+                ]
+                current: section.accelProfile
+                onPicked: id => section.setAccelProfile(id)
             }
+        }
 
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4) }
-
-            // Left-handed Mode
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label { text: I18n.tr("Left-Handed Mouse Mode") }
-                }
-
-                Toggle {
-                    checked: section.leftHanded
-                    onToggled: section.setLeftHanded(!section.leftHanded)
-                }
-            }
+        SwitchRow {
+            title: I18n.tr("Left-Handed Mouse Mode")
+            checked: section.leftHanded
+            onToggled: section.setLeftHanded(!section.leftHanded)
         }
     }
 
-    // Two fingers on a Magic Mouse's surface, as on a Mac: read by the
-    // session daemon straight from the device (src/daemon/magic_mouse.cpp),
-    // since no compositor sees them. The status line asks it what it finds.
-    Card {
+    // ── 4. Magic Mouse ───────────────────────────────────────────────────────
+    SettingsGroup {
         title: I18n.tr("Magic Mouse")
-        subtitle: section.magicMouseStatus
-        icon: "\u{f037d}"
+        description: section.magicMouseStatus
 
-        Toggle {
-            label: I18n.tr("Gestures on the mouse's surface")
-            subtitle: I18n.tr("Swipe two fingers sideways for the next workspace; tap twice with two fingers for the workspace overview")
+        SwitchRow {
+            title: I18n.tr("Gestures on the mouse's surface")
+            note: I18n.tr("Swipe two fingers sideways for the next workspace; tap twice with two fingers for the workspace overview")
             checked: Settings.magicMouseGestures !== false
             onToggled: Settings.set("magicMouseGestures", Settings.magicMouseGestures === false)
         }
     }
 
-    // ── Hot corners ──────────────────────────────────────────────────────────
-    Card {
-        id: cornersCard
+    // ── 5. Hot corners ───────────────────────────────────────────────────────
+    SettingsGroup {
+        id: cornersGroup
         title: I18n.tr("Hot corners")
-        subtitle: I18n.tr("Push the pointer into a corner of the screen and hold it there a moment")
-        icon: "\u{f0293}"
+        description: I18n.tr("The top corners are also where the top bar's first and last buttons are: a corner set here takes their outermost pixel.")
 
         readonly property var actions: [
             { id: "none", label: I18n.tr("Nothing") },
@@ -415,6 +271,10 @@ ColumnLayout {
             { id: "lock", label: I18n.tr("Lock Screen") }
         ]
 
+        readonly property var actionItems: cornersGroup.actions
+            .filter(a => !a.swayfx || Sway.swayfx)
+            .map(a => ({ id: a.id, label: a.label }))
+
         Repeater {
             model: [
                 { key: "hotCornerTopLeft", label: I18n.tr("Top left") },
@@ -422,33 +282,18 @@ ColumnLayout {
                 { key: "hotCornerBottomLeft", label: I18n.tr("Bottom left") },
                 { key: "hotCornerBottomRight", label: I18n.tr("Bottom right") }
             ]
-            delegate: RowLayout {
+            delegate: SettingsRow {
                 id: cornerRow
                 required property var modelData
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Label { text: cornerRow.modelData.label; Layout.preferredWidth: Design.s(110); dim: true }
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-                    Repeater {
-                        model: cornersCard.actions.filter(a => !a.swayfx || Sway.swayfx)
-                        delegate: Pill {
-                            required property var modelData
-                            label: modelData.label
-                            active: (Settings[cornerRow.modelData.key] || "none") === modelData.id
-                            onClicked: Settings.set(cornerRow.modelData.key, modelData.id)
-                        }
-                    }
+                title: cornerRow.modelData.label
+
+                Select {
+                    Layout.preferredWidth: Design.s(220)
+                    model: cornersGroup.actionItems
+                    current: Settings[cornerRow.modelData.key] || "none"
+                    onPicked: id => Settings.set(cornerRow.modelData.key, id)
                 }
             }
-        }
-        Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            role: "caption"
-            dim: true
-            text: I18n.tr("The top corners are also where the top bar's first and last buttons are: a corner set here takes their outermost pixel.")
         }
     }
 

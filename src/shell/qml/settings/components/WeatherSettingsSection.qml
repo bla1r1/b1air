@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import "../../Ui"
 import "../../Services"
 
-Card {
+SettingsGroup {
     id: section
 
     property string apiKey: ""
@@ -65,7 +65,7 @@ Card {
                 }
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 visible: Settings.weatherKeyStored
                 icon: "\u{f01b4}"
@@ -115,7 +115,7 @@ Card {
                     { id: "imperial", label: I18n.tr("Fahrenheit") }
                 ]
 
-                Pill {
+                Chip {
                     required property var modelData
                     Layout.fillWidth: true
                     label: modelData.label

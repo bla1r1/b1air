@@ -260,17 +260,17 @@ MiniView {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
 
-                Pill {
+                Button {
                     Layout.fillWidth: true
                     label: I18n.tr("Cancel")
                     onClicked: root.cancelJoin()
                 }
 
-                Pill {
+                Button {
+                    variant: pskField.text.length > 0 ? "primary" : "secondary"
                     Layout.fillWidth: true
                     label: I18n.tr("Join")
                     icon: "\u{f012c}"
-                    active: pskField.text.length > 0
                     onClicked: root.join(pskField.text)
                 }
             }

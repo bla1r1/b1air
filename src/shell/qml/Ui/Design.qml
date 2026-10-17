@@ -23,10 +23,13 @@ QtObject {
 
     component FontScale: QtObject {
         readonly property int caption: 11   // metadata, units, timestamps
+        readonly property int footnote: 12  // note, secondary text
         readonly property int body: 13      // standard UI working size
         readonly property int subhead: 15   // card titles, device names
         readonly property int title: 20     // page and popup titles
-        readonly property int display: 24   // popup headlines, hero numbers
+        readonly property int display: 28   // popup headlines, hero numbers
+        readonly property int glyph: 16     // an icon in a button or row
+        readonly property int glyphSm: 14   // an icon in a small button, menu item, tab
 
         // Inter: the open face closest to the one a desktop like this is
         // usually set in — wide, even, with figures that can be told to
@@ -58,14 +61,10 @@ QtObject {
     }
 
     component RadiusScale: QtObject {
-        // b1air-monitor and b1air-text (and their two copies under shell/qml)
-        // already referenced Design.radius.sm, which was never declared here:
-        // Design.s(undefined) is NaN, so those four elements were drawn with
-        // radius NaN instead of a small rounded corner.
-        readonly property int sm: 6       // chips, inline badges, inner boxes
-        readonly property int ctl: 10     // buttons, fields, list rows, sliders
-        readonly property int card: 14    // cards, quick-tiles
-        readonly property int panel: 20   // popup panels, main windows
+        readonly property int sm: 4       // chips, badges, inner elements
+        readonly property int ctl: 8      // buttons, fields, list rows, selects
+        readonly property int card: 12    // cards, groups, quick-tiles
+        readonly property int panel: 16   // popup panels, main windows
         readonly property int pill: 999   // toggles, chips, status pills
     }
 
@@ -77,27 +76,45 @@ QtObject {
         readonly property int lg: 16
         readonly property int xl: 24
         readonly property int xxl: 32
+
+        // Semantic layout spacing tokens
+        readonly property int pagePadding: 24
+        readonly property int groupGap: 24
+        readonly property int rowPaddingX: 12
     }
 
-    // Fixed heights that repeat across the shell. Before this scale the same
-    // control was Design.s(34), s(36) and s(38) in three files, so nothing in a
-    // row lined up with anything else in it.
+    // Canonical 5 heights and component sizes across the shell.
     component SizeScale: QtObject {
-        readonly property int header: 36    // brand / title row at the top of a panel
-        readonly property int iconBtn: 28   // round header / media button
-        // Inline controls that stack inside one Card. They were written as
-        // Design.s(32) in Field and Pill and Design.s(30) in Stepper, so a
-        // card mixing a field, a stepper and a pill had three row heights
-        // that did not line up — the exact drift this scale exists to stop.
-        readonly property int field: 32     // text field, stepper, pill
+        // Canonical 5 heights
+        readonly property int xs: 24        // bar, chip
+        readonly property int sm: 28        // toolbar, icon button
+        readonly property int md: 32        // text field, button, select, segmented, menu item
+        readonly property int row: 40       // single-line list row
+        readonly property int rowTall: 52   // two-line list row
+
+        readonly property int mini: 20      // badge, a tab's close button, a frame's tools
+        readonly property int micro: 16     // spinner, the smallest square control
         readonly property int knob: 36      // circular toggle inside a tile
-        readonly property int row: 38       // one-line list row, square button
-        readonly property int ctl: 38       // slider, field, capsule control
-        readonly property int rowTall: 44   // two-line list row
-        readonly property int action: 36    // bottom action button
+        readonly property int header: 36    // brand / title row at the top of a panel
         readonly property int art: 48       // album art
         readonly property int tile: 56      // quick tile
         readonly property int media: 76     // media card
+    }
+
+    // Widths that repeat: the same sidebar, menu or field in every app.
+    component WidthScale: QtObject {
+        readonly property int sidebar: 224     // an app's sidebar
+        readonly property int menuMin: 240     // a menu or popover, narrowest
+        readonly property int menuMax: 440     // a menu, widest
+        readonly property int select: 280      // a Select, closed and open
+        readonly property int dialog: 340      // a dialog's message column
+        readonly property int tab: 220         // one tab, widest
+        readonly property int text: 320        // a short centred paragraph
+        readonly property int field: 120       // a field with no layout width
+        readonly property int segment: 220     // a segmented control, narrowest
+        readonly property int segmentSm: 110   // one segment, small
+        readonly property int segmentMd: 125   // one segment
+        readonly property int list: 260        // a popup list's height, at most
     }
 
     component DurationScale: QtObject {
@@ -299,6 +316,15 @@ QtObject {
     readonly property color veilStrong: tint(text, 0.10)
     readonly property color veilBold: tint(text, 0.16)
 
+    // ── Semantic States & Highlights ─────────────────────────────────────────
+    readonly property color focusRing: accent
+    readonly property color separator: line
+    readonly property color selection: tint(accent, 0.22)
+    readonly property color stateHover: veil
+    readonly property color statePressed: veilStrong
+    readonly property color stateSelected: selection
+    readonly property real disabledOpacity: opacity.disabled
+
     // =========================================================================
     // TYPE & SHAPE
     // =========================================================================
@@ -307,11 +333,13 @@ QtObject {
     readonly property RadiusScale radius: RadiusScale {}
     readonly property SpaceScale space: SpaceScale {}
     readonly property SizeScale size: SizeScale {}
+    readonly property WidthScale width: WidthScale {}
     readonly property DurationScale duration: DurationScale {}
     readonly property OpacityScale opacity: OpacityScale {}
     readonly property ShadowSpec shadow: ShadowSpec {}
 
     readonly property int border: 1
+    readonly property int focusWidth: 2   // the keyboard focus outline
     readonly property int easing: Easing.OutCubic
     readonly property int blurMax: 64
 
@@ -568,17 +596,4 @@ QtObject {
             out[k] = String(root._p[k]);
         return out;
     }
-
-    // Legacy aliases
-    readonly property color base: surface
-    readonly property color mantle: sunken
-    readonly property color crust: ground
-    readonly property color subtext0: textDim
-    readonly property color subtext1: textDim
-    readonly property color surface0: raised
-    readonly property color surface1: hover
-    readonly property color surface2: active
-    readonly property color overlay0: textFaint
-    readonly property color overlay1: textFaint
-    readonly property color overlay2: textFaint
 }

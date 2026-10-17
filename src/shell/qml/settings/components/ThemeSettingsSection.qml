@@ -24,55 +24,47 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     // ── Light by day, dark by night ─────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Light and dark")
-        subtitle: Settings.themeAuto && Services.Theme.nightFrom !== ""
+        description: Settings.themeAuto && Services.Theme.nightFrom !== ""
             ? I18n.tr("Dark from sunset (%1) to sunrise (%2), at the place set for the night light",
                       Services.Theme.nightFrom, Services.Theme.nightTo)
             : I18n.tr("One theme all day, or light by day and dark after sunset")
-        icon: "\u{f050e}"
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                label: I18n.tr("Always the theme below")
-                active: !Settings.themeAuto
-                onClicked: Settings.set("themeAuto", false)
-            }
-            Pill {
-                label: I18n.tr("Automatically")
-                active: Settings.themeAuto
-                onClicked: Settings.set("themeAuto", true)
+        SettingsRow {
+            title: I18n.tr("Schedule")
+
+            SegmentedControl {
+                size: "sm"
+                Layout.preferredWidth: Design.s(280)
+                model: [
+                    { id: "manual", label: I18n.tr("Always one theme") },
+                    { id: "auto",   label: I18n.tr("Automatically") }
+                ]
+                current: Settings.themeAuto ? "auto" : "manual"
+                onPicked: id => Settings.set("themeAuto", id === "auto")
             }
         }
+
         Repeater {
             model: Settings.themeAuto ? [{ key: "themeDay", label: I18n.tr("Day") },
                                          { key: "themeNight", label: I18n.tr("Night") }] : []
-            delegate: RowLayout {
+            delegate: SettingsRow {
                 id: autoRow
                 required property var modelData
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Label { text: autoRow.modelData.label; Layout.preferredWidth: Design.s(80); dim: true }
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-                    Repeater {
-                        model: Services.Theme.available
-                        delegate: Pill {
-                            required property var modelData
-                            label: modelData.name
-                            active: Settings[autoRow.modelData.key] === modelData.id
-                            onClicked: Settings.set(autoRow.modelData.key, modelData.id)
-                        }
-                    }
+                title: autoRow.modelData.label
+
+                Select {
+                    Layout.preferredWidth: Design.s(220)
+                    model: Services.Theme.available.map(t => ({ id: t.id, label: t.name }))
+                    current: Settings[autoRow.modelData.key]
+                    onPicked: id => Settings.set(autoRow.modelData.key, id)
                 }
             }
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Theme")
         subtitle: I18n.tr("The whole palette — surfaces, text and accents — in one file")
         icon: "\u{f0765}"
@@ -102,17 +94,21 @@ ColumnLayout {
                 }
             }
 
-            ActionButton {
-                label: Settings.themeName === "wallpaper" ? I18n.tr("Regenerate") : I18n.tr("Apply")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: Settings.themeName === "wallpaper" ? I18n.tr("Regenerate") : I18n.tr("Apply")
                 icon: "\u{f0765}"
-                onActivated: Services.Theme.applyFromWallpaper()
+                onClicked: Services.Theme.applyFromWallpaper()
             }
 
             // Keeps this palette as a theme, so the next wallpaper doesn't replace it.
-            ActionButton {
-                label: I18n.tr("Save as theme")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: I18n.tr("Save as theme")
                 icon: "\u{f0193}"
-                onActivated: {
+                onClicked: {
                     if (Services.Theme.saveWallpaperAs(newThemeName.text) !== "")
                         newThemeName.text = "";
                 }
@@ -184,13 +180,14 @@ ColumnLayout {
                         onClicked: Services.Theme.beginEdit(themeRow.modelData.id)
                     }
 
-                    ActionButton {
+                    Button {
                         visible: !themeRow.modelData.builtin
                         Layout.fillWidth: false
-                        label: I18n.tr("Delete")
+                        size: "sm"
+                        variant: "danger"
+                        text: I18n.tr("Delete")
                         icon: "\u{f01b4}"
-                        destructive: true
-                        onActivated: Services.Theme.deleteTheme(themeRow.modelData.id)
+                        onClicked: Services.Theme.deleteTheme(themeRow.modelData.id)
                     }
                 }
 
@@ -369,20 +366,25 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
                 Item { Layout.fillWidth: true }
-                Pill {
-                    label: I18n.tr("Open JSON")
+                Button {
+                    size: "sm"
+                    variant: "secondary"
+                    text: I18n.tr("Open JSON")
                     icon: "\u{f0219}"
                     onClicked: Quickshell.execDetached(["b1air-text", Services.Theme.themesDir + "/" + Services.Theme.editingId + ".json"])
                 }
-                Pill {
-                    label: I18n.tr("Revert")
+                Button {
+                    size: "sm"
+                    variant: "secondary"
+                    text: I18n.tr("Revert")
                     icon: "\u{f0156}"
                     onClicked: Services.Theme.revertEdit()
                 }
-                Pill {
-                    label: I18n.tr("Done")
+                Button {
+                    size: "sm"
+                    variant: "primary"
+                    text: I18n.tr("Done")
                     icon: "\u{f012c}"
-                    active: true
                     onClicked: { editor.selected = ""; Services.Theme.finishEdit(); }
                 }
             }
@@ -415,8 +417,10 @@ ColumnLayout {
                 }
             }
 
-            Pill {
-                label: I18n.tr("Create")
+            Button {
+                size: "sm"
+                variant: "primary"
+                text: I18n.tr("Create")
                 icon: "\u{f0415}"
                 onClicked: {
                     if (Services.Theme.createFrom(newThemeName.text) !== "")
@@ -424,13 +428,12 @@ ColumnLayout {
                 }
             }
 
-            Pill {
-                label: I18n.tr("Edit")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: I18n.tr("Edit")
                 icon: "\u{f03eb}"
-                // Ui/Pill has no disabled state of its own; `enabled` blocks the
-                // clicks and the opacity says so.
                 enabled: Services.Theme.currentFile !== "" && Services.Theme.editingId === ""
-                opacity: enabled ? 1.0 : 0.45
                 onClicked: Services.Theme.beginEdit(Settings.themeName)
             }
         }
@@ -473,8 +476,10 @@ ColumnLayout {
                 }
             }
 
-            Pill {
-                label: I18n.tr("Import")
+            Button {
+                size: "sm"
+                variant: "primary"
+                text: I18n.tr("Import")
                 icon: "\u{f0552}"
                 onClicked: {
                     if (Services.Theme.importFrom(importPath.text))
@@ -482,8 +487,10 @@ ColumnLayout {
                 }
             }
 
-            Pill {
-                label: I18n.tr("Export")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: I18n.tr("Export")
                 icon: "\u{f0554}"
                 onClicked: Services.Theme.exportTo("")
             }

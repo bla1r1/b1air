@@ -29,12 +29,12 @@ ColumnLayout {
                                                              : I18n.tr("Could not delete the screen time history")
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Screen time")
         subtitle: I18n.tr("Which app was in front and for how long, kept on this computer only")
         icon: "\u{f051e}"
 
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Record screen time")
             note: I18n.tr("Off: nothing is recorded from the next login, and Screen Time & Focus stays empty")
             checked: Settings.focusDaemonAutoStart !== false
@@ -51,12 +51,12 @@ ColumnLayout {
                 dim: section.forgetStatus === ""
                 wrapMode: Text.WordWrap
             }
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 icon: "\u{f0a7a}"
                 label: I18n.tr("Delete history")
                 destructive: true
-                confirmLabel: I18n.tr("Delete?")
+                confirmText: I18n.tr("Delete?")
                 onActivated: forgetStats.running = true
             }
         }
@@ -65,7 +65,7 @@ ColumnLayout {
     // ── Clipboard ────────────────────────────────────────────────────────────
     property bool clipCleared: false
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Clipboard history")
         subtitle: I18n.tr("What was copied, kept so it can be pasted again (Mod+Ctrl+V)")
         icon: "\u{f014c}"
@@ -81,12 +81,12 @@ ColumnLayout {
                 dim: !section.clipCleared
                 wrapMode: Text.WordWrap
             }
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 icon: "\u{f0a7a}"
                 label: I18n.tr("Clear history")
                 destructive: true
-                confirmLabel: I18n.tr("Clear?")
+                confirmText: I18n.tr("Clear?")
                 onActivated: { Clipboard.clearHistory(); section.clipCleared = true; }
             }
         }
@@ -127,9 +127,9 @@ ColumnLayout {
 
     // The names of the files in the home folder, for Spotlight
     // (daemon/file_index): kept in ~/.cache/b1air/files-index.db.
-    Card {
+    SettingsGroup {
         title: I18n.tr("File search")
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Index file names for Spotlight")
             subtitle: I18n.tr("Names only, not what is in the files; hidden folders and network drives are left out")
             checked: Settings.fileIndex !== false
@@ -137,21 +137,23 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Trash")
         note: I18n.tr("Deleted files are kept this long, then removed for good at login")
         icon: "\u{f0a7a}"
 
-        Stepper {
+        SettingsRow {
             label: I18n.tr("Keep deleted files for")
-            valueText: section.trashDays === 0 ? I18n.tr("Forever") : I18n.trn("%1 day", "%1 days", section.trashDays)
-            onDecrement: section.stepTrash(-1)
-            onIncrement: section.stepTrash(1)
+            Stepper {
+                valueText: section.trashDays === 0 ? I18n.tr("Forever") : I18n.trn("%1 day", "%1 days", section.trashDays)
+                onDecrement: section.stepTrash(-1)
+                onIncrement: section.stepTrash(1)
+            }
         }
     }
 
     // ── Location ─────────────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Location")
         subtitle: I18n.tr("Places typed into Settings, used for the weather and for sunset and sunrise")
         icon: "\u{f034e}"
@@ -169,7 +171,7 @@ ColumnLayout {
                     role: "caption"; dim: true; elide: Text.ElideRight
                 }
             }
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 visible: !!Settings.weatherCityId
                 icon: "\u{f0156}"
@@ -191,7 +193,7 @@ ColumnLayout {
                     role: "caption"; dim: true; elide: Text.ElideRight
                 }
             }
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 visible: !!Settings.nightLightLocation
                 icon: "\u{f0156}"
@@ -203,7 +205,7 @@ ColumnLayout {
 
     // ── Camera and microphone ────────────────────────────────────────────────
     // Only words, nothing to set: not drawn (the dots in the bar say it).
-    Card {
+    SettingsGroup {
         visible: false
         title: I18n.tr("Camera and microphone")
         subtitle: I18n.tr("The top bar shows a red dot while the microphone records and an orange one while the camera does — always, so it cannot be missed")

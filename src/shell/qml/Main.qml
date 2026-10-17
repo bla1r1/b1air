@@ -41,7 +41,7 @@ Scope {
     Binding {
         target: Design
         property: "translucent"
-        value: rootScope.compositorBlurs && (!Settings.loaded || Settings.blurEnabled)
+        value: !Settings.loaded || Settings.blurEnabled
     }
 
     // Ui/Design cannot read Services/Settings itself — the standalone apps load

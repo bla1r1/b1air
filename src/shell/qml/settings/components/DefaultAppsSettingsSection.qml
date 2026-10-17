@@ -153,7 +153,7 @@ ColumnLayout {
     Repeater {
         model: section.rows
 
-        Card {
+        SettingsGroup {
             id: rowCard
             required property var modelData
             readonly property var apps: {
@@ -186,7 +186,7 @@ ColumnLayout {
 
                 Repeater {
                     model: rowCard.apps
-                    delegate: Pill {
+                    delegate: Chip {
                         required property var modelData
                         label: modelData.name
                         active: modelData.desktopFile === (section.current[rowCard.modelData.kind] || "")
@@ -206,7 +206,7 @@ ColumnLayout {
                     onAccepted: v => { if (section.chooseTyped(rowCard.modelData, v)) customField.text = ""; }
                 }
 
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f012c}"
                     label: I18n.tr("Set")

@@ -9,7 +9,7 @@ Item {
     property string action: ""
     property string actionTip: ""
     signal actionClicked()
-    implicitHeight: Design.s(32)
+    implicitHeight: Design.s(Design.size.md)
     Layout.fillWidth: true
 
     Label {
@@ -26,13 +26,15 @@ Item {
         font.letterSpacing: 0.6
         elide: Text.ElideRight
     }
-    BarButton {
+    Button {
+        variant: "ghost"
+        iconOnly: true
         id: btn
         visible: root.action !== ""
         anchors.right: parent.right
         anchors.verticalCenter: label.verticalCenter
-        small: true
-        glyph: root.action
+        size: "sm"
+        icon: root.action
         tip: root.actionTip
         onClicked: root.actionClicked()
     }

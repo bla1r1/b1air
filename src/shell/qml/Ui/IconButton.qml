@@ -16,7 +16,7 @@ Item {
 
     property string icon: ""
     property string role: "body"
-    property real diameter: Design.size.iconBtn
+    property real diameter: Design.size.sm
 
     property color tone: Design.textDim
     property color hoverTone: Design.accent
@@ -48,4 +48,12 @@ Item {
     }
 
     Clickable { id: ma; onClicked: root.clicked() }
+
+    // Tab reaches it; Enter and Space do what a click does.
+    activeFocusOnTab: root.enabled
+    Keys.onReturnPressed: event => { root.clicked(); event.accepted = true; }
+    Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
+    Accessible.role: Accessible.Button
+    Accessible.name: root.icon
+    FocusRing { target: root; cornerRadius: root.width / 2 + Design.s(Design.space.xxs) }
 }

@@ -201,18 +201,19 @@ Item {
         progress: Devices.busyOp === "add" && Devices.progressTotal > 0 ? Devices.progressDone / Devices.progressTotal : -1
 
         actions: [
-            BarButton {
-                glyph: "\u{f01ea}"
+            Button {
+                variant: "secondary"
+                icon: "\u{f01ea}"
                 label: I18n.tr("Eject")
                 enabled: !pane.busyHere
                 onClicked: Devices.eject(pane.path)
             }
         ]
         footer: [
-            BarButton {
-                glyph: "\u{f0415}"
+            Button {
+                variant: "primary"
+                icon: "\u{f0415}"
                 label: I18n.tr("Add Music…")
-                primary: true
                 tip: I18n.tr("Opens your Music folder beside this window: drag songs or albums here")
                 onClicked: Devices.openWindow(FilesBackend.homePath + "/Music")
             }
@@ -326,9 +327,10 @@ Item {
                             ]
                         }
                     }
-                    BarButton {
+                    Button {
+                        variant: "secondary"
                         Layout.fillWidth: true
-                        glyph: "\u{f0415}"
+                        icon: "\u{f0415}"
                         label: I18n.tr("New Playlist")
                         enabled: !pane.loading
                         onClicked: nameDialog.ask("playlist", I18n.tr("Playlist"))
@@ -358,14 +360,18 @@ Item {
                         dim: pane.tab !== "playlists"
                         elide: Text.ElideRight
                     }
-                    BarButton {
+                    Button {
+                        variant: "ghost"
+                        iconOnly: true
                         visible: pane.tab === "playlists" && !!pane.playlist && !pane.playlist.smart
-                        glyph: "\u{f03eb}"; small: true; tip: I18n.tr("Rename playlist")
+                        icon: "\u{f03eb}"; size: "sm"; tip: I18n.tr("Rename playlist")
                         onClicked: nameDialog.ask("renamePlaylist", pane.playlist.name)
                     }
-                    BarButton {
+                    Button {
+                        variant: "danger"
+                        iconOnly: true
                         visible: pane.tab === "playlists" && !!pane.playlist && !pane.playlist.smart
-                        glyph: "\u{f0a7a}"; small: true; danger: true; tip: I18n.tr("Delete playlist")
+                        icon: "\u{f0a7a}"; size: "sm";  tip: I18n.tr("Delete playlist")
                         onClicked: confirmPlaylist.open()
                     }
                     Field {
@@ -619,7 +625,7 @@ Item {
             ? I18n.tr("Delete “%1” from the iPod?", (pane.byId[ids[0]] || {}).title || "")
             : I18n.trn("Delete %1 song from the iPod?", "Delete %1 songs from the iPod?", ids.length)
         message: I18n.tr("The files on this computer stay; only the iPod's copies go.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: { Devices.removeTracks(pane.path, ids); pane.selected = ({}); }
@@ -629,7 +635,7 @@ Item {
         id: confirmPlaylist
         title: I18n.tr("Delete the playlist “%1”?", pane.playlist ? pane.playlist.name : "")
         message: I18n.tr("Its songs stay on the iPod.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: Devices.playlist(pane.path, "delete", [pane.playlistId])

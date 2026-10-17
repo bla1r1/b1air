@@ -149,7 +149,7 @@ PopupShell {
             // copied an empty string to the clipboard and the other asked
             // xdg-open to open "". Neither reported anything; they simply did
             // nothing while looking available.
-            ActionButton {
+            Button {
                 enabled: root.filePath !== ""
                 icon: "\u{f0c5}"
                 label: I18n.tr("Copy Path")
@@ -159,7 +159,7 @@ PopupShell {
                 }
             }
 
-            ActionButton {
+            Button {
                 enabled: root.filePath !== ""
                 icon: "\u{f08e}"
                 label: I18n.tr("Open")

@@ -625,8 +625,17 @@ PY_I18N
     else fail "a translation is broken"; fi
 }
 
+check_design() {
+    head_ "design-system"
+    if "$REPO/tools/check-design.sh" >/dev/null; then
+        pass "design metrics tracked and within limits"
+    else
+        fail "design metrics check failed"
+    fi
+}
+
 # ── driver ───────────────────────────────────────────────────────────────────
-ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n daemon_cli shell_boot)
+ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n design daemon_cli shell_boot)
 
 # Runnable by name, absent from the default run: it needs the network.
 EXTRA=(vendor_updates)

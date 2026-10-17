@@ -24,7 +24,7 @@ Rectangle {
     signal clicked()
 
     Layout.fillWidth: true
-    implicitHeight: Design.s(detail !== "" ? 42 : 36)
+    implicitHeight: Design.s(detail !== "" ? Design.size.row + Design.space.xxs : Design.size.md + Design.space.xs)
     radius: Design.s(Design.radius.ctl)
     color: active ? Design.tint(Design.accent, 0.22)
          : highlight ? Design.tint(Design.accent, 0.14)
@@ -45,10 +45,10 @@ Rectangle {
         anchors.rightMargin: Design.s(Design.space.xs)
         spacing: Design.s(Design.space.sm)
         Text {
-            Layout.preferredWidth: Design.s(22)
+            Layout.preferredWidth: Design.s(Design.size.mini)
             text: root.glyph
             font.family: Design.font.icon
-            font.pixelSize: Design.s(17)
+            font.pixelSize: Design.s(Design.font.glyph)
             color: root.active && !root.keepGlyphColor ? Design.accent : root.glyphColor
             horizontalAlignment: Text.AlignHCenter
         }
@@ -66,10 +66,10 @@ Rectangle {
         }
         Rectangle {
             visible: root.badge !== ""
-            implicitWidth: badgeText.implicitWidth + Design.s(12)
-            implicitHeight: Design.s(20)
+            implicitWidth: badgeText.implicitWidth + Design.s(Design.space.md)
+            implicitHeight: Design.s(Design.size.mini)
             radius: height / 2
-            color: Design.raised
+            color: Design.well
             Text {
                 id: badgeText
                 anchors.centerIn: parent
@@ -79,6 +79,14 @@ Rectangle {
                 color: Design.textDim
             }
         }
-        Row { id: trail; spacing: Design.s(2) }
+        Row { id: trail; spacing: Design.s(Design.space.xxs) }
     }
+
+    // Tab reaches it; Enter and Space do what a click does.
+    activeFocusOnTab: true
+    Keys.onReturnPressed: event => { root.clicked(); event.accepted = true; }
+    Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
+    Accessible.role: Accessible.PageTab
+    Accessible.name: root.label
+    FocusRing { target: root }
 }

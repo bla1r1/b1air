@@ -108,7 +108,7 @@ ColumnLayout {
     // would let you switch the desktop off from inside itself.
 
     // ── 2. Applications Autostart ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Autostart Applications")
         subtitle: I18n.tr("Launch your favourite applications, background daemons, and scripts on login")
         icon: "\u{f009}"
@@ -129,7 +129,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                 }
 
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: section.showAppPicker ? I18n.tr("Close App List") : I18n.tr("Add Installed App…")
@@ -248,7 +248,7 @@ ColumnLayout {
                                     Layout.fillWidth: true
                                 }
 
-                                ActionButton {
+                                Button {
                                     icon: "󰐕"
                                     label: I18n.tr("Add")
                                     onActivated: section.addCustomApp(appPickerItem.model.name, appPickerItem.model.exec, appPickerItem.model.icon)
@@ -289,11 +289,9 @@ ColumnLayout {
                     onAccepted: v => section.addCustomApp(customNameInput.text, v, "")
                 }
 
-                // Sized to its own text. ActionButton fills width by default,
-                // which is right when it is the only thing on its row and
-                // wrong here: it shared the row with the command field and
-                // took the space that field needs to be usable.
-                ActionButton {
+                // Sized to its own text: it shares the row with the command
+                // field, which needs the space to be usable.
+                Button {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: I18n.tr("Add Binary")
@@ -337,13 +335,13 @@ ColumnLayout {
                             Label { text: customAppItem.modelData.command || ""; role: "caption"; isMono: true; dim: true }
                         }
 
-                        Toggle {
+                        SwitchRow {
                             checked: customAppItem.modelData.enabled !== false
                             onToggled: section.toggleCustomApp(customAppItem.index)
                         }
 
-                        // Icon-sized: ActionButton fills its row by default,
-                        // and this one took half the width of every entry.
+                        // Icon-sized: a full-width button here took half the
+                        // width of every entry.
                         IconButton {
                             icon: "󰆴"
                             hoverTone: Design.danger
@@ -356,7 +354,7 @@ ColumnLayout {
     }
 
     // ── 3. Welcome & User Guide ──────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Welcome & first-run setup")
         subtitle: I18n.tr("The shortcut guide at login, and the setup a new account goes through")
         icon: "\u{f02d}"
@@ -374,7 +372,7 @@ ColumnLayout {
                     spacing: Design.s(2)
                     Label { text: I18n.tr("Open Guide on Login") }
                 }
-                Toggle {
+                SwitchRow {
                     checked: section.openGuideAtStartup
                     onToggled: {
                         const next = !section.openGuideAtStartup;
@@ -395,7 +393,7 @@ ColumnLayout {
                     spacing: Design.s(2)
                     Label { text: I18n.tr("First-run setup") }
                 }
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f040a}"
                     label: I18n.tr("Run it again")

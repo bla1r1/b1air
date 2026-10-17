@@ -30,7 +30,7 @@ ColumnLayout {
     }
 
     // ── 1. Master Switch ─────────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Game Mode Performance")
         subtitle: I18n.tr("Optimize system responsiveness, disable desktop overhead, and maximize FPS")
         icon: "\u{f11b}"
@@ -45,7 +45,7 @@ ColumnLayout {
                 Label { text: I18n.tr("Enable Game Mode") }
             }
 
-            Toggle {
+            SwitchRow {
                 checked: section.gameModeEnabled
                 onToggled: section.toggleGameMode(!section.gameModeEnabled)
             }
@@ -53,7 +53,7 @@ ColumnLayout {
     }
 
     // ── 2. Display & Desktop Options ─────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Display & Desktop Overlays")
         subtitle: I18n.tr("Configurable behaviors applied when Game Mode is active")
         icon: "\u{f108}"
@@ -70,7 +70,7 @@ ColumnLayout {
                     Label { text: I18n.tr("Adaptive Sync (VRR)"); weight: Design.weight.medium }
                     Label { text: I18n.tr("Enable Variable Refresh Rate on supported gaming monitors"); role: "caption"; dim: true }
                 }
-                Toggle {
+                SwitchRow {
                     checked: section.gameModeAdaptiveSync
                     onToggled: {
                         Settings.set("gameModeAdaptiveSync", !section.gameModeAdaptiveSync);
@@ -92,7 +92,7 @@ ColumnLayout {
                     Label { text: I18n.tr("Hide Top Bar"); weight: Design.weight.medium }
                     Label { text: I18n.tr("Automatically hide top status bar during gaming sessions"); role: "caption"; dim: true }
                 }
-                Toggle {
+                SwitchRow {
                     checked: section.gameModeHideBar
                     onToggled: {
                         Settings.set("gameModeHideBar", !section.gameModeHideBar);
@@ -114,7 +114,7 @@ ColumnLayout {
                     Label { text: I18n.tr("Do Not Disturb (DND)"); weight: Design.weight.medium }
                     Label { text: I18n.tr("Mute all popups and toast notifications while in game"); role: "caption"; dim: true }
                 }
-                Toggle {
+                SwitchRow {
                     checked: section.gameModeDND
                     onToggled: {
                         Settings.set("gameModeDND", !section.gameModeDND);

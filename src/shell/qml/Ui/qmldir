@@ -4,49 +4,54 @@ singleton Design 1.0 Design.qml
 singleton I18n 1.0 I18n.qml
 
 # frame
-PopupShell 1.0 PopupShell.qml
-Card       1.0 Card.qml
-Tile       1.0 Tile.qml
-EditFrame  1.0 EditFrame.qml
-WidgetTray 1.0 WidgetTray.qml
-ScrollArea 1.0 ScrollArea.qml
-OverflowBar 1.0 OverflowBar.qml
+PopupShell    1.0 PopupShell.qml
+Popover       1.0 Popover.qml
+SettingsGroup 1.0 SettingsGroup.qml
+Tile          1.0 Tile.qml
+EditFrame     1.0 EditFrame.qml
+WidgetTray    1.0 WidgetTray.qml
+ScrollArea    1.0 ScrollArea.qml
+OverflowBar   1.0 OverflowBar.qml
 
 # primitives
+Control      1.0 Control.qml
+FocusRing    1.0 FocusRing.qml
 Label        1.0 Label.qml
 SectionLabel 1.0 SectionLabel.qml
-Icon       1.0 Icon.qml
-IconButton 1.0 IconButton.qml
-Clickable  1.0 Clickable.qml
+Separator    1.0 Separator.qml
+Icon         1.0 Icon.qml
+IconButton   1.0 IconButton.qml
+Clickable    1.0 Clickable.qml
 
 # controls
-Slider     1.0 Slider.qml
-Field      1.0 Field.qml
-Toggle     1.0 Toggle.qml
-Switch     1.0 Switch.qml
-Pill       1.0 Pill.qml
-Dropdown   1.0 Dropdown.qml
-FormRow    1.0 FormRow.qml
-Stepper    1.0 Stepper.qml
+Button           1.0 Button.qml
+Slider           1.0 Slider.qml
+Field            1.0 Field.qml
+Switch           1.0 Switch.qml
+SwitchRow        1.0 SwitchRow.qml
+SegmentedControl 1.0 SegmentedControl.qml
+Select           1.0 Select.qml
+ListPicker       1.0 ListPicker.qml
+Chip             1.0 Chip.qml
+SettingsRow      1.0 SettingsRow.qml
+Stepper          1.0 Stepper.qml
 
-# rows
-Badge      1.0 Badge.qml
-EmptyState 1.0 EmptyState.qml
-ActionButton 1.0 ActionButton.qml
-ButtonRow    1.0 ButtonRow.qml
-AppDialog    1.0 AppDialog.qml
-AppMenu      1.0 AppMenu.qml
-AppMenuItem  1.0 AppMenuItem.qml
+# rows and feedback
+Badge            1.0 Badge.qml
+InlineStatus     1.0 InlineStatus.qml
+EmptyState       1.0 EmptyState.qml
+AppDialog        1.0 AppDialog.qml
+AppMenu          1.0 AppMenu.qml
+AppMenuItem      1.0 AppMenuItem.qml
 AppMenuSeparator 1.0 AppMenuSeparator.qml
-AppToolbar   1.0 AppToolbar.qml
-AppTab       1.0 AppTab.qml
-BarButton    1.0 BarButton.qml
-BarGroup     1.0 BarGroup.qml
-AppSidebar   1.0 AppSidebar.qml
-SidebarHeading 1.0 SidebarHeading.qml
-SidebarItem  1.0 SidebarItem.qml
-AppStatusBar 1.0 AppStatusBar.qml
+MenuRow          1.0 MenuRow.qml
+AppToolbar       1.0 AppToolbar.qml
+AppTab           1.0 AppTab.qml
+AppSidebar       1.0 AppSidebar.qml
+SidebarHeading   1.0 SidebarHeading.qml
+SidebarItem      1.0 SidebarItem.qml
+AppStatusBar     1.0 AppStatusBar.qml
 
 # helpers
-Paths 1.0 Paths.js
-DeviceRow  1.0 DeviceRow.qml
+Paths     1.0 Paths.js
+DeviceRow 1.0 DeviceRow.qml
