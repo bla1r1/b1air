@@ -88,7 +88,7 @@ Item {
     // in the other apps; in the shell the whole panel is glass.
     Rectangle {
         anchors.fill: parent
-        anchors.leftMargin: app.standalone && Design.translucent ? Design.s(224) + Design.border : 0
+        anchors.leftMargin: app.standalone && Design.translucent ? Design.s(Design.width.sidebar) + Design.border : 0
         radius: app.standalone ? 0 : Design.s(Design.radius.panel)
         color: app.standalone ? Design.surface : Design.glassBg
         border.color: app.standalone ? "transparent" : Design.glassBorder
@@ -135,7 +135,7 @@ Item {
         // ── Sidebar ──────────────────────────────────────────────────────────
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(224)
+            Layout.preferredWidth: Design.s(Design.width.sidebar)
             // In the shell the whole panel is already glass, and a second,
             // darker glass on it read as a black slab beside the page: the
             // rail is the panel itself there, set apart by the hairline. In
@@ -174,7 +174,7 @@ Item {
                 Field {
                     id: searchBox
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(36)
+                    Layout.preferredHeight: Design.s(Design.size.header)
                     radius: height / 2
                     color: Design.well
                     placeholder: I18n.tr("Search settings (Ctrl+F)")
@@ -188,7 +188,7 @@ Item {
                     Layout.fillHeight: true
                     model: app.filteredPages
                     clip: true
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
                     ScrollBar.vertical: OverflowBar { id: railBar }
 
                     delegate: Loader {
@@ -197,7 +197,7 @@ Item {
                         required property int index
                         // Clear of the scroll bar, which is drawn over the list:
                         // a long name ("Віддалений робочий стіл") ran under it.
-                        width: railList.width - (railBar.visible && railList.contentHeight > railList.height ? Design.s(10) : 0)
+                        width: railList.width - (railBar.visible && railList.contentHeight > railList.height ? Design.s(Design.space.sm) : 0)
                         sourceComponent: modelData.isHeader ? headingRow : pageRow
 
                         Component {
@@ -258,8 +258,8 @@ Item {
             // other, and full-width buttons read as empty bars.
             ColumnLayout {
                 id: pageCol
-                readonly property real sidePad: Design.s(24)
-                width: Math.min(pageScroll.availableWidth - sidePad * 2, Design.s(1040))
+                readonly property real sidePad: Design.s(Design.space.pagePadding)
+                width: Math.min(pageScroll.availableWidth - sidePad * 2, Design.s(Design.width.page))
                 x: Math.max(sidePad, (pageScroll.availableWidth - width) / 2)
                 spacing: Design.s(Design.space.lg)
 
@@ -646,7 +646,7 @@ Item {
                     }
                 }
 
-                Item { Layout.preferredHeight: Design.s(Design.space.xl) }
+                Item { Layout.preferredHeight: Design.s(Design.space.xxl) }
             }
             }
 

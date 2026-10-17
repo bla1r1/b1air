@@ -101,13 +101,10 @@ ColumnLayout {
             }
         }
 
-        Item { height: Design.s(Design.space.xs) }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("VNC password"); role: "caption"; dim: true }
+        SettingsRow {
+            label: I18n.tr("VNC password")
             Field {
-                Layout.fillWidth: true
+                Layout.preferredWidth: Design.s(Design.width.select)
                 text: section.vncPassword
                 echoMode: TextInput.Password
                 placeholder: I18n.tr("Required for TLS authentication")
@@ -120,23 +117,11 @@ ColumnLayout {
             }
         }
 
-        // Quick Connect Badge & Copy
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
+        // Where to connect: the address is the row, its command copies it.
+        SettingsRow {
             visible: section.vncRunning
-
-            Badge {
-                text: "vnc://" + section.localIp + ":" + section.vncPort
-            }
-
-            Label {
-                visible: section.vncUser !== ""
-                text: I18n.tr("sign in as %1", section.vncUser)
-                role: "caption"
-                dim: true
-            }
-
+            label: "vnc://" + section.localIp + ":" + section.vncPort
+            note: section.vncUser !== "" ? I18n.tr("sign in as %1", section.vncUser) : ""
             Button {
                 label: I18n.tr("Copy Address")
                 icon: "\u{f00c5}"
@@ -167,29 +152,16 @@ ColumnLayout {
             }
         }
 
-        Item { height: Design.s(Design.space.xs) }
-
-        // Kernel Input Emulation (/dev/uinput) Status
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Kernel Input Emulation (/dev/uinput)"); weight: Design.weight.semibold }
-                Label {
-                    text: section.uinputReady
-                        ? I18n.tr("Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps")
-                        : I18n.tr("Requires input group permissions (/dev/uinput)")
-                    role: "caption"
-                    dim: true
-                }
-            }
-
+        // Kernel Input Emulation (/dev/uinput) status. Not ready is not a
+        // fault — most people never need it — so no red badge for it.
+        SettingsRow {
+            label: I18n.tr("Kernel Input Emulation (/dev/uinput)")
+            note: section.uinputReady
+                ? I18n.tr("Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps")
+                : I18n.tr("Requires input group permissions (/dev/uinput)")
             Badge {
                 text: section.uinputReady ? I18n.tr("Ready") : I18n.tr("Inactive")
-                color: section.uinputReady ? Design.ok : Design.danger
+                tone: section.uinputReady ? Design.ok : Design.textDim
             }
         }
 

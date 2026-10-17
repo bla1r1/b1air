@@ -123,14 +123,10 @@ ColumnLayout {
 
     // ── 1. Master Control ────────────────────────────────────────────────────
     SettingsGroup {
-        title: I18n.tr("Night Light")
-        description: section.nightLightEnabled
-            ? I18n.tr("Active at %1K color temperature", section.tempK)
-            : I18n.tr("Reduce blue light in evening hours to protect sleep")
-
+        // No title over a switch with the same name; the state is its note.
         SwitchRow {
             title: I18n.tr("Night Light")
-            note: I18n.tr("Shift the screen towards warm colours to go easier on the eyes at night")
+            note: section.nightLightEnabled ? I18n.tr("Active at %1K color temperature", section.tempK) : ""
             checked: section.nightLightEnabled
             onToggled: section.applyTemp(!section.nightLightEnabled, section.tempK)
         }

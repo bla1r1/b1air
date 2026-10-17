@@ -77,8 +77,10 @@ Rectangle {
         ColumnLayout {
             id: container
             Layout.fillWidth: true
+            // The same room at the bottom of the card as at the top, whatever
+            // ends it: a row, a field or a line of text.
             Layout.topMargin: (root.title === "" && root._effectiveNote === "") ? Design.s(Design.space.xs) : 0
-            Layout.bottomMargin: (children.length > 0) ? Design.s(Design.space.xs) : 0
+            Layout.bottomMargin: (children.length > 0) ? Design.s(Design.space.md) : 0
             spacing: 0
 
             onChildrenChanged: root._padChildren()
@@ -94,9 +96,26 @@ Rectangle {
         for (let i = 0; i < container.children.length; ++i) {
             const c = container.children[i];
             if (c.settingsRow) continue;
+            // A layout holding rows (a Repeater's column, a part shown or
+            // hidden as one) leaves the padding to its rows, as the group does.
+            let holdsRows = false;
+            for (let k = 0; k < c.children.length; ++k)
+                if (c.children[k].settingsRow) { holdsRows = true; break; }
+            if (holdsRows) {
+                // Rows sit flush, with the hairline between them, as they do
+                // straight in the group.
+                if (c.spacing !== undefined) c.spacing = 0;
+                continue;
+            }
             if (c.Layout.leftMargin === 0 && c.Layout.rightMargin === 0) {
                 c.Layout.leftMargin = pad;
                 c.Layout.rightMargin = pad;
+            }
+            // And a little air above and below: rows bring their own, free
+            // content sat flush against the row next to it.
+            if (c.Layout.topMargin === 0 && c.Layout.bottomMargin === 0) {
+                c.Layout.topMargin = Design.s(c.sectionLabel ? Design.space.md : Design.space.xs);
+                c.Layout.bottomMargin = Design.s(Design.space.xs);
             }
         }
     }

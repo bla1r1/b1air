@@ -36,7 +36,7 @@ ColumnLayout {
 
             SegmentedControl {
                 size: "sm"
-                Layout.preferredWidth: Design.s(280)
+                Layout.preferredWidth: Design.s(Design.width.select)
                 model: [
                     { id: "manual", label: I18n.tr("Always one theme") },
                     { id: "auto",   label: I18n.tr("Automatically") }
@@ -55,7 +55,7 @@ ColumnLayout {
                 title: autoRow.modelData.label
 
                 Select {
-                    Layout.preferredWidth: Design.s(220)
+                    Layout.preferredWidth: Design.s(Design.width.control)
                     model: Services.Theme.available.map(t => ({ id: t.id, label: t.name }))
                     current: Settings[autoRow.modelData.key]
                     onPicked: id => Settings.set(autoRow.modelData.key, id)
@@ -66,7 +66,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Theme")
-        subtitle: I18n.tr("The whole palette — surfaces, text and accents — in one file")
         icon: "\u{f0765}"
 
         // From the wallpaper.
@@ -74,29 +73,14 @@ ColumnLayout {
         // Not in the Repeater above it, because it is not a file in the themes
         // directory — it is generated from whatever picture is on the desktop
         // right now, and re-generated whenever it is asked for.
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label {
-                    Layout.fillWidth: true
-                    text: I18n.tr("From the wallpaper")
-                    weight: Design.weight.semibold
-                    color: Settings.themeName === "wallpaper" ? Design.accent : Design.text
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: I18n.tr("Takes the picture's dominant colour and builds the palette around it. Warnings and errors keep their own colours.")
-                    role: "caption"; dim: true; wrapMode: Text.WordWrap
-                }
-            }
+        // In use, it says so by its command: Regenerate instead of Apply.
+        SettingsRow {
+            label: I18n.tr("From the wallpaper")
+            note: I18n.tr("Takes the picture's dominant colour and builds the palette around it. Warnings and errors keep their own colours.")
 
             Button {
                 size: "sm"
-                variant: "secondary"
+                checked: Settings.themeName === "wallpaper"
                 text: Settings.themeName === "wallpaper" ? I18n.tr("Regenerate") : I18n.tr("Apply")
                 icon: "\u{f0765}"
                 onClicked: Services.Theme.applyFromWallpaper()
@@ -105,7 +89,6 @@ ColumnLayout {
             // Keeps this palette as a theme, so the next wallpaper doesn't replace it.
             Button {
                 size: "sm"
-                variant: "secondary"
                 text: I18n.tr("Save as theme")
                 icon: "\u{f0193}"
                 onClicked: {
@@ -203,7 +186,7 @@ ColumnLayout {
         ColumnLayout {
             id: editor
             Layout.fillWidth: true
-            Layout.topMargin: Design.s(Design.space.sm)
+            Layout.topMargin: Design.s(Design.space.md)
             spacing: Design.s(Design.space.sm)
             visible: Services.Theme.editingId !== ""
 
@@ -252,7 +235,7 @@ ColumnLayout {
 
                     GridLayout {
                         Layout.fillWidth: true
-                        columns: Math.max(1, Math.floor(width / Design.s(230)))
+                        columns: Math.max(1, Math.floor(width / Design.s(Design.width.control)))
                         columnSpacing: Design.s(Design.space.sm)
                         rowSpacing: Design.s(Design.space.xs)
 
@@ -282,8 +265,8 @@ ColumnLayout {
                                     spacing: Design.s(Design.space.sm)
 
                                     Rectangle {
-                                        Layout.preferredWidth: Design.s(26)
-                                        Layout.preferredHeight: Design.s(26)
+                                        Layout.preferredWidth: Design.s(Design.size.sm)
+                                        Layout.preferredHeight: Design.s(Design.size.sm)
                                         radius: Design.s(Design.radius.sm)
                                         color: roleRow.colour
                                         border.color: Design.glassBorderStrong
@@ -303,7 +286,7 @@ ColumnLayout {
                                     Field {
                                         mono: true
                                         id: hexField
-                                        Layout.preferredWidth: Design.s(92)
+                                        Layout.preferredWidth: Design.s(Design.width.field)
                                         text: roleRow.colour
                                         function take(value) {
                                             const v = value.trim();
@@ -390,17 +373,11 @@ ColumnLayout {
             }
         }
 
-        SectionLabel {
-            text: I18n.tr("Create your own")
-            Layout.topMargin: Design.s(Design.space.sm)
-        }
-
-        Label {
-            text: I18n.tr("A new theme starts as a copy of the palette on screen, so it renders correctly from the first save and you only change what you want to change.")
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
+        // A heading and what it does, as a row: a caption over a paragraph
+        // over a field read as three loose lines.
+        SettingsRow {
+            label: I18n.tr("Create your own")
+            note: I18n.tr("A new theme starts as a copy of the palette on screen, so it renders correctly from the first save and you only change what you want to change.")
         }
 
         RowLayout {
@@ -419,7 +396,6 @@ ColumnLayout {
 
             Button {
                 size: "sm"
-                variant: "primary"
                 text: I18n.tr("Create")
                 icon: "\u{f0415}"
                 onClicked: {
@@ -448,17 +424,11 @@ ColumnLayout {
             Layout.fillWidth: true
         }
 
-        SectionLabel {
-            text: I18n.tr("Import & export")
-            Layout.topMargin: Design.s(Design.space.sm)
-        }
-
-        Label {
-            text: I18n.tr("Export writes the palette you are looking at into %1, where it shows up in the list above and can be copied to another machine.", Services.Theme.themesDir)
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
+        // A heading and what it does, as a row: a caption over a paragraph
+        // over a field read as three loose lines.
+        SettingsRow {
+            label: I18n.tr("Import & export")
+            note: I18n.tr("Export writes the palette you are looking at into %1, where it shows up in the list above and can be copied to another machine.", Services.Theme.themesDir)
         }
 
         RowLayout {
@@ -478,7 +448,6 @@ ColumnLayout {
 
             Button {
                 size: "sm"
-                variant: "primary"
                 text: I18n.tr("Import")
                 icon: "\u{f0552}"
                 onClicked: {

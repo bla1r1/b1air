@@ -28,36 +28,13 @@ ColumnLayout {
 
     // One row, so that seven switches are seven declarations of what they
     // switch rather than seven copies of the same layout.
-    component WidgetRow: RowLayout {
+    component WidgetRow: SwitchRow {
         id: row
-
         property string boolKey: ""
         property bool boolValue: true
-        property string title: ""
-        property string subtitle: ""
-
         readonly property bool shown: row.boolValue
-
-        Layout.fillWidth: true
-        spacing: Design.s(Design.space.md)
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(2)
-            // Both fill: a ColumnLayout whose children only state an implicit
-            // width stays that wide, so the description column never took the
-            // slack and the picker beside it started wherever each subtitle
-            // happened to end.
-            Label { Layout.fillWidth: true; text: row.title }
-            Label { visible: false; Layout.fillWidth: true; text: row.subtitle; role: "caption"; dim: true
-                    elide: Text.ElideRight }
-        }
-
-
-        SwitchRow {
-            checked: row.shown
-            onToggled: Settings.set(row.boolKey, !row.shown)
-        }
+        checked: row.shown
+        onToggled: Settings.set(row.boolKey, !row.shown)
     }
 
 
@@ -66,7 +43,6 @@ ColumnLayout {
     // ── Dock ─────────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Dock")
-        subtitle: I18n.tr("Pinned and open apps along the bottom of the screen; a dot under the ones running")
         icon: "\u{f0db}"
 
         SwitchRow {
@@ -101,35 +77,34 @@ ColumnLayout {
     // ── Top bar ──────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Top Bar Modules")
-        subtitle: I18n.tr("Which islands the bar draws")
 
         WidgetRow {
             boolKey: "barShowApps"; boolValue: Settings.barShowApps
-            title: I18n.tr("Apps Button"); subtitle: I18n.tr("Opens the launcher; right-click opens Spotlight")
+            title: I18n.tr("Apps Button"); note: I18n.tr("Opens the launcher; right-click opens Spotlight")
         }
         WidgetRow {
             boolKey: "barShowPinned"; boolValue: Settings.barShowPinned
-            title: I18n.tr("Pinned Apps"); subtitle: I18n.tr("The apps pinned from the launcher")
+            title: I18n.tr("Pinned Apps")
         }
         WidgetRow {
             boolKey: "barShowWorkspaces"; boolValue: Settings.barShowWorkspaces
-            title: I18n.tr("Workspaces"); subtitle: I18n.tr("The numbered workspace strip")
+            title: I18n.tr("Workspaces")
         }
         WidgetRow {
             boolKey: "barShowMedia"; boolValue: Settings.barShowMedia
-            title: I18n.tr("Now Playing"); subtitle: I18n.tr("Track title from the active media player")
+            title: I18n.tr("Now Playing")
         }
         WidgetRow {
             boolKey: "barShowWeather"; boolValue: Settings.barShowWeather
-            title: I18n.tr("Weather"); subtitle: I18n.tr("Temperature and condition badge")
+            title: I18n.tr("Weather")
         }
         WidgetRow {
             boolKey: "barShowStats"; boolValue: Settings.barShowStats
-            title: I18n.tr("CPU & Memory"); subtitle: I18n.tr("Processor load and memory in use")
+            title: I18n.tr("CPU & Memory")
         }
         WidgetRow {
             boolKey: "barShowTray"; boolValue: Settings.barShowTray
-            title: I18n.tr("System Tray"); subtitle: I18n.tr("Icons from applications running in the background")
+            title: I18n.tr("System Tray")
         }
     }
 
@@ -137,20 +112,14 @@ ColumnLayout {
     // in its own edit mode (the pencil); this is the same list
     // (ccHiddenTiles, ccHiddenCards), where Settings is looked for it — the
     // Widgets page promised it and had only the bar.
-    component CcRow: RowLayout {
+    component CcRow: SwitchRow {
         id: ccRow
         property string listKey: ""
         property string list: ""
         property string itemId: ""
-        property string title: ""
         readonly property bool shown: !Settings.isWidgetHidden(ccRow.list, ccRow.itemId)
-        Layout.fillWidth: true
-        spacing: Design.s(Design.space.md)
-        Label { Layout.fillWidth: true; text: ccRow.title; weight: Design.weight.semibold }
-        SwitchRow {
-            checked: ccRow.shown
-            onToggled: Settings.setWidgetHidden(ccRow.listKey, ccRow.itemId, ccRow.shown)
-        }
+        checked: ccRow.shown
+        onToggled: Settings.setWidgetHidden(ccRow.listKey, ccRow.itemId, ccRow.shown)
     }
 
     SettingsGroup {

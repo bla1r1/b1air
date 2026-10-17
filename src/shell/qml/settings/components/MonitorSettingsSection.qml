@@ -226,7 +226,7 @@ ColumnLayout {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(260)
+            Layout.preferredHeight: Design.s(Design.size.canvas)
             radius: Design.s(Design.radius.card)
             color: Design.well
             border.color: Design.tint(Design.line, 0.5)
@@ -237,10 +237,10 @@ ColumnLayout {
                 anchors.centerIn: parent
                 rows: 25
                 columns: 40
-                spacing: Design.s(18)
+                spacing: Design.s(Design.space.lg)
                 Repeater {
                     model: 1000
-                    Rectangle { width: Design.s(2); height: Design.s(2); radius: Design.s(1); color: Design.tint(Design.text, 0.08) }
+                    Rectangle { width: Design.s(Design.space.xxs); height: Design.s(Design.space.xxs); radius: Design.s(Design.border); color: Design.tint(Design.text, 0.08) }
                 }
             }
 
@@ -337,7 +337,7 @@ ColumnLayout {
                                 width: (monitorNode.resW / monitorNode.sysScale) * section.uiScale
                                 height: (monitorNode.resH / monitorNode.sysScale) * section.uiScale
 
-                                radius: Design.s(8)
+                                radius: Design.s(Design.radius.ctl)
                                 color: monitorNode.isActive ? Design.tint(section.selectedResAccent, 0.18) : Design.ground
                                 border.color: monitorNode.isActive ? section.selectedResAccent : Design.active
                                 border.width: monitorNode.isActive ? 2 : 1
@@ -355,7 +355,7 @@ ColumnLayout {
                                 // the canvas zoom is.
                                 Item {
                                     anchors.centerIn: parent
-                                    width: 120
+                                    width: Design.width.field
                                     // A fourth line for the main display's mark.
                                     height: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name ? 92 : 76
 
@@ -371,7 +371,7 @@ ColumnLayout {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
                                             font.weight: Font.Bold
-                                            font.pixelSize: 34
+                                            font.pixelSize: Design.font.display
                                             color: monitorNode.isActive ? section.selectedResAccent : Design.textDim
                                             text: monitorNode.index + 1
                                             Behavior on color { ColorAnimation { duration: Design.duration.base } }
@@ -380,14 +380,14 @@ ColumnLayout {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
                                             font.weight: Font.DemiBold
-                                            font.pixelSize: 12
+                                            font.pixelSize: Design.font.footnote
                                             color: Design.text
                                             text: monitorNode.name
                                         }
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
-                                            font.pixelSize: 10
+                                            font.pixelSize: Design.font.caption
                                             color: Design.textDim
                                             text: monitorNode.resW + "×" + monitorNode.resH
                                                 + " @ " + monitorNode.rate + "Hz"
@@ -395,7 +395,7 @@ ColumnLayout {
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             visible: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name
-                                            font.pixelSize: 10
+                                            font.pixelSize: Design.font.caption
                                             font.weight: Font.DemiBold
                                             color: section.selectedResAccent
                                             text: I18n.tr("★ Main")
@@ -411,10 +411,10 @@ ColumnLayout {
                                 y: monitorNode.spot ? monitorNode.spot.y : 0
                                 width: monitorCard.width
                                 height: monitorCard.height
-                                radius: Design.s(8)
+                                radius: Design.s(Design.radius.ctl)
                                 color: Design.tint(section.selectedResAccent, 0.10)
                                 border.color: section.selectedResAccent
-                                border.width: 2
+                                border.width: Design.focusWidth
                                 z: 7
                             }
 
@@ -700,7 +700,7 @@ ColumnLayout {
                     required property var modelData
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(44)
+                    Layout.preferredHeight: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isSel: section.activeMonitor
@@ -758,7 +758,7 @@ ColumnLayout {
         Item {
             id: sliderContainer
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(56)
+            Layout.preferredHeight: Design.s(Design.size.tile)
             Layout.leftMargin: Design.s(Design.space.md)
             Layout.rightMargin: Design.s(Design.space.md)
 
@@ -787,8 +787,8 @@ ColumnLayout {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.topMargin: Design.s(Design.space.sm)
-                height: Design.s(12)
-                radius: Design.s(6)
+                height: Design.s(Design.space.md)
+                radius: Design.s(Design.space.xs)
                 color: Design.well
                 border.color: Design.ground
                 border.width: Design.border
@@ -809,7 +809,7 @@ ColumnLayout {
                     id: tick
                     required property int index
                     x: (tick.index / (sliderContainer.rates.length - 1)) * track.width
-                    y: track.y + Design.s(22)
+                    y: track.y + Design.s(Design.space.xl)
 
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -824,8 +824,8 @@ ColumnLayout {
 
             Rectangle {
                 id: knob
-                width: Design.s(24)
-                height: Design.s(24)
+                width: Design.s(Design.size.xs)
+                height: Design.s(Design.size.xs)
                 radius: width / 2
                 color: sliderMa.containsPress ? section.selectedRateAccent : Design.text
                 anchors.verticalCenter: track.verticalCenter
@@ -1029,47 +1029,20 @@ ColumnLayout {
     // it is a screen, and arranged with the others here.
     SettingsGroup {
         title: I18n.tr("A tablet as a second screen")
-        subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
         icon: "\u{f004b}"
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                Label {
-                    // Wrapped: on one line it pushed the buttons past the card's edge.
-                    text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
-                    role: "caption"
-                    dim: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
+        SettingsRow {
+            label: I18n.tr("Virtual Headless Display")
+            note: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
+            Button {
+                label: I18n.tr("Create Display")
+                icon: "\u{f0079}"
+                onActivated: Daemon.sidecarCreate(1920, 1080)
             }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                spacing: Design.s(Design.space.sm)
-
-                Button {
-                    label: I18n.tr("Create Display")
-                    icon: "\u{f0079}"
-                    onActivated: {
-                        Daemon.sidecarCreate(1920, 1080);
-                    }
-                }
-
-                Button {
-                    label: I18n.tr("Remove")
-                    icon: "\u{f00d}"
-                    onActivated: {
-                        Daemon.sidecarRemove();
-                    }
-                }
+            Button {
+                label: I18n.tr("Remove")
+                icon: "\u{f00d}"
+                onActivated: Daemon.sidecarRemove()
             }
         }
     }

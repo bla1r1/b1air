@@ -101,8 +101,8 @@ ColumnLayout {
             spacing: Design.s(Design.space.lg)
 
             Rectangle {
-                Layout.preferredWidth: Design.s(88)
-                Layout.preferredHeight: Design.s(88)
+                Layout.preferredWidth: Design.s(Design.size.avatar)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: width / 2
                 color: Design.tint(Design.accent, 0.14)
                 clip: true
@@ -270,12 +270,12 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Row {
                 visible: section.fpEnrolling && section.fp.stages > 0
-                spacing: Design.s(6)
+                spacing: Design.s(Design.space.xs)
                 Repeater {
                     model: section.fp.stages
                     Rectangle {
                         required property int index
-                        width: Design.s(14); height: width; radius: width / 2
+                        width: Design.s(Design.space.md); height: width; radius: width / 2
                         color: index < section.fpDone ? Design.accent : Design.hover
                         Behavior on color { ColorAnimation { duration: Design.duration.base } }
                     }
@@ -316,98 +316,51 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === "" || section.part === "account"
         title: I18n.tr("Account Details & Shell")
-        subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            // Full Name Input
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: I18n.tr("Display / Full Name")
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: I18n.tr("Real name shown on lockscreen and greeter")
-                        dim: true
-                    }
-                }
-
-                Field {
-                    id: nameField
-                    Layout.preferredWidth: Design.s(220)
-                    text: section.userInfo.name || ""
-                    placeholder: I18n.tr("Enter full name...")
-                    onCommitted: v => {
-                        if (v.trim().length > 0) {
-                            Quickshell.execDetached([section.daemonCmd, "user", "set-name", v.trim()]);
-                            section.loadUserInfo();
-                        }
-                    }
-                }
-
-                Button {
-                    Layout.fillWidth: false
-                    icon: "\u{f00c}"
-                    label: I18n.tr("Save")
-                    onActivated: {
-                        if (nameField.text.trim().length > 0) {
-                            Quickshell.execDetached([section.daemonCmd, "user", "set-name", nameField.text.trim()]);
-                            section.loadUserInfo();
-                        }
+        SettingsRow {
+            label: I18n.tr("Display / Full Name")
+            note: I18n.tr("Real name shown on lockscreen and greeter")
+            Field {
+                id: nameField
+                Layout.preferredWidth: Design.s(Design.width.control)
+                text: section.userInfo.name || ""
+                placeholder: I18n.tr("Enter full name...")
+                onCommitted: v => {
+                    if (v.trim().length > 0) {
+                        Quickshell.execDetached([section.daemonCmd, "user", "set-name", v.trim()]);
+                        section.loadUserInfo();
                     }
                 }
             }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.line
-            }
-
-            // Default Shell
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: I18n.tr("Default Shell")
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: I18n.tr("Login shell executed for terminals and virtual consoles")
-                        dim: true
+            Button {
+                icon: "\u{f00c}"
+                label: I18n.tr("Save")
+                onActivated: {
+                    if (nameField.text.trim().length > 0) {
+                        Quickshell.execDetached([section.daemonCmd, "user", "set-name", nameField.text.trim()]);
+                        section.loadUserInfo();
                     }
                 }
+            }
+        }
 
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
-
-                    Repeater {
-                        model: section.availableShells
-
-                        Chip {
-                            label: modelData.label
-                            active: section.userInfo.shell && (section.userInfo.shell === modelData.path || section.userInfo.shell.endsWith("/" + modelData.label))
-                            onClicked: {
-                                Quickshell.execDetached([section.daemonCmd, "user", "set-shell", modelData.path]);
-                                section.loadUserInfo();
-                            }
-                        }
-                    }
+        // One shell of a few: a segmented control, as every other choice.
+        SettingsRow {
+            label: I18n.tr("Default Shell")
+            note: I18n.tr("Login shell executed for terminals and virtual consoles")
+            SegmentedControl {
+                visible: section.availableShells.length > 0
+                size: "sm"
+                model: section.availableShells.map(sh => ({ id: sh.path, label: sh.label }))
+                current: {
+                    const cur = section.userInfo.shell || "";
+                    const hit = section.availableShells.find(sh => cur === sh.path || cur.endsWith("/" + sh.label));
+                    return hit ? hit.path : "";
+                }
+                onPicked: function(id) {
+                    Quickshell.execDetached([section.daemonCmd, "user", "set-shell", id]);
+                    section.loadUserInfo();
                 }
             }
         }
@@ -452,19 +405,18 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === "lock"
         title: I18n.tr("Session & Login Screen")
-        subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"
 
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("Compositor"); Layout.fillWidth: true }
-            Badge { text: section.compositorName; color: Design.textDim }
+        // A value, not a status: plain text, as in About.
+        SettingsRow {
+            label: I18n.tr("Compositor")
+            Label { text: section.compositorName || "—"; dim: true }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("Login screen theme"); Layout.fillWidth: true }
-            Badge { text: section.greeterTheme; color: Design.textDim }
+        // A value, not a status: plain text, as in About.
+        SettingsRow {
+            label: I18n.tr("Login screen theme")
+            Label { text: section.greeterTheme || "—"; dim: true }
         }
     }
 

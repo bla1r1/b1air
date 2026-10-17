@@ -36,7 +36,6 @@ ColumnLayout {
     // applied and then forgotten — see Services/SwayConfig.
     SettingsGroup {
         title: I18n.tr("Accent colour")
-        description: I18n.tr("Buttons, selection and focus. The theme's own, or one of its other colours")
 
         Item {
             Layout.fillWidth: true
@@ -74,12 +73,12 @@ ColumnLayout {
                     Rectangle {
                         id: accentDot
                         required property var modelData
-                        width: Design.s(32)
+                        width: Design.s(Design.size.md)
                         height: width
                         radius: width / 2
                         color: accentDot.modelData.color
                         border.color: (Settings.accentName || "") === accentDot.modelData.name ? Design.text : "transparent"
-                        border.width: 2
+                        border.width: Design.focusWidth
 
                         activeFocusOnTab: true
                         Accessible.role: Accessible.RadioButton

@@ -34,6 +34,9 @@ ColumnLayout {
 
     readonly property var inRange: Network.wifi.networks || []
     readonly property var connectedWifi: Network.wifi.connected
+    // In range, less the one in use: that one has its own row on top.
+    readonly property var others: Network.wifi.power === "on"
+        ? section.inRange.filter(n => !section.connectedWifi || n.ssid !== section.connectedWifi.ssid) : []
 
     function _isNear(name) {
         return section.inRange.some(n => n.ssid === name);
@@ -76,80 +79,31 @@ ColumnLayout {
     SettingsGroup {
         visible: !section.essentials
         title: I18n.tr("Ethernet (Wired)")
-        subtitle: Network.ethernet && Network.ethernet.connected
-            ? I18n.tr("Connected via %1", Network.ethernet.ifname)
-            : I18n.tr("No active wired connection detected")
         icon: "\u{f0200}" // ethernet icon
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            Rectangle {
-                visible: false   // no glyph on a tile: the row is its name and state
-                width: Design.s(36)
-                height: width
-                radius: width / 2
-                color: (Network.ethernet && Network.ethernet.connected)
-                    ? Design.tint(Design.accent, 0.15) : Design.well
-
-                Icon {
-                    anchors.centerIn: parent
-                    text: "\u{f0200}"
-                    role: "body"
-                    color: (Network.ethernet && Network.ethernet.connected)
-                        ? Design.accent : Design.textDim
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-
-                Label {
-                    text: (Network.ethernet && Network.ethernet.connected)
-                        ? I18n.tr("Wired Connection (%1)", Network.ethernet.ifname)
-                        : I18n.tr("Disconnected")
-                    weight: Design.weight.semibold
-                }
-
-                Label {
-                    text: (Network.ethernet && Network.ethernet.connected)
-                        ? ("IPv4: " + Network.ethernet.ip + (Network.ethernet.prefix ? "/" + Network.ethernet.prefix : ""))
-                        : I18n.tr("Plug in an Ethernet cable to connect")
-                    role: "caption"
-                    dim: true
-                }
-            }
+        // Its state is the row: no group note retelling it, and no red
+        // "Offline" — an unplugged cable is not a fault.
+        SettingsRow {
+            id: ethRow
+            readonly property bool wired: !!(Network.ethernet && Network.ethernet.connected)
+            label: wired ? I18n.tr("Wired Connection (%1)", Network.ethernet.ifname) : I18n.tr("Disconnected")
+            note: wired
+                ? ("IPv4: " + Network.ethernet.ip + (Network.ethernet.prefix ? "/" + Network.ethernet.prefix : ""))
+                : I18n.tr("Plug in an Ethernet cable to connect")
 
             Badge {
-                text: (Network.ethernet && Network.ethernet.connected) ? I18n.tr("Active") : I18n.tr("Offline")
-                tone: (Network.ethernet && Network.ethernet.connected) ? Design.ok : Design.danger
+                visible: ethRow.wired
+                text: I18n.tr("Active")
+                tone: Design.ok
             }
-
-            // Gear icon button for advanced IP configuration
-            Rectangle {
-                width: Design.s(32)
-                height: Design.s(32)
-                radius: Design.s(Design.radius.ctl)
-                color: section.showEthConfig ? Design.tint(Design.accent, 0.25) : (gearMa.containsMouse ? Design.glassHover : Design.well)
-                border.color: section.showEthConfig ? Design.accent : (gearMa.containsMouse ? Design.hover : "transparent")
-                border.width: 1
-
-                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-                Icon {
-                    anchors.centerIn: parent
-                    text: "\u{f0493}"
-                    role: "body"
-                    color: section.showEthConfig ? Design.accent : Design.textDim
-                }
-
-                Clickable {
-                    id: gearMa
-                    onClicked: section.showEthConfig = !section.showEthConfig
-                }
+            Button {
+                iconOnly: true
+                variant: "ghost"
+                checked: section.showEthConfig
+                icon: "\u{f0493}"
+                text: I18n.tr("IPv4 Configuration")
+                tip: I18n.tr("IPv4 Configuration")
+                onClicked: section.showEthConfig = !section.showEthConfig
             }
         }
 
@@ -199,8 +153,7 @@ ColumnLayout {
                     }
                     Item { Layout.fillWidth: true }
                     SegmentedControl {
-                        size: "sm"
-                        model: [
+                            model: [
                             { id: "auto", label: I18n.tr("Automatic (DHCP)") },
                             { id: "manual", label: I18n.tr("Manual (Static IP)") }
                         ]
@@ -217,7 +170,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: I18n.tr("IP Address"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("IP Address"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(Design.width.field) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -229,7 +182,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: I18n.tr("Subnet Prefix"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("Subnet Prefix"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(Design.width.field) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -241,7 +194,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: I18n.tr("Gateway"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("Gateway"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(Design.width.field) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -253,7 +206,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: I18n.tr("DNS Servers"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(100) }
+                        Label { text: I18n.tr("DNS Servers"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(Design.width.field) }
                         Field {
                             mono: true
                             Layout.fillWidth: true
@@ -270,15 +223,13 @@ ColumnLayout {
                     Item { Layout.fillWidth: true }
 
                     Button {
-                        size: "sm"
-                        variant: "secondary"
+                            variant: "secondary"
                         text: I18n.tr("Cancel")
                         onClicked: section.showEthConfig = false
                     }
 
                     Button {
-                        size: "sm"
-                        variant: "primary"
+                            variant: "primary"
                         icon: "\u{f012c}"
                         text: I18n.tr("Apply Changes")
                         onClicked: {
@@ -303,89 +254,39 @@ ColumnLayout {
     // ── 2. Wi-Fi Card ────────────────────────────────────────────────────────
     SettingsGroup {
         visible: Network.hasWifi
-        title: I18n.tr("Wi-Fi")
-        subtitle: Network.wifi.power === "on"
-            ? (section.connectedWifi ? I18n.tr("Connected to %1", section.connectedWifi.ssid) : I18n.tr("Wi-Fi is on, not connected"))
-            : I18n.tr("Wi-Fi adapter is turned off")
         icon: "\u{f0928}"
 
-        // Master Switch
+        // Master Switch. The group has no title of its own: it said "Wi-Fi"
+        // over a switch that said "Wi-Fi". Its state is the switch's note.
         SwitchRow {
             title: I18n.tr("Wi-Fi")
-            note: I18n.tr("Scan for and join wireless networks")
+            note: Network.wifi.power === "on"
+                ? (section.connectedWifi ? I18n.tr("Connected to %1", section.connectedWifi.ssid) : I18n.tr("Wi-Fi is on, not connected"))
+                : I18n.tr("Wi-Fi adapter is turned off")
             checked: Network.wifi.power === "on"
             onToggled: Network.toggleWifi()
         }
 
-        // Active Connection Diagnostics
-        Rectangle {
+        // The network in use: a row like the others, with its one command.
+        SettingsRow {
             visible: section.connectedWifi !== null && Network.wifi.power === "on"
-            Layout.fillWidth: true
-
-            // Same as the Bluetooth adapter box: anchored contents give no
-            // implicit height, so this measured zero and the "Available
-            // networks" heading and the network list were painted over the top
-            // of the connected network and its Disconnect button.
-            Layout.preferredHeight: activeBody.implicitHeight + Design.s(Design.space.md) * 2
-
-            radius: Design.s(Design.radius.ctl)
-            color: Design.well
-            border.color: Design.line
-            border.width: 1
-
-            ColumnLayout {
-                id: activeBody
-                anchors.fill: parent
-                anchors.margins: Design.s(Design.space.md)
-                spacing: Design.s(Design.space.sm)
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.sm)
-
-                    Icon {
-                        text: section.connectedWifi ? section.connectedWifi.icon : "\u{f0928}"
-                        role: "body"
-                        color: Design.accent
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        Label {
-                            text: section.connectedWifi ? section.connectedWifi.ssid : ""
-                            weight: Design.weight.semibold
-                            color: Design.text
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-
-                        Label {
-                            text: section.connectedWifi
-                                ? I18n.tr("Signal %1% • %2", section.connectedWifi.signal, (section.connectedWifi.security || I18n.tr("Open")))
-                                : ""
-                            role: "caption"
-                            dim: true
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    Button {
-                        size: "sm"
-                        variant: "secondary"
-                        text: I18n.tr("Disconnect")
-                        onClicked: Network.disconnectWifi()
-                    }
-                }
+            icon: (section.connectedWifi && section.connectedWifi.icon) || "\u{f0928}"
+            label: section.connectedWifi ? section.connectedWifi.ssid : ""
+            note: section.connectedWifi
+                ? I18n.tr("Signal %1% • %2", section.connectedWifi.signal, (section.connectedWifi.security || I18n.tr("Open")))
+                : ""
+            Button {
+                text: I18n.tr("Disconnect")
+                onClicked: Network.disconnectWifi()
             }
         }
+    }
 
-        SectionLabel {
-            visible: Network.wifi.power === "on" && Network.savedWifi.length > 0
-            text: I18n.tr("Available networks")
-        }
+    // The networks in range, a card of their own: under a small caption
+    // inside the Wi-Fi card they ran into the connected network above.
+    SettingsGroup {
+        visible: Network.hasWifi && Network.wifi.power === "on"
+        title: I18n.tr("Available networks")
 
         // The passphrase field, outside the list: Services/Network replaces
         // the list every two seconds (signal strengths change), and the
@@ -419,76 +320,39 @@ ColumnLayout {
         }
 
         Repeater {
-            model: Network.wifi.power === "on" ? section.inRange : []
+            model: section.others
 
-            ColumnLayout {
+            // Connect is secondary: one per network, so none of them is the
+            // page's primary action.
+            SettingsRow {
                 id: netEntry
                 required property var modelData
 
-                readonly property bool secured: netEntry.modelData.security
+                readonly property bool secured: !!netEntry.modelData.security
                     && netEntry.modelData.security !== "open"
                 readonly property bool asking: section.askingFor === netEntry.modelData.ssid
 
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.xs)
+                icon: netEntry.modelData.icon || "\u{f0928}"
+                label: netEntry.modelData.ssid || I18n.tr("Hidden network")
+                // Says why one row joins on a click and another asks for a
+                // passphrase, the way the mini view does.
+                note: Network.isBusy(netEntry.modelData.ssid) ? I18n.tr("Connecting…")
+                    : Network.failedSsid === netEntry.modelData.ssid ? section.failText(Network.failedReason)
+                    : (netEntry.modelData.known ? I18n.tr("Saved")
+                    : (netEntry.secured ? I18n.tr("Password required") : I18n.tr("Open network")))
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.sm)
-
-                    Icon {
-                        text: netEntry.modelData.icon || "\u{f0928}"
-                        role: "body"
-                        color: Design.textDim
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        Label {
-                            text: netEntry.modelData.ssid || I18n.tr("Hidden network")
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
+                Button {
+                    text: netEntry.asking ? I18n.tr("Cancel") : I18n.tr("Connect")
+                    onClicked: {
+                        if (netEntry.asking) {
+                            section.askingFor = "";
+                            return;
                         }
-
-                        Label {
-                            // Says why one row joins on a click and another asks
-                            // for a passphrase, the way the mini view does.
-                            text: Network.isBusy(netEntry.modelData.ssid) ? I18n.tr("Connecting…")
-                                : Network.failedSsid === netEntry.modelData.ssid ? section.failText(Network.failedReason)
-                                : (netEntry.modelData.known ? I18n.tr("Saved")
-                                : (netEntry.secured ? I18n.tr("Password required") : I18n.tr("Open network")))
-                            role: "caption"
-                            dim: true
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
+                        if (netEntry.secured && !netEntry.modelData.known) {
+                            section.ask(netEntry.modelData.ssid);
+                            return;
                         }
-                    }
-
-                    Icon {
-                        visible: netEntry.secured
-                        text: "\u{f033e}"
-                        role: "caption"
-                        color: Design.textFaint
-                    }
-
-                    Button {
-                        size: "sm"
-                        variant: netEntry.asking ? "secondary" : "primary"
-                        text: netEntry.asking ? I18n.tr("Cancel") : I18n.tr("Connect")
-                        icon: netEntry.asking ? "" : "\u{f0928}"
-                        onClicked: {
-                            if (netEntry.asking) {
-                                section.askingFor = "";
-                                return;
-                            }
-                            if (netEntry.secured && !netEntry.modelData.known) {
-                                section.ask(netEntry.modelData.ssid);
-                                return;
-                            }
-                            Network.connectWifi(netEntry.modelData.ssid);
-                        }
+                        Network.connectWifi(netEntry.modelData.ssid);
                     }
                 }
             }
@@ -502,60 +366,33 @@ ColumnLayout {
             hint: I18n.tr("Nothing is broadcasting nearby, or the scan has not finished yet.")
         }
 
-        SectionLabel {
-            text: I18n.tr("Saved networks")
-        }
+    }
 
+    SettingsGroup {
+        visible: Network.hasWifi && Network.wifi.power === "on" && Network.savedWifi.length > 0
+        title: I18n.tr("Saved networks")
+
+        // Nothing saved needs no notice: the list above already says which
+        // networks are known.
         Repeater {
             model: Network.wifi.power === "on" ? Network.savedWifi : []
 
-            RowLayout {
+            SettingsRow {
+                id: savedRow
                 required property var modelData
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
-
-                Icon {
-                    text: "\u{f0928}"
-                    role: "body"
-                    color: section._isNear(modelData.name) ? Design.accent : Design.textFaint
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Label {
-                        text: modelData.name
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        text: (section._isNear(modelData.name) ? I18n.tr("In range") : I18n.tr("Not in range"))
-                            + " • " + (modelData.autoconnect ? I18n.tr("joins automatically") : I18n.tr("manual"))
-                        role: "caption"
-                        dim: true
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-                }
-
+                icon: "\u{f0928}"
+                label: savedRow.modelData.name
+                note: (section._isNear(savedRow.modelData.name) ? I18n.tr("In range") : I18n.tr("Not in range"))
+                    + " • " + (savedRow.modelData.autoconnect ? I18n.tr("joins automatically") : I18n.tr("manual"))
                 Button {
-                    size: "sm"
                     variant: "ghost"
-                    icon: "\u{f01b4}"
+                    iconOnly: true
+                    icon: "\u{f0a7a}"
                     text: I18n.tr("Forget")
-                    onClicked: Network.forgetWifi(modelData.name)
+                    tip: I18n.tr("Forget")
+                    onClicked: Network.forgetWifi(savedRow.modelData.name)
                 }
             }
-        }
-
-        EmptyState {
-            Layout.fillWidth: true
-            visible: Network.wifi.power === "on" && Network.savedWifi.length === 0
-            icon: "\u{f092e}"
-            title: I18n.tr("No saved networks")
-            hint: I18n.tr("Join a network and it will be remembered here.")
         }
     }
 }

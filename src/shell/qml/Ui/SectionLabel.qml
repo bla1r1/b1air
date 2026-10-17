@@ -13,4 +13,8 @@ Label {
     role: "caption"
     weight: Design.weight.semibold
     dim: true
+
+    // In a SettingsGroup it heads the part below it, so the group gives it
+    // more room above than below (see SettingsGroup._padChildren).
+    readonly property bool sectionLabel: true
 }

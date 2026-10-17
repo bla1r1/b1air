@@ -50,7 +50,9 @@ Item {
 
     readonly property bool _hasNote: _effectiveNote !== ""
     readonly property real _minHeight: Design.s(_hasNote ? Design.size.rowTall : Design.size.row)
-    implicitHeight: Math.max(_minHeight, rowLayout.implicitHeight + Design.s(Design.space.xs) * 2)
+    // As much room above and below a control as at the card's edge: a row
+    // holding a button was 4px from its neighbours, a row of text 12.
+    implicitHeight: Math.max(_minHeight, rowLayout.implicitHeight + Design.s(Design.space.sm) * 2)
     Layout.preferredHeight: implicitHeight
 
     RowLayout {
@@ -60,12 +62,19 @@ Item {
         anchors.rightMargin: Design.s(Design.space.rowPaddingX)
         spacing: Design.s(Design.space.md)
 
-        Icon {
+        // A fixed box, not the glyph's own width: glyphs differ, and the
+        // labels of a list drifted by a few pixels from row to row.
+        Item {
             visible: root.icon !== ""
-            text: root.icon
-            role: "subhead"
-            color: Design.textDim
+            Layout.preferredWidth: Design.s(Design.size.mini)
+            Layout.preferredHeight: Design.s(Design.size.mini)
             Layout.alignment: Qt.AlignVCenter
+            Icon {
+                anchors.centerIn: parent
+                text: root.icon
+                role: "subhead"
+                color: Design.textDim
+            }
         }
 
         ColumnLayout {

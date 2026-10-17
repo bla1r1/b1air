@@ -171,8 +171,8 @@ Item {
             spacing: Design.s(Design.space.md)
 
             Rectangle {
-                Layout.preferredWidth: Design.s(48)
-                Layout.preferredHeight: Design.s(48)
+                Layout.preferredWidth: Design.s(Design.size.art)
+                Layout.preferredHeight: Design.s(Design.size.art)
                 radius: Design.s(Design.radius.ctl)
                 color: Design.tint(Design.accent, 0.18)
                 Icon {
@@ -185,7 +185,7 @@ Item {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(2)
+                spacing: Design.s(Design.space.xxs)
                 Label {
                     Layout.fillWidth: true
                     text: wizard.index === 0 && wizard.step.id === "keyboard" ? I18n.tr("Welcome to b1air") + " — " + wizard.step.title : wizard.step.title
@@ -203,13 +203,13 @@ Item {
 
             // Step dots, the current one long.
             Row {
-                spacing: Design.s(6)
+                spacing: Design.s(Design.space.xs)
                 Repeater {
                     model: wizard.steps.length
                     Rectangle {
                         required property int index
-                        width: index === wizard.index ? Design.s(22) : Design.s(8)
-                        height: Design.s(8)
+                        width: index === wizard.index ? Design.s(Design.size.mini) : Design.s(Design.space.sm)
+                        height: Design.s(Design.space.sm)
                         radius: height / 2
                         color: index <= wizard.index ? Design.accent : Design.line
                         Behavior on width { NumberAnimation { duration: Design.duration.fast } }

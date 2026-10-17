@@ -139,7 +139,6 @@ ColumnLayout {
     // ── Search & Filter ──────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Keyboard Shortcuts Reference")
-        subtitle: I18n.tr("Complete cheatsheet of desktop keybindings and global triggers")
         icon: "\u{f11c}"
 
         Field {
@@ -180,12 +179,12 @@ ColumnLayout {
                         }
                         delegate: RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(36)
+                            Layout.preferredHeight: Design.s(Design.size.header)
                             spacing: Design.s(Design.space.md)
 
                             Rectangle {
-                                Layout.preferredWidth: Design.s(160)
-                                Layout.preferredHeight: Design.s(28)
+                                Layout.preferredWidth: Design.s(Design.width.label)
+                                Layout.preferredHeight: Design.s(Design.size.sm)
                                 radius: Design.s(Design.radius.pill)
                                 color: Design.well
                                 border.color: Design.line

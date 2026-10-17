@@ -141,7 +141,6 @@ ColumnLayout {
     // ── 1. Touchpad Basics ───────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Touchpad Basics")
-        description: I18n.tr("Scrolling direction and tapping behavior")
 
         SwitchRow {
             title: I18n.tr("Natural Scrolling")
@@ -171,7 +170,6 @@ ColumnLayout {
     // ── 2. Multi-Touch Gestures ──────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Multi-Touch Gestures")
-        description: I18n.tr("Three- and four-finger swipes")
 
         SwitchRow {
             title: I18n.tr("3-Finger Workspace Swipe")
@@ -199,7 +197,6 @@ ColumnLayout {
     // ── 3. Mouse & Pointer ───────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Mouse & Pointer")
-        description: I18n.tr("Tracking speed, acceleration profiles, and primary button")
 
         Item {
             Layout.fillWidth: true
@@ -288,7 +285,7 @@ ColumnLayout {
                 title: cornerRow.modelData.label
 
                 Select {
-                    Layout.preferredWidth: Design.s(220)
+                    Layout.preferredWidth: Design.s(Design.width.control)
                     model: cornersGroup.actionItems
                     current: Settings[cornerRow.modelData.key] || "none"
                     onPicked: id => Settings.set(cornerRow.modelData.key, id)

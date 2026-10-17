@@ -99,6 +99,10 @@ QtObject {
         readonly property int art: 48       // album art
         readonly property int tile: 56      // quick tile
         readonly property int media: 76     // media card
+        readonly property int stat: 72      // a figure tile (screen time, focus)
+        readonly property int avatar: 88    // a user picture
+        readonly property int thumb: 120    // a wallpaper thumbnail
+        readonly property int canvas: 260   // the display arrangement canvas
     }
 
     // Widths that repeat: the same sidebar, menu or field in every app.
@@ -115,6 +119,9 @@ QtObject {
         readonly property int segmentSm: 110   // one segment, small
         readonly property int segmentMd: 125   // one segment
         readonly property int list: 260        // a popup list's height, at most
+        readonly property int control: 220     // a Select or stepper at the end of a settings row
+        readonly property int label: 160       // a label column in a form, a key cap
+        readonly property int page: 1040       // a settings page's column, widest
     }
 
     component DurationScale: QtObject {

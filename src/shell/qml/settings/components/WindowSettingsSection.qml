@@ -83,7 +83,6 @@ ColumnLayout {
     // ── Tiling ───────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Tiling")
-        description: I18n.tr("How a new window finds its place")
 
         SwitchRow {
             label: I18n.tr("Automatic split (like Hyprland)")
@@ -98,7 +97,6 @@ ColumnLayout {
     // ── Spacing (Gaps) ───────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Window Spacing (Gaps)")
-        description: I18n.tr("Inner and outer spacing between tiled windows")
 
         SettingsRow {
             label: I18n.tr("Inner Gaps (between windows)")
@@ -124,7 +122,6 @@ ColumnLayout {
     // ── Borders & Layout Rules ───────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Borders & Layout Rules")
-        description: I18n.tr("Window border styling and single-window behavior")
 
         SettingsRow {
             label: I18n.tr("Border Width")
@@ -188,7 +185,6 @@ ColumnLayout {
     // ── Unfocused windows ────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Unfocused Windows")
-        description: I18n.tr("Darker or see-through, so the focused one stands out")
 
         SwitchRow {
             label: I18n.tr("Dim Inactive Windows")
@@ -210,7 +206,7 @@ ColumnLayout {
             note: I18n.tr("%1%", Settings.inactiveOpacityPercent)
 
             Slider {
-                Layout.preferredWidth: Design.s(220)
+                Layout.preferredWidth: Design.s(Design.width.control)
                 minimum: 20
                 maximum: 95
                 value: Settings.inactiveOpacityPercent
@@ -222,7 +218,6 @@ ColumnLayout {
     // ── Workspaces & Navigation ──────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Workspaces & Navigation")
-        description: I18n.tr("Special workspaces and full desktop overview")
 
         SwitchRow {
             label: I18n.tr("Mod+S calls up the special workspace")

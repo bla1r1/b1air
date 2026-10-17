@@ -256,7 +256,6 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.leftMargin: Design.s(Design.space.rowPaddingX)
             Layout.rightMargin: Design.s(Design.space.rowPaddingX)
-            Layout.bottomMargin: Design.s(Design.space.sm)
             columns: 3
             columnSpacing: Design.s(Design.space.md)
             rowSpacing: Design.s(Design.space.md)
@@ -270,7 +269,7 @@ ColumnLayout {
                     required property int index
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(120)
+                    Layout.preferredHeight: Design.s(Design.size.thumb)
                     radius: Design.s(Design.radius.card)
                     color: Design.well
                     clip: true
@@ -299,7 +298,7 @@ ColumnLayout {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        height: Design.s(32)
+                        height: Design.s(Design.size.md)
                         gradient: Gradient {
                             GradientStop { position: 0.0; color: "transparent" }
                             GradientStop { position: 1.0; color: "#dd000000" }
@@ -323,7 +322,7 @@ ColumnLayout {
                         anchors.top: parent.top
                         anchors.right: parent.right
                         anchors.margins: Design.s(Design.space.xs)
-                        width: Design.s(22)
+                        width: Design.s(Design.size.mini)
                         height: width
                         radius: width / 2
                         color: Design.accent
@@ -348,7 +347,6 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.leftMargin: Design.s(Design.space.rowPaddingX)
             Layout.rightMargin: Design.s(Design.space.rowPaddingX)
-            Layout.bottomMargin: Design.s(Design.space.sm)
             visible: section.wallpaperList.length === 0
             icon: "\u{f02ca}"
             title: I18n.tr("No wallpapers found")
@@ -359,17 +357,13 @@ ColumnLayout {
     // ── 2. Source Folder Configuration ───────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Source folder")
-        subtitle: I18n.tr("The directory where wallpapers are scanned and saved")
         icon: "\u{f024b}"
 
         ColumnLayout {
             Layout.fillWidth: true
             Layout.leftMargin: Design.s(Design.space.rowPaddingX)
             Layout.rightMargin: Design.s(Design.space.rowPaddingX)
-            Layout.bottomMargin: Design.s(Design.space.sm)
             spacing: Design.s(Design.space.xs)
-
-            Label { text: I18n.tr("Folder Path"); role: "caption"; dim: true }
 
             Field {
                 mono: true

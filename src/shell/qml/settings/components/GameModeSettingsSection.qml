@@ -31,96 +31,35 @@ ColumnLayout {
 
     // ── 1. Master Switch ─────────────────────────────────────────────────────
     SettingsGroup {
-        title: I18n.tr("Game Mode Performance")
-        subtitle: I18n.tr("Optimize system responsiveness, disable desktop overhead, and maximize FPS")
-        icon: "\u{f11b}"
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Enable Game Mode") }
-            }
-
-            SwitchRow {
-                checked: section.gameModeEnabled
-                onToggled: section.toggleGameMode(!section.gameModeEnabled)
-            }
+        SwitchRow {
+            label: I18n.tr("Enable Game Mode")
+            checked: section.gameModeEnabled
+            onToggled: section.toggleGameMode(!section.gameModeEnabled)
         }
     }
 
     // ── 2. Display & Desktop Options ─────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Display & Desktop Overlays")
-        subtitle: I18n.tr("Configurable behaviors applied when Game Mode is active")
         icon: "\u{f108}"
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            RowLayout {
-                Layout.fillWidth: true
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: I18n.tr("Adaptive Sync (VRR)"); weight: Design.weight.medium }
-                    Label { text: I18n.tr("Enable Variable Refresh Rate on supported gaming monitors"); role: "caption"; dim: true }
-                }
-                SwitchRow {
-                    checked: section.gameModeAdaptiveSync
-                    onToggled: {
-                        Settings.set("gameModeAdaptiveSync", !section.gameModeAdaptiveSync);
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.line
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: I18n.tr("Hide Top Bar"); weight: Design.weight.medium }
-                    Label { text: I18n.tr("Automatically hide top status bar during gaming sessions"); role: "caption"; dim: true }
-                }
-                SwitchRow {
-                    checked: section.gameModeHideBar
-                    onToggled: {
-                        Settings.set("gameModeHideBar", !section.gameModeHideBar);
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.line
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: I18n.tr("Do Not Disturb (DND)"); weight: Design.weight.medium }
-                    Label { text: I18n.tr("Mute all popups and toast notifications while in game"); role: "caption"; dim: true }
-                }
-                SwitchRow {
-                    checked: section.gameModeDND
-                    onToggled: {
-                        Settings.set("gameModeDND", !section.gameModeDND);
-                    }
-                }
-            }
+        SwitchRow {
+            label: I18n.tr("Adaptive Sync (VRR)")
+            note: I18n.tr("Enable Variable Refresh Rate on supported gaming monitors")
+            checked: section.gameModeAdaptiveSync
+            onToggled: Settings.set("gameModeAdaptiveSync", !section.gameModeAdaptiveSync)
+        }
+        SwitchRow {
+            label: I18n.tr("Hide Top Bar")
+            note: I18n.tr("Automatically hide top status bar during gaming sessions")
+            checked: section.gameModeHideBar
+            onToggled: Settings.set("gameModeHideBar", !section.gameModeHideBar)
+        }
+        SwitchRow {
+            label: I18n.tr("Do Not Disturb (DND)")
+            note: I18n.tr("Mute all popups and toast notifications while in game")
+            checked: section.gameModeDND
+            onToggled: Settings.set("gameModeDND", !section.gameModeDND)
         }
     }
 }

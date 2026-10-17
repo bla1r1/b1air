@@ -200,7 +200,7 @@ ColumnLayout {
                     readonly property bool first: chip.index === 0
 
                     width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
-                    height: Design.s(36)
+                    height: Design.s(Design.size.header)
                     radius: Design.s(Design.radius.ctl)
                     color: chip.first ? Design.tint(Design.accent, 0.14) : Design.well
                     border.color: chip.first ? Design.tint(Design.accent, 0.5) : Design.line
@@ -279,7 +279,7 @@ ColumnLayout {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: visible
-                ? Math.min(Design.s(220), section.layoutResults.length * Design.s(32) + Design.s(8))
+                ? Math.min(Design.s(Design.width.list), section.layoutResults.length * Design.s(Design.size.md) + Design.s(Design.space.sm))
                 : 0
             visible: (layoutField.focused || section.layoutQuery !== "") && section.layoutResults.length > 0
             radius: Design.s(Design.radius.ctl)
@@ -290,7 +290,7 @@ ColumnLayout {
 
             ListView {
                 anchors.fill: parent
-                anchors.margins: Design.s(4)
+                anchors.margins: Design.s(Design.space.xs)
                 model: section.layoutResults
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: OverflowBar {}
@@ -298,7 +298,7 @@ ColumnLayout {
                 delegate: Rectangle {
                     required property var modelData
                     width: ListView.view.width
-                    height: Design.s(32)
+                    height: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
                     color: resultArea.containsMouse ? Design.hover : "transparent"
 
@@ -309,7 +309,7 @@ ColumnLayout {
                         spacing: Design.s(Design.space.sm)
 
                         Label {
-                            Layout.preferredWidth: Design.s(48)
+                            Layout.preferredWidth: Design.s(Design.size.art)
                             text: modelData.code.toUpperCase()
                             isMono: true
                             weight: Design.weight.semibold
@@ -558,25 +558,37 @@ ColumnLayout {
                 || b.cat.toLowerCase().includes(bindCard.filter)
                 || bindCard.pretty(bindCard.keysOf(b)).toLowerCase().includes(bindCard.filter))
 
+            // A row of the list like any other: flat, a hairline above it,
+            // filled only while its key is being changed.
             Rectangle {
                 id: bindRow
                 required property var modelData
+                required property int index
                 readonly property bool editing: bindCard.editingId === bindRow.modelData.id
                 readonly property bool changed: bindCard.overrides[bindRow.modelData.id] !== undefined
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: bindCol.implicitHeight + Design.s(Design.space.sm) * 2
+                Layout.preferredHeight: Math.max(Design.s(Design.size.row), bindCol.implicitHeight + Design.s(Design.space.sm) * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: bindRow.editing ? Design.tint(Design.accent, 0.1) : Design.well
-                border.color: bindRow.editing ? Design.accent : "transparent"
-                border.width: 1
+                color: bindRow.editing ? Design.well : "transparent"
+
+                Rectangle {
+                    visible: bindRow.index > 0 && !bindRow.editing
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: Design.separator
+                    opacity: 0.6
+                }
 
                 ColumnLayout {
                     id: bindCol
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.margins: Design.s(Design.space.sm)
+                    anchors.leftMargin: bindRow.editing ? Design.s(Design.space.sm) : 0
+                    anchors.rightMargin: bindRow.editing ? Design.s(Design.space.sm) : 0
                     spacing: Design.s(Design.space.sm)
 
                     RowLayout {
@@ -591,15 +603,16 @@ ColumnLayout {
 
                         Badge {
                             visible: bindRow.changed
-                            text: "changed"
+                            text: I18n.tr("changed")
+                            tone: Design.textDim
                         }
 
+                        // A value, not a choice: the text colour, not the accent.
                         Label {
                             text: bindCard.pretty(bindCard.keysOf(bindRow.modelData))
                             role: "caption"
                             isMono: true
-                            weight: Design.weight.semibold
-                            color: Design.accent
+                            dim: true
                         }
 
                         IconButton {
@@ -629,6 +642,7 @@ ColumnLayout {
                             onAccepted: v => bindCard.save(bindRow.modelData, v)
                         }
 
+                        // The one primary while a key is being changed.
                         Button {
                             size: "sm"
                             variant: "primary"

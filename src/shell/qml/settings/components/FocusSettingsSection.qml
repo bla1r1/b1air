@@ -126,7 +126,6 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Today's Activity")
-        subtitle: I18n.tr("Real-time summary of your computer usage and focus intervals")
         icon: "\u{f051e}"
 
         RowLayout {
@@ -136,13 +135,13 @@ ColumnLayout {
             // Screen time stat box
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(72)
+                Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
                 color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Design.s(Design.space.xxs)
                     Label {
                         text: I18n.tr("Screen Time Today")
                         role: "caption"
@@ -160,13 +159,13 @@ ColumnLayout {
             // Daily goal progress box
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(72)
+                Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
                 color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Design.s(Design.space.xxs)
                     Label {
                         text: I18n.tr("Daily Goal (%1h)", section.dailyGoalHours)
                         role: "caption"
@@ -185,13 +184,13 @@ ColumnLayout {
             // Focus status box
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(72)
+                Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
                 color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Design.s(Design.space.xxs)
                     Label {
                         text: I18n.tr("Focus Status")
                         role: "caption"
@@ -215,66 +214,17 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === "notifications"
         title: I18n.tr("Application Notification Filters")
-        subtitle: I18n.tr("Control banner popups and sound alerts for individual apps")
         icon: "\u{f0f3}"
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+        Repeater {
+            model: section.activeApps
 
-            Repeater {
-                model: section.activeApps
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Design.s(Design.space.md)
-
-                        Rectangle {
-                            width: Design.s(32); height: Design.s(32)
-                            radius: Design.s(Design.radius.ctl)
-                            color: Design.well
-
-                            Icon {
-                                anchors.centerIn: parent
-                                text: "\u{f0f3}"
-                                role: "caption"
-                                color: section.isRuleEnabled(modelData.name) ? Design.accent : Design.textDim
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Design.s(2)
-
-                            Label {
-                                text: modelData.name
-                                weight: Design.weight.semibold
-                            }
-
-                            Label {
-                                text: modelData.subtitle
-                                role: "caption"
-                                dim: true
-                            }
-                        }
-
-                        SwitchRow {
-                            checked: section.isRuleEnabled(modelData.name)
-                            onToggled: section.toggleRule(modelData.name)
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 1
-                        color: Design.tint(Design.line, 0.4)
-                        visible: index < section.activeApps.length - 1
-                    }
-                }
+            SwitchRow {
+                required property var modelData
+                label: modelData.name
+                note: modelData.subtitle
+                checked: section.isRuleEnabled(modelData.name)
+                onToggled: section.toggleRule(modelData.name)
             }
         }
     }
@@ -283,7 +233,6 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Focus & Break Intervals")
-        subtitle: I18n.tr("Customize work cycles and rest duration for FocusTime timer")
         icon: "\u{f0520}"
 
         ColumnLayout {
@@ -392,14 +341,11 @@ ColumnLayout {
                 }
             }
         }
-        RowLayout {
-            Layout.fillWidth: true
+        SwitchRow {
             visible: modesCard.editing !== "game"
-            Label { Layout.fillWidth: true; text: I18n.tr("On now"); dim: true }
-            Switch {
-                checked: Settings.focusMode === modesCard.editing
-                onToggled: Notifications.setMode(Settings.focusMode === modesCard.editing ? "" : modesCard.editing)
-            }
+            label: I18n.tr("On now")
+            checked: Settings.focusMode === modesCard.editing
+            onToggled: Notifications.setMode(Settings.focusMode === modesCard.editing ? "" : modesCard.editing)
         }
         Label { text: I18n.tr("Let through"); role: "caption"; weight: Design.weight.semibold; dim: true }
         Flow {
@@ -428,15 +374,15 @@ ColumnLayout {
 
     SettingsGroup {
         visible: section.part === "notifications"
-        title: I18n.tr("Quiet hours")
-        subtitle: I18n.tr("Do Not Disturb on a schedule, every day")
-        // Shown while it is in force: what is being held back, and until when.
-        note: Notifications.quietHours ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd)) : ""
+        // No title over the switch of the same name. Its note says what is
+        // held back, and while in force, until when.
         icon: "\u{f00a0}"
 
         SwitchRow {
             label: I18n.tr("Quiet hours")
-            note: I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
+            note: Notifications.quietHours
+                ? I18n.tr("On now — banners and sounds are held until %1", section._hhmm(Settings.dndScheduleEnd))
+                : I18n.tr("Notifications still arrive and wait in the list; they just do not pop up or play a sound")
             checked: Settings.dndScheduleEnabled === true
             onToggled: Settings.set("dndScheduleEnabled", !(Settings.dndScheduleEnabled === true))
         }

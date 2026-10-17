@@ -20,7 +20,7 @@ ColumnLayout {
     // ── Motion ───────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Motion")
-        description: section.off ? I18n.tr("Animations are off") : I18n.tr("How long every animation takes")
+        description: section.off ? I18n.tr("Animations are off") : ""
 
         SwitchRow {
             label: I18n.tr("Animations")
@@ -35,7 +35,7 @@ ColumnLayout {
             note: I18n.tr("%1 ms", Settings.animationDuration)
 
             Slider {
-                Layout.preferredWidth: Design.s(220)
+                Layout.preferredWidth: Design.s(Design.width.control)
                 minimum: 80
                 maximum: 600
                 value: Math.max(80, Settings.animationDuration)
@@ -47,7 +47,6 @@ ColumnLayout {
     // ── Workspaces ───────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Workspaces")
-        description: I18n.tr("Switching from one workspace to another")
 
         SettingsRow {
             label: I18n.tr("Transition")
@@ -57,7 +56,7 @@ ColumnLayout {
 
             SegmentedControl {
                 size: "sm"
-                Layout.preferredWidth: Design.s(180)
+                Layout.preferredWidth: Design.s(Design.width.control)
                 model: [
                     { id: "slide", label: I18n.tr("Slide") },
                     { id: "fade",  label: I18n.tr("Fade") }
@@ -71,7 +70,6 @@ ColumnLayout {
     // ── Windows ──────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Windows")
-        description: I18n.tr("Opening and closing a window")
 
         SettingsRow {
             label: I18n.tr("Opening animation")
@@ -84,7 +82,7 @@ ColumnLayout {
 
             SegmentedControl {
                 size: "sm"
-                Layout.preferredWidth: Design.s(280)
+                Layout.preferredWidth: Design.s(Design.width.select)
                 model: [
                     { id: "popin", label: I18n.tr("Pop in") },
                     { id: "fade",  label: I18n.tr("Fade") },
@@ -102,7 +100,7 @@ ColumnLayout {
             note: I18n.tr("%1%", Settings.popinPercent)
 
             Slider {
-                Layout.preferredWidth: Design.s(220)
+                Layout.preferredWidth: Design.s(Design.width.control)
                 minimum: 40
                 maximum: 95
                 showPercent: false

@@ -41,18 +41,10 @@ ColumnLayout {
             onToggled: Settings.set("focusDaemonAutoStart", !(Settings.focusDaemonAutoStart !== false))
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            Label {
-                Layout.fillWidth: true
-                text: section.forgetStatus !== "" ? section.forgetStatus : I18n.tr("Everything recorded so far, every day")
-                role: "caption"
-                dim: section.forgetStatus === ""
-                wrapMode: Text.WordWrap
-            }
+        SettingsRow {
+            label: I18n.tr("History")
+            note: section.forgetStatus !== "" ? section.forgetStatus : I18n.tr("Everything recorded so far, every day")
             Button {
-                Layout.fillWidth: false
                 icon: "\u{f0a7a}"
                 label: I18n.tr("Delete history")
                 destructive: true
@@ -70,19 +62,11 @@ ColumnLayout {
         subtitle: I18n.tr("What was copied, kept so it can be pasted again (Mod+Ctrl+V)")
         icon: "\u{f014c}"
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            Label {
-                Layout.fillWidth: true
-                text: section.clipCleared ? I18n.tr("Cleared. Pinned entries were kept.")
-                                          : I18n.tr("Pinned entries stay; everything else goes")
-                role: "caption"
-                dim: !section.clipCleared
-                wrapMode: Text.WordWrap
-            }
+        SettingsRow {
+            label: I18n.tr("History")
+            note: section.clipCleared ? I18n.tr("Cleared. Pinned entries were kept.")
+                                      : I18n.tr("Pinned entries stay; everything else goes")
             Button {
-                Layout.fillWidth: false
                 icon: "\u{f0a7a}"
                 label: I18n.tr("Clear history")
                 destructive: true
@@ -158,21 +142,10 @@ ColumnLayout {
         subtitle: I18n.tr("Places typed into Settings, used for the weather and for sunset and sunrise")
         icon: "\u{f034e}"
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Weather"); weight: Design.weight.semibold }
-                Label {
-                    Layout.fillWidth: true
-                    text: Settings.weatherCityId ? Settings.weatherCityId : I18n.tr("Not set")
-                    role: "caption"; dim: true; elide: Text.ElideRight
-                }
-            }
+        SettingsRow {
+            label: I18n.tr("Weather")
+            note: Settings.weatherCityId ? Settings.weatherCityId : I18n.tr("Not set")
             Button {
-                Layout.fillWidth: false
                 visible: !!Settings.weatherCityId
                 icon: "\u{f0156}"
                 label: I18n.tr("Forget")
@@ -180,21 +153,10 @@ ColumnLayout {
             }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Night Light"); weight: Design.weight.semibold }
-                Label {
-                    Layout.fillWidth: true
-                    text: Settings.nightLightLocation ? Settings.nightLightLocation : I18n.tr("Not set")
-                    role: "caption"; dim: true; elide: Text.ElideRight
-                }
-            }
+        SettingsRow {
+            label: I18n.tr("Night Light")
+            note: Settings.nightLightLocation ? Settings.nightLightLocation : I18n.tr("Not set")
             Button {
-                Layout.fillWidth: false
                 visible: !!Settings.nightLightLocation
                 icon: "\u{f0156}"
                 label: I18n.tr("Forget")

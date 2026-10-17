@@ -49,7 +49,6 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Energy & performance")
-        description: I18n.tr("Tune system performance and power consumption")
 
         // The mini view in the Control Center has always had this empty state;
         // the full page drew three live-looking tiles that silently did nothing
@@ -72,8 +71,6 @@ ColumnLayout {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
-                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
                 model: [
                     { id: "performance", label: I18n.tr("Performance"), icon: "\u{f0e4}" },
                     { id: "balanced",    label: I18n.tr("Balanced"),    icon: "\u{f0241}" },
@@ -100,7 +97,7 @@ ColumnLayout {
                 spacing: Design.s(Design.space.md)
 
             Rectangle {
-                width: Design.s(44)
+                width: Design.s(Design.size.art)
                 height: width
                 radius: width / 2
                 color: Design.tint(Power.charging ? Design.ok : (Power.capacity <= 20 ? Design.danger : Design.accent), 0.15)
@@ -220,8 +217,6 @@ ColumnLayout {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
-                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
                 model: [
                     { id: "auto",            label: I18n.tr("Charge") },
                     { id: "inhibit-charge",  label: I18n.tr("Hold") },
@@ -249,7 +244,6 @@ ColumnLayout {
     SettingsGroup {
         visible: (section.part === "") && (Power.hasBattery)
         title: I18n.tr("Low battery")
-        description: I18n.tr("What happens as the charge runs out")
 
         SwitchRow {
             label: I18n.tr("Warn me when the battery is low")
@@ -381,7 +375,7 @@ ColumnLayout {
                         required property bool modelData
                         readonly property bool now: modelData === (Power.hasBattery && !Power.pluggedIn)
                         Layout.fillWidth: false
-                        Layout.preferredWidth: Design.s(170)
+                        Layout.preferredWidth: Design.s(Design.width.label)
                         spacing: Design.s(Design.space.xs)
                         Item { Layout.fillWidth: true }
                         Icon {
@@ -420,7 +414,7 @@ ColumnLayout {
                             Stepper {
                                 required property bool modelData
                                 Layout.fillWidth: false
-                                Layout.preferredWidth: Design.s(170)
+                                Layout.preferredWidth: Design.s(Design.width.label)
                                 readonly property int value: section.seconds(idleRow.modelData.base, modelData)
                                 valueText: section.timeoutText(value)
                                 onDecrement: section.setTimeout(idleRow.modelData.base, modelData, section.stepFrom(value, -1))
@@ -475,7 +469,7 @@ ColumnLayout {
                         required property bool modelData
                         readonly property bool now: modelData === (Power.hasBattery && !Power.charging)
                         Layout.fillWidth: false
-                        Layout.preferredWidth: Design.s(170)
+                        Layout.preferredWidth: Design.s(Design.width.label)
                         spacing: Design.s(Design.space.xs)
                         Item { Layout.fillWidth: true }
                         Icon {
@@ -509,7 +503,7 @@ ColumnLayout {
                     Stepper {
                         required property bool modelData
                         Layout.fillWidth: false
-                        Layout.preferredWidth: Design.s(170)
+                        Layout.preferredWidth: Design.s(Design.width.label)
                         valueText: section.lidChoices[section.lidIndex(modelData)].label
                         onDecrement: section.stepLid(modelData, -1)
                         onIncrement: section.stepLid(modelData, 1)
@@ -529,7 +523,6 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Power button")
-        description: I18n.tr("Action taken when pressing the physical power key")
 
         SettingsRow {
             label: I18n.tr("Power button action")
@@ -544,7 +537,6 @@ ColumnLayout {
     SettingsGroup {
         visible: section.part === "lock"
         title: I18n.tr("Locking")
-        description: I18n.tr("When screen locks and behaviour on lock")
 
         SwitchRow {
             label: I18n.tr("Lock when the screen turns off")

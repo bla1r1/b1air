@@ -110,7 +110,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Sound")
-        description: I18n.tr("Master switch for system audio")
 
         SwitchRow {
             label: I18n.tr("Sound output")
@@ -122,7 +121,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Output devices")
-        description: I18n.tr("Per-device level, independent of master slider")
 
         Repeater {
             model: Audio.outputs
@@ -146,7 +144,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Input devices")
-        description: I18n.tr("Microphones and capture sources")
 
         Repeater {
             model: Audio.inputs
@@ -213,7 +210,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Application volume")
-        description: I18n.tr("Individual stream levels")
 
         Repeater {
             model: Audio.apps
@@ -236,7 +232,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("Volume keys")
-        description: I18n.tr("What a press of the media keys does")
 
         SettingsRow {
             label: I18n.tr("Volume step")
@@ -264,7 +259,6 @@ ColumnLayout {
 
     SettingsGroup {
         title: I18n.tr("System sounds")
-        description: I18n.tr("Audio feedback played by desktop")
 
         SwitchRow {
             label: I18n.tr("Screenshot sound")

@@ -17,7 +17,6 @@ ColumnLayout {
     // ── Clock ────────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Clock")
-        description: I18n.tr("How the time in the bar is written")
 
         SwitchRow {
             label: I18n.tr("24-hour time")
@@ -30,7 +29,6 @@ ColumnLayout {
     // ── Workspaces ───────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Workspaces")
-        description: I18n.tr("How many workspace numbers the bar shows")
 
         SettingsRow {
             label: I18n.tr("Workspace count")
@@ -47,7 +45,6 @@ ColumnLayout {
     SettingsGroup {
         visible: Quickshell.screens && Quickshell.screens.length > 1
         title: I18n.tr("Multiple Displays")
-        description: I18n.tr("Which screen carries the full bar, and what the others show")
 
         SwitchRow {
             label: I18n.tr("Shorter bars on other screens")
@@ -61,7 +58,7 @@ ColumnLayout {
             note: I18n.tr("The same choice as Main display in Displays: it also gets workspace 1 and the focus at login. Automatic uses the first screen the compositor reports; naming one keeps it across replugs.")
 
             Select {
-                Layout.preferredWidth: Design.s(220)
+                Layout.preferredWidth: Design.s(Design.width.control)
                 model: [{ id: "", label: I18n.tr("Automatic") }].concat(
                     (Quickshell.screens || []).map(s => ({ id: s.name, label: s.name }))
                 )

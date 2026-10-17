@@ -149,7 +149,6 @@ ColumnLayout {
     // ── Language ─────────────────────────────────────────────────────────────
     SettingsGroup {
         title: I18n.tr("Language")
-        description: I18n.tr("What this desktop and other programs speak")
 
         SettingsRow {
             label: I18n.tr("Interface language")
@@ -230,7 +229,6 @@ ColumnLayout {
     SettingsGroup {
         id: formatsGroup
         title: I18n.tr("Region")
-        description: I18n.tr("Dates, times, numbers, money and units")
 
         SettingsRow {
             label: I18n.tr("Formats")
@@ -247,16 +245,16 @@ ColumnLayout {
         Item {
             id: previewBox
             Layout.fillWidth: true
-            implicitHeight: previewGrid.implicitHeight + Design.s(Design.space.md) * 2
+            implicitHeight: previewGrid.implicitHeight + Design.s(Design.space.sm) * 2
 
             readonly property var preview: Qt.locale(Settings.formatsLocale || I18n.locale.name)
             readonly property var now: new Date()
 
             GridLayout {
                 id: previewGrid
+                // The group pads it at the sides already, as it does every
+                // free item; padded here too, it stood in from the rows.
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.rowPaddingX)
-                anchors.rightMargin: Design.s(Design.space.rowPaddingX)
                 anchors.topMargin: Design.s(Design.space.sm)
                 anchors.bottomMargin: Design.s(Design.space.sm)
                 columns: 2
