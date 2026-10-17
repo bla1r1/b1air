@@ -249,7 +249,7 @@ ColumnLayout {
                                 }
                             }
 
-                            MouseArea {
+                            Clickable {
                                 id: pickerMa
                                 anchors.fill: parent
                                 hoverEnabled: true

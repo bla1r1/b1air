@@ -90,6 +90,7 @@ MiniView {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: Notifications.history.count > 0
             clip: true
             spacing: Design.s(Design.space.sm)
             model: parent.groups
@@ -171,7 +172,7 @@ MiniView {
                             border.color: Design.glassBorder
                             border.width: Design.border
 
-                            MouseArea {
+                            Clickable {
                                 id: cardMa
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -268,14 +269,15 @@ MiniView {
                     }
                 }
             }
+        }
 
-            Label {
-                anchors.centerIn: parent
-                visible: Notifications.history.count === 0
-                text: I18n.tr("No notifications")
-                role: "body"
-                dim: true
-            }
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: Notifications.history.count === 0 ? "empty" : ""
+            icon: "\u{f009b}"
+            title: I18n.tr("No notifications")
+            hint: I18n.tr("You're all caught up.")
         }
 
         // ── Widgets under the list, as a notification centre has them ────────
@@ -331,7 +333,7 @@ MiniView {
                         Layout.fillWidth: true
                     }
                 }
-                MouseArea {
+                Clickable {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: Quickshell.execDetached(["b1air-shell", "toggle", "focustime"])

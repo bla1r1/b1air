@@ -195,33 +195,12 @@ PopupShell {
                 }
             }
 
-            // Empty Placeholder
-            ColumnLayout {
-                anchors.centerIn: parent
-                visible: stagedFiles.count === 0
-                spacing: Design.s(Design.space.sm)
-
-                Icon {
-                    text: "\u{f0ee}" // cloud-upload
-                    role: "title"
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: I18n.tr("Drag files here to stage")
-                    role: "body"
-                    weight: Design.weight.semibold
-                    dim: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: I18n.tr("Stage documents, images, or code before sending or batch moving")
-                    role: "caption"
-                    dim: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
+            AppState {
+                anchors.fill: parent
+                mode: stagedFiles.count === 0 ? "empty" : ""
+                icon: "\u{f0ee}" // cloud-upload
+                title: I18n.tr("Drag files here to stage")
+                hint: I18n.tr("Stage documents, images, or code before sending or batch moving")
             }
         }
     }

@@ -73,7 +73,7 @@ Rectangle {
                         Label { text: modelData.title; role: "caption"; weight: Design.weight.semibold; anchors.verticalCenter: parent.verticalCenter }
                     }
 
-                    MouseArea {
+                    Clickable {
                         id: chipMa
                         anchors.fill: parent
                         hoverEnabled: true

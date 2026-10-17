@@ -104,6 +104,7 @@ PopupShell {
             id: clipList
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: root.filteredItems.length > 0
             clip: true
             spacing: Design.s(Design.space.xs)
             model: root.filteredItems
@@ -218,7 +219,7 @@ PopupShell {
                     }
                 }
 
-                MouseArea {
+                Clickable {
                     id: cardHoverMa
                     // Below the card's contents: declared last, it lay over the
                     // pin and delete buttons, and pressing either copied the
@@ -233,36 +234,17 @@ PopupShell {
                     }
                 }
             }
+        }
 
-            // Empty state
-            ColumnLayout {
-                anchors.centerIn: parent
-                visible: root.filteredItems.length === 0
-                spacing: Design.s(Design.space.sm)
-
-                Icon {
-                    text: "\u{f0ea}"
-                    font.pixelSize: Design.s(Design.font.hero)
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: root.searchFilter ? I18n.tr("No matching clips found") : I18n.tr("Clipboard history is empty")
-                    role: "body"
-                    weight: Design.weight.medium
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    visible: !root.searchFilter
-                    text: I18n.tr("Copied text and snippets will appear here automatically")
-                    role: "caption"
-                    color: Design.textFaint
-                    Layout.alignment: Qt.AlignHCenter
-                }
-            }
+        // Before the store is read, an empty list says nothing about history.
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: root.filteredItems.length > 0 ? "" : !Clipboard._loaded ? "loading" : "empty"
+            icon: "\u{f0ea}"
+            title: mode === "loading" ? ""
+                 : root.searchFilter ? I18n.tr("No matching clips found") : I18n.tr("Clipboard history is empty")
+            hint: root.searchFilter ? "" : I18n.tr("Copied text and snippets will appear here automatically")
         }
     }
 

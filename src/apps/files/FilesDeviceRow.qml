@@ -15,9 +15,9 @@ RowLayout {
     spacing: Design.s(Design.space.lg)
 
     Label {
-        Layout.preferredWidth: Design.s(150)
+        Layout.preferredWidth: Design.s(Design.width.label)
         Layout.alignment: Qt.AlignTop
-        Layout.topMargin: Design.s(2)
+        Layout.topMargin: Design.s(Design.space.xxs)
         horizontalAlignment: Text.AlignRight
         text: row.label
         weight: Design.weight.semibold

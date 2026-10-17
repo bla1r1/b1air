@@ -11,6 +11,18 @@ Item {
     default property alias content: row.data
     property alias spacing: row.spacing
     implicitHeight: Design.s(Design.size.rowTall)
+
+    // The hairline under it, matching the one over AppStatusBar: the
+    // toolbar is chrome, and where it ends should show.
+    property bool rule: true
+    Rectangle {
+        visible: root.rule
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: Design.border
+        color: Design.separator
+    }
     RowLayout {
         id: row
         anchors.fill: parent

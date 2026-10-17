@@ -86,7 +86,7 @@ C.Dialog {
 
     // Lighter than it was: a sheet is about the window, not the screen.
     C.Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.25)
+        color: Design.scrim
         Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
     }
 

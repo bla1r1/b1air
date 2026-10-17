@@ -29,10 +29,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: I18n.tr("System Monitor")
-    width: Design.s(880)
-    height: Design.s(580)
-    minimumWidth: Design.s(720)
-    minimumHeight: Design.s(450)
+    width: Design.s(Design.window.compactWidth)
+    height: Design.s(Design.window.compactHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 
@@ -91,128 +91,8 @@ Window {
     Shortcut { sequence: "Ctrl+2"; onActivated: window.currentTab = "processes" }
     Shortcut { sequence: "Ctrl+Tab"; onActivated: window.currentTab = (window.currentTab === "overview" ? "processes" : "overview") }
 
-    // One card, four uses. These were four copies of the same sixty lines, and
-    // the copies had drifted: the badge set `width`/`height` inside a RowLayout
-    // instead of Layout.preferredWidth/Height, which a layout does not honour,
-    // so identical-looking code positioned the text differently in each card —
-    // CPU's label sat next to its badge while Memory's floated 200 px away.
-    component MetricCard: Rectangle {
-        id: card
-
-        property string label: ""
-        property string value: ""
-        property string sub: ""
-        property color tone: Design.accent
-        // 0..100 draws a progress ring; below 0 draws the glyph instead.
-        property real pct: -1
-        property string glyph: ""
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: Design.s(90)
-        radius: Design.s(Design.radius.card)
-        color: Design.ground
-        border.color: Design.glassBorder
-        border.width: 1
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: Design.s(12)
-            spacing: Design.s(12)
-
-            Item {
-                Layout.preferredWidth: Design.s(46)
-                Layout.preferredHeight: Design.s(46)
-                Layout.alignment: Qt.AlignVCenter
-
-                // Track plus arc: the ring now reads as a gauge rather than
-                // repeating the number printed beside it.
-                Rectangle {
-                    anchors.fill: parent
-                    radius: width / 2
-                    color: Design.tint(card.tone, 0.12)
-                    border.color: Design.tint(card.tone, 0.35)
-                    border.width: Design.s(2)
-                }
-
-                Canvas {
-                    id: ringCanvas
-                    anchors.fill: parent
-                    visible: card.pct >= 0
-
-                    // Canvas paints once when it is first shown; without these
-                    // the arc was drawn before the card had a percentage (or
-                    // before it had a size) and then never again, so all four
-                    // rings rendered as empty circles.
-                    Component.onCompleted: requestPaint()
-                    onWidthChanged: requestPaint()
-                    onHeightChanged: requestPaint()
-                    onVisibleChanged: if (visible) requestPaint()
-
-                    onPaint: {
-                        const ctx = getContext("2d");
-                        ctx.reset();
-                        const r = Math.min(width, height) / 2 - Design.s(1);
-                        const cx = width / 2, cy = height / 2;
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, r, -Math.PI / 2,
-                                -Math.PI / 2 + (Math.max(0, Math.min(100, card.pct)) / 100) * 2 * Math.PI);
-                        ctx.strokeStyle = card.tone;
-                        ctx.lineWidth = Design.s(4);
-                        ctx.lineCap = "round";
-                        ctx.stroke();
-                    }
-                    Connections {
-                        target: card
-                        function onPctChanged() { ringCanvas.requestPaint(); }
-                    }
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    visible: card.pct < 0 && card.glyph !== ""
-                    text: card.glyph
-                    font.family: Design.font.icon
-                    font.pixelSize: Design.s(16)
-                    color: card.tone
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: Design.s(2)
-
-                Text {
-                    text: card.label
-                    font.family: Design.font.sans
-                    font.weight: Design.weight.semibold
-                    font.pixelSize: Design.s(Design.font.caption)
-                    color: Design.textDim
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    text: card.value
-                    font.family: Design.font.sans
-                    font.weight: Design.weight.bold
-                    font.pixelSize: Design.s(16)
-                    color: Design.text
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    text: card.sub
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(Design.font.caption)
-                    color: Design.textDim
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-            }
-        }
-    }
+    // The metric cards are Ui/MetricTile now (moved from here, so the
+    // Control Center can draw a reading the same way).
 
     Shortcut { sequence: "F5"; onActivated: if (isNative) MonitorBackend.refresh() }
 
@@ -238,16 +118,30 @@ Window {
             AppToolbar {
                 Layout.fillWidth: true
 
-                RowLayout {
-                    spacing: Design.s(Design.space.xxs)
-                    Button { variant: "secondary"; icon: "\u{f0128}"; label: I18n.tr("Overview"); tip: I18n.tr("Ctrl+1"); checked: window.currentTab === "overview"; onClicked: window.currentTab = "overview" }
-                    Button { variant: "secondary"; icon: "\u{f0279}"; label: I18n.tr("Processes"); tip: I18n.tr("Ctrl+2"); checked: window.currentTab === "processes"; onClicked: window.currentTab = "processes" }
+                // Two views of one machine: a segmented control, as everywhere
+                // a choice of view is. The filter is the toolbar's search
+                // field, on the view it filters.
+                SegmentedControl {
+                    size: "sm"
+                    model: [
+                        { id: "overview",  label: I18n.tr("Overview"),  icon: "\u{f0128}" },
+                        { id: "processes", label: I18n.tr("Processes"), icon: "\u{f0279}" }
+                    ]
+                    current: window.currentTab
+                    onPicked: id => window.currentTab = id
                 }
                 Item { Layout.fillWidth: true }
-                RowLayout {
-                    spacing: Design.s(Design.space.xxs)
-                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
+                Field {
+                    id: searchInput
+                    visible: window.currentTab === "processes"
+                    Layout.preferredWidth: Design.s(Design.width.control)
+                    placeholder: I18n.tr("Filter processes (Ctrl+F)")
+                    onEdited: value => {
+                        window.procSearchQuery = value;
+                        if (isNative) MonitorBackend.setProcessFilter(value);
+                    }
                 }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
             }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -267,19 +161,19 @@ Window {
                 // Without a height the column sizes to its content, so nothing
                 // inside it could expand and the Overview tab left roughly 600
                 // px of empty black below the chart on a 1080p screen.
-                height: Math.max(implicitHeight, overviewScroll.availableHeight - Design.s(8))
+                height: Math.max(implicitHeight, overviewScroll.availableHeight - Design.s(Design.space.sm))
                 spacing: Design.s(Design.space.md)
 
-                Item { Layout.preferredHeight: Design.s(4) }
+                Item { Layout.preferredHeight: Design.s(Design.space.xs) }
 
                 // ── 1. Top metric cards ──────────────────────────────────────
                 GridLayout {
                     Layout.fillWidth: true
                     columns: window.width > 900 ? 4 : 2
-                    rowSpacing: Design.s(10)
-                    columnSpacing: Design.s(10)
+                    rowSpacing: Design.s(Design.space.sm)
+                    columnSpacing: Design.s(Design.space.sm)
 
-                    MetricCard {
+                    MetricTile {
                         label: "CPU"
                         value: window.cpuPct.toFixed(1) + "%"
                         sub: I18n.trn("%1 core  ·  load %2", "%1 cores  ·  load %2", window.cpuCores, window.loadAvgStr.split(" ")[0])
@@ -287,7 +181,7 @@ Window {
                         tone: Design.sapphire
                     }
 
-                    MetricCard {
+                    MetricTile {
                         label: I18n.tr("Memory")
                         value: (window.ramUsedMb / 1024.0).toFixed(1) + " GB"
                         sub: I18n.tr("of %1 GB  ·  %2% used", (window.ramTotalMb / 1024.0).toFixed(1), Math.round(window.ramPct))
@@ -298,7 +192,7 @@ Window {
                     // The ring used to read 11% next to "154.9 GB / Free Space",
                     // leaving it ambiguous whether the ring meant used or free.
                     // It is the used share, and the subtitle now says so.
-                    MetricCard {
+                    MetricTile {
                         label: I18n.tr("Storage")
                         value: I18n.tr("%1 GB free", window.diskFreeGb.toFixed(1))
                         sub: I18n.tr("of %1 GB  ·  %2% used", window.diskTotalGb.toFixed(1), Math.round(window.diskPct))
@@ -310,7 +204,7 @@ Window {
                     // than an empty ring pretending to be a gauge. The task
                     // count moved out of here — it has nothing to do with
                     // uptime and already has a home in the status bar.
-                    MetricCard {
+                    MetricTile {
                         label: I18n.tr("Uptime")
                         value: window.uptimeStr
                         sub: "since last boot"
@@ -325,16 +219,16 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: Design.s(220)
+                    Layout.minimumHeight: Design.s(Design.width.control)
                     radius: Design.s(Design.radius.card)
                     color: Design.ground
                     border.color: Design.glassBorder
-                    border.width: 1
+                    border.width: Design.border
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: Design.s(16)
-                        spacing: Design.s(8)
+                        anchors.margins: Design.s(Design.space.lg)
+                        spacing: Design.s(Design.space.sm)
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -356,17 +250,17 @@ Window {
 
                             // Legend
                             RowLayout {
-                                spacing: Design.s(16)
+                                spacing: Design.s(Design.space.lg)
 
                                 RowLayout {
-                                    spacing: Design.s(6)
-                                    Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.sapphire }
+                                    spacing: Design.s(Design.space.xs)
+                                    Rectangle { width: Design.s(Design.space.sm); height: Design.s(Design.space.sm); radius: 2; color: Design.sapphire }
                                     Text { text: I18n.tr("CPU"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
 
                                 RowLayout {
-                                    spacing: Design.s(6)
-                                    Rectangle { width: Design.s(10); height: Design.s(10); radius: 2; color: Design.mauve }
+                                    spacing: Design.s(Design.space.xs)
+                                    Rectangle { width: Design.s(Design.space.sm); height: Design.s(Design.space.sm); radius: 2; color: Design.mauve }
                                     Text { text: I18n.tr("Memory"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                 }
                             }
@@ -392,7 +286,7 @@ Window {
                                 // have meant 50% or 5% — there was nothing to
                                 // read it against. Percentages now sit in a
                                 // gutter and the plot starts after it.
-                                const gutter = Design.s(34);
+                                const gutter = Design.s(Design.size.md);
                                 const plotX = gutter;
                                 const plotW = Math.max(1, width - gutter);
 
@@ -423,7 +317,7 @@ Window {
                                     isNative ? MonitorBackend.ramHistory : []);
 
                                 ctx.lineWidth = 1;
-                                ctx.font = Design.s(9) + "px " + Design.font.mono;
+                                ctx.font = Design.s(Design.space.sm) + "px " + Design.font.mono;
                                 ctx.textBaseline = "middle";
                                 for (let i = 0; i <= 4; ++i) {
                                     const pctLabel = Math.round(ceiling - i * (ceiling / 4));
@@ -474,7 +368,7 @@ Window {
                     }
                 }
 
-                Item { Layout.preferredHeight: Design.s(8) }
+                Item { Layout.preferredHeight: Design.s(Design.space.sm) }
             }
         }
 
@@ -487,54 +381,11 @@ Window {
             visible: window.currentTab === "processes"
             spacing: 0
 
-            // Search and Sort Bar
-            // Filter and sort: the same capsules as every toolbar.
-            Item {
-                Layout.fillWidth: true
-                implicitHeight: Design.s(48)
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.md)
-                    anchors.rightMargin: Design.s(Design.space.md)
-                    spacing: Design.s(Design.space.sm)
-
-                    Field {
-                        id: searchInput
-                        Layout.preferredWidth: Design.s(240)
-                        Layout.preferredHeight: Design.s(36)
-                        radius: height / 2
-                        color: Design.raised
-                        placeholder: I18n.tr("Filter processes (Ctrl+F)")
-                        onEdited: value => {
-                            window.procSearchQuery = value;
-                            if (isNative) MonitorBackend.setProcessFilter(value);
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                    Label { text: I18n.tr("Sort by"); role: "caption"; color: Design.textFaint }
-                    RowLayout {
-                        spacing: Design.s(Design.space.xxs)
-                        Button {
-                            variant: "secondary"
-                            label: "CPU"
-                            checked: window.procSortBy === "cpu"
-                            onClicked: { window.procSortBy = "cpu"; if (isNative) MonitorBackend.setProcessSort("cpu"); }
-                        }
-                        Button {
-                            variant: "secondary"
-                            label: "RAM"
-                            checked: window.procSortBy === "mem"
-                            onClicked: { window.procSortBy = "mem"; if (isNative) MonitorBackend.setProcessSort("mem"); }
-                        }
-                    }
-                }
-            }
-
-            // Table Header
+            // Table Header: sorted by a click on CPU or Memory, the way a
+            // list header works, instead of a "Sort by CPU | RAM" pair.
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: Design.s(30)
+                implicitHeight: Design.s(Design.size.md)
                 color: Design.ground
 
                 RowLayout {
@@ -543,18 +394,28 @@ Window {
                     anchors.rightMargin: Design.s(Design.space.md)
                     spacing: Design.s(Design.space.sm)
 
-                    Text { text: I18n.tr("PID"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(60) }
-                    Text { text: I18n.tr("Process"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(300) }
+                    ColumnHead { label: I18n.tr("PID"); sortable: false; Layout.preferredWidth: Design.s(Design.size.tile) }
+                    ColumnHead { label: I18n.tr("Process"); sortable: false; Layout.preferredWidth: Design.s(Design.width.select) }
                     // The name column was the only one with fillWidth, so it
                     // took every spare pixel: on a 1280px window it ran 950px
                     // wide for names that need two hundred, and the numbers
                     // anyone actually reads sat crushed against the far edge
                     // with a void between. The slack carries the reading now.
-                    Text { text: I18n.tr("Load"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.fillWidth: true }
-                    Text { text: I18n.tr("User"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80) }
-                    Text { text: I18n.tr("CPU"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
-                    Text { text: I18n.tr("Memory"); font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(70); horizontalAlignment: Text.AlignRight }
-                    Text { text: ""; font.family: Design.font.sans; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim; Layout.preferredWidth: Design.s(80); horizontalAlignment: Text.AlignHCenter }
+                    ColumnHead { label: I18n.tr("Load"); sortable: false; Layout.fillWidth: true }
+                    ColumnHead { label: I18n.tr("User"); sortable: false; Layout.preferredWidth: Design.s(Design.size.stat) }
+                    ColumnHead {
+                        label: I18n.tr("CPU"); alignRight: true; ascending: false
+                        sorted: window.procSortBy === "cpu"
+                        Layout.preferredWidth: Design.s(Design.size.stat)
+                        onClicked: { window.procSortBy = "cpu"; if (isNative) MonitorBackend.setProcessSort("cpu"); }
+                    }
+                    ColumnHead {
+                        label: I18n.tr("Memory"); alignRight: true; ascending: false
+                        sorted: window.procSortBy === "mem"
+                        Layout.preferredWidth: Design.s(Design.size.stat)
+                        onClicked: { window.procSortBy = "mem"; if (isNative) MonitorBackend.setProcessSort("mem"); }
+                    }
+                    Item { Layout.preferredWidth: Design.s(Design.size.stat) }
                 }
             }
 
@@ -569,9 +430,23 @@ Window {
 
                 ScrollBar.vertical: OverflowBar {}
 
+                // Nothing yet, or nothing matches: said in the list's place.
+                AppState {
+                    parent: procList
+                    anchors.fill: parent
+                    // Without the backend nothing will ever arrive; waiting
+                    // on it showed a spinner forever.
+                    mode: !window.isNative ? "error"
+                        : procList.count > 0 ? "" : (window.procSearchQuery !== "" ? "empty" : "loading")
+                    icon: window.isNative ? "\u{f0349}" : ""
+                    title: !window.isNative ? I18n.tr("Process list unavailable")
+                         : window.procSearchQuery !== "" ? I18n.tr("No process matches “%1”", window.procSearchQuery)
+                                                         : I18n.tr("Reading the process list…")
+                }
+
                 delegate: Rectangle {
                     width: procList.width
-                    height: Design.s(36)
+                    height: Design.s(Design.size.knob)
                     color: rowHover.containsMouse ? Design.tint(Design.text, 0.05) : (index % 2 === 0 ? "transparent" : Design.tint(Design.surface, 0.3))
 
                     RowLayout {
@@ -585,7 +460,7 @@ Window {
                             font.family: Design.font.mono
                             font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
-                            Layout.preferredWidth: Design.s(60)
+                            Layout.preferredWidth: Design.s(Design.size.tile)
                         }
 
                         RowLayout {
@@ -595,14 +470,14 @@ Window {
                             // and Layout.preferredWidth alone did nothing — the
                             // bar beside it came out two pixels wide.
                             Layout.fillWidth: false
-                            Layout.preferredWidth: Design.s(300)
-                            spacing: Design.s(8)
+                            Layout.preferredWidth: Design.s(Design.width.select)
+                            spacing: Design.s(Design.space.sm)
 
                             Text {
                                 text: "\u{f108}" // binary icon
                                 font.family: Design.font.icon
                                 color: Design.textDim
-                                font.pixelSize: Design.s(12)
+                                font.pixelSize: Design.s(Design.font.footnote)
                             }
 
                             Text {
@@ -625,12 +500,12 @@ Window {
                         // so at a glance.
                         Item {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(10)
+                            Layout.preferredHeight: Design.s(Design.space.sm)
 
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
-                                height: Design.s(6)
+                                height: Design.s(Design.space.xs)
                                 radius: height / 2
                                 color: Design.tint(Design.text, 0.06)
                             }
@@ -641,17 +516,17 @@ Window {
                                 // over 100% for one process, and a bar wider
                                 // than its track draws outside the column.
                                 width: parent.width * Math.min(1, model.mem / 100)
-                                height: Design.s(6)
+                                height: Design.s(Design.space.xs)
                                 radius: height / 2
                                 color: "transparent"
                                 border.color: Design.tint(Design.mauve, 0.55)
-                                border.width: 1
+                                border.width: Design.border
                             }
 
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width * Math.min(1, model.cpu / 100)
-                                height: Design.s(6)
+                                height: Design.s(Design.space.xs)
                                 radius: height / 2
                                 color: model.cpu > 15.0 ? Design.danger
                                      : (model.cpu > 5.0 ? Design.warn : Design.tint(Design.sapphire, 0.75))
@@ -663,7 +538,7 @@ Window {
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
-                            Layout.preferredWidth: Design.s(80)
+                            Layout.preferredWidth: Design.s(Design.size.stat)
                         }
 
                         Text {
@@ -672,7 +547,7 @@ Window {
                             font.weight: model.cpu > 5.0 ? Design.weight.semibold : Design.weight.regular
                             font.pixelSize: Design.s(Design.font.caption)
                             color: model.cpu > 15.0 ? Design.danger : (model.cpu > 5.0 ? Design.warn : Design.text)
-                            Layout.preferredWidth: Design.s(70)
+                            Layout.preferredWidth: Design.s(Design.size.stat)
                             horizontalAlignment: Text.AlignRight
                         }
 
@@ -681,19 +556,19 @@ Window {
                             font.family: Design.font.mono
                             font.pixelSize: Design.s(Design.font.caption)
                             color: Design.textDim
-                            Layout.preferredWidth: Design.s(70)
+                            Layout.preferredWidth: Design.s(Design.size.stat)
                             horizontalAlignment: Text.AlignRight
                         }
 
                         // Kill Action Buttons
                         RowLayout {
-                            Layout.preferredWidth: Design.s(80)
+                            Layout.preferredWidth: Design.s(Design.size.stat)
                             Layout.alignment: Qt.AlignHCenter
-                            spacing: Design.s(4)
+                            spacing: Design.s(Design.space.xs)
 
                             Rectangle {
-                                width: Design.s(26)
-                                height: Design.s(26)
+                                width: Design.s(Design.size.xs)
+                                height: Design.s(Design.size.xs)
                                 radius: width / 2
                                 color: killHover.containsMouse ? Design.tint(Design.danger, 0.25) : "transparent"
 
@@ -702,19 +577,19 @@ Window {
                                     text: "\u{f00d}" // cross
                                     font.family: Design.font.icon
                                     color: killHover.containsMouse ? Design.danger : Design.textDim
-                                    font.pixelSize: Design.s(11)
+                                    font.pixelSize: Design.s(Design.font.caption)
                                 }
 
                                 HoverHandler { id: killHover }
-                                MouseArea {
+                                Clickable {
                                     anchors.fill: parent
                                     onClicked: if (isNative) killConfirm.ask(model.pid, model.name, false)
                                 }
                             }
 
                             Rectangle {
-                                width: Design.s(26)
-                                height: Design.s(26)
+                                width: Design.s(Design.size.xs)
+                                height: Design.s(Design.size.xs)
                                 radius: width / 2
                                 color: forceHover.containsMouse ? Design.danger : "transparent"
 
@@ -723,11 +598,11 @@ Window {
                                     text: "\u{f057}" // skull / force kill
                                     font.family: Design.font.icon
                                     color: forceHover.containsMouse ? Design.ground : Design.textDim
-                                    font.pixelSize: Design.s(11)
+                                    font.pixelSize: Design.s(Design.font.caption)
                                 }
 
                                 HoverHandler { id: forceHover }
-                                MouseArea {
+                                Clickable {
                                     anchors.fill: parent
                                     onClicked: if (isNative) killConfirm.ask(model.pid, model.name, true)
                                 }
@@ -794,14 +669,14 @@ Window {
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Design.s(40)
+        anchors.bottomMargin: Design.s(Design.size.row)
         visible: killError.text.length > 0
-        width: killError.implicitWidth + Design.s(28)
-        height: Design.s(32)
+        width: killError.implicitWidth + Design.s(Design.space.xl)
+        height: Design.s(Design.size.md)
         radius: Design.s(Design.radius.ctl)
         color: Design.surface
         border.color: Design.danger
-        border.width: 1
+        border.width: Design.border
         Label { id: killError; anchors.centerIn: parent; color: Design.danger }
     }
 }

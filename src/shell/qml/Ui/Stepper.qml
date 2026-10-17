@@ -53,7 +53,7 @@ RowLayout {
             weight: Design.weight.semibold
         }
 
-        Clickable { id: stepArea; onClicked: step.activated() }
+        Clickable { id: stepArea; keyboard: false; onClicked: step.activated() }
 
         activeFocusOnTab: true
         Accessible.role: Accessible.Button

@@ -249,6 +249,7 @@ PopupShell {
             id: emojiGrid
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: window.filteredList.length > 0
             clip: true
             cellWidth: Design.s(Design.size.art)
             cellHeight: Design.s(Design.size.art)
@@ -284,6 +285,15 @@ PopupShell {
                     onClicked: window.selectEmoji(emojiCell.modelData.e)
                 }
             }
+        }
+
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: window.filteredList.length === 0 ? "empty" : ""
+            icon: "\u{f002}"
+            title: I18n.tr("Nothing matches “%1”", window.query.trim())
+            hint: I18n.tr("Try another word, like heart or smile.")
         }
 
         // ── Bottom Status Bar ────────────────────────────────────────────────

@@ -48,6 +48,10 @@ MenuRow          1.0 MenuRow.qml
 AppToolbar       1.0 AppToolbar.qml
 AppTab           1.0 AppTab.qml
 AppSidebar       1.0 AppSidebar.qml
+AppTitle         1.0 AppTitle.qml
+AppState         1.0 AppState.qml
+ColumnHead       1.0 ColumnHead.qml
+MetricTile       1.0 MetricTile.qml
 SidebarHeading   1.0 SidebarHeading.qml
 SidebarItem      1.0 SidebarItem.qml
 AppStatusBar     1.0 AppStatusBar.qml

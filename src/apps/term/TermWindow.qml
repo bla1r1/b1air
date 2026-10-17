@@ -30,10 +30,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: I18n.tr("Terminal")
-    width: Design.s(840)
-    height: Design.s(540)
-    minimumWidth: Design.s(450)
-    minimumHeight: Design.s(300)
+    width: Design.s(Design.window.compactWidth)
+    height: Design.s(Design.window.compactHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 
@@ -87,71 +87,67 @@ Window {
             anchors.fill: parent
             spacing: 0
 
-            // ── Ultra-Compact Headerbar (36px) with Multi-Tabs ──────────────
-            Rectangle {
+            // The standard toolbar: what runs in the current tab on the left,
+            // a new tab and a menu on the right. It was a 42px header of its
+            // own, with the tabs, an app glyph and five icon buttons in a row.
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(42)
-                color: Design.surface
+                rule: tabsModel.count < 2
                 z: 10
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(10)
-                    anchors.rightMargin: Design.s(10)
-                    spacing: Design.s(6)
-
-                    // Terminal App Icon
-                    Label {
-                        text: "\u{f120}" // 
-                        font.family: "JetBrainsMono Nerd Font"
-                        font.pixelSize: Design.s(14)
-                        color: Design.textDim
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    // Tabs Strip
-                    RowLayout {
-                        spacing: Design.s(4)
-                        Layout.alignment: Qt.AlignVCenter
-
-                        Repeater {
-                            model: tabsModel
-                            delegate: AppTab {
-                                required property int index
-                                required property var model
-                                label: (index + 1) + ": " + (model.tabTitle || "fish")
-                                active: window.currentTabIndex === index
-                                closable: tabsModel.count > 1
-                                onClicked: window.currentTabIndex = index
-                                onCloseRequested: window.closeTab(index)
-                            }
-                        }
-
-                        // Add Tab Button (+)
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
-                    }
-
-                    Item { Layout.fillWidth: true } // Spacer
-
-                    // Zoom Controls & Actions
-                    Row {
-                        spacing: Design.s(Design.space.xs)
-                        Layout.alignment: Qt.AlignVCenter
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0374}"; tip: I18n.tr("Smaller text (Ctrl+−)"); onClicked: currentTermView().zoomOut() }
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("Larger text (Ctrl+=)"); onClicked: currentTermView().zoomIn() }
-                        Rectangle { width: 1; height: Design.s(16); color: Design.line; anchors.verticalCenter: parent.verticalCenter }
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f018f}"; tip: I18n.tr("Copy (Ctrl+Shift+C)"); onClicked: currentTermView().copySelection() }
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0192}"; tip: I18n.tr("Paste (Ctrl+Shift+V)"); onClicked: currentTermView().pasteClipboard() }
-                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f00e2}"; tip: I18n.tr("Clear"); onClicked: currentTermView().clear() }
-                    }
+                AppTitle {
+                    readonly property var tab: tabsModel.count > window.currentTabIndex ? tabsModel.get(window.currentTabIndex) : null
+                    title: (tab && tab.tabTitle) || "fish"
+                    subtitle: tabsModel.count > 1 ? I18n.tr("Tab %1 of %2", window.currentTabIndex + 1, tabsModel.count) : ""
+                }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
+                Button {
+                    id: termMoreBtn
+                    variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
+                    tip: I18n.tr("More")
+                    onClicked: termMenu.popup(termMoreBtn, 0, termMoreBtn.height)
+                }
+                AppMenu {
+                    id: termMenu
+                    AppMenuItem { text: I18n.tr("Copy"); keys: "Ctrl+Shift+C"; glyph: "\u{f018f}"; onTriggered: currentTermView().copySelection() }
+                    AppMenuItem { text: I18n.tr("Paste"); keys: "Ctrl+Shift+V"; glyph: "\u{f0192}"; onTriggered: currentTermView().pasteClipboard() }
+                    AppMenuItem { text: I18n.tr("Clear"); glyph: "\u{f00e2}"; onTriggered: currentTermView().clear() }
+                    AppMenuSeparator {}
+                    AppMenuItem { text: I18n.tr("Larger text"); keys: "Ctrl+="; glyph: "\u{f0415}"; onTriggered: currentTermView().zoomIn() }
+                    AppMenuItem { text: I18n.tr("Smaller text"); keys: "Ctrl+−"; glyph: "\u{f0374}"; onTriggered: currentTermView().zoomOut() }
                 }
             }
 
-            // Divider line
-            Rectangle {
+            // The tabs, under the toolbar as in Files; with one there is
+            // nothing to choose between, so no strip.
+            Item {
+                visible: tabsModel.count > 1
                 Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: Design.line
+                Layout.preferredHeight: Design.s(Design.size.knob)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Design.s(Design.space.md)
+                    anchors.rightMargin: Design.s(Design.space.md)
+                    spacing: Design.s(Design.space.xs)
+                    Repeater {
+                        model: tabsModel
+                        delegate: AppTab {
+                            required property int index
+                            required property var model
+                            label: model.tabTitle || "fish"
+                            active: window.currentTabIndex === index
+                            closable: tabsModel.count > 1
+                            onClicked: window.currentTabIndex = index
+                            onCloseRequested: window.closeTab(index)
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                Rectangle {
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: Design.border
+                    color: Design.separator
+                }
             }
 
             // ── Terminal Views Stack ─────────────────────────────────────────
@@ -172,7 +168,7 @@ Window {
                         TerminalView {
                             id: singleTermView
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
+                            anchors.margins: Design.s(Design.space.sm)
                             focus: window.currentTabIndex === index
 
                             // Follow the desktop theme. The terminal painted

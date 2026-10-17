@@ -323,7 +323,7 @@ ColumnLayout {
                         Icon { text: "\u{f0415}"; role: "caption"; color: Design.textDim } // plus
                     }
 
-                    MouseArea {
+                    Clickable {
                         id: resultArea
                         anchors.fill: parent
                         hoverEnabled: true

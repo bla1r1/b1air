@@ -34,7 +34,7 @@ PopupShell {
 
     // Data State Properties
     property var musicData: {
-        "title": "Loading...", "artist": "", "status": "Stopped", "percent": 0,
+        "title": "", "artist": "", "status": "Stopped", "percent": 0,
         "lengthStr": "00:00", "positionStr": "00:00", "timeStr": "--:-- / --:--",
         "source": "Offline", "playerName": "", "blur": "", "grad": "",
         "deviceIcon": "󰓃", "deviceName": "Speaker",
@@ -70,9 +70,8 @@ PopupShell {
         const merged = Object.assign({}, root.musicData, t);
 
         merged.status = Media.status || "Stopped";
-        merged.title = t.title && String(t.title).trim() !== ""
-            ? t.title
-            : (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"));
+        // With no player at all the empty state below speaks instead.
+        merged.title = t.title && String(t.title).trim() !== "" ? t.title : I18n.tr("Nothing playing");
         merged.source = t.source || (Media.hasPlayer ? (t.playerName || "") : "Offline");
         merged.positionStr = t.positionStr || "00:00";
         merged.lengthStr = t.lengthStr || "00:00";
@@ -256,11 +255,25 @@ PopupShell {
                 }
             }
 
+            // With no player there is nothing to show or drive: the cover,
+            // seek bar and transport went on offering controls that did
+            // nothing, under "No media player" set as if it were a song.
+            EmptyState {
+                anchors.centerIn: parent
+                width: parent.width - Design.s(Design.space.lg) * 2
+                visible: !Media.hasPlayer
+                opacity: root.introText
+                icon: "\u{f075a}"
+                title: I18n.tr("No media player")
+                hint: I18n.tr("Start playing in any app to control it here.")
+            }
+
             // LAYER 2: UI Content
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.lg)
                 spacing: 0
+                visible: Media.hasPlayer
 
                 // ==========================================
                 // TOP INFO SECTION
@@ -278,7 +291,7 @@ PopupShell {
 
                         opacity: root.introCover
                         // Enhanced 2D drift animation
-                        transform: Translate { x: Design.s(-40) * (1 - root.introCover); y: Design.s(Design.space.sm) * (1 - root.introCover) }
+                        transform: Translate { x: -Design.s(Design.space.xxl) * (1 - root.introCover); y: Design.s(Design.space.sm) * (1 - root.introCover) }
 
                         // Elastic response to play/pause state
                         scale: root.musicData.status === "Playing" ? 1.0 : 0.90

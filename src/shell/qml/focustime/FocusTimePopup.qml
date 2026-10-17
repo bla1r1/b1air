@@ -164,8 +164,13 @@ PopupShell {
         from: 0; to: Math.PI * 2; duration: window.driftPeriod; loops: Animation.Infinite; running: false
     }
 
+    // The first reply (or failure) has come in. Until then an empty model
+    // means "not asked yet", not "nothing recorded".
+    property bool loaded: false
+
     // --- SHARED DATA INGESTION ---
     function updateFromData(data) {
+        window.loaded = true;
         window.selectedDateStr = data.selected_date;
         window.totalSeconds = data.total || 0;
         window.averageSeconds = data.average || 0;
@@ -284,12 +289,21 @@ PopupShell {
         stdout: StdioCollector {
             onStreamFinished: {
                 let raw = this.text.trim();
-                if (raw === "") return;
+                if (raw === "") {
+                    window.loaded = true;
+                    return;
+                }
                 try {
                     let data = JSON.parse(raw);
                     window.updateFromData(data);
-                } catch(e) {}
+                } catch(e) {
+                    window.loaded = true;
+                }
             }
+        }
+        onExited: code => {
+            if (code !== 0)
+                window.loaded = true;
         }
     }
 
@@ -525,7 +539,7 @@ PopupShell {
                     Layout.preferredHeight: Design.s(Design.size.row)
 
                     opacity: introHeader
-                    transform: Translate { y: Design.s(-20) * (1 - introHeader) }
+                    transform: Translate { y: -Design.s(Design.space.xl) * (1 - introHeader) }
                     
                     // Left Buttons (Overlapped to prevent layout shifting)
                     RowLayout {
@@ -655,7 +669,7 @@ PopupShell {
                         
                         opacity: 1.0 - window.weekViewFocus
                         visible: opacity > 0
-                        transform: Translate { x: Design.s(-40) * window.weekViewFocus }
+                        transform: Translate { x: -Design.s(Design.space.xxl) * window.weekViewFocus }
                         scale: 0.95 + (0.05 * (1.0 - window.weekViewFocus)) // Smooth fluid scale backward
 
                         // ==========================================
@@ -946,12 +960,12 @@ PopupShell {
                                 border.width: 1
 
                                 opacity: introMidLeft
-                                transform: Translate { x: Design.s(-30) * (1 - introMidLeft) }
+                                transform: Translate { x: -Design.s(Design.space.xxl) * (1 - introMidLeft) }
 
                                 EmptyState {
                                     anchors.centerIn: parent
                                     width: parent.width - Design.s(Design.space.xxl)
-                                    visible: weekListModel.count === 0
+                                    visible: window.loaded && weekListModel.count === 0
                                     icon: "\u{f0128}"
                                     title: I18n.tr("No week to show yet")
                                 }
@@ -1148,7 +1162,7 @@ PopupShell {
                                     
                                     opacity: 1.0 - window.appViewFocus
                                     visible: opacity > 0
-                                    transform: Translate { x: Design.s(-30) * window.appViewFocus }
+                                    transform: Translate { x: -Design.s(Design.space.xxl) * window.appViewFocus }
                                     scale: 0.95 + (0.05 * (1.0 - window.appViewFocus)) // Native slide-and-scale
 
                                     model: appListModel
@@ -1251,10 +1265,16 @@ PopupShell {
                                 EmptyState {
                                     anchors.centerIn: parent
                                     width: parent.width
-                                    visible: appListModel.count === 0 && window.appViewFocus < 0.5
+                                    visible: window.loaded && appListModel.count === 0 && window.appViewFocus < 0.5
                                     icon: "\u{f04fe}"
                                     title: I18n.tr("No activity recorded")
                                     hint: I18n.tr("Applications appear here once you have used them for a while.")
+                                }
+
+                                AppState {
+                                    anchors.fill: parent
+                                    mode: !window.loaded && window.appViewFocus < 0.5 ? "loading" : ""
+                                    title: I18n.tr("Reading your activity…")
                                 }
 
                                 // --- VIEW B: 24-Hour App Activity Chart (Now 48 chunks / 30 mins) ---
@@ -1381,7 +1401,7 @@ PopupShell {
                                                 spacing: Design.s(Design.space.sm)
 
                                                 opacity: introMidLeft
-                                                transform: Translate { x: Design.s(-20) * (1 - introMidLeft) + (dayIndex * Design.s(Design.space.xs) * (1 - introMidLeft)) }
+                                                transform: Translate { x: -Design.s(Design.space.xl) * (1 - introMidLeft) + (dayIndex * Design.s(Design.space.xs) * (1 - introMidLeft)) }
 
                                                 Label {
                                                     role: "caption"
@@ -1440,7 +1460,7 @@ PopupShell {
                                         spacing: 0 // Crucial for exact alignment with heatmap blocks
                                         
                                         // Spacer matches the day-name label width + spacing exactly
-                                        Item { Layout.preferredWidth: Design.s(75 + 8) }
+                                        Item { Layout.preferredWidth: Design.s(Design.size.media) + Design.s(Design.space.sm) }
 
                                         Label { role: "caption"; font.weight: Design.weight.medium; color: Design.textFaint; text: "00:00"; Layout.alignment: Qt.AlignLeft }
                                         Item { Layout.fillWidth: true }
@@ -1525,6 +1545,15 @@ PopupShell {
 
                             opacity: introBottom
                             transform: Translate { y: Design.s(Design.space.xxl) * (1 - introBottom) }
+
+                            EmptyState {
+                                anchors.centerIn: parent
+                                width: parent.width - Design.s(Design.space.xxl)
+                                visible: window.loaded && weekAppListModel.count === 0
+                                icon: "\u{f04fe}"
+                                title: I18n.tr("No apps this week")
+                                hint: I18n.tr("Time spent in apps shows up here.")
+                            }
 
                             ListView {
                                 id: weekAppList

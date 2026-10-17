@@ -47,7 +47,7 @@ Item {
         }
     }
 
-    Clickable { id: ma; onClicked: root.clicked() }
+    Clickable { id: ma; keyboard: false; onClicked: root.clicked() }
 
     // Tab reaches it; Enter and Space do what a click does.
     activeFocusOnTab: root.enabled

@@ -32,10 +32,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: I18n.tr("System Settings")
-    width: Design.s(960)
-    height: Design.s(640)
-    minimumWidth: Design.s(760)
-    minimumHeight: Design.s(500)
+    width: Design.s(Design.window.standardWidth)
+    height: Design.s(Design.window.standardHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 

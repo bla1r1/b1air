@@ -29,10 +29,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: (TextBackend.isModified ? "● " : "") + I18n.tr("Text Editor — %1", TextBackend.fileName)
-    width: Design.s(900)
-    height: Design.s(620)
-    minimumWidth: Design.s(680)
-    minimumHeight: Design.s(420)
+    width: Design.s(Design.window.compactWidth)
+    height: Design.s(Design.window.compactHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 
@@ -128,38 +128,19 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         // TOP HEADER BAR (COMPACT TILED TOOLBAR)
         // ═════════════════════════════════════════════════════════════════════
+        // What is open on the left, as in every app; the commands on the right,
+        // Save the one primary while there is something to save.
         AppToolbar {
             Layout.fillWidth: true
 
-            RowLayout {
-                spacing: Design.s(Design.space.xxs)
-                Button { variant: "secondary"; icon: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
-                Button { variant: (TextBackend.isModified) ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save");  tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
+            AppTitle {
+                title: TextBackend.fileName || I18n.tr("Untitled")
+                subtitle: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
+                modified: TextBackend.isModified
             }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
-                    weight: Design.weight.semibold
-                    elide: Text.ElideMiddle
-                }
-                Label {
-                    Layout.fillWidth: true
-                    visible: text !== ""
-                    horizontalAlignment: Text.AlignHCenter
-                    text: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
-                    role: "caption"
-                    color: Design.textFaint
-                    elide: Text.ElideMiddle
-                }
-            }
-            RowLayout {
-                spacing: Design.s(Design.space.xxs)
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
-            }
+            Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+            Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New file (Ctrl+N)"); onClicked: window.newFileWithConfirmation() }
+            Button { variant: TextBackend.isModified ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save"); tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -177,7 +158,7 @@ Window {
                 // ── Line Numbers Gutter ──────────────────────────────────────
                 Rectangle {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: Design.s(52)
+                    Layout.preferredWidth: Design.s(Design.size.rowTall)
                     color: Design.ground
 
                     ListView {
@@ -205,7 +186,7 @@ Window {
                             readonly property real _next: index + 1 < window.lineStarts.length
                                 ? (_layout, editorArea.positionToRectangle(window.lineStarts[index + 1]).y)
                                 : _here.y + _here.height
-                            width: lineNumbersView.width - Design.s(14)
+                            width: lineNumbersView.width - Design.s(Design.space.md)
                             height: Math.max(1, _next - _here.y)
 
                             Text {
@@ -243,14 +224,17 @@ Window {
 
                     TextArea.flickable: TextArea {
                         id: editorArea
+                        // The style's own frame drew an accent outline round the
+                        // whole page whenever it had the caret, i.e. always.
+                        background: null
                         font.family: Design.font.mono
-                        font.pixelSize: Design.s(13)
+                        font.pixelSize: Design.s(Design.font.body)
                         color: Design.text
                         selectionColor: Design.tint(Design.accent, 0.35)
                         selectedTextColor: Design.text
                         tabStopDistance: 32
                         wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
-                        padding: Design.s(12)
+                        padding: Design.s(Design.space.md)
                         selectByMouse: true
                         // Typing works the moment the window appears.
                         Component.onCompleted: forceActiveFocus()
@@ -302,40 +286,21 @@ Window {
                     // the git client says to pick a repository. This one drew
                     // a black field and the number 1 in the gutter, which is
                     // the same thing a broken window looks like.
-                    ColumnLayout {
+                    EmptyState {
                         // Positioned against the Flickable's viewport rather
                         // than anchored to `parent`: assigning TextArea.flickable
                         // makes this a child of the content item, whose origin
                         // is the top-left of the *document*, so centring on it
                         // put the message in the gutter.
-                        x: (editorFlickable.width - implicitWidth) / 2
+                        width: Math.min(editorFlickable.width, Design.s(Design.width.dialog))
+                        x: (editorFlickable.width - width) / 2
                         y: (editorFlickable.height - implicitHeight) / 2
-                        spacing: Design.s(Design.space.sm)
                         visible: editorArea.text.length === 0
                                  && !TextBackend.filePath
                                  && !editorArea.activeFocus
-
-                        Icon {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: "\u{f0219}"
-                            role: "display"
-                            color: Design.textFaint
-                        }
-
-                        Label {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: I18n.tr("Empty document")
-                            weight: Design.weight.semibold
-                            dim: true
-                        }
-
-                        Label {
-                            Layout.alignment: Qt.AlignHCenter
-                            horizontalAlignment: Text.AlignHCenter
-                            text: I18n.tr("Start typing, or open a file: b1air-text notes.md")
-                            role: "caption"
-                            color: Design.textFaint
-                        }
+                        icon: "\u{f0219}"
+                        title: I18n.tr("Empty document")
+                        hint: I18n.tr("Start typing, or open a file.")
                     }
                 }
             }
@@ -389,7 +354,7 @@ Window {
         onRejected: window.afterSave = ""
 
         contentItem: ColumnLayout {
-            implicitWidth: Design.s(420)
+            implicitWidth: Design.s(Design.width.menuMax)
             spacing: Design.s(Design.space.sm)
 
             Label {

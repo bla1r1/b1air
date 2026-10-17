@@ -19,6 +19,9 @@ PopupShell {
     property string filePath: ""
     property string fileText: ""
     property string fileType: "text" // "image", "text", "pdf", "archive"
+    // "" while there is text to show, else what AppState says instead:
+    // "empty" (an empty file) or "error" (an archive that could not be listed).
+    property string previewState: ""
 
     readonly property string fileName: filePath ? filePath.split("/").pop() : I18n.tr("File Preview")
     readonly property string fileExt: fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : ""
@@ -56,6 +59,7 @@ PopupShell {
         archiveLoader.running = false;
         pdfLoader.running = false;
         root.fileText = "";
+        root.previewState = "";
 
         if (root.filePath === "")
             return;
@@ -79,30 +83,35 @@ PopupShell {
     Component.onCompleted: root.loadPreview()
 
     // An empty reply is an answer too — an empty file, or a command that could
-    // not read it. Saying so beats leaving "Loading preview…" on screen for
-    // good, which is indistinguishable from a hang.
-    function _finish(text, emptyNote) {
-        root.fileText = (text && text.length > 0) ? text : emptyNote;
+    // not read it. Saying so beats leaving the loading state on screen for
+    // good, which is indistinguishable from a hang. It is said as a state, not
+    // as the file's text: a sentence in the monospace pane reads as content.
+    function _finish(text, emptyState) {
+        if (text && text.length > 0)
+            root.fileText = text;
+        else
+            root.previewState = emptyState;
     }
 
     Process {
         id: textLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, I18n.tr("This file is empty."))
+            onStreamFinished: root._finish(this.text, "empty")
         }
     }
 
     Process {
         id: archiveLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, I18n.tr("Could not list this archive."))
+            onStreamFinished: root._finish(this.text, "error")
         }
     }
 
     Process {
         id: pdfLoader
         stdout: StdioCollector {
-            onStreamFinished: root._finish(this.text, I18n.tr("PDF Document"))
+            // pdfinfo printing nothing still leaves a PDF worth naming.
+            onStreamFinished: root.fileText = this.text && this.text.length > 0 ? this.text : I18n.tr("PDF Document")
         }
     }
 
@@ -182,7 +191,8 @@ PopupShell {
 
             // 1. Image Preview
             Image {
-                visible: root.fileType === "image"
+                id: image
+                visible: root.fileType === "image" && status !== Image.Error
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.sm)
                 source: root.fileType === "image" && root.filePath ? Paths.fileUrl(root.filePath) : ""
@@ -213,13 +223,13 @@ PopupShell {
 
             // 3. Text / Code / Archive / PDF Metadata Preview
             ScrollView {
-                visible: root.fileType !== "image" && root.filePath !== ""
+                visible: root.fileType !== "image" && root.filePath !== "" && root.previewState === ""
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.sm)
                 clip: true
 
                 TextArea {
-                    text: root.fileText || I18n.tr("Loading preview…")
+                    text: root.fileText
                     readOnly: true
                     selectByMouse: true
                     font.family: Design.font.mono
@@ -228,6 +238,24 @@ PopupShell {
                     background: null
                     wrapMode: TextEdit.WrapAnywhere
                 }
+            }
+
+            // 4. Still reading, nothing in the file, or nothing readable.
+            AppState {
+                anchors.fill: parent
+                readonly property bool imageFailed: root.fileType === "image" && image.status === Image.Error
+                readonly property bool reading: root.fileText === ""
+                    && (textLoader.running || archiveLoader.running || pdfLoader.running)
+                mode: root.filePath === "" ? ""
+                    : imageFailed ? "error"
+                    : root.previewState !== "" ? root.previewState
+                    : reading ? "loading" : ""
+                icon: mode === "empty" ? "\u{f0214}" : ""
+                title: mode === "loading" ? I18n.tr("Loading preview…")
+                    : imageFailed ? I18n.tr("Can't preview this image")
+                    : root.previewState === "error" ? I18n.tr("Can't read this archive")
+                    : I18n.tr("This file is empty")
+                hint: imageFailed ? I18n.tr("The file may be damaged or in an unsupported format.") : ""
             }
         }
     }

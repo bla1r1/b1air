@@ -72,6 +72,14 @@ PopupShell {
                     }
                 }
             }
+            // Said, not left blank: an empty menu under a switch that is on
+            // reads as a menu that failed to open.
+            MenuRow {
+                visible: wifiCol.on && !wifiCol.connected && wifiCol.others.length === 0
+                enabled: false
+                opacity: Design.opacity.disabled
+                text: I18n.tr("No networks found")
+            }
             MenuSeparator {}
             MenuRow { text: I18n.tr("Wi-Fi Settings…"); onClicked: menu.openSettings("network") }
         }
@@ -103,6 +111,12 @@ PopupShell {
                     text: model.description
                     onClicked: Audio.setDefault("sink", model.name)
                 }
+            }
+            MenuRow {
+                visible: Audio.outputs.count === 0
+                enabled: false
+                opacity: Design.opacity.disabled
+                text: I18n.tr("No output devices")
             }
             MenuSeparator {}
             MenuRow { text: I18n.tr("Sound Settings…"); onClicked: menu.openSettings("audio") }

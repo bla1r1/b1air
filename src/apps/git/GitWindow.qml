@@ -30,12 +30,12 @@ ApplicationWindow {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: GitBackend.repoName ? I18n.tr("Git — %1", GitBackend.repoName) : I18n.tr("Git")
-    width: Design.s(1040)
-    height: Design.s(680)
+    width: Design.s(Design.window.largeWidth)
+    height: Design.s(Design.window.largeHeight)
     // Low enough for a window tiled to half a small screen; the layout
     // follows the width from there (sidebar, toolbar cells, file lists).
-    minimumWidth: 480
-    minimumHeight: 450
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
     flags: Qt.Window
@@ -49,24 +49,6 @@ ApplicationWindow {
     // sets repoPath to the directory it started from, so that is never empty.
     readonly property bool hasRepo: GitBackend.isRepo
 
-    // A second, hand-rolled Tokyo Night palette used to live here alongside the
-    // Catppuccin one in Ui/Design.qml, so this window never followed the theme.
-    // The names stay — they are used throughout the file — but each now resolves
-    // to a design-system role, exactly as FilesWindow.qml was already migrated.
-    readonly property color colBg: Design.surface
-    readonly property color colDark: Design.ground
-    readonly property color colHeader: Design.sunken
-    readonly property color colSunken: Design.sunken
-    readonly property color colBorder: Design.glassBorder
-    readonly property color colBorderSubtle: Design.line
-    readonly property color colBlue: Design.accent
-    readonly property color colPurple: Design.mauve
-    readonly property color colCyan: Design.sapphire
-    readonly property color colGreen: Design.ok
-    readonly property color colOrange: Design.warn
-    readonly property color colRed: Design.danger
-    readonly property color colFg: Design.text
-    readonly property color colDim: Design.textDim
 
     // GitBackend::refresh() has been Q_INVOKABLE since the app was written and
     // was never called from anywhere in the UI, so a repo changed in a terminal
@@ -227,20 +209,38 @@ ApplicationWindow {
 
     // One dialog for confirmations and names:
     // { title, text, input, value, placeholder, confirm, destructive, accept(value) }
+    // The three dropdowns are Ui's Popover now; the flags stay the one way
+    // the rest of the file opens and closes them.
+    onRepoDropdownOpenChanged: repoDropdownOpen ? repoPop.open() : repoPop.close()
+    onBranchDropdownOpenChanged: branchDropdownOpen ? branchPop.open() : branchPop.close()
+    onAccountsDropdownOpenChanged: accountsDropdownOpen ? accountsPop.open() : accountsPop.close()
+    // Closed by Esc or a click outside: clear what was half-done in it.
+    function closeDropdowns() {
+        window.repoDropdownOpen = false;
+        window.branchDropdownOpen = false;
+        window.accountsDropdownOpen = false;
+        window.pendingSwitch = "";
+        window.pendingRemoveWorktree = "";
+        window.pendingDeleteBranch = "";
+        window.pendingTrashRepo = "";
+    }
+
     property var dialog: null
     function ask(spec) {
         window.repoDropdownOpen = false;
         window.accountsDropdownOpen = false;
         window.dialog = spec;
         dialogInput.text = spec.value || "";
-        if (spec.input) dialogInput.forceActiveFocus();
+        askDialog.open();
+        if (spec.input) dialogInput.focusInput();
     }
     function closeDialog(accepted) {
         const d = window.dialog;
         window.dialog = null;
         if (accepted && d && d.accept) {
             const v = dialogInput.text.trim();
-            if (d.input && v === "") return;
+            // Nothing typed: ask again rather than act on an empty name.
+            if (d.input && v === "") { window.ask(d); return; }
             d.accept(v);
         }
     }
@@ -322,7 +322,7 @@ ApplicationWindow {
         Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.field)
         Layout.fillWidth: !compact
         radius: Design.s(Design.radius.ctl)
-        border.width: 1
+        border.width: Design.border
         border.color: open ? Design.tint(Design.accent, 0.35) : Design.glassBorder
         color: open ? Design.selection
              : Design.translucent
@@ -531,9 +531,9 @@ ApplicationWindow {
              : st === "renamed" ? "" : "";
     }
     function statusColor(st) {
-        if (st === "conflicted") return window.colRed;
-        return st === "added" ? window.colGreen : st === "deleted" ? window.colRed
-             : st === "renamed" ? window.colCyan : window.colOrange;
+        if (st === "conflicted") return Design.danger;
+        return st === "added" ? Design.ok : st === "deleted" ? Design.danger
+             : st === "renamed" ? Design.sapphire : Design.warn;
     }
     function statusWord(st) {
         if (st === "conflicted") return I18n.tr("Conflicted");
@@ -557,10 +557,10 @@ ApplicationWindow {
         id: av
         property string name: ""
         property string email: ""
-        property color tone: window.colBlue
+        property color tone: Design.accent
         property int ring: 2
         readonly property string picture: (Avatars.revision, Avatars.url(av.email))
-        width: Design.s(20); height: width; radius: width / 2
+        width: Design.s(Design.size.mini); height: width; radius: width / 2
         color: av.tone
         border.color: Design.tint(Design.ground, 0.8)
         border.width: av.ring
@@ -631,7 +631,7 @@ ApplicationWindow {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: window.colBg
+        color: Design.surface
         clip: true
 
         ColumnLayout {
@@ -661,6 +661,14 @@ ApplicationWindow {
                 color: "transparent"
                 z: 20
 
+                // AppToolbar's hairline: the bar is AppToolbar's size and look,
+                // but it also carries the progress line along its bottom edge.
+                Rectangle {
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: Design.border
+                    color: Design.separator
+                }
+
                 // Progress of the running operation: fills when git reports a
                 // percentage, slides back and forth when it doesn't.
                 Item {
@@ -668,7 +676,7 @@ ApplicationWindow {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    height: 2
+                    height: Design.s(Design.focusWidth)
                     visible: window.busy
                     clip: true
                     z: 2
@@ -677,7 +685,7 @@ ApplicationWindow {
                         visible: GitBackend.progress >= 0
                         height: parent.height
                         width: parent.width * Math.max(0, GitBackend.progress) / 100
-                        color: window.colBlue
+                        color: Design.accent
                         Behavior on width { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
                     }
                     Rectangle {
@@ -686,7 +694,7 @@ ApplicationWindow {
                         height: parent.height
                         width: parent.width * 0.25
                         radius: 1
-                        color: window.colBlue
+                        color: Design.accent
                         SequentialAnimation on x {
                             running: progressLine.visible && GitBackend.progress < 0
                             loops: Animation.Infinite
@@ -812,13 +820,15 @@ ApplicationWindow {
                         // A share of the window, within bounds, rather than a
                         // fixed 320: tiled to half a screen the diff beside it
                         // was left with too little room to read.
-                        Layout.preferredWidth: Math.round(Math.max(Design.s(224), Math.min(Design.s(340), window.width * 0.28)))
+                        Layout.preferredWidth: Math.round(Math.max(Design.s(Design.width.sidebar), Math.min(Design.s(Design.width.dialog), window.width * 0.28)))
                         Layout.fillHeight: true
-                        // The sidebar of every app: sunken, flush with the
-                        // window edge, a hairline on the right.
-                        color: Design.sunken
+                        // The sidebar of every app (Ui/AppSidebar's look): the
+                        // sidebar glass, flush with the window edge, a hairline
+                        // on the right. It holds a list and a commit box that
+                        // fill its height, so it is not an AppSidebar itself.
+                        color: Design.translucent ? Design.glassSidebar : Design.sunken
                         clip: true
-                        Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line; z: 5 }
+                        Rectangle { anchors.right: parent.right; width: Design.border; height: parent.height; color: Design.separator; z: 5 }
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -827,29 +837,23 @@ ApplicationWindow {
                             // Top Sidebar Tab Switcher: [ Changes (N) ] [ History ]
 Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Design.s(48)
-                                RowLayout {
-                                    spacing: Design.s(Design.space.xxs)
+                                Layout.preferredHeight: Design.s(Design.size.art)
+                                // One choice of view: a segmented control, as in
+                                // Monitor and Files; it was two toggle buttons.
+                                SegmentedControl {
                                     anchors.centerIn: parent
-                                    Button {
-                                        variant: "secondary"
-                                        label: I18n.tr("Changes") + (GitBackend.changedFiles.length ? "  " + GitBackend.changedFiles.length : "")
-                                        icon: "\u{f0279}"
-                                        checked: window.currentTab === 0
-                                        onClicked: window.currentTab = 0
-                                    }
-                                    Button {
-                                        variant: "secondary"
-                                        label: I18n.tr("History")
-                                        icon: "\u{f02da}"
-                                        checked: window.currentTab === 1
-                                        onClicked: {
-                                            window.currentTab = 1;
-                                            // Open on the newest commit rather
-                                            // than an empty panel.
-                                            if (GitBackend.selectedCommit === "" && GitBackend.history.count > 0)
-                                                GitBackend.selectCommit(GitBackend.history.hashAt(0));
-                                        }
+                                    size: "sm"
+                                    model: [
+                                        { id: "0", label: I18n.tr("Changes") + (GitBackend.changedFiles.length ? "  " + GitBackend.changedFiles.length : ""), icon: "\u{f0279}" },
+                                        { id: "1", label: I18n.tr("History"), icon: "\u{f02da}" }
+                                    ]
+                                    current: String(window.currentTab)
+                                    onPicked: id => {
+                                        window.currentTab = Number(id);
+                                        // Open on the newest commit rather than an
+                                        // empty panel.
+                                        if (window.currentTab === 1 && GitBackend.selectedCommit === "" && GitBackend.history.count > 0)
+                                            GitBackend.selectCommit(GitBackend.history.hashAt(0));
                                     }
                                 }
                             }
@@ -867,7 +871,7 @@ Item {
                                     // Stage All / Unstage All Bar
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: Design.s(28)
+                                        height: Design.s(Design.size.sm)
                                         color: Design.tint(Design.ground, 0.40)
 
                                         Rectangle {
@@ -875,7 +879,7 @@ Item {
                                             anchors.right: parent.right
                                             anchors.bottom: parent.bottom
                                             height: 1
-                                            color: window.colBorder
+                                            color: Design.glassBorder
                                         }
 
                                         MouseArea {
@@ -886,21 +890,21 @@ Item {
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(8)
-                                            anchors.rightMargin: Design.s(10)
-                                            spacing: Design.s(8)
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.sm)
 
                                             // Stage everything, or nothing; a dash when it's mixed.
                                             Rectangle {
                                                 readonly property int staged: GitBackend.changedFiles.filter(f => f.isStaged).length
                                                 readonly property int total: GitBackend.changedFiles.length
                                                 visible: total > 0
-                                                Layout.preferredWidth: Design.s(16)
-                                                Layout.preferredHeight: Design.s(16)
-                                                radius: Design.s(3)
-                                                color: staged > 0 ? window.colGreen : "transparent"
-                                                border.color: staged > 0 ? window.colGreen : window.colDim
-                                                border.width: 1
+                                                Layout.preferredWidth: Design.s(Design.size.micro)
+                                                Layout.preferredHeight: Design.s(Design.size.micro)
+                                                radius: Design.s(Design.radius.sm)
+                                                color: staged > 0 ? Design.accent : "transparent"
+                                                border.color: staged > 0 ? Design.accent : Design.textDim
+                                                border.width: Design.border
                                                 Text {
                                                     anchors.centerIn: parent
                                                     visible: parent.staged > 0
@@ -909,7 +913,7 @@ Item {
                                                     font.weight: Design.weight.semibold
                                                     color: Design.accentText
                                                 }
-                                                MouseArea {
+                                                Clickable {
                                                     anchors.fill: parent
                                                     cursorShape: Qt.PointingHandCursor
                                                     onClicked: parent.staged === parent.total ? GitBackend.unstageAll() : GitBackend.stageAll()
@@ -922,37 +926,25 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: window.colDim
+                                                color: Design.textDim
                                                 Layout.fillWidth: true
                                                 elide: Text.ElideRight
                                             }
 
-                                            Text {
-                                                text: I18n.tr("Stage All")
-                                                font.family: Design.font.sans
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colGreen
-                                                opacity: window.hasRepo ? 1.0 : 0.45
-                                                enabled: window.hasRepo
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: GitBackend.stageAll()
-                                                }
-                                            }
-                                            Text { text: "•"; font.pixelSize: Design.s(Design.font.caption); color: window.colDim }
-                                            Text {
-                                                text: I18n.tr("Unstage All")
-                                                font.family: Design.font.sans
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colRed
-                                                opacity: window.hasRepo ? 1.0 : 0.45
-                                                enabled: window.hasRepo
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: GitBackend.unstageAll()
-                                                }
+                                            // Commands, so buttons in the text colour: green
+                                            // and red are what a file's state is, not what
+                                            // a click does.
+                                            // One command, the one that applies: Stage All
+                                            // while anything is unstaged, Unstage All once
+                                            // everything is. Two side by side did not fit a
+                                            // narrow pane ("Unstage A…").
+                                            Button {
+                                                readonly property bool allStaged: GitBackend.changedFiles.length > 0
+                                                                                  && window.stagedCount === GitBackend.changedFiles.length
+                                                variant: "ghost"; size: "sm"
+                                                label: allStaged ? I18n.tr("Unstage All") : I18n.tr("Stage All")
+                                                enabled: window.hasRepo && GitBackend.changedFiles.length > 0
+                                                onClicked: allStaged ? GitBackend.unstageAll() : GitBackend.stageAll()
                                             }
                                         }
                                     }
@@ -960,16 +952,16 @@ Item {
                                     // A merge waiting to be finished or aborted.
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: Design.s(34)
+                                        Layout.preferredHeight: Design.s(Design.size.md)
                                         visible: GitBackend.mergeState.active === true
                                         readonly property int conflicts: GitBackend.mergeState.conflicts || 0
                                         color: conflicts > 0 ? Design.tint(Design.danger, 0.14) : Design.tint(Design.ok, 0.14)
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(10)
-                                            anchors.rightMargin: Design.s(10)
-                                            spacing: Design.s(10)
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.sm)
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: I18n.tr("Merging %1 — %2", GitBackend.mergeState.branch || "",
@@ -979,7 +971,7 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: parent.parent.conflicts > 0 ? window.colRed : window.colGreen
+                                                color: parent.parent.conflicts > 0 ? Design.danger : Design.ok
                                                 elide: Text.ElideRight
                                             }
                                             Text {
@@ -989,15 +981,15 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: window.colGreen
-                                                MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.commitMerge() }
+                                                color: Design.ok
+                                                Clickable { anchors.fill: parent; anchors.margins: -Design.s(Design.space.xs); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.commitMerge() }
                                             }
                                             Text {
                                                 text: I18n.tr("Abort")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colDim
-                                                MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.abortMerge() }
+                                                color: Design.textDim
+                                                Clickable { anchors.fill: parent; anchors.margins: -Design.s(Design.space.xs); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.abortMerge() }
                                             }
                                         }
                                     }
@@ -1006,17 +998,17 @@ Item {
                                     // this branch, offered back on return.
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: Design.s(34)
+                                        Layout.preferredHeight: Design.s(Design.size.md)
                                         visible: GitBackend.branchStash.ref !== undefined
-                                        color: Design.tint(Design.accent, 0.12)
+                                        color: Design.well
 
                                         property bool confirmDiscard: false
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(10)
-                                            anchors.rightMargin: Design.s(10)
-                                            spacing: Design.s(8)
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.sm)
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: parent.parent.confirmDiscard ? I18n.tr("Delete the stash for good?")
@@ -1024,7 +1016,7 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: parent.parent.confirmDiscard ? window.colRed : window.colBlue
+                                                color: parent.parent.confirmDiscard ? Design.danger : Design.text
                                                 elide: Text.ElideRight
                                             }
                                             Text {
@@ -1032,10 +1024,10 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: parent.parent.confirmDiscard ? window.colRed : window.colGreen
-                                                MouseArea {
+                                                color: parent.parent.confirmDiscard ? Design.danger : Design.text
+                                                Clickable {
                                                     anchors.fill: parent
-                                                    anchors.margins: -Design.s(4)
+                                                    anchors.margins: -Design.s(Design.space.xs)
                                                     cursorShape: Qt.PointingHandCursor
                                                     onClicked: {
                                                         const bar = parent.parent.parent;
@@ -1049,10 +1041,10 @@ Item {
                                                 text: parent.parent.confirmDiscard ? I18n.tr("Keep") : I18n.tr("Discard")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colDim
-                                                MouseArea {
+                                                color: Design.textDim
+                                                Clickable {
                                                     anchors.fill: parent
-                                                    anchors.margins: -Design.s(4)
+                                                    anchors.margins: -Design.s(Design.space.xs)
                                                     cursorShape: Qt.PointingHandCursor
                                                     // Discarding loses work, so it
                                                     // asks once, in place.
@@ -1072,28 +1064,38 @@ Item {
                                         model: GitBackend.changedFiles
                                         spacing: 1
 
+                                        EmptyState {
+                                            parent: changedList
+                                            anchors.centerIn: parent
+                                            width: parent.width
+                                            visible: window.hasRepo && changedList.count === 0
+                                            icon: "\u{f012c}"
+                                            title: I18n.tr("No changes")
+                                            hint: I18n.tr("Your working tree is clean.")
+                                        }
+
                                         delegate: Rectangle {
                                             id: fileCard
                                             width: changedList.width
-                                            height: Design.s(32)
-                                            color: isSelected ? Design.tint(Design.accent, 0.18) : (fArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
+                                            height: Design.s(Design.size.md)
+                                            color: isSelected ? Design.selection : (fArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
 
                                             readonly property bool isSelected: GitBackend.selectedFile === modelData.path
 
                                             RowLayout {
                                                 anchors.fill: parent
-                                                anchors.leftMargin: Design.s(8)
-                                                anchors.rightMargin: Design.s(8)
-                                                spacing: Design.s(8)
+                                                anchors.leftMargin: Design.s(Design.space.sm)
+                                                anchors.rightMargin: Design.s(Design.space.sm)
+                                                spacing: Design.s(Design.space.sm)
 
                                                 // Staged Checkbox
                                                 Rectangle {
-                                                    width: Design.s(16)
-                                                    height: Design.s(16)
-                                                    radius: Design.s(3)
-                                                    color: modelData.isStaged ? window.colGreen : "transparent"
-                                                    border.color: modelData.isStaged ? window.colGreen : window.colDim
-                                                    border.width: 1
+                                                    width: Design.s(Design.size.micro)
+                                                    height: Design.s(Design.size.micro)
+                                                    radius: Design.s(Design.radius.sm)
+                                                    color: modelData.isStaged ? Design.accent : "transparent"
+                                                    border.color: modelData.isStaged ? Design.accent : Design.textDim
+                                                    border.width: Design.border
 
                                                     Text {
                                                         anchors.centerIn: parent
@@ -1104,7 +1106,7 @@ Item {
                                                         visible: modelData.isStaged
                                                     }
 
-                                                    MouseArea {
+                                                    Clickable {
                                                         anchors.fill: parent
                                                         cursorShape: Qt.PointingHandCursor
                                                         onClicked: {
@@ -1118,7 +1120,7 @@ Item {
                                                 Text {
                                                     text: window.statusIcon(modelData.status)
                                                     font.family: Design.font.mono
-                                                    font.pixelSize: Design.s(13)
+                                                    font.pixelSize: Design.s(Design.font.body)
                                                     color: window.statusColor(modelData.status)
                                                 }
 
@@ -1128,7 +1130,7 @@ Item {
                                                     text: modelData.path
                                                     font.family: Design.font.mono
                                                     font.pixelSize: Design.s(Design.font.caption)
-                                                    color: fileCard.isSelected ? Design.text : window.colFg
+                                                    color: fileCard.isSelected ? Design.text : Design.text
                                                     elide: Text.ElideMiddle
                                                 }
                                             }
@@ -1164,8 +1166,8 @@ Item {
                                     // so its separator is on top of it.
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: Design.s(176) + (lastCommitBar.visible ? Design.s(40) : 0)
-                                                + (identityWarning.visible ? Design.s(18) : 0)
+                                        height: Design.s(Design.width.label) + (lastCommitBar.visible ? Design.s(Design.size.row) : 0)
+                                                + (identityWarning.visible ? Design.s(Design.space.lg) : 0)
                                         color: Design.tint(Design.ground, 0.90)
 
                                         Connections {
@@ -1185,30 +1187,30 @@ Item {
                                             anchors.right: parent.right
                                             anchors.top: parent.top
                                             height: 1
-                                            color: window.colBorder
+                                            color: Design.glassBorder
                                         }
 
                                         ColumnLayout {
                                             anchors.fill: parent
-                                            anchors.margins: Design.s(10)
-                                            spacing: Design.s(6)
+                                            anchors.margins: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.xs)
 
                                             // The latest commit, while it can still be taken back.
                                             Rectangle {
                                                 id: lastCommitBar
                                                 Layout.fillWidth: true
-                                                Layout.preferredHeight: Design.s(34)
+                                                Layout.preferredHeight: Design.s(Design.size.md)
                                                 visible: GitBackend.lastCommit.canUndo === true
-                                                radius: Design.s(5)
-                                                color: window.colBg
-                                                border.color: window.colBorder
-                                                border.width: 1
+                                                radius: Design.s(Design.radius.sm)
+                                                color: Design.surface
+                                                border.color: Design.glassBorder
+                                                border.width: Design.border
 
                                                 RowLayout {
                                                     anchors.fill: parent
-                                                    anchors.leftMargin: Design.s(8)
-                                                    anchors.rightMargin: Design.s(6)
-                                                    spacing: Design.s(8)
+                                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                                    spacing: Design.s(Design.space.sm)
                                                     ColumnLayout {
                                                         Layout.fillWidth: true
                                                         spacing: 0
@@ -1216,7 +1218,7 @@ Item {
                                                             text: I18n.tr("Committed %1", window.relTime(GitBackend.lastCommit.time))
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
-                                                            color: window.colDim
+                                                            color: Design.textDim
                                                         }
                                                         Text {
                                                             Layout.fillWidth: true
@@ -1224,18 +1226,18 @@ Item {
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
                                                             font.weight: Design.weight.semibold
-                                                            color: window.colFg
+                                                            color: Design.text
                                                             elide: Text.ElideRight
                                                         }
                                                     }
                                                     Rectangle {
-                                                        Layout.preferredWidth: undoText.implicitWidth + Design.s(16)
-                                                        Layout.preferredHeight: Design.s(22)
-                                                        radius: Design.s(4)
-                                                        opacity: window.busy ? 0.5 : 1
+                                                        Layout.preferredWidth: undoText.implicitWidth + Design.s(Design.space.lg)
+                                                        Layout.preferredHeight: Design.s(Design.size.mini)
+                                                        radius: Design.s(Design.radius.sm)
+                                                        opacity: window.busy ? Design.opacity.disabled : 1
                                                         color: undoArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent"
-                                                        border.color: window.colBorder
-                                                        border.width: 1
+                                                        border.color: Design.glassBorder
+                                                        border.width: Design.border
                                                         Text {
                                                             id: undoText
                                                             anchors.centerIn: parent
@@ -1243,9 +1245,9 @@ Item {
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
                                                             font.weight: Design.weight.semibold
-                                                            color: window.colFg
+                                                            color: Design.text
                                                         }
-                                                        MouseArea {
+                                                        Clickable {
                                                             id: undoArea
                                                             anchors.fill: parent
                                                             hoverEnabled: true
@@ -1264,19 +1266,19 @@ Item {
                                                 text: I18n.tr("Set your name and email: git config user.name / user.email")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colOrange
+                                                color: Design.warn
                                                 elide: Text.ElideRight
                                             }
 
                                             // Summary (Required)
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                height: Design.s(36)
+                                                height: Design.s(Design.size.knob)
                                                 radius: Design.s(Design.radius.ctl)
                                                 color: Design.raised
                                                 opacity: window.hasRepo ? 1.0 : 0.5
                                                 border.color: sumInput.activeFocus ? Design.accent : Design.line
-                                                border.width: 1
+                                                border.width: Design.border
 
                                                 TextInput {
                                                     id: sumInput
@@ -1295,7 +1297,7 @@ Item {
                                                     verticalAlignment: TextInput.AlignVCenter
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.body)
-                                                    color: window.colFg
+                                                    color: Design.text
                                                     selectByMouse: true
                                                     clip: true
                                                     Keys.onPressed: (e) => {
@@ -1309,7 +1311,7 @@ Item {
                                                         text: I18n.tr("Summary (required)")
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.body)
-                                                        color: window.colDim
+                                                        color: Design.textDim
                                                         visible: !sumInput.text && !sumInput.activeFocus
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -1320,12 +1322,12 @@ Item {
                                             Rectangle {
                                                 Layout.fillWidth: true
                                                 Layout.fillHeight: true
-                                                Layout.minimumHeight: Design.s(56)
+                                                Layout.minimumHeight: Design.s(Design.size.tile)
                                                 radius: Design.s(Design.radius.ctl)
                                                 color: Design.raised
                                                 opacity: window.hasRepo ? 1.0 : 0.5
                                                 border.color: descInput.activeFocus ? Design.accent : Design.line
-                                                border.width: 1
+                                                border.width: Design.border
 
                                                 // In a ScrollView: a bare TextArea grows past its
                                                 // box and cannot be scrolled, so a long
@@ -1345,7 +1347,7 @@ Item {
                                                         bottomPadding: Design.s(Design.space.sm)
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.body)
-                                                        color: window.colFg
+                                                        color: Design.text
                                                         selectByMouse: true
                                                         background: null
                                                         wrapMode: TextEdit.Wrap
@@ -1356,7 +1358,7 @@ Item {
                                                             text: I18n.tr("Description")
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.body)
-                                                            color: window.colDim
+                                                            color: Design.textDim
                                                             visible: !descInput.text && !descInput.activeFocus
                                                         }
                                                     }
@@ -1366,23 +1368,23 @@ Item {
                                             // Commit Action Button
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                height: Design.s(36)
+                                                height: Design.s(Design.size.knob)
                                                 radius: height / 2
                                                 readonly property bool committing: GitBackend.busy === "commit"
                                                 readonly property bool ready: window.hasRepo && sumInput.text.trim().length > 0 && !window.busy
-                                                color: ready ? (commitArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue) : Design.raised
+                                                color: ready ? (commitArea.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent) : Design.raised
                                                 enabled: ready
 
                                                 Row {
                                                     id: commitSpin
                                                     anchors.centerIn: parent
-                                                    spacing: Design.s(6)
+                                                    spacing: Design.s(Design.space.xs)
                                                     visible: parent.committing
                                                     Text {
                                                         text: "󰝲"
                                                         font.family: Design.font.icon
-                                                        font.pixelSize: Design.s(12)
-                                                        color: window.colFg
+                                                        font.pixelSize: Design.s(Design.font.footnote)
+                                                        color: Design.text
                                                         RotationAnimator on rotation { running: commitSpin.visible; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
                                                     }
                                                     Text {
@@ -1390,7 +1392,7 @@ Item {
                                                         font.family: Design.font.sans
                                                         font.pixelSize: Design.s(Design.font.caption)
                                                         font.weight: Design.weight.semibold
-                                                        color: window.colFg
+                                                        color: Design.text
                                                     }
                                                 }
 
@@ -1408,10 +1410,10 @@ Item {
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.body)
                                                     font.weight: Design.weight.semibold
-                                                    color: parent.ready ? Design.accentText : window.colDim
+                                                    color: parent.ready ? Design.accentText : Design.textDim
                                                 }
 
-                                                MouseArea {
+                                                Clickable {
                                                     id: commitArea
                                                     anchors.fill: parent
                                                     hoverEnabled: true
@@ -1438,22 +1440,32 @@ Item {
                                     spacing: 1
                                     ScrollBar.vertical: OverflowBar {}
 
+                                    EmptyState {
+                                        parent: historyList
+                                        anchors.centerIn: parent
+                                        width: parent.width
+                                        visible: window.hasRepo && GitBackend.history.count === 0
+                                        icon: "\u{f02da}"
+                                        title: I18n.tr("No commits yet")
+                                        hint: I18n.tr("Make your first commit in Changes.")
+                                    }
+
                                     // The rows were hover-only: nothing
                                     // happened on click, so a commit's files
                                     // and changes could not be seen at all.
                                     delegate: Rectangle {
                                         width: historyList.width
-                                        height: Design.s(52)
+                                        height: Design.s(Design.size.rowTall)
                                         readonly property bool isSelected: GitBackend.selectedCommit === model.fullHash
-                                        color: isSelected ? Design.tint(Design.accent, 0.18)
+                                        color: isSelected ? Design.selection
                                                           : (hArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
                                         border.color: Design.tint(Design.accent, 0.08)
-                                        border.width: 1
+                                        border.width: Design.border
 
                                         ColumnLayout {
                                             anchors.fill: parent
-                                            anchors.margins: Design.s(8)
-                                            spacing: Design.s(3)
+                                            anchors.margins: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.xxs)
 
                                             RowLayout {
                                                 Layout.fillWidth: true
@@ -1463,7 +1475,7 @@ Item {
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.caption)
                                                     font.weight: Design.weight.semibold
-                                                    color: window.colFg
+                                                    color: Design.text
                                                     elide: Text.ElideRight
                                                 }
                                                 // Pushed or not. A cloud with a
@@ -1475,24 +1487,24 @@ Item {
                                                     visible: model.sync !== ""
                                                     text: model.sync === "local" ? "󰅧" : "󰅠"
                                                     font.family: Design.font.mono
-                                                    font.pixelSize: Design.s(13)
-                                                    color: model.sync === "local" ? window.colOrange : window.colDim
+                                                    font.pixelSize: Design.s(Design.font.body)
+                                                    color: model.sync === "local" ? Design.warn : Design.textDim
                                                     opacity: model.sync === "local" ? 1.0 : 0.6
                                                 }
                                                 Rectangle {
-                                                    width: Design.s(54); height: Design.s(18); radius: Design.s(3)
-                                                    color: Design.tint(Design.accent, 0.15)
-                                                    Text { anchors.centerIn: parent; text: model.hash || ""; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: window.colBlue }
+                                                    width: Design.s(Design.size.rowTall); height: Design.s(Design.size.micro); radius: Design.s(Design.radius.sm)
+                                                    color: "transparent"
+                                                    Text { anchors.centerIn: parent; text: model.hash || ""; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                                 }
                                             }
 
                                             RowLayout {
                                                 Layout.fillWidth: true
-                                                spacing: Design.s(6)
+                                                spacing: Design.s(Design.space.xs)
                                                 AuthorAvatar {
-                                                    Layout.preferredWidth: Design.s(16)
-                                                    Layout.preferredHeight: Design.s(16)
-                                                    width: Design.s(16)
+                                                    Layout.preferredWidth: Design.s(Design.size.micro)
+                                                    Layout.preferredHeight: Design.s(Design.size.micro)
+                                                    width: Design.s(Design.size.micro)
                                                     ring: 1
                                                     name: model.author || ""
                                                     email: model.email || ""
@@ -1504,7 +1516,7 @@ Item {
                                                           + (model.sync === "local" ? " • not pushed" : "")
                                                     font.family: Design.font.sans
                                                     font.pixelSize: Design.s(Design.font.caption)
-                                                    color: window.colDim
+                                                    color: Design.textDim
                                                 }
                                             }
                                         }
@@ -1566,23 +1578,23 @@ Item {
                                     // columns shrank to their text and the
                                     // new-line number sat on top of the old.
                                     Text {
-                                        Layout.preferredWidth: Design.s(42)
+                                        Layout.preferredWidth: Design.s(Design.size.row)
                                         text: modelData.oldLine || ""
                                         horizontalAlignment: Text.AlignRight
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
+                                        color: Design.textDim
                                         rightPadding: 8
                                     }
 
                                     // New Line Num
                                     Text {
-                                        Layout.preferredWidth: Design.s(42)
+                                        Layout.preferredWidth: Design.s(Design.size.row)
                                         text: modelData.newLine || ""
                                         horizontalAlignment: Text.AlignRight
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
+                                        color: Design.textDim
                                         rightPadding: 8
                                     }
 
@@ -1594,10 +1606,10 @@ Item {
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(Design.font.caption)
                                         color: {
-                                            if (modelData.type === "add") return window.colGreen;
-                                            if (modelData.type === "del") return window.colRed;
-                                            if (modelData.type === "header") return window.colBlue;
-                                            return window.colFg;
+                                            if (modelData.type === "add") return Design.ok;
+                                            if (modelData.type === "del") return Design.danger;
+                                            if (modelData.type === "header") return Design.accent;
+                                            return Design.text;
                                         }
                                     }
                                 }
@@ -1619,7 +1631,7 @@ Item {
                             // is room for it.
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: Design.s(36)
+                                height: Design.s(Design.size.knob)
                                 visible: GitBackend.selectedFile !== ""
                                 color: Design.tint(Design.ground, 0.8)
 
@@ -1628,20 +1640,20 @@ Item {
                                     anchors.right: parent.right
                                     anchors.bottom: parent.bottom
                                     height: 1
-                                    color: window.colBorder
+                                    color: Design.glassBorder
                                 }
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: Design.s(14)
-                                    anchors.rightMargin: Design.s(14)
-                                    spacing: Design.s(8)
+                                    anchors.leftMargin: Design.s(Design.space.md)
+                                    anchors.rightMargin: Design.s(Design.space.md)
+                                    spacing: Design.s(Design.space.sm)
 
                                     Text {
                                         text: "󰈙"
                                         font.family: Design.font.mono
-                                        font.pixelSize: Design.s(13)
-                                        color: window.colBlue
+                                        font.pixelSize: Design.s(Design.font.body)
+                                        color: Design.textDim
                                     }
 
                                     Text {
@@ -1649,7 +1661,7 @@ Item {
                                         font.family: Design.font.mono
                                         font.pixelSize: Design.s(Design.font.body)
                                         font.weight: Design.weight.semibold
-                                        color: window.colFg
+                                        color: Design.text
                                         Layout.fillWidth: true
                                         elide: Text.ElideMiddle
                                     }
@@ -1658,7 +1670,7 @@ Item {
                                         text: GitBackend.statusSummary
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
+                                        color: Design.textDim
                                     }
                                 }
                             }
@@ -1676,38 +1688,21 @@ Item {
                                 // Empty State when clean
                                 ColumnLayout {
                                     anchors.centerIn: parent
-                                    spacing: Design.s(12)
+                                    spacing: Design.s(Design.space.md)
                                     visible: GitBackend.currentDiff.length === 0
 
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "󰊢"
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(48)
-                                        color: window.colDim
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(14)
-                                        font.weight: Design.weight.semibold
-                                        color: window.colFg
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: GitBackend.isRepo ? I18n.tr("Working directory is clean") : I18n.tr("Select a repository from the top menu or open a folder.")
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.body)
-                                        color: window.colDim
+                                    EmptyState {
+                                        icon: "󰊢"
+                                        title: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
+                                        hint: GitBackend.isRepo ? I18n.tr("Working directory is clean") : I18n.tr("Select a repository from the top menu or open a folder.")
                                     }
 
                                     // What to do next, as GitHub Desktop suggests it.
                                     ColumnLayout {
                                         Layout.alignment: Qt.AlignHCenter
-                                        Layout.topMargin: Design.s(8)
-                                        Layout.preferredWidth: Math.min(Design.s(460), diffList.width - Design.s(40))
-                                        spacing: Design.s(8)
+                                        Layout.topMargin: Design.s(Design.space.sm)
+                                        Layout.preferredWidth: Math.min(Design.s(Design.width.menuMax), diffList.width - Design.s(Design.size.row))
+                                        spacing: Design.s(Design.space.sm)
                                         visible: GitBackend.isRepo && GitBackend.changedFiles.length === 0
 
                                         Repeater {
@@ -1732,45 +1727,45 @@ Item {
                                                 required property var modelData
                                                 required property int index
                                                 Layout.fillWidth: true
-                                                Layout.preferredHeight: Design.s(52)
-                                                radius: Design.s(8)
-                                                color: window.colBg
-                                                border.color: window.colBorder
-                                                border.width: 1
+                                                Layout.preferredHeight: Design.s(Design.size.rowTall)
+                                                radius: Design.s(Design.radius.ctl)
+                                                color: Design.surface
+                                                border.color: Design.glassBorder
+                                                border.width: Design.border
                                                 RowLayout {
                                                     anchors.fill: parent
-                                                    anchors.leftMargin: Design.s(14)
-                                                    anchors.rightMargin: Design.s(10)
-                                                    spacing: Design.s(10)
+                                                    anchors.leftMargin: Design.s(Design.space.md)
+                                                    anchors.rightMargin: Design.s(Design.space.sm)
+                                                    spacing: Design.s(Design.space.sm)
                                                     ColumnLayout {
                                                         Layout.fillWidth: true
-                                                        spacing: Design.s(2)
+                                                        spacing: Design.s(Design.space.xxs)
                                                         Text {
                                                             text: modelData.title
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.body)
                                                             font.weight: Design.weight.semibold
-                                                            color: window.colFg
+                                                            color: Design.text
                                                         }
                                                         Text {
                                                             Layout.fillWidth: true
                                                             text: modelData.text
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
-                                                            color: window.colDim
+                                                            color: Design.textDim
                                                             elide: Text.ElideMiddle
                                                         }
                                                     }
                                                     Rectangle {
                                                         readonly property bool primary: index === 0 && ["push", "pull"].indexOf(modelData.run) >= 0
-                                                        Layout.preferredWidth: sugText.implicitWidth + Design.s(20)
-                                                        Layout.preferredHeight: Design.s(26)
-                                                        radius: Design.s(5)
-                                                        opacity: window.busy ? 0.5 : 1
-                                                        color: primary ? (sugArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
+                                                        Layout.preferredWidth: sugText.implicitWidth + Design.s(Design.space.lg)
+                                                        Layout.preferredHeight: Design.s(Design.size.xs)
+                                                        radius: Design.s(Design.radius.sm)
+                                                        opacity: window.busy ? Design.opacity.disabled : 1
+                                                        color: primary ? (sugArea.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent)
                                                                        : (sugArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
-                                                        border.color: primary ? "transparent" : window.colBorder
-                                                        border.width: 1
+                                                        border.color: primary ? "transparent" : Design.glassBorder
+                                                        border.width: Design.border
                                                         Text {
                                                             id: sugText
                                                             anchors.centerIn: parent
@@ -1778,9 +1773,9 @@ Item {
                                                             font.family: Design.font.sans
                                                             font.pixelSize: Design.s(Design.font.caption)
                                                             font.weight: Design.weight.semibold
-                                                            color: parent.primary ? Design.accentText : window.colFg
+                                                            color: parent.primary ? Design.accentText : Design.text
                                                         }
-                                                        MouseArea {
+                                                        Clickable {
                                                             id: sugArea
                                                             anchors.fill: parent
                                                             hoverEnabled: true
@@ -1819,7 +1814,7 @@ Item {
                             // Commit header: subject, author, date, hash, body.
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: commitHead.implicitHeight + Design.s(20)
+                                Layout.preferredHeight: commitHead.implicitHeight + Design.s(Design.space.lg)
                                 visible: GitBackend.selectedCommit !== ""
                                 color: Design.tint(Design.ground, 0.8)
 
@@ -1828,7 +1823,7 @@ Item {
                                     anchors.right: parent.right
                                     anchors.bottom: parent.bottom
                                     height: 1
-                                    color: window.colBorder
+                                    color: Design.glassBorder
                                 }
 
                                 ColumnLayout {
@@ -1836,9 +1831,9 @@ Item {
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: Design.s(14)
-                                    anchors.rightMargin: Design.s(14)
-                                    spacing: Design.s(4)
+                                    anchors.leftMargin: Design.s(Design.space.md)
+                                    anchors.rightMargin: Design.s(Design.space.md)
+                                    spacing: Design.s(Design.space.xs)
 
                                     // Wrapped, not cut: the header grows
                                     // with it (implicitHeight above), and a
@@ -1849,15 +1844,15 @@ Item {
                                         Layout.fillWidth: true
                                         text: GitBackend.commitInfo.subject || ""
                                         font.family: Design.font.sans
-                                        font.pixelSize: Design.s(13)
+                                        font.pixelSize: Design.s(Design.font.body)
                                         font.weight: Design.weight.semibold
-                                        color: window.colFg
+                                        color: Design.text
                                         wrapMode: Text.Wrap
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: Design.s(8)
+                                        spacing: Design.s(Design.space.sm)
 
                                         // One initial-disc per person, the
                                         // author first, overlapping as the
@@ -1865,7 +1860,7 @@ Item {
                                         // full list is in the tooltip.
                                         Row {
                                             id: peopleRow
-                                            spacing: -Design.s(5)
+                                            spacing: -Design.s(Design.space.xs)
                                             readonly property var names: [GitBackend.commitInfo.author || ""]
                                                 .concat((GitBackend.commitInfo.coAuthors || [])
                                                         .filter(n => n !== GitBackend.commitInfo.author))
@@ -1878,7 +1873,7 @@ Item {
                                                     name: modelData
                                                     email: index === 0 ? (GitBackend.commitInfo.email || "")
                                                          : ((GitBackend.commitInfo.coAuthorEmails || {})[modelData] || "")
-                                                    tone: [window.colBlue, window.colPurple, window.colGreen, window.colOrange, window.colCyan][index % 5]
+                                                    tone: [Design.accent, Design.mauve, Design.ok, Design.warn, Design.sapphire][index % 5]
                                                 }
                                             }
                                             // A handler, not a MouseArea: an
@@ -1903,7 +1898,7 @@ Item {
                                                      : GitBackend.selectedCommitSync === "pushed" ? "  •  pushed" : "")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: window.colDim
+                                            color: Design.textDim
                                             wrapMode: Text.Wrap
                                         }
                                     }
@@ -1928,7 +1923,7 @@ Item {
                                             onTextChanged: open = false
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: window.colFg
+                                            color: Design.text
                                             wrapMode: Text.Wrap
                                             maximumLineCount: open ? 100000 : 4
                                             elide: Text.ElideRight
@@ -1939,8 +1934,8 @@ Item {
                                         text: commitBody.open ? I18n.tr("Show less") : I18n.tr("Show more")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colBlue
-                                        MouseArea {
+                                        color: Design.textDim
+                                        Clickable {
                                             anchors.fill: parent
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: commitBody.open = !commitBody.open
@@ -1958,7 +1953,7 @@ Item {
                                 // The commit's files.
                                 ListView {
                                     id: commitFileList
-                                    Layout.preferredWidth: Math.round(Math.max(Design.s(150), Math.min(Design.s(260), window.width * 0.2)))
+                                    Layout.preferredWidth: Math.round(Math.max(Design.s(Design.width.label), Math.min(Design.s(Design.size.canvas), window.width * 0.2)))
                                     Layout.fillHeight: true
                                     clip: true
                                     model: GitBackend.commitFiles
@@ -1968,21 +1963,21 @@ Item {
                                     delegate: Rectangle {
                                         id: commitFileRow
                                         width: commitFileList.width
-                                        height: Design.s(30)
+                                        height: Design.s(Design.size.sm)
                                         readonly property bool isSelected: GitBackend.commitFile === modelData.path
-                                        color: isSelected ? Design.tint(Design.accent, 0.18)
+                                        color: isSelected ? Design.selection
                                                           : (cfArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(10)
-                                            anchors.rightMargin: Design.s(8)
-                                            spacing: Design.s(8)
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.sm)
+                                            spacing: Design.s(Design.space.sm)
 
                                             Text {
                                                 text: window.statusIcon(modelData.status)
                                                 font.family: Design.font.mono
-                                                font.pixelSize: Design.s(13)
+                                                font.pixelSize: Design.s(Design.font.body)
                                                 color: window.statusColor(modelData.status)
                                             }
 
@@ -1996,7 +1991,7 @@ Item {
                                                 text: modelData.name
                                                 font.family: Design.font.mono
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colFg
+                                                color: Design.text
                                                 elide: Text.ElideRight
                                             }
                                             Text {
@@ -2004,7 +1999,7 @@ Item {
                                                 text: modelData.path.substring(0, modelData.path.length - modelData.name.length)
                                                 font.family: Design.font.mono
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colDim
+                                                color: Design.textDim
                                                 elide: Text.ElideLeft
                                             }
                                         }
@@ -2034,7 +2029,7 @@ Item {
                                 Rectangle {
                                     Layout.preferredWidth: 1
                                     Layout.fillHeight: true
-                                    color: window.colBorder
+                                    color: Design.glassBorder
                                 }
 
                                 ColumnLayout {
@@ -2047,7 +2042,7 @@ Item {
                                     // the name.
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: Design.s(30)
+                                        height: Design.s(Design.size.sm)
                                         visible: GitBackend.commitFile !== ""
                                         color: Design.tint(Design.ground, 0.4)
 
@@ -2056,19 +2051,19 @@ Item {
                                             anchors.right: parent.right
                                             anchors.bottom: parent.bottom
                                             height: 1
-                                            color: window.colBorder
+                                            color: Design.glassBorder
                                         }
 
                                         Text {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(12)
-                                            anchors.rightMargin: Design.s(12)
+                                            anchors.leftMargin: Design.s(Design.space.md)
+                                            anchors.rightMargin: Design.s(Design.space.md)
                                             verticalAlignment: Text.AlignVCenter
                                             text: GitBackend.commitFile
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(Design.font.caption)
                                             font.weight: Design.weight.semibold
-                                            color: window.colFg
+                                            color: Design.text
                                             elide: Text.ElideMiddle
                                         }
                                     }
@@ -2082,21 +2077,21 @@ Item {
                                         delegate: diffRowDelegate
                                         ScrollBar.vertical: OverflowBar {}
 
-                                        Text {
+                                        EmptyState {
+                                            parent: commitDiffList
                                             anchors.centerIn: parent
+                                            width: parent.width
                                             visible: GitBackend.commitDiff.length === 0
                                             // A rename with identical content
                                             // has no hunks; say what happened
                                             // to it instead of "nothing".
                                             readonly property var shown: GitBackend.commitFiles.find(f => f.path === GitBackend.commitFile)
-                                            text: GitBackend.commitFiles.length === 0
+                                            icon: "\u{f0219}"
+                                            title: GitBackend.commitFiles.length === 0
                                                   ? I18n.tr("This commit changes no files")
                                                   : (shown && shown.oldPath)
                                                     ? I18n.tr("Renamed from %1, content unchanged", shown.oldPath)
                                                     : I18n.tr("No textual changes in this file")
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(Design.font.body)
-                                            color: window.colDim
                                         }
                                     }
                                 }
@@ -2106,32 +2101,15 @@ Item {
                             ColumnLayout {
                                 Layout.alignment: Qt.AlignCenter
                                 Layout.fillHeight: true
-                                spacing: Design.s(12)
+                                spacing: Design.s(Design.space.md)
                                 visible: GitBackend.selectedCommit === ""
 
                                 Item { Layout.fillHeight: true }
-                                Text {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    text: "󰜘"
-                                    font.family: Design.font.mono
-                                    font.pixelSize: Design.s(48)
-                                    color: window.colDim
-                                }
-                                Text {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    text: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(14)
-                                    font.weight: Design.weight.semibold
-                                    color: window.colFg
-                                }
-                                Text {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    text: GitBackend.isRepo ? I18n.tr("Its files and changes appear here.")
+                                EmptyState {
+                                    icon: "󰜘"
+                                    title: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
+                                    hint: GitBackend.isRepo ? I18n.tr("Its files and changes appear here.")
                                                             : I18n.tr("Select a repository from the top menu or open a folder.")
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(Design.font.body)
-                                    color: window.colDim
                                 }
                                 Item { Layout.fillHeight: true }
                             }
@@ -2139,50 +2117,24 @@ Item {
                     }
                 }
 
-                // ══════════════════════════════════════════════════════════════
-                // Clicking outside a popup closes it.
-                //
-                // Nothing sat behind these, so once one was open the only way
-                // to dismiss it was to find the button that opened it — every
-                // other click went to whatever was underneath and the popup
-                // stayed. Below the popups (z 50) and above the workspace, so
-                // it catches the clicks they do not.
-                MouseArea {
-                    anchors.fill: parent
-                    z: 40
-                    visible: window.repoDropdownOpen || window.branchDropdownOpen || window.accountsDropdownOpen
-                    onClicked: {
-                        window.repoDropdownOpen = false;
-                        window.branchDropdownOpen = false;
-                        window.accountsDropdownOpen = false;
-                        window.pendingSwitch = "";
-                        window.pendingRemoveWorktree = "";
-                        window.pendingDeleteBranch = "";
-                        window.pendingTrashRepo = "";
-                    }
-                }
+
 
                 // REPOSITORY SELECTOR DROPDOWN POPUP
                 // ══════════════════════════════════════════════════════════════
                 // Hangs from its cell, flush with its left edge, as the
                 // original's does.
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.leftMargin: repoBtn.x
-                    width: Math.min(Design.s(420), parent.width - repoBtn.x - Design.s(8))
-                    height: Design.s(330)
-                    radius: Design.s(Design.radius.panel)
-                    color: Design.raised
-                    border.color: Design.line
-                    border.width: 1
-                    z: 50
-                    visible: window.repoDropdownOpen
+                Popover {
+                    id: repoPop
+                    anchorItem: repoBtn
+                    width: Math.min(Design.s(Design.width.menuMax), window.width - Design.s(Design.space.lg))
+                    height: Design.s(Design.width.text)
+                    padding: Design.s(Design.space.md)
+                    onClosed: window.closeDropdowns()
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Design.s(Design.space.md)
-                        spacing: Design.s(8)
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: Design.s(Design.space.sm)
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -2192,7 +2144,7 @@ Item {
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
                                 font.weight: Design.weight.semibold
-                                color: window.colBlue
+                                color: Design.text
                             }
                             // No "rescan": the list is what has been opened
                             // here, on purpose. Searching the disk both missed
@@ -2202,7 +2154,7 @@ Item {
                                 text: GitBackend.repos.length + (GitBackend.repos.length === 1 ? " repository" : " repositories")
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.caption)
-                                color: window.colDim
+                                color: Design.textDim
                             }
                         }
 
@@ -2211,26 +2163,26 @@ Item {
                         // field, with no browser of any kind.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(30)
-                            radius: Design.s(5)
-                            color: openArea.containsMouse ? Design.tint(Design.accent, 0.30) : Design.tint(Design.accent, 0.18)
-                            border.color: window.colBlue
-                            border.width: 1
+                            Layout.preferredHeight: Design.s(Design.size.sm)
+                            radius: Design.s(Design.radius.sm)
+                            color: openArea.containsMouse ? Design.glassHover : Design.well
+                            border.color: Design.glassBorder
+                            border.width: Design.border
 
                             Row {
                                 anchors.centerIn: parent
-                                spacing: Design.s(6)
-                                Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
+                                spacing: Design.s(Design.space.xs)
+                                Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.footnote); color: Design.textDim }
                                 Text {
                                     text: I18n.tr("Open repository…")
                                     font.family: Design.font.sans
-                                    font.pixelSize: Design.s(11)
+                                    font.pixelSize: Design.s(Design.font.caption)
                                     font.weight: Design.weight.semibold
-                                    color: window.colFg
+                                    color: Design.text
                                 }
                             }
 
-                            MouseArea {
+                            Clickable {
                                 id: openArea
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -2243,26 +2195,26 @@ Item {
                         // typed in full still opens on Enter.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(28)
-                            radius: Design.s(5)
-                            color: window.colBg
-                            border.color: window.colBorder
-                            border.width: 1
+                            Layout.preferredHeight: Design.s(Design.size.sm)
+                            radius: Design.s(Design.radius.sm)
+                            color: Design.surface
+                            border.color: Design.glassBorder
+                            border.width: Design.border
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: Design.s(8)
-                                anchors.rightMargin: Design.s(8)
-                                spacing: Design.s(6)
+                                anchors.leftMargin: Design.s(Design.space.sm)
+                                anchors.rightMargin: Design.s(Design.space.sm)
+                                spacing: Design.s(Design.space.xs)
 
-                                Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colDim }
+                                Text { text: "󰍉"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
 
                                 TextInput {
                                     id: repoFilterInput
                                     Layout.fillWidth: true
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colFg
+                                    color: Design.text
                                     selectByMouse: true
                                     clip: true
                                     onTextChanged: window.repoFilter = text
@@ -2278,7 +2230,7 @@ Item {
                                         visible: repoFilterInput.text === ""
                                         text: I18n.tr("Filter, or type a path")
                                         font: repoFilterInput.font
-                                        color: window.colDim
+                                        color: Design.textDim
                                     }
                                 }
                             }
@@ -2297,11 +2249,11 @@ Item {
                                 id: repoRowItem
                                 required property var modelData
                                 width: repoList.width
-                                height: Design.s(34)
-                                radius: Design.s(4)
+                                height: Design.s(Design.size.md)
+                                radius: Design.s(Design.radius.sm)
                                 readonly property bool isCurrent: modelData.path === GitBackend.repoPath
-                                color: repoItemArea.containsMouse ? Design.tint(Design.accent, 0.20)
-                                     : (isCurrent ? Design.tint(Design.accent, 0.10) : "transparent")
+                                color: repoItemArea.containsMouse ? Design.glassHover
+                                     : (isCurrent ? Design.selection : "transparent")
 
                                 MouseArea {
                                     id: repoItemArea
@@ -2321,11 +2273,11 @@ Item {
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: Design.s(8)
-                                    anchors.rightMargin: Design.s(4)
-                                    spacing: Design.s(8)
+                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                    spacing: Design.s(Design.space.sm)
 
-                                    Text { text: "󰊢"; font.family: Design.font.mono; font.pixelSize: Design.s(12); color: window.colBlue }
+                                    Text { text: "󰊢"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.footnote); color: Design.textDim }
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -2335,14 +2287,14 @@ Item {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             font.weight: Design.weight.semibold
-                                            color: window.colFg
+                                            color: Design.text
                                         }
                                         Text {
                                             Layout.fillWidth: true
                                             text: repoRowItem.modelData.path
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: window.colDim
+                                            color: Design.textDim
                                             elide: Text.ElideMiddle
                                         }
                                     }
@@ -2352,19 +2304,19 @@ Item {
                                     // working tree. Only the first is one
                                     // click; the second asks below, by name.
                                     Rectangle {
-                                        Layout.preferredWidth: Design.s(22)
-                                        Layout.preferredHeight: Design.s(22)
-                                        radius: Design.s(4)
+                                        Layout.preferredWidth: Design.s(Design.size.mini)
+                                        Layout.preferredHeight: Design.s(Design.size.mini)
+                                        radius: Design.s(Design.radius.sm)
                                         visible: repoItemArea.containsMouse || trashArea.containsMouse || forgetArea.containsMouse
                                         color: trashArea.containsMouse ? Design.tint(Design.danger, 0.30) : "transparent"
                                         Text {
                                             anchors.centerIn: parent
                                             text: "󰩹"
                                             font.family: Design.font.mono
-                                            font.pixelSize: Design.s(11)
-                                            color: trashArea.containsMouse ? window.colRed : window.colDim
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: trashArea.containsMouse ? Design.danger : Design.textDim
                                         }
-                                        MouseArea {
+                                        Clickable {
                                             id: trashArea
                                             anchors.fill: parent
                                             hoverEnabled: true
@@ -2377,18 +2329,18 @@ Item {
                                     }
 
                                     Rectangle {
-                                        Layout.preferredWidth: Design.s(22)
-                                        Layout.preferredHeight: Design.s(22)
-                                        radius: Design.s(4)
+                                        Layout.preferredWidth: Design.s(Design.size.mini)
+                                        Layout.preferredHeight: Design.s(Design.size.mini)
+                                        radius: Design.s(Design.radius.sm)
                                         visible: repoItemArea.containsMouse || trashArea.containsMouse || forgetArea.containsMouse
                                         color: forgetArea.containsMouse ? Design.tint(Design.warn, 0.30) : "transparent"
                                         Text {
                                             anchors.centerIn: parent
                                             text: "✕"
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: forgetArea.containsMouse ? window.colFg : window.colDim
+                                            color: forgetArea.containsMouse ? Design.text : Design.textDim
                                         }
-                                        MouseArea {
+                                        Clickable {
                                             id: forgetArea
                                             anchors.fill: parent
                                             hoverEnabled: true
@@ -2400,16 +2352,12 @@ Item {
                             }
                         }
 
-                        Text {
-                            Layout.fillWidth: true
+                        EmptyState {
                             visible: window.filteredRepos.length === 0
-                            text: GitBackend.repos.length === 0
-                                ? I18n.tr("Nothing here yet — open a repository with the button above.")
-                                : I18n.tr("Nothing matches that filter.")
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(Design.font.caption)
-                            color: window.colDim
-                            wrapMode: Text.WordWrap
+                            icon: GitBackend.repos.length === 0 ? "\u{f02a2}" : "\u{f0349}"
+                            title: GitBackend.repos.length === 0 ? I18n.tr("No repositories")
+                                 : I18n.tr("Nothing matches “%1”", window.repoFilter.trim())
+                            hint: GitBackend.repos.length === 0 ? I18n.tr("Open a repository with the button above.") : ""
                         }
 
                         // Deleting the working tree, asked for explicitly and
@@ -2418,38 +2366,38 @@ Item {
                         // file manager beside it treats delete the same way.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(56)
+                            Layout.preferredHeight: Design.s(Design.size.tile)
                             visible: window.pendingTrashRepo !== ""
-                            radius: Design.s(5)
+                            radius: Design.s(Design.radius.sm)
                             color: Design.tint(Design.danger, 0.15)
-                            border.color: window.colRed
-                            border.width: 1
+                            border.color: Design.danger
+                            border.width: Design.border
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
 
                                 Text {
                                     Layout.fillWidth: true
                                     text: I18n.tr("Move %1 to the trash? This deletes the whole working tree.", window.pendingTrashRepo)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colFg
+                                    color: Design.text
                                     wrapMode: Text.WordWrap
                                 }
 
                                 RowLayout {
-                                    spacing: Design.s(6)
+                                    spacing: Design.s(Design.space.xs)
                                     Item { Layout.fillWidth: true }
                                     Text {
                                         text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
-                                        MouseArea {
+                                        color: Design.textDim
+                                        Clickable {
                                             anchors.fill: parent
-                                            anchors.margins: -Design.s(4)
+                                            anchors.margins: -Design.s(Design.space.xs)
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: window.pendingTrashRepo = ""
                                         }
@@ -2459,10 +2407,10 @@ Item {
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.weight: Design.weight.semibold
-                                        color: window.colRed
-                                        MouseArea {
+                                        color: Design.danger
+                                        Clickable {
                                             anchors.fill: parent
-                                            anchors.margins: -Design.s(4)
+                                            anchors.margins: -Design.s(Design.space.xs)
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 GitBackend.trashRepo(window.pendingTrashRepo);
@@ -2479,57 +2427,52 @@ Item {
                 // ══════════════════════════════════════════════════════════════
                 // BRANCH SWITCHER DROPDOWN POPUP
                 // ══════════════════════════════════════════════════════════════
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.leftMargin: Math.max(0, Math.min(branchBtn.x, parent.width - width))
-                    width: Math.min(Design.s(300), parent.width - Design.s(8))
-                    height: Math.min(parent.height - Design.s(8),
-                                     Design.s(300)
-                                     + (window.pendingSwitch !== "" ? Design.s(140) : 0)
-                                     + (window.pendingRemoveWorktree !== "" ? Design.s(60) : 0)
-                                     + (GitBackend.worktrees.length > 1 ? Design.s(30 + 30 * GitBackend.worktrees.length) : 0))
-                    radius: Design.s(Design.radius.panel)
-                    color: Design.raised
-                    border.color: Design.line
-                    border.width: 1
-                    z: 50
-                    visible: window.branchDropdownOpen
+                Popover {
+                    id: branchPop
+                    anchorItem: branchBtn
+                    width: Math.min(Design.s(Design.width.select), window.width - Design.s(Design.space.sm))
+                    height: Math.min(window.height - Design.s(Design.size.rowTall) * 2,
+                                     Design.s(Design.width.select)
+                                     + (window.pendingSwitch !== "" ? Design.s(Design.size.thumb) : 0)
+                                     + (window.pendingRemoveWorktree !== "" ? Design.s(Design.size.tile) : 0)
+                                     + (GitBackend.worktrees.length > 1 ? Design.s(Design.size.island) * (1 + GitBackend.worktrees.length) : 0))
+                    padding: Design.s(Design.space.md)
+                    onClosed: window.closeDropdowns()
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Design.s(Design.space.md)
-                        spacing: Design.s(8)
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: Design.s(Design.space.sm)
 
                         Text {
                             text: I18n.tr("Branches")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
                             font.weight: Design.weight.semibold
-                            color: window.colGreen
+                            color: Design.text
                         }
 
                         // Creating a branch needed a terminal before this.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(28)
-                            radius: Design.s(5)
-                            color: window.colBg
-                            border.color: window.colBorder
-                            border.width: 1
+                            Layout.preferredHeight: Design.s(Design.size.sm)
+                            radius: Design.s(Design.radius.sm)
+                            color: Design.surface
+                            border.color: Design.glassBorder
+                            border.width: Design.border
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: Design.s(8)
-                                anchors.rightMargin: Design.s(4)
-                                spacing: Design.s(6)
+                                anchors.leftMargin: Design.s(Design.space.sm)
+                                anchors.rightMargin: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
 
                                 TextInput {
                                     id: newBranchInput
                                     Layout.fillWidth: true
                                     font.family: Design.font.mono
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colFg
+                                    color: Design.text
                                     selectByMouse: true
                                     clip: true
                                     // Enter opens an existing branch, or creates one with this name.
@@ -2553,25 +2496,25 @@ Item {
                                         visible: newBranchInput.text === ""
                                         text: I18n.tr("Filter, or type a new branch name")
                                         font: newBranchInput.font
-                                        color: window.colDim
+                                        color: Design.textDim
                                     }
                                 }
 
                                 Rectangle {
-                                    Layout.preferredWidth: Design.s(52)
-                                    Layout.preferredHeight: Design.s(20)
-                                    radius: Design.s(3)
-                                    opacity: newBranchInput.text.trim() === "" ? 0.4 : 1.0
-                                    color: window.colGreen
+                                    Layout.preferredWidth: Design.s(Design.size.rowTall)
+                                    Layout.preferredHeight: Design.s(Design.size.mini)
+                                    radius: Design.s(Design.radius.sm)
+                                    opacity: newBranchInput.text.trim() === "" ? Design.opacity.disabled : 1.0
+                                    color: Design.well
                                     Text {
                                         anchors.centerIn: parent
                                         text: I18n.tr("New")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.weight: Design.weight.semibold
-                                        color: window.colBg
+                                        color: Design.text
                                     }
-                                    MouseArea {
+                                    Clickable {
                                         anchors.fill: parent
                                         enabled: newBranchInput.text.trim() !== ""
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -2599,14 +2542,23 @@ Item {
                                                 : GitBackend.branches.filter(b => b.toLowerCase().indexOf(q) >= 0);
                             }
 
+                            EmptyState {
+                                parent: branchList
+                                anchors.centerIn: parent
+                                width: parent.width
+                                visible: branchList.count === 0 && newBranchInput.text.trim() !== ""
+                                title: I18n.tr("No branch matches")
+                                hint: I18n.tr("Press Enter to create it.")
+                            }
+
                             delegate: Rectangle {
                                 id: branchRowItem
                                 required property var modelData
                                 width: branchList.width
-                                height: Design.s(28)
-                                radius: Design.s(4)
+                                height: Design.s(Design.size.sm)
+                                radius: Design.s(Design.radius.sm)
                                 readonly property bool isCurrent: modelData === GitBackend.branchName
-                                color: isCurrent ? Design.tint(Design.ok, 0.25)
+                                color: isCurrent ? Design.selection
                                      : (bArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
 
                                 MouseArea {
@@ -2642,18 +2594,18 @@ Item {
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: Design.s(6)
-                                    anchors.rightMargin: Design.s(4)
-                                    spacing: Design.s(6)
+                                    anchors.leftMargin: Design.s(Design.space.xs)
+                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                    spacing: Design.s(Design.space.xs)
 
-                                    Text { text: ""; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colGreen }
+                                    Text { text: ""; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                     Text {
                                         Layout.fillWidth: true
                                         text: branchRowItem.modelData
                                         font.family: Design.font.mono
-                                        font.pixelSize: Design.s(11)
+                                        font.pixelSize: Design.s(Design.font.caption)
                                         font.bold: branchRowItem.isCurrent
-                                        color: window.colFg
+                                        color: Design.text
                                         elide: Text.ElideMiddle
                                     }
                                     // Where it stands against its remote.
@@ -2666,13 +2618,13 @@ Item {
                                             : (info.behind > 0 ? info.behind + "↓ " : "") + (info.ahead > 0 ? info.ahead + "↑" : "")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: info.gone ? window.colOrange : window.colDim
+                                        color: info.gone ? Design.warn : Design.textDim
                                     }
                                     Text {
                                         text: "✓"
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.weight: Design.weight.semibold
-                                        color: window.colGreen
+                                        color: Design.accent
                                         visible: branchRowItem.isCurrent
                                     }
 
@@ -2681,18 +2633,18 @@ Item {
                                     // only outcome is an error message is worse
                                     // than no button.
                                     Rectangle {
-                                        Layout.preferredWidth: Design.s(20)
-                                        Layout.preferredHeight: Design.s(20)
-                                        radius: Design.s(4)
+                                        Layout.preferredWidth: Design.s(Design.size.mini)
+                                        Layout.preferredHeight: Design.s(Design.size.mini)
+                                        radius: Design.s(Design.radius.sm)
                                         visible: !branchRowItem.isCurrent && (bArea.containsMouse || delArea.containsMouse)
                                         color: delArea.containsMouse ? Design.tint(Design.danger, 0.30) : "transparent"
                                         Text {
                                             anchors.centerIn: parent
                                             text: "✕"
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: delArea.containsMouse ? window.colRed : window.colDim
+                                            color: delArea.containsMouse ? Design.danger : Design.textDim
                                         }
-                                        MouseArea {
+                                        Clickable {
                                             id: delArea
                                             anchors.fill: parent
                                             hoverEnabled: true
@@ -2724,8 +2676,8 @@ Item {
                                 font.family: Design.font.sans
                                 font.pixelSize: Design.s(Design.font.body)
                                 font.weight: Design.weight.semibold
-                                color: window.colGreen
-                                bottomPadding: Design.s(4)
+                                color: Design.text
+                                bottomPadding: Design.s(Design.space.xs)
                             }
 
                             Repeater {
@@ -2734,30 +2686,30 @@ Item {
                                     id: wtRow
                                     required property var modelData
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: Design.s(30)
-                                    radius: Design.s(4)
-                                    color: modelData.current ? Design.tint(Design.ok, 0.25)
+                                    Layout.preferredHeight: Design.s(Design.size.sm)
+                                    radius: Design.s(Design.radius.sm)
+                                    color: modelData.current ? Design.selection
                                          : (wtArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: Design.s(6)
-                                        anchors.rightMargin: Design.s(6)
-                                        spacing: Design.s(6)
-                                        Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(11); color: window.colGreen }
+                                        anchors.leftMargin: Design.s(Design.space.xs)
+                                        anchors.rightMargin: Design.s(Design.space.xs)
+                                        spacing: Design.s(Design.space.xs)
+                                        Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                         Text {
                                             text: wtRow.modelData.branch || ""
                                             font.family: Design.font.mono
-                                            font.pixelSize: Design.s(11)
+                                            font.pixelSize: Design.s(Design.font.caption)
                                             font.bold: wtRow.modelData.current
-                                            color: window.colFg
+                                            color: Design.text
                                         }
                                         Text {
                                             Layout.fillWidth: true
                                             text: wtRow.modelData.path
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: window.colDim
+                                            color: Design.textDim
                                             elide: Text.ElideLeft
                                             horizontalAlignment: Text.AlignRight
                                         }
@@ -2787,44 +2739,44 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(52)
+                            Layout.preferredHeight: Design.s(Design.size.rowTall)
                             visible: window.pendingRemoveWorktree !== ""
-                            radius: Design.s(5)
+                            radius: Design.s(Design.radius.sm)
                             color: Design.tint(Design.danger, 0.15)
-                            border.color: window.colRed
-                            border.width: 1
+                            border.color: Design.danger
+                            border.width: Design.border
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
                                 Text {
                                     Layout.fillWidth: true
                                     text: I18n.tr("Remove the worktree at %1?", window.pendingRemoveWorktree)
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colFg
+                                    color: Design.text
                                     elide: Text.ElideMiddle
                                 }
                                 RowLayout {
-                                    spacing: Design.s(10)
+                                    spacing: Design.s(Design.space.sm)
                                     Item { Layout.fillWidth: true }
                                     Text {
                                         text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
-                                        MouseArea { anchors.fill: parent; anchors.margins: -Design.s(4); cursorShape: Qt.PointingHandCursor; onClicked: window.pendingRemoveWorktree = "" }
+                                        color: Design.textDim
+                                        Clickable { anchors.fill: parent; anchors.margins: -Design.s(Design.space.xs); cursorShape: Qt.PointingHandCursor; onClicked: window.pendingRemoveWorktree = "" }
                                     }
                                     Text {
                                         text: I18n.tr("Remove")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.weight: Design.weight.semibold
-                                        color: window.colRed
-                                        MouseArea {
+                                        color: Design.danger
+                                        Clickable {
                                             anchors.fill: parent
-                                            anchors.margins: -Design.s(4)
+                                            anchors.margins: -Design.s(Design.space.xs)
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 const path = window.pendingRemoveWorktree;
@@ -2841,20 +2793,20 @@ Item {
                         // GitHub Desktop's question.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: switchCol.implicitHeight + Design.s(12)
+                            Layout.preferredHeight: switchCol.implicitHeight + Design.s(Design.space.md)
                             visible: window.pendingSwitch !== ""
-                            radius: Design.s(5)
-                            color: Design.tint(Design.accent, 0.12)
-                            border.color: window.colBlue
-                            border.width: 1
+                            radius: Design.s(Design.radius.sm)
+                            color: Design.well
+                            border.color: Design.accent
+                            border.width: Design.border
 
                             ColumnLayout {
                                 id: switchCol
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.top: parent.top
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
 
                                 Text {
                                     Layout.fillWidth: true
@@ -2863,7 +2815,7 @@ Item {
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
                                     font.weight: Design.weight.semibold
-                                    color: window.colFg
+                                    color: Design.text
                                     wrapMode: Text.WordWrap
                                 }
 
@@ -2883,13 +2835,13 @@ Item {
                                             ? I18n.tr("They are stashed, and offered back when you return.")
                                             : I18n.tr("They come along, uncommitted.")
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: Design.s(36)
-                                        radius: Design.s(4)
-                                        color: optArea.containsMouse ? Design.tint(Design.accent, 0.22) : window.colBg
+                                        Layout.preferredHeight: Design.s(Design.size.knob)
+                                        radius: Design.s(Design.radius.sm)
+                                        color: optArea.containsMouse ? Design.glassHover : Design.surface
                                         ColumnLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(8)
-                                            anchors.rightMargin: Design.s(8)
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.sm)
                                             spacing: 0
                                             Text {
                                                 Layout.fillWidth: true
@@ -2897,7 +2849,7 @@ Item {
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 font.weight: Design.weight.semibold
-                                                color: window.colFg
+                                                color: Design.text
                                                 elide: Text.ElideRight
                                             }
                                             Text {
@@ -2905,11 +2857,11 @@ Item {
                                                 text: parent.parent.detail
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
-                                                color: window.colDim
+                                                color: Design.textDim
                                                 elide: Text.ElideRight
                                             }
                                         }
-                                        MouseArea {
+                                        Clickable {
                                             id: optArea
                                             anchors.fill: parent
                                             hoverEnabled: true
@@ -2930,10 +2882,10 @@ Item {
                                     text: I18n.tr("Cancel")
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colDim
-                                    MouseArea {
+                                    color: Design.textDim
+                                    Clickable {
                                         anchors.fill: parent
-                                        anchors.margins: -Design.s(4)
+                                        anchors.margins: -Design.s(Design.space.xs)
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: window.pendingSwitch = ""
                                     }
@@ -2944,38 +2896,38 @@ Item {
                         // The second question, asked only when git said no.
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(52)
+                            Layout.preferredHeight: Design.s(Design.size.rowTall)
                             visible: window.pendingDeleteBranch !== ""
-                            radius: Design.s(5)
+                            radius: Design.s(Design.radius.sm)
                             color: Design.tint(Design.danger, 0.15)
-                            border.color: window.colRed
-                            border.width: 1
+                            border.color: Design.danger
+                            border.width: Design.border
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
 
                                 Text {
                                     Layout.fillWidth: true
                                     text: "\"" + window.pendingDeleteBranch + "\" is not merged anywhere. Deleting it loses its commits."
                                     font.family: Design.font.sans
                                     font.pixelSize: Design.s(Design.font.caption)
-                                    color: window.colFg
+                                    color: Design.text
                                     wrapMode: Text.WordWrap
                                 }
 
                                 RowLayout {
-                                    spacing: Design.s(6)
+                                    spacing: Design.s(Design.space.xs)
                                     Item { Layout.fillWidth: true }
                                     Text {
                                         text: I18n.tr("Cancel")
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
-                                        color: window.colDim
-                                        MouseArea {
+                                        color: Design.textDim
+                                        Clickable {
                                             anchors.fill: parent
-                                            anchors.margins: -Design.s(4)
+                                            anchors.margins: -Design.s(Design.space.xs)
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: window.pendingDeleteBranch = ""
                                         }
@@ -2985,10 +2937,10 @@ Item {
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
                                         font.weight: Design.weight.semibold
-                                        color: window.colRed
-                                        MouseArea {
+                                        color: Design.danger
+                                        Clickable {
                                             anchors.fill: parent
-                                            anchors.margins: -Design.s(4)
+                                            anchors.margins: -Design.s(Design.space.xs)
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 GitBackend.deleteBranch(window.pendingDeleteBranch, true);
@@ -3007,33 +2959,24 @@ Item {
                 // One row per hosting service. Signing in runs the service's
                 // own CLI in a terminal; with the CLI missing the row says so
                 // and offers nothing, rather than a button that cannot work.
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.leftMargin: Math.max(0, Math.min(accountsBtn.x, parent.width - width))
-                    width: Design.s(300)
-                    height: accCol.implicitHeight + Design.s(20)
-                    radius: Design.s(Design.radius.panel)
-                    color: Design.raised
-                    border.color: Design.line
-                    border.width: 1
-                    z: 50
-                    visible: window.accountsDropdownOpen
+                Popover {
+                    id: accountsPop
+                    anchorItem: accountsBtn
+                    width: Design.s(Design.width.select)
+                    padding: Design.s(Design.space.sm)
+                    onClosed: window.closeDropdowns()
 
                     ColumnLayout {
                         id: accCol
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: Design.s(10)
-                        spacing: Design.s(8)
+                        Layout.fillWidth: true
+                        spacing: Design.s(Design.space.sm)
 
                         Text {
                             text: I18n.tr("Accounts")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
                             font.weight: Design.weight.semibold
-                            color: window.colBlue
+                            color: Design.text
                         }
 
                         Repeater {
@@ -3044,23 +2987,23 @@ Item {
                                 required property var modelData
                                 readonly property bool signedIn: !!modelData.login
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Design.s(46)
-                                radius: Design.s(6)
-                                color: window.colBg
-                                border.color: window.colBorder
-                                border.width: 1
+                                Layout.preferredHeight: Design.s(Design.size.art)
+                                radius: Design.s(Design.radius.sm)
+                                color: Design.surface
+                                border.color: Design.glassBorder
+                                border.width: Design.border
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: Design.s(10)
-                                    anchors.rightMargin: Design.s(8)
-                                    spacing: Design.s(10)
+                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                    anchors.rightMargin: Design.s(Design.space.sm)
+                                    spacing: Design.s(Design.space.sm)
 
                                     Text {
                                         text: accItem.modelData.provider === "github" ? "" : ""
                                         font.family: Design.font.mono
-                                        font.pixelSize: Design.s(18)
-                                        color: accItem.modelData.provider === "gitlab" ? window.colOrange : window.colFg
+                                        font.pixelSize: Design.s(Design.font.glyph)
+                                        color: accItem.modelData.provider === "gitlab" ? Design.warn : Design.text
                                     }
 
                                     ColumnLayout {
@@ -3071,7 +3014,7 @@ Item {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.body)
                                             font.weight: Design.weight.semibold
-                                            color: window.colFg
+                                            color: Design.text
                                         }
                                         Text {
                                             Layout.fillWidth: true
@@ -3081,20 +3024,20 @@ Item {
                                                 : I18n.tr("Not signed in")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
-                                            color: accItem.signedIn ? window.colGreen : window.colDim
+                                            color: accItem.signedIn ? Design.ok : Design.textDim
                                         }
                                     }
 
                                     Rectangle {
                                         visible: accItem.modelData.installed
-                                        Layout.preferredWidth: accBtnText.implicitWidth + Design.s(16)
-                                        Layout.preferredHeight: Design.s(24)
-                                        radius: Design.s(5)
+                                        Layout.preferredWidth: accBtnText.implicitWidth + Design.s(Design.space.lg)
+                                        Layout.preferredHeight: Design.s(Design.size.xs)
+                                        radius: Design.s(Design.radius.sm)
                                         color: accBtnArea.containsMouse
-                                               ? (accItem.signedIn ? Design.tint(Design.danger, 0.25) : Qt.lighter(window.colBlue, 1.1))
-                                               : (accItem.signedIn ? "transparent" : window.colBlue)
-                                        border.color: accItem.signedIn ? window.colBorder : "transparent"
-                                        border.width: 1
+                                               ? (accItem.signedIn ? Design.tint(Design.danger, 0.25) : Qt.lighter(Design.accent, 1.1))
+                                               : (accItem.signedIn ? "transparent" : Design.accent)
+                                        border.color: accItem.signedIn ? Design.glassBorder : "transparent"
+                                        border.width: Design.border
                                         Text {
                                             id: accBtnText
                                             anchors.centerIn: parent
@@ -3102,9 +3045,9 @@ Item {
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             font.bold: !accItem.signedIn
-                                            color: accItem.signedIn ? window.colFg : Design.accentText
+                                            color: accItem.signedIn ? Design.text : Design.accentText
                                         }
-                                        MouseArea {
+                                        Clickable {
                                             id: accBtnArea
                                             anchors.fill: parent
                                             hoverEnabled: true
@@ -3124,120 +3067,65 @@ Item {
                     }
                 }
             }
+
+            // What state the repository is in, and what just happened: the
+            // standard status bar. The notices were a toast of Git's own that
+            // slid up over the diff.
+            AppStatusBar {
+                Layout.fillWidth: true
+                visible: window.hasRepo
+                Label {
+                    role: "caption"
+                    dim: true
+                    text: GitBackend.branchName + (GitBackend.upstream ? "  →  " + GitBackend.upstream : "")
+                          + (GitBackend.aheadCount > 0 ? "   " + GitBackend.aheadCount + "↑" : "")
+                          + (GitBackend.behindCount > 0 ? "   " + GitBackend.behindCount + "↓" : "")
+                }
+                InlineStatus {
+                    visible: notice.message !== ""
+                    Layout.fillWidth: true
+                    status: notice.isError ? "error" : "ok"
+                    message: notice.message
+                    showRetry: false
+                }
+                Item { Layout.fillWidth: !notice.message; visible: !notice.message }
+                Label {
+                    role: "caption"
+                    color: Design.textFaint
+                    text: I18n.trn("%1 changed file", "%1 changed files", GitBackend.changedFiles.length)
+                }
+            }
         }
     }
 
-    // The dialog from window.ask().
-    Rectangle {
-        parent: window.contentItem
-        anchors.fill: parent
-        z: 95
-        visible: window.dialog !== null
-        color: Qt.rgba(0, 0, 0, 0.45)
+    // The dialog from window.ask(): Ui's AppDialog, as in every app. It was
+    // a box of its own with hand-drawn buttons over a darker scrim.
+    AppDialog {
+        id: askDialog
+        title: window.dialog ? window.dialog.title : ""
+        destructive: window.dialog !== null && window.dialog.destructive === true
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        buttonText: ({ [Dialog.Ok]: window.dialog ? (window.dialog.confirm || I18n.tr("OK")) : I18n.tr("OK") })
+        onAccepted: window.closeDialog(true)
+        onRejected: window.closeDialog(false)
 
-        MouseArea { anchors.fill: parent; onClicked: window.closeDialog(false) }
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(parent.width - Design.s(40), Design.s(400))
-            height: dialogCol.implicitHeight + Design.s(32)
-            radius: Design.s(10)
-            color: window.colHeader
-            border.color: window.colBorder
-            border.width: 1
-
-            MouseArea { anchors.fill: parent }
-
-            ColumnLayout {
-                id: dialogCol
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: Design.s(16)
-                spacing: Design.s(10)
-
-                Text {
-                    text: window.dialog ? window.dialog.title : ""
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(14)
-                    font.weight: Design.weight.semibold
-                    color: window.colFg
-                }
-                Text {
-                    Layout.fillWidth: true
-                    text: window.dialog ? (window.dialog.text || "") : ""
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(Design.font.caption)
-                    color: window.colDim
-                    wrapMode: Text.Wrap
-                }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(30)
-                    visible: window.dialog !== null && window.dialog.input === true
-                    radius: Design.s(5)
-                    color: window.colBg
-                    border.color: dialogInput.activeFocus ? window.colBlue : window.colBorder
-                    border.width: 1
-                    TextInput {
-                        id: dialogInput
-                        anchors.fill: parent
-                        anchors.leftMargin: Design.s(8)
-                        anchors.rightMargin: Design.s(8)
-                        verticalAlignment: TextInput.AlignVCenter
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(Design.font.body)
-                        color: window.colFg
-                        selectByMouse: true
-                        clip: true
-                        onAccepted: window.closeDialog(true)
-                        Keys.onEscapePressed: window.closeDialog(false)
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: dialogInput.text === ""
-                            text: window.dialog ? (window.dialog.placeholder || "") : ""
-                            font: dialogInput.font
-                            color: window.colDim
-                        }
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(8)
-                    Item { Layout.fillWidth: true }
-                    Repeater {
-                        model: ["cancel", "confirm"]
-                        delegate: Rectangle {
-                            required property string modelData
-                            readonly property bool isConfirm: modelData === "confirm"
-                            readonly property bool danger: isConfirm && window.dialog !== null && window.dialog.destructive === true
-                            Layout.preferredWidth: dlgBtnText.implicitWidth + Design.s(24)
-                            Layout.preferredHeight: Design.s(28)
-                            radius: Design.s(5)
-                            color: !isConfirm ? (dlgBtnArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
-                                 : danger ? (dlgBtnArea.containsMouse ? Qt.lighter(window.colRed, 1.1) : window.colRed)
-                                 : (dlgBtnArea.containsMouse ? Qt.lighter(window.colBlue, 1.1) : window.colBlue)
-                            border.color: isConfirm ? "transparent" : window.colBorder
-                            border.width: 1
-                            Text {
-                                id: dlgBtnText
-                                anchors.centerIn: parent
-                                text: parent.isConfirm ? (window.dialog ? (window.dialog.confirm || "OK") : "OK") : I18n.tr("Cancel")
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(Design.font.caption)
-                                font.bold: parent.isConfirm
-                                color: parent.isConfirm ? Design.accentText : window.colFg
-                            }
-                            MouseArea {
-                                id: dlgBtnArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: window.closeDialog(parent.isConfirm)
-                            }
-                        }
-                    }
-                }
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            Label {
+                Layout.fillWidth: true
+                visible: text !== ""
+                text: window.dialog ? (window.dialog.text || "") : ""
+                dim: true
+                wrapMode: Text.Wrap
+            }
+            Field {
+                id: dialogInput
+                Layout.fillWidth: true
+                mono: true
+                visible: window.dialog !== null && window.dialog.input === true
+                placeholder: window.dialog ? (window.dialog.placeholder || "") : ""
+                onAccepted: askDialog.accept()
             }
         }
     }
@@ -3245,69 +3133,22 @@ Item {
     // What just happened, or what went wrong. Errors stay until clicked.
     Connections {
         target: GitBackend
-        function onNotice(message) { toast.show(message, false); }
-        function onCommandFailed(message) { toast.show(message, true); }
+        function onNotice(message) { notice.show(message, false); }
+        function onCommandFailed(message) { notice.show(message, true); }
     }
 
-    Rectangle {
-        id: toast
+    // The last notice, shown in the status bar: a confirmation for a few
+    // seconds, an error until the next action replaces it.
+    QtObject {
+        id: notice
         property bool isError: false
         property string message: ""
-
         function show(msg, err) {
-            toast.message = msg;
-            toast.isError = err;
-            hideTimer.interval = err ? 8000 : 2500;
-            hideTimer.restart();
-            toast.shown = true;
-        }
-        property bool shown: false
-
-        parent: window.contentItem
-        z: 100
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: parent.height - (shown ? height + Design.s(24) : -Design.s(10))
-        width: Math.min(parent.width - Design.s(40), toastRow.implicitWidth + Design.s(28))
-        height: toastRow.implicitHeight + Design.s(18)
-        radius: Design.s(10)
-        color: window.colHeader
-        border.color: isError ? window.colRed : window.colBorder
-        border.width: 1
-        opacity: shown ? 1 : 0
-        visible: opacity > 0
-
-        Behavior on y { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
-
-        Timer { id: hideTimer; onTriggered: toast.shown = false }
-
-        RowLayout {
-            id: toastRow
-            anchors.centerIn: parent
-            width: Math.min(implicitWidth, toast.parent.width - Design.s(68))
-            spacing: Design.s(10)
-            Text {
-                text: toast.isError ? "󰀦" : "󰄬"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(15)
-                color: toast.isError ? window.colRed : window.colGreen
-                Layout.alignment: Qt.AlignTop
-            }
-            Text {
-                Layout.fillWidth: true
-                Layout.maximumWidth: Design.s(520)
-                text: toast.message
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(Design.font.body)
-                color: window.colFg
-                wrapMode: Text.Wrap
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: toast.shown = false
+            notice.message = msg;
+            notice.isError = err;
+            noticeTimer.interval = err ? 15000 : 4000;
+            noticeTimer.restart();
         }
     }
+    Timer { id: noticeTimer; onTriggered: notice.message = "" }
 }

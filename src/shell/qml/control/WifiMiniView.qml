@@ -68,6 +68,42 @@ MiniView {
             width: netList.width
             spacing: Design.s(Design.space.xs)
 
+            // A join that failed said nothing here: the row just stopped
+            // spinning. Settings words the reason the same way.
+            RowLayout {
+                visible: Network.failedSsid !== ""
+                Layout.fillWidth: true
+                Layout.bottomMargin: Design.s(Design.space.xs)
+                spacing: Design.s(Design.space.sm)
+
+                Icon {
+                    text: "\u{f0028}"
+                    role: "body"
+                    color: Design.danger
+                    Layout.alignment: Qt.AlignTop
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: I18n.tr("Couldn't join %1", Network.failedSsid)
+                        role: "body"
+                        weight: Design.weight.semibold
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: Network.failedReason === "WifiNetworkLost" ? I18n.tr("The network went out of range")
+                            : Network.failedReason === "Unknown" || Network.failedReason === "" ? I18n.tr("Could not connect")
+                            : I18n.tr("Wrong password, or the network refused it")
+                        role: "caption"
+                        dim: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
             SectionLabel {
                 text: I18n.tr("Connected")
                 visible: root.connectedNet !== null

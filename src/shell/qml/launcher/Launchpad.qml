@@ -525,7 +525,7 @@ PopupShell {
                                 color: PinnedApps.isPinned(modelData.name) ? Design.accent : Design.textDim
                             }
 
-                            MouseArea {
+                            Clickable {
                                 id: pinArea
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -564,15 +564,18 @@ PopupShell {
                 }
             }
 
-            EmptyState {
-                anchors.centerIn: parent
-                width: parent.width
-                visible: window.filteredApps.length === 0
+            // Until the scan is in, an empty category only means "not yet".
+            AppState {
+                anchors.fill: parent
+                mode: window.filteredApps.length > 0 ? ""
+                    : !Services.Apps.loaded ? "loading" : "empty"
                 icon: "\u{f002}"
-                title: window.query.trim() ? I18n.tr("Nothing matches “%1”", window.query.trim())
-                                           : I18n.tr("No applications in %1", I18n.tr(window.activeCategory))
-                hint: window.query.trim() ? I18n.tr("Try fewer letters, or clear the category filter.")
-                                          : I18n.tr("Install something, or pick another category above.")
+                title: mode === "loading" ? I18n.tr("Loading apps…")
+                     : window.query.trim() ? I18n.tr("Nothing matches “%1”", window.query.trim())
+                     : I18n.tr("No applications in %1", I18n.tr(window.activeCategory))
+                hint: mode === "loading" ? ""
+                    : window.query.trim() ? I18n.tr("Try fewer letters, or clear the category filter.")
+                    : I18n.tr("Install something, or pick another category above.")
             }
         }
 

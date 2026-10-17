@@ -126,7 +126,7 @@ ColumnLayout {
                     color: Design.accent
                 }
 
-                MouseArea {
+                Clickable {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: avatarFileDialog.open()

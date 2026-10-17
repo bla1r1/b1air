@@ -142,6 +142,10 @@ PopupShell {
         }
     }
 
+    // The files are the slow part; while they are still coming an empty list
+    // is not yet an answer.
+    readonly property bool searchingFiles: fileDelay.running || fileFind.running || findFallback.running
+
     // ── Results ──────────────────────────────────────────────────────────────
 
     readonly property string calcResult: window.hasQuery ? (window.evaluateMath(window.query) || window.convert(window.query)) : ""
@@ -326,11 +330,22 @@ PopupShell {
 
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.glassBorder; visible: window.hasQuery }
 
+            AppState {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                mode: !window.hasQuery || window.results.length > 0 ? ""
+                    : window.searchingFiles ? "loading" : "empty"
+                icon: "\u{f002}"
+                title: mode === "loading" ? I18n.tr("Searching files…")
+                                          : I18n.tr("No results for “%1”", window.query.trim())
+                hint: I18n.tr("Apps, settings, files and sums show up here.")
+            }
+
             // ── Results | preview ────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: window.hasQuery
+                visible: window.hasQuery && window.results.length > 0
                 spacing: 0
 
                 ListView {

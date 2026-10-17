@@ -334,6 +334,9 @@ QtObject {
     readonly property color focusRing: accent
     readonly property color separator: line
     readonly property color selection: tint(accent, 0.22)
+    // Behind a modal: the window dimmed, not blacked out. One value for every
+    // dialog; AppDialog had 0.25 and Git's own 0.45.
+    readonly property color scrim: Qt.rgba(0, 0, 0, 0.25)
     readonly property color stateHover: veil
     readonly property color statePressed: veilStrong
     readonly property color stateSelected: selection
@@ -348,6 +351,23 @@ QtObject {
     readonly property SpaceScale space: SpaceScale {}
     readonly property SizeScale size: SizeScale {}
     readonly property WidthScale width: WidthScale {}
+    // An app window's first size, by how much it shows: compact (one document
+    // or one table: Text, Term, Camera, Monitor), standard (View, Settings),
+    // large (a sidebar, a list and a pane: Files, Git). Each app had its own
+    // pair of numbers, seven sizes for three kinds of window.
+    component WindowScale: QtObject {
+        readonly property int compactWidth: 880
+        readonly property int compactHeight: 580
+        readonly property int standardWidth: 960
+        readonly property int standardHeight: 640
+        readonly property int largeWidth: 1120
+        readonly property int largeHeight: 720
+        readonly property int minWidth: 560
+        readonly property int minHeight: 400
+        readonly property int largeMinWidth: 760
+        readonly property int largeMinHeight: 480
+    }
+    readonly property WindowScale window: WindowScale {}
     readonly property DurationScale duration: DurationScale {}
     readonly property OpacityScale opacity: OpacityScale {}
     readonly property ShadowSpec shadow: ShadowSpec {}

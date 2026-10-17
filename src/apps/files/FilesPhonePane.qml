@@ -124,13 +124,13 @@ Item {
         ColumnLayout {
             visible: !pane.ready
             anchors.centerIn: parent
-            width: Math.min(parent.width - Design.s(48), Design.s(440))
+            width: Math.min(parent.width - Design.s(Design.size.art), Design.s(Design.width.menuMax))
             spacing: Design.s(Design.space.md)
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: pane.state === "locked" ? "\u{f033e}" : pane.state === "connecting" ? "\u{f0450}" : "\u{f0565}"
                 font.family: Design.font.icon
-                font.pixelSize: Design.s(56)
+                font.pixelSize: Design.s(Design.font.hero)
                 color: Design.textFaint
             }
             Label {
@@ -274,11 +274,14 @@ Item {
                 text: pane.iphone ? I18n.tr("Apps on the iPhone that share files. Open one to copy files to it or from it.")
                                   : I18n.tr("The phone's storage, as folders.")
             }
-            Label { visible: pane.iphone && pane.appsLoading; text: I18n.tr("Looking…"); dim: true }
-            Label {
-                visible: pane.iphone && !pane.appsLoading && pane.apps.length === 0
-                text: I18n.tr("No app on this iPhone shares files.")
-                dim: true
+            AppState {
+                Layout.fillWidth: true
+                // A column that sizes to its content has no height to fill;
+                // this keeps the message clear of the paragraph above it.
+                Layout.preferredHeight: Design.s(Design.size.canvas)
+                mode: !pane.iphone ? "" : pane.appsLoading ? "loading" : pane.apps.length === 0 ? "empty" : ""
+                icon: "\u{f003b}"
+                title: pane.appsLoading ? I18n.tr("Looking…") : I18n.tr("No app on this iPhone shares files.")
             }
             Rectangle {
                 Layout.fillWidth: true
@@ -287,7 +290,7 @@ Item {
                 radius: Design.s(Design.radius.card)
                 color: Design.sunken
                 border.color: Design.line
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     id: listColumn
                     width: parent.width
@@ -305,13 +308,13 @@ Item {
                             required property var modelData
                             required property int index
                             Layout.fillWidth: true
-                            implicitHeight: Design.s(44)
+                            implicitHeight: Design.s(Design.size.row)
                             color: appMa.containsMouse ? Design.hover : "transparent"
                             radius: Design.s(Design.radius.card)
                             Rectangle {
                                 visible: appRow.index > 0
                                 anchors.top: parent.top
-                                x: Design.s(52); width: parent.width - x; height: 1
+                                x: Design.s(Design.size.rowTall); width: parent.width - x; height: 1
                                 color: Design.line
                             }
                             RowLayout {
@@ -320,8 +323,8 @@ Item {
                                 anchors.rightMargin: Design.s(Design.space.md)
                                 spacing: Design.s(Design.space.md)
                                 Rectangle {
-                                    Layout.preferredWidth: Design.s(28); Layout.preferredHeight: Design.s(28)
-                                    radius: Design.s(7)
+                                    Layout.preferredWidth: Design.s(Design.size.sm); Layout.preferredHeight: Design.s(Design.size.sm)
+                                    radius: Design.s(Design.radius.ctl)
                                     color: Design.well
                                     Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.textDim }
                                 }
@@ -329,7 +332,7 @@ Item {
                                 Label { visible: !!appRow.modelData.version; text: appRow.modelData.version || ""; dim: true; role: "caption" }
                                 Icon { text: "\u{f0142}"; color: Design.textFaint }
                             }
-                            MouseArea {
+                            Clickable {
                                 id: appMa
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -356,7 +359,7 @@ Item {
             id: column
             x: Math.max(Design.s(Design.space.xl), (page.width - width) / 2)
             y: Design.s(Design.space.xl)
-            width: Math.min(page.width - Design.s(Design.space.xl) * 2, Design.s(720))
+            width: Math.min(page.width - Design.s(Design.space.xl) * 2, Design.s(Design.width.menuMax))
             spacing: Design.s(Design.space.xl)
         }
     }

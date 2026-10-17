@@ -1014,9 +1014,12 @@ PopupShell {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.size.header)
 
+                    // Dimmed like the transport beside it: with no player
+                    // this is a note about the card, not a track.
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: Design.s(Design.space.xxs)
+                        opacity: Media.hasPlayer ? Design.opacity.full : Design.opacity.disabled
 
                         Label {
                             text: Media.track.title || (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"))
@@ -1035,7 +1038,7 @@ PopupShell {
                         }
                     }
 
-                    MouseArea {
+                    Clickable {
                         anchors.fill: parent
                         enabled: Media.hasPlayer
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor

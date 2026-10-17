@@ -39,6 +39,11 @@ ApplicationWindow {
     readonly property bool showsVideo: window.kind === "video"
         && !(player.mediaStatus >= MediaPlayer.LoadedMedia && player.mediaStatus !== MediaPlayer.InvalidMedia
              && !player.hasVideo)
+    // The file could not be read as what its name says it is. Without this
+    // the canvas stayed black, as if the picture were simply dark.
+    readonly property bool openFailed: window.isMedia
+        ? player.mediaStatus === MediaPlayer.InvalidMedia || player.error !== MediaPlayer.NoError
+        : ViewBackend.animated ? animImage.status === Image.Error : mainImage.status === Image.Error
     property real volume: 0.8
     property bool muted: false
     function togglePlay() {
@@ -70,29 +75,14 @@ ApplicationWindow {
     // screen.
     readonly property int siblingCount: ViewBackend.filesInDir ? ViewBackend.filesInDir.length : 0
     readonly property bool hasSiblings: window.siblingCount > 1
-    width: Design.s(960)
-    height: Design.s(640)
-    minimumWidth: 500
-    minimumHeight: 400
+    width: Design.s(Design.window.standardWidth)
+    height: Design.s(Design.window.standardHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
     flags: Qt.Window
 
-    // A second, hand-rolled Tokyo Night palette used to live here alongside the
-    // Catppuccin one in Ui/Design.qml, so this window never followed the theme.
-    // The names stay — they are used throughout the file — but each now resolves
-    // to a design-system role, exactly as FilesWindow.qml was already migrated.
-    readonly property color colBg: Design.surface
-    readonly property color colDark: Design.ground
-    readonly property color colSidebar: Design.sunken
-    readonly property color colSunken: Design.sunken
-    readonly property color colBorder: Design.glassBorder
-    readonly property color colBorderSubtle: Design.line
-    readonly property color colBlue: Design.accent
-    readonly property color colGreen: Design.ok
-    readonly property color colOrange: Design.warn
-    readonly property color colFg: Design.text
-    readonly property color colDim: Design.textDim
 
     // The box a picture is fitted into at 100%: the canvas, or the picture's
     // own size when that is smaller — a small picture is not blown up.
@@ -116,7 +106,7 @@ ApplicationWindow {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: window.colBg
+        color: Design.surface
         clip: true
 
         // Keyboard Shortcuts
@@ -178,52 +168,46 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 z: 10
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label {
-                        Layout.fillWidth: true
-                        text: ViewBackend.fileName || I18n.tr("No image open")
-                        weight: Design.weight.semibold
-                        elide: Text.ElideMiddle
-                    }
-                    Label {
-                        visible: window.hasImage
-                        text: [window.kind === "video" && video.sourceRect.width > 0
+                AppTitle {
+                    title: ViewBackend.fileName || I18n.tr("No image open")
+                    subtitle: !window.hasImage ? "" : [window.kind === "video" && video.sourceRect.width > 0
                                    ? video.sourceRect.width + " × " + video.sourceRect.height : ViewBackend.imageResolution,
                                ViewBackend.fileSize,
                                ViewBackend.totalFiles > 1 ? I18n.tr("%1 of %2", ViewBackend.fileIndex + 1, ViewBackend.totalFiles) : ""]
                               .filter(x => x).join("  ·  ")
-                        role: "caption"
-                        color: Design.textFaint
-                    }
                 }
                 RowLayout {
                     spacing: Design.s(Design.space.xxs)
                     visible: !window.isMedia
-                    CtrlBtn { icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
                     Label {
-                        Layout.preferredWidth: Design.s(46)
+                        Layout.preferredWidth: Design.s(Design.size.art)
                         horizontalAlignment: Text.AlignHCenter
                         text: Math.round(window.zoomFactor * 100) + "%"
-                        isMono: true
+                        tabular: true
                         role: "caption"
                         dim: true
                     }
-                    CtrlBtn { icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
                 }
-                RowLayout {
-                    spacing: Design.s(Design.space.xxs)
+                Button { variant: "ghost"; iconOnly: true; visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); checked: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0293}"; tip: I18n.tr("Full screen (F)"); checked: window.visibility === Window.FullScreen; onClicked: window.toggleFullScreen() }
+                // Reset, rotate and wallpaper: what is used now and then, in
+                // the menu. The toolbar keeps what is used all the time.
+                Button {
+                    id: moreBtn
+                    variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
                     visible: !window.isMedia
-                    CtrlBtn { icon: "\u{f0450}"; tip: I18n.tr("Reset view (0)"); onClicked: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
-                    CtrlBtn { icon: "\u{f0467}"; tip: I18n.tr("Rotate 90° (R)"); onClicked: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                    tip: I18n.tr("More")
+                    onClicked: moreMenu.popup(moreBtn, 0, moreBtn.height)
                 }
-                RowLayout {
-                    spacing: Design.s(Design.space.xxs)
-                    CtrlBtn { visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); active: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
-                    CtrlBtn { icon: "\u{f0293}"; tip: I18n.tr("Full screen (F)"); active: window.visibility === Window.FullScreen; onClicked: window.toggleFullScreen() }
+                AppMenu {
+                    id: moreMenu
+                    AppMenuItem { text: I18n.tr("Reset view"); keys: "0"; glyph: "\u{f0450}"; onTriggered: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
+                    AppMenuItem { text: I18n.tr("Rotate 90°"); keys: "R"; glyph: "\u{f0467}"; onTriggered: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                    AppMenuSeparator {}
+                    AppMenuItem { text: I18n.tr("Set as wallpaper"); glyph: "\u{f0e09}"; onTriggered: ViewBackend.setWallpaper() }
                 }
-                Button { variant: "secondary"; visible: !window.isMedia; icon: "\u{f0e09}"; label: I18n.tr("Set as wallpaper"); onClicked: ViewBackend.setWallpaper() }
             }
 
             // ── Main Image Canvas ────────────────────────────────────────────
@@ -281,6 +265,7 @@ ApplicationWindow {
                         // A GIF or an animated WebP, played; Image showed the
                         // first frame and stopped there.
                         AnimatedImage {
+                            id: animImage
                             anchors.centerIn: parent
                             width: window.fitSize.width
                             height: window.fitSize.height
@@ -331,7 +316,7 @@ ApplicationWindow {
 
                 Rectangle {
                     anchors.fill: parent
-                    visible: window.showsVideo
+                    visible: window.showsVideo && !window.openFailed
                     color: "black"
                     VideoOutput {
                         id: video
@@ -350,12 +335,12 @@ ApplicationWindow {
                 // A song: its cover, and what the tags call it.
                 ColumnLayout {
                     anchors.centerIn: parent
-                    width: Math.min(parent.width - Design.s(48), Design.s(420))
-                    visible: window.isMedia && !window.showsVideo
+                    width: Math.min(parent.width - Design.s(Design.size.art), Design.s(Design.width.menuMax))
+                    visible: window.isMedia && !window.showsVideo && !window.openFailed
                     spacing: Design.s(Design.space.md)
                     Rectangle {
                         Layout.alignment: Qt.AlignHCenter
-                        readonly property real side: Math.min(Design.s(300), parent.width, controlsArea.height - Design.s(150))
+                        readonly property real side: Math.min(Design.s(Design.width.select), parent.width, controlsArea.height - Design.s(Design.width.label))
                         Layout.preferredWidth: side
                         Layout.preferredHeight: side
                         radius: Design.s(Design.radius.card)
@@ -405,32 +390,39 @@ ApplicationWindow {
                     hint: I18n.tr("Open a picture, a film or a song from Files, or pass a path: b1air-view file")
                 }
 
+                AppState {
+                    anchors.fill: parent
+                    mode: window.hasImage && window.openFailed ? "error" : ""
+                    title: I18n.tr("Can't open this file")
+                    hint: I18n.tr("It may be damaged or in a format that isn't supported.")
+                }
+
                 // Left Arrow Overlay (Prev)
                 Rectangle {
                     anchors.left: parent.left
-                    anchors.leftMargin: Design.s(16)
+                    anchors.leftMargin: Design.s(Design.space.lg)
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Design.s(36); height: Design.s(36); radius: Design.s(18)
+                    width: Design.s(Design.size.knob); height: Design.s(Design.size.knob); radius: height / 2
                     color: prevArrArea.containsMouse ? Design.tint(Design.ground, 0.85) : Design.tint(Design.ground, 0.45)
-                    border.color: window.colBorder
+                    border.color: Design.glassBorder
                     border.width: 1
                     visible: window.hasImage && window.hasSiblings
-                    Text { anchors.centerIn: parent; text: "󰁍"; font.family: Design.font.mono; font.pixelSize: Design.s(14); color: window.colFg }
-                    MouseArea { id: prevArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.previous() }
+                    Text { anchors.centerIn: parent; text: "󰁍"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.glyphSm); color: Design.text }
+                    Clickable { id: prevArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.previous() }
                 }
 
                 // Right Arrow Overlay (Next)
                 Rectangle {
                     anchors.right: parent.right
-                    anchors.rightMargin: Design.s(16)
+                    anchors.rightMargin: Design.s(Design.space.lg)
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Design.s(36); height: Design.s(36); radius: Design.s(18)
+                    width: Design.s(Design.size.knob); height: Design.s(Design.size.knob); radius: height / 2
                     visible: window.hasImage && window.hasSiblings
                     color: nextArrArea.containsMouse ? Design.tint(Design.ground, 0.85) : Design.tint(Design.ground, 0.45)
-                    border.color: window.colBorder
+                    border.color: Design.glassBorder
                     border.width: 1
-                    Text { anchors.centerIn: parent; text: "󰁔"; font.family: Design.font.mono; font.pixelSize: Design.s(14); color: window.colFg }
-                    MouseArea { id: nextArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.next() }
+                    Text { anchors.centerIn: parent; text: "󰁔"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.glyphSm); color: Design.text }
+                    Clickable { id: nextArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.next() }
                 }
             }
 
@@ -438,8 +430,8 @@ ApplicationWindow {
             Rectangle {
                 id: controls
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(52)
-                color: window.colSidebar
+                Layout.preferredHeight: Design.s(Design.size.rowTall)
+                color: Design.sunken
                 // In a full-screen film it steps aside until the mouse moves.
                 property bool awake: true
                 function wake() { awake = true; sleepTimer.restart(); }
@@ -450,7 +442,7 @@ ApplicationWindow {
                                      && player.playbackState === MediaPlayer.PlayingState) controls.awake = false
                 }
                 visible: window.isMedia && (controls.awake || window.visibility !== Window.FullScreen || !window.showsVideo)
-                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: window.colBorder }
+                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.glassBorder }
 
                 RowLayout {
                     anchors.fill: parent
@@ -460,13 +452,13 @@ ApplicationWindow {
 
                     RowLayout {
                         spacing: Design.s(Design.space.xxs)
-                        CtrlBtn { icon: "\u{f04ae}"; tip: I18n.tr("Previous (Page Up)"); enabled: ViewBackend.hasPrevious; onClicked: ViewBackend.previous() }
-                        CtrlBtn {
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f04ae}"; tip: I18n.tr("Previous (Page Up)"); enabled: ViewBackend.hasPrevious; onClicked: ViewBackend.previous() }
+                        Button { variant: "ghost"; iconOnly: true;
                             icon: player.playbackState === MediaPlayer.PlayingState ? "\u{f03e4}" : "\u{f040a}"
                             tip: player.playbackState === MediaPlayer.PlayingState ? I18n.tr("Pause (Space)") : I18n.tr("Play (Space)")
                             onClicked: window.togglePlay()
                         }
-                        CtrlBtn { icon: "\u{f04ad}"; tip: I18n.tr("Next (Page Down)"); enabled: ViewBackend.hasNext; onClicked: ViewBackend.next() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f04ad}"; tip: I18n.tr("Next (Page Down)"); enabled: ViewBackend.hasNext; onClicked: ViewBackend.next() }
                     }
 
                     Label {
@@ -480,7 +472,7 @@ ApplicationWindow {
                     Item {
                         id: seek
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(24)
+                        Layout.preferredHeight: Design.s(Design.size.xs)
                         property bool dragging: false
                         property real dragPosition: 0
                         readonly property real ratio: player.duration > 0
@@ -489,7 +481,7 @@ ApplicationWindow {
                             id: groove
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width
-                            height: seekArea.containsMouse || seek.dragging ? Design.s(6) : Design.s(4)
+                            height: seekArea.containsMouse || seek.dragging ? Design.s(Design.space.xs) : Design.s(Design.space.xs)
                             radius: height / 2
                             color: Design.tint(Design.text, 0.14)
                             Rectangle {
@@ -503,7 +495,7 @@ ApplicationWindow {
                             visible: seekArea.containsMouse || seek.dragging
                             x: Math.round(seek.width * seek.ratio - width / 2)
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Design.s(12); height: width; radius: width / 2
+                            width: Design.s(Design.space.md); height: width; radius: width / 2
                             color: Design.text
                         }
                         MouseArea {
@@ -528,7 +520,7 @@ ApplicationWindow {
 
                     // A film with more than one language, or with subtitles:
                     // which to hear and which to read. Shown only then.
-                    CtrlBtn {
+                    Button { variant: "ghost"; iconOnly: true;
                         id: tracksBtn
                         visible: player.audioTracks.length > 1 || player.subtitleTracks.length > 0
                         icon: "\u{f05ca}"
@@ -537,8 +529,8 @@ ApplicationWindow {
                     }
 
                     Slider {
-                        Layout.preferredWidth: Design.s(130)
-                        Layout.preferredHeight: Design.s(30)
+                        Layout.preferredWidth: Design.s(Design.size.thumb)
+                        Layout.preferredHeight: Design.s(Design.size.sm)
                         value: Math.round(window.volume * 100)
                         muted: window.muted
                         icon: window.muted || window.volume === 0 ? "\u{f0581}" : "\u{f057e}"
@@ -553,8 +545,8 @@ ApplicationWindow {
             // ── Bottom Filmstrip Thumbnail Strip (Optional, 70px) ─────────────
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(70)
-                color: window.colSidebar
+                Layout.preferredHeight: Design.s(Design.size.stat)
+                color: Design.sunken
                 visible: window.showFilmstrip && window.hasSiblings
 
                 // One rule where the strip meets the picture, not a box: a full
@@ -565,29 +557,29 @@ ApplicationWindow {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     height: 1
-                    color: window.colBorder
+                    color: Design.glassBorder
                 }
 
                 ListView {
                     id: filmstripList
                     anchors.fill: parent
-                    anchors.margins: Design.s(6)
+                    anchors.margins: Design.s(Design.space.xs)
                     orientation: ListView.Horizontal
-                    spacing: Design.s(6)
+                    spacing: Design.s(Design.space.xs)
                     clip: true
                     model: ViewBackend.filesInDir
                     // Delegates kept and refilled while scrolling a long
                     // folder, and the open file kept in sight.
                     reuseItems: true
-                    cacheBuffer: Design.s(64) * 6
+                    cacheBuffer: Design.s(Design.size.tile) * 6
                     currentIndex: ViewBackend.fileIndex
                     highlightFollowsCurrentItem: false
                     onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
 
                     delegate: Rectangle {
-                        width: Design.s(58); height: Design.s(58); radius: Design.s(6)
+                        width: Design.s(Design.size.tile); height: Design.s(Design.size.tile); radius: Design.s(Design.radius.sm)
                         color: isCur ? Design.tint(Design.accent, 0.25) : (thumbArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
-                        border.color: isCur ? window.colBlue : "transparent"
+                        border.color: isCur ? Design.accent : "transparent"
                         border.width: 1
 
                         readonly property bool isCur: modelData.path === ViewBackend.currentPath
@@ -600,11 +592,11 @@ ApplicationWindow {
                         Image {
                             id: stripThumb
                             anchors.fill: parent
-                            anchors.margins: Design.s(3)
+                            anchors.margins: Design.s(Design.space.xxs)
                             source: "image://thumb/" + encodeURIComponent(modelData.path)
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
-                            sourceSize: Qt.size(Design.s(64), Design.s(64))
+                            sourceSize: Qt.size(Design.s(Design.size.tile), Design.s(Design.size.tile))
                         }
                         Icon {
                             anchors.centerIn: parent
@@ -615,7 +607,7 @@ ApplicationWindow {
                             styleColor: stripThumb.status === Image.Ready ? Qt.alpha("black", 0.5) : "transparent"
                         }
 
-                        MouseArea {
+                        Clickable {
                             id: thumbArea
                             anchors.fill: parent
                             hoverEnabled: true
@@ -681,10 +673,4 @@ ApplicationWindow {
     }
 
     // The suite's toolbar button; `tip` was declared here and never shown.
-    component CtrlBtn: Button {
-        variant: "ghost"
-        iconOnly: true
-        property bool active: false
-        checked: active
-    }
 }

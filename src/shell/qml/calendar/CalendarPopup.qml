@@ -708,7 +708,13 @@ PopupShell {
                                     }
                                 }
                                 Label {
-                                    text: window.todayForecast ? I18n.tr(window.todayForecast.desc) : I18n.tr("Fetching weather...")
+                                    // Fetching only while a fetch can still
+                                    // answer: a failed one, or a day past the
+                                    // forecast's end, never would.
+                                    text: window.todayForecast ? I18n.tr(window.todayForecast.desc)
+                                          : window.weatherData ? I18n.tr("No forecast for this day")
+                                          : Weather.failed ? I18n.tr("Weather unavailable")
+                                          : I18n.tr("Fetching weather…")
                                     role: "caption"
                                     weight: Design.weight.semibold
                                     color: Design.text
@@ -901,6 +907,13 @@ PopupShell {
                                 }
                             }
                         }
+                    }
+
+                    EmptyState {
+                        visible: !window.weatherData
+                        icon: Weather.failed ? "\u{f0028}" : "\u{f0590}"
+                        title: Weather.failed ? I18n.tr("Weather unavailable") : I18n.tr("No forecast yet")
+                        hint: Weather.failed ? I18n.tr("Couldn't reach the weather service.") : ""
                     }
                 }
                 }

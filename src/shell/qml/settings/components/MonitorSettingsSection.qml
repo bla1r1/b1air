@@ -844,7 +844,8 @@ ColumnLayout {
 
             Clickable {
                 id: sliderMa
-                anchors.margins: Design.s(-15)
+                keyboard: false
+                anchors.margins: -Design.s(Design.space.lg)
                 enabled: section.activeMonitor !== null
 
                 function updateSelection(mouseX, snapToGrid) {

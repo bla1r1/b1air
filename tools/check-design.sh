@@ -3,7 +3,8 @@
 # Design system conformance and metric tracker for b1air.
 #
 # Measures:
-#   - Design.s(<number>) literal usages (0 in the shell, src/shell/qml; the apps still have theirs)
+#   - Design.s(<number>) literal usages (0 in the shell and the apps)
+#   - Gradients and hex colours in the apps (0)
 #   - Hex color literals outside palette files
 #   - Gradient usages
 #   - Font weight bold usages (should be restricted to display hero numbers)
@@ -22,6 +23,7 @@ apps_dir = os.path.join(repo, "src/apps")
 ui_dir = os.path.join(repo, "src/shell/qml/Ui")
 settings_dir = os.path.join(repo, "src/shell/qml/settings")
 shell_dir_only = os.path.join(repo, "src/shell/qml")
+apps_only = os.path.join(repo, "src/apps")
 
 qml_files = glob.glob(os.path.join(shell_dir, "**/*.qml"), recursive=True) + \
             glob.glob(os.path.join(apps_dir, "**/*.qml"), recursive=True)
@@ -30,6 +32,9 @@ s_lit_total = 0
 s_lit_ui = 0
 s_lit_settings = 0
 s_lit_shell = 0
+s_lit_apps = 0
+apps_hex = []
+apps_grad = 0
 hex_colors = []
 gradients = 0
 bolds = 0
@@ -52,7 +57,9 @@ for path in qml_files:
     clean_text = re.sub(r"//.*$", "", clean_text, flags=re.M)
 
     # 1. Design.s(<number>)
-    s_matches = re.findall(r"\bDesign\.s\(\s*\d+\s*\)", clean_text)
+    # A number as the whole argument, or leading an expression
+    # ("Design.s(30 + 30 * n)"): both are sizes that bypass the scales.
+    s_matches = re.findall(r"\bDesign\.s\(\s*-?\s*\d", clean_text)
     if s_matches:
         count = len(s_matches)
         s_lit_total += count
@@ -62,6 +69,8 @@ for path in qml_files:
             s_lit_settings += count
         if path.startswith(shell_dir_only):
             s_lit_shell += count
+        if path.startswith(apps_only):
+            s_lit_apps += count
 
     # 2. Hex colors outside whitelist
     if fname not in HEX_WHITELIST:
@@ -73,6 +82,9 @@ for path in qml_files:
     # 3. Gradients
     grad_matches = re.findall(r"\bGradient\s*\{", clean_text)
     gradients += len(grad_matches)
+    if path.startswith(apps_only):
+        apps_grad += len(grad_matches)
+        apps_hex += [(rel, h) for h in re.findall(r"#[0-9a-fA-F]{3,8}\b", clean_text)]
 
     # 4. Bold font weights
     bold_matches = re.findall(r"weight:\s*Design\.weight\.bold\b", clean_text)
@@ -83,6 +95,7 @@ print(f"Design.s(<literal>) total:   {s_lit_total}")
 print(f"Design.s(<literal>) in Ui/:  {s_lit_ui}")
 print(f"... in settings/:            {s_lit_settings}")
 print(f"... in the shell (all):       {s_lit_shell}")
+print(f"... in the apps:              {s_lit_apps}")
 print(f"Hex colors outside themes:   {len(hex_colors)}")
 print(f"Gradient declarations:       {gradients}")
 print(f"Design.weight.bold usages:   {bolds}")
@@ -99,6 +112,12 @@ if s_lit_ui > 0:
     failures.append(f"{s_lit_ui} Design.s(<literal>) in Ui/: use the scales in Design.qml")
 if s_lit_shell > 0:
     failures.append(f"{s_lit_shell} Design.s(<literal>) in src/shell/qml: use the scales in Design.qml")
+if s_lit_apps > 0:
+    failures.append(f"{s_lit_apps} Design.s(<literal>) in src/apps: use the scales in Design.qml")
+if apps_grad > 0:
+    failures.append(f"{apps_grad} Gradient in src/apps: flat fills, as everywhere")
+for rel, h in apps_hex:
+    failures.append(f"{rel}: colour {h}: use a Design role")
 for path in qml_files:
     rel = os.path.relpath(path, repo)
     text = re.sub(r"//.*$", "", open(path, encoding="utf-8").read(), flags=re.M)

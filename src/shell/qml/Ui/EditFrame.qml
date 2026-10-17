@@ -130,7 +130,7 @@ Item {
                     weight: Design.weight.semibold
                     color: Design.accent
                 }
-                MouseArea {
+                Clickable {
                     id: sizeMa
                     anchors.fill: parent
                     hoverEnabled: true
@@ -150,7 +150,7 @@ Item {
                     role: "caption"
                     color: Design.accentText
                 }
-                MouseArea {
+                Clickable {
                     id: removeMa
                     anchors.fill: parent
                     hoverEnabled: true

@@ -129,7 +129,7 @@ PopupShell {
                         }
                     }
 
-                    MouseArea {
+                    Clickable {
                         id: tileHover
                         anchors.fill: parent
                         hoverEnabled: true

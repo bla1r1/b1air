@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as C
 
 // =============================================================================
 // SegmentedControl component for 2-5 mutually exclusive choices.
@@ -11,7 +12,9 @@ import QtQuick.Layouts
 Rectangle {
     id: root
 
-    // Model can be array of strings ["One", "Two"] or objects [{ id: "one", label: "One", icon?: "..." }]
+    // Model can be array of strings ["One", "Two"] or objects
+    // [{ id: "one", label: "One", icon?: "...", tip?: "..." }]. An item with an
+    // icon and no label is a square icon segment; its tip names it on hover.
     property var model: []
     property int currentIndex: 0
     property string current: "" // id or string value
@@ -32,6 +35,22 @@ Rectangle {
         if (!root.model || idx < 0 || idx >= root.model.length) return "";
         const it = root.model[idx];
         return (typeof it === "object" && it !== null && it.label !== undefined) ? it.label : String(it);
+    }
+
+    function _itemTip(idx) {
+        if (!root.model || idx < 0 || idx >= root.model.length) return "";
+        const it = root.model[idx];
+        return (typeof it === "object" && it !== null && it.tip !== undefined) ? it.tip : "";
+    }
+
+    // Icons only: every item has an icon and no label.
+    readonly property bool iconsOnly: {
+        if (!root.model || root.count === 0) return false;
+        for (let i = 0; i < root.count; ++i) {
+            const it = root.model[i];
+            if (typeof it !== "object" || it === null || !it.icon || (it.label !== undefined && it.label !== "")) return false;
+        }
+        return true;
     }
 
     function _itemIcon(idx) {
@@ -76,7 +95,9 @@ Rectangle {
     Layout.preferredHeight: _targetHeight
 
     // Minimum width based on count and padding
-    implicitWidth: Math.max(Design.s(Design.width.segment), count * Design.s(size === "sm" ? Design.width.segmentSm : Design.width.segmentMd))
+    implicitWidth: iconsOnly
+        ? count * _targetHeight + Design.s(Design.space.xxs) * 2
+        : Math.max(Design.s(Design.width.segment), count * Design.s(size === "sm" ? Design.width.segmentSm : Design.width.segmentMd))
     Layout.preferredWidth: implicitWidth
 
     radius: Design.s(Design.radius.ctl)
@@ -138,6 +159,7 @@ Rectangle {
                     }
 
                     Label {
+                        visible: text !== ""
                         text: root._itemLabel(index)
                         role: root.size === "sm" ? "footnote" : "body"
                         weight: segItem.isSelected ? Design.weight.semibold : Design.weight.regular
@@ -149,6 +171,10 @@ Rectangle {
                         maximumLineCount: 1
                     }
                 }
+
+                C.ToolTip.visible: segMa.containsMouse && root._itemTip(index) !== ""
+                C.ToolTip.text: root._itemTip(index)
+                C.ToolTip.delay: 600
 
                 MouseArea {
                     id: segMa

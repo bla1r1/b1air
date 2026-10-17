@@ -56,8 +56,9 @@ PanelWindow {
         anchors.fill: parent
         color: Qt.alpha(Design.ground, 0.70)
 
-        MouseArea {
+        Clickable {
             anchors.fill: parent
+            keyboard: false
             onClicked: polkitWin.cancelAuth()
         }
     }

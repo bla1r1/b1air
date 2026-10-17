@@ -27,7 +27,7 @@ Item {
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: root.large
-            Layout.preferredHeight: root.large ? -1 : Math.min(width, Design.s(220))
+            Layout.preferredHeight: root.large ? -1 : Math.min(width, Design.s(Design.width.control))
             Image {
                 id: pic
                 anchors.fill: parent
