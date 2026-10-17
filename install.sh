@@ -260,6 +260,7 @@ install_packages() {
     done < <(edition_lists "$REPO_DIR" "$DISTRO" "$EDITION")
     # For update-dotfiles.sh, which keeps this edition's packages installed.
     record_edition "$EDITION" "$DRY_RUN" || warn "Could not record the edition in $B1AIR_EDITION_FILE."
+    edition_kernel_settings
 }
 
 
@@ -819,6 +820,39 @@ deploy_session_files() {
         done
         sudo udevadm control --reload-rules 2>/dev/null || true
     fi
+
+    # 5. Kernel settings for Windows programs and games: more memory maps
+    # (sysctl.d) and ntsync, loaded at boot (modules-load.d) and now.
+    local conf
+    for conf in "$REPO_DIR"/etc/sysctl.d/*.conf "$REPO_DIR"/etc/modules-load.d/*.conf; do
+        [[ -f "$conf" ]] || continue
+        local dir; dir="/etc/$(basename "$(dirname "$conf")")"
+        sudo install -D -m 644 "$conf" "$dir/$(basename "$conf")"
+        ok "Installed $dir/$(basename "$conf")"
+    done
+    sudo sysctl -q --system >/dev/null 2>&1 || true
+    sudo modprobe ntsync 2>/dev/null || true
+}
+
+# What an edition asks of the kernel (etc/sysctl.d/editions/<name>.conf): the
+# gaming edition's, for one, turns off the split-lock slowdown. Each edition of
+# the chain has its file in /etc/sysctl.d; an edition no longer chosen loses it.
+edition_kernel_settings() {
+    local chain e f
+    chain="$(edition_chain "$REPO_DIR" "$EDITION" 2>/dev/null)" || return 0
+    for f in /etc/sysctl.d/81-b1air-edition-*.conf; do
+        [[ -e "$f" ]] || continue
+        e="${f#/etc/sysctl.d/81-b1air-edition-}"; e="${e%.conf}"
+        grep -Fxq "$e" <<<"$chain" && continue
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would remove $f"; else sudo rm -f "$f"; fi
+    done
+    while IFS= read -r e; do
+        f="$REPO_DIR/etc/sysctl.d/editions/$e.conf"
+        [[ -f "$f" ]] || continue
+        if [[ "$DRY_RUN" -eq 1 ]]; then log "Would install /etc/sysctl.d/81-b1air-edition-$e.conf"; continue; fi
+        sudo install -D -m 644 "$f" "/etc/sysctl.d/81-b1air-edition-$e.conf"
+    done <<<"$chain"
+    [[ "$DRY_RUN" -eq 1 ]] || sudo sysctl -q --system >/dev/null 2>&1 || true
 }
 
 # The phone as a security key: the root helper that makes its FIDO device

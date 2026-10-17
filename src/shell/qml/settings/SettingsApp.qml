@@ -429,6 +429,17 @@ Item {
 
                 Loader {
                     Layout.fillWidth: true
+                    active: app.page === "winapps"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WinAppsSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
                     active: app.page === "gamemode"
                     visible: active
                     sourceComponent: Component {

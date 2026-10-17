@@ -28,6 +28,7 @@ QtObject {
         { id: "startup",     icon: "\u{f0459}", label: I18n.tr("Startup Apps"), desc: I18n.tr("Apps that start when you log in"),   tags: "startup autostart boot launch apps systemd login" },
         { id: "notifications", icon: "\u{f009a}", label: I18n.tr("Notifications"), desc: I18n.tr("Which apps may show banners and sounds, and quiet hours"), tags: "notifications banners popups sounds apps filters dnd do not disturb quiet hours night silence" },
         { id: "capture",     icon: "\u{f016d}", label: I18n.tr("Screenshots"), desc: I18n.tr("Where screenshots and recordings go, and how they are taken"),     tags: "screenshot capture grim slurp record screen area video gif" },
+        { id: "winapps",     icon: "\u{f05b3}", label: I18n.tr("Windows Programs"), desc: I18n.tr("Programs from Windows, run with Proton: their settings, components and removing them"), tags: "windows wine proton exe msi umu ge-proton dxvk vkd3d bottles games directx winetricks components prefix" },
         { id: "gamemode",    icon: "\u{f11b}",  label: I18n.tr("Game Mode"), desc: I18n.tr("One switch for less latency and fewer effects while playing"),      tags: "game mode performance vr fstrim process priority latency boost" },
         { isHeader: true, label: I18n.tr("TIME & FOCUS") },
         { id: "focus",       icon: "\u{f051e}", label: I18n.tr("Screen Time & Focus"), desc: I18n.tr("Screen time today, focus and break intervals, reminders"),     tags: "screen time timer focus pomodoro analytics breaks reminders eye care dnd" },

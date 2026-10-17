@@ -315,24 +315,62 @@ void boxed(cairo_t* cr, const std::string& s, const Rect& r) {
 
 bool hovered(const Rect& r) { return r.contains(g.px, g.py); }
 
-// A round button: an icon, and a word after it if there is one.
+// The shell's panel, as the Air style draws one where nothing blurs behind
+// it: the theme's ground nearly opaque, a hairline of the text colour round
+// it, and a soft shadow under it.
+void panel(cairo_t* cr, const Rect& r, double radius) {
+    for (int i = 4; i >= 1; --i) {
+        rounded(cr, {r.x - i, r.y - i + 3, r.w + 2 * i, r.h + 2 * i}, radius + i);
+        cairo_set_source_rgba(cr, 0, 0, 0, 0.05);
+        cairo_fill(cr);
+    }
+    rounded(cr, r, radius);
+    set(cr, g.pal.ground, 0.92);
+    cairo_fill_preserve(cr);
+    set(cr, g.pal.text, 0.10);
+    cairo_set_line_width(cr, 1);
+    cairo_stroke(cr);
+}
+
+// What is readable on a filled button of colour c.
+const Colour& ink_on(const Colour& c) {
+    static const Colour white{1, 1, 1};
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b > 0.62 ? g.pal.ground : white;
+}
+
+enum class Kind { Plain, Close, Primary, Danger };
+
+// A round button: an icon, and a word after it if there is one. The main
+// action of the bar is filled (Capture with the accent, Record red), the
+// rest are an icon until hovered.
 double button_width(cairo_t* cr, const std::string& label) {
     if (label.empty()) return 36;
     font(cr, 13, true);
-    return 36 + 6 + text_width(cr, label);
+    return 16 + 18 + 6 + text_width(cr, label) + 16;
 }
 
-void button(cairo_t* cr, double x, double y, const std::string& icon, const std::string& label, bool danger, Button b,
+void button(cairo_t* cr, double x, double y, const std::string& icon, const std::string& label, Kind kind, Button b,
             int index = 0) {
+    const auto& p = g.pal;
     const Rect r{x, y, button_width(cr, label), 36};
-    if (hovered(r)) {
-        rounded(cr, r, 18);
-        if (danger) set(cr, g.pal.error, 0.2);
-        else set(cr, g.pal.high);
+    const bool over = hovered(r);
+    const Colour* ink = &p.text;
+    rounded(cr, r, 18);
+    if (kind == Kind::Primary || kind == Kind::Danger) {
+        const Colour& fill = kind == Kind::Primary ? p.primary : p.error;
+        set(cr, fill, over ? 0.86 : 1.0);
         cairo_fill(cr);
+        ink = &ink_on(fill);
+    } else if (over) {
+        if (kind == Kind::Close) set(cr, p.error, 0.18);
+        else set(cr, p.text, 0.10);
+        cairo_fill(cr);
+        if (kind == Kind::Close) ink = &p.error;
+    } else {
+        cairo_new_path(cr);
+        if (kind == Kind::Close) ink = &p.dim;
     }
-    const Colour& ink = danger ? g.pal.error : g.pal.text;
-    set(cr, ink);
+    set(cr, *ink);
     font(cr, 18, false, true);
     if (label.empty()) {
         boxed(cr, icon, r);
@@ -350,42 +388,49 @@ void button(cairo_t* cr, double x, double y, const std::string& icon, const std:
 }
 
 void separator(cairo_t* cr, double x, double y) {
-    set(cr, g.pal.mid);
-    cairo_rectangle(cr, x, y + 10, 2, 32);
+    set(cr, g.pal.text, 0.12);
+    cairo_rectangle(cr, x, y + 14, 1, 20);
     cairo_fill(cr);
 }
 
 // Mute icon, a level slider, and for the microphone the list arrow.
-double audio_width(bool dropdown) { return 30 + 4 + 60 + (dropdown ? 4 + 20 : 0); }
+double audio_width(bool dropdown) { return 32 + 4 + 64 + (dropdown ? 4 + 22 : 0); }
 
 void audio(cairo_t* cr, double x, double y, const char* on, const char* off, double value, bool muted, Button mute,
            Button slider, bool dropdown, bool up) {
-    const Rect icon{x, y + 11, 30, 30};
+    const auto& p = g.pal;
+    const Rect icon{x, y + 8, 32, 32};
     if (hovered(icon)) {
-        cairo_arc(cr, icon.x + 15, icon.y + 15, 15, 0, 2 * M_PI);
-        set(cr, g.pal.high);
+        cairo_arc(cr, icon.x + 16, icon.y + 16, 16, 0, 2 * M_PI);
+        set(cr, p.text, 0.10);
         cairo_fill(cr);
     }
-    set(cr, muted ? g.pal.error : g.pal.text);
+    set(cr, muted ? p.error : p.text);
     font(cr, 16, false, true);
     boxed(cr, muted ? off : on, icon);
     g.hits.push_back({icon, mute});
 
-    const Rect track{x + 34, y + 24, 60, 4};
-    const Colour& fill = muted ? g.pal.dim : g.pal.tertiary;
+    const Rect track{x + 36, y + 22, 64, 4};
     rounded(cr, track, 2);
-    set(cr, g.pal.high);
+    set(cr, p.text, 0.16);
     cairo_fill(cr);
-    rounded(cr, {track.x, track.y, track.w * value, track.h}, 2);
-    set(cr, fill);
-    cairo_fill(cr);
-    cairo_arc(cr, track.x + track.w * value, track.y + 2, 6, 0, 2 * M_PI);
-    cairo_fill(cr);
-    g.hits.push_back({{track.x - 6, y + 12, track.w + 12, 28}, slider});
+    if (!muted) {
+        rounded(cr, {track.x, track.y, track.w * value, track.h}, 2);
+        set(cr, p.primary);
+        cairo_fill(cr);
+    }
+    // The knob: white, with a hairline, as the shell's sliders.
+    cairo_arc(cr, track.x + track.w * value, track.y + 2, 7, 0, 2 * M_PI);
+    cairo_set_source_rgb(cr, 1, 1, 1);
+    cairo_fill_preserve(cr);
+    cairo_set_source_rgba(cr, 0, 0, 0, 0.18);
+    cairo_set_line_width(cr, 1);
+    cairo_stroke(cr);
+    g.hits.push_back({{track.x - 7, y + 8, track.w + 14, 32}, slider});
 
     if (dropdown) {
-        const Rect arrow{x + 98, y + 11, 20, 30};
-        set(cr, g.pal.text);
+        const Rect arrow{x + 104, y + 8, 22, 32};
+        set(cr, p.dim);
         font(cr, 16, false, true);
         boxed(cr, up ? "󰅃" : "󰅀", arrow);
         g.hits.push_back({arrow, Button::MicList});
@@ -394,51 +439,46 @@ void audio(cairo_t* cr, double x, double y, const char* on, const char* off, dou
 
 void draw_toolbar(cairo_t* cr) {
     const auto& tr = g.tr;
+    const auto& p = g.pal;
     // What is on it, left to right, to measure first.
-    const double seg = 80, gap = 8;
-    double w = 8 + seg + gap + 2 + gap;
+    const double seg = 76, gap = 6;
+    double w = 6 + seg + gap + 1 + gap;
     if (g.video) {
-        w += audio_width(false) + gap + audio_width(true) + gap + 2 + gap + button_width(cr, tr("Record")) + gap + 36;
+        w += audio_width(false) + gap + audio_width(true) + gap + 1 + gap + button_width(cr, tr("Record")) + gap + 36;
     } else {
-        w += button_width(cr, tr("Capture")) + gap + 36 + gap + 36 + gap + 2 + gap + 36 + gap + 36;
+        w += 36 + gap + 36 + gap + 1 + gap + 36 + gap + 36 + gap + button_width(cr, tr("Capture"));
     }
-    w += 8;
-    const double h = 52;
+    w += 6;
+    const double h = 48;
     const double sx = sel_x(), sy = sel_y(), sw = sel_w(), sh = sel_h();
-    const bool below = sy + sh + h + 15 <= g.height;
-    const bool above = sy - h - 15 >= 0;
+    const bool below = sy + sh + h + 14 <= g.height;
+    const bool above = sy - h - 14 >= 0;
     const bool inside = sh >= h + 30 && sw >= w + 20;
     if (!below && !above && !inside) return;
     const double x = std::max(10.0, std::min(g.width - w - 10.0, sx + sw / 2 - w / 2));
-    const double y = below ? sy + sh + 15 : above ? sy - h - 15 : sy + sh - h - 15;
-    const Rect bar{x, y, w, h};
-    rounded(cr, bar, 26);
-    set(cr, g.pal.low);
-    cairo_fill_preserve(cr);
-    set(cr, g.pal.high);
-    cairo_set_line_width(cr, 2);
-    cairo_stroke(cr);
+    const double y = below ? sy + sh + 14 : above ? sy - h - 14 : sy + sh - h - 14;
+    panel(cr, {x, y, w, h}, h / 2);
 
-    double cx = x + 8;
-    // Picture | video.
-    const Rect segr{cx, y + 8, seg, 36};
+    double cx = x + 6;
+    // Picture | video: a segmented control.
+    const Rect segr{cx, y + 6, seg, 36};
     rounded(cr, segr, 18);
-    set(cr, g.pal.mid);
+    set(cr, p.text, 0.07);
     cairo_fill(cr);
-    const Rect photo{cx + 4, y + 12, seg / 2 - 4, 28}, video{cx + seg / 2, y + 12, seg / 2 - 4, 28};
-    rounded(cr, g.video ? video : photo, 14);
-    set(cr, g.pal.high);
+    const Rect photo{cx + 3, y + 9, seg / 2 - 3, 30}, video{cx + seg / 2, y + 9, seg / 2 - 3, 30};
+    rounded(cr, g.video ? video : photo, 15);
+    set(cr, p.text, 0.16);
     cairo_fill(cr);
     font(cr, 16, false, true);
-    set(cr, g.video ? g.pal.dim : g.pal.text);
+    set(cr, g.video ? p.dim : p.text);
     boxed(cr, "󰄄", photo);
-    set(cr, g.video ? g.pal.text : g.pal.dim);
+    set(cr, g.video ? p.text : p.dim);
     boxed(cr, "󰕧", video);
     g.hits.push_back({photo, Button::Photo});
     g.hits.push_back({video, Button::Video});
     cx += seg + gap;
     separator(cr, cx, y);
-    cx += 2 + gap;
+    cx += 1 + gap;
 
     const bool up = y + 200 > g.height;
     if (g.video) {
@@ -448,44 +488,45 @@ void draw_toolbar(cairo_t* cr) {
         audio(cr, cx, y, "󰍬", "󰍭", g.mic_vol, g.mic_mute, Button::MicMute, Button::MicSlider, true, up);
         cx += audio_width(true) + gap;
         separator(cr, cx, y);
-        cx += 2 + gap;
-        button(cr, cx, y + 8, "󰑊", tr("Record"), true, Button::Record);
-        cx += button_width(cr, tr("Record")) + gap;
-        button(cr, cx, y + 8, "󰅖", "", true, Button::Close);
+        cx += 1 + gap;
+        button(cr, cx, y + 6, "󰅖", "", Kind::Close, Button::Close);
+        cx += 36 + gap;
+        button(cr, cx, y + 6, "󰑊", tr("Record"), Kind::Danger, Button::Record);
 
         if (g.mic_list_open) {
             const double lw = 280;
-            const double row = 32;
-            const double lh = g.mics.empty() ? 40 : std::min(180.0, g.mics.size() * (row + 4) + 4);
+            const double row = 34;
+            const double lh = g.mics.empty() ? 44 : std::min(186.0, g.mics.size() * (row + 2) + 10);
             const Rect list{std::max(10.0, std::min(g.width - lw - 10.0, mic_x - 40)), up ? y - lh - 8 : y + h + 8, lw, lh};
-            rounded(cr, list, 8);
-            set(cr, g.pal.low);
-            cairo_fill_preserve(cr);
-            set(cr, g.pal.high);
-            cairo_set_line_width(cr, 2);
-            cairo_stroke(cr);
+            panel(cr, list, 14);
             g.hits.push_back({list, Button::None});   // a click on its padding is not a click elsewhere
             if (g.mics.empty()) {
-                set(cr, g.pal.dim);
+                set(cr, p.dim);
                 font(cr, 12, false);
                 boxed(cr, tr("No Microphones (Install pulseaudio)"), list);
             }
-            double ry = list.y + 4;
-            for (size_t i = 0; i < g.mics.size() && ry + row <= list.y + list.h; ++i, ry += row + 4) {
-                const Rect r{list.x + 4, ry, list.w - 8, row};
+            double ry = list.y + 5;
+            for (size_t i = 0; i < g.mics.size() && ry + row <= list.y + list.h; ++i, ry += row + 2) {
+                const Rect r{list.x + 5, ry, list.w - 10, row};
+                const bool current = g.mics[i].name == g.mic_device;
                 if (hovered(r)) {
-                    rounded(cr, r, 6);
-                    set(cr, g.pal.mid);
+                    rounded(cr, r, 9);
+                    set(cr, p.text, 0.08);
                     cairo_fill(cr);
                 }
+                if (current) {
+                    set(cr, p.primary);
+                    font(cr, 15, false, true);
+                    boxed(cr, "󰄬", {r.x + r.w - 30, r.y, 24, r.h});
+                }
                 cairo_save(cr);
-                cairo_rectangle(cr, r.x + 6, r.y, r.w - 12, r.h);
+                cairo_rectangle(cr, r.x + 10, r.y, r.w - 44, r.h);
                 cairo_clip(cr);
-                set(cr, g.mics[i].name == g.mic_device ? g.pal.tertiary : g.pal.text);
-                font(cr, 12, false);
+                set(cr, p.text);
+                font(cr, 13, current);
                 cairo_font_extents_t fe;
                 cairo_font_extents(cr, &fe);
-                cairo_move_to(cr, r.x + 6, r.y + (r.h + fe.ascent - fe.descent) / 2);
+                cairo_move_to(cr, r.x + 10, r.y + (r.h + fe.ascent - fe.descent) / 2);
                 cairo_show_text(cr, (g.mics[i].description.empty() ? g.mics[i].name : g.mics[i].description).c_str());
                 cairo_restore(cr);
                 cairo_new_path(cr);
@@ -493,36 +534,37 @@ void draw_toolbar(cairo_t* cr) {
             }
         }
     } else {
-        button(cr, cx, y + 8, "󰄄", tr("Capture"), false, Button::Capture);
-        cx += button_width(cr, tr("Capture")) + gap;
-        button(cr, cx, y + 8, "󰏫", "", false, Button::Edit);
+        button(cr, cx, y + 6, "󰏫", "", Kind::Plain, Button::Edit);
         cx += 36 + gap;
-        button(cr, cx, y + 8, "󰐲", "", false, Button::Qr);
+        button(cr, cx, y + 6, "󰐲", "", Kind::Plain, Button::Qr);
         cx += 36 + gap;
         separator(cr, cx, y);
-        cx += 2 + gap;
-        button(cr, cx, y + 8, g.maximized ? "󰊔" : "󰊓", "", false, Button::Maximize);
+        cx += 1 + gap;
+        button(cr, cx, y + 6, g.maximized ? "󰊔" : "󰊓", "", Kind::Plain, Button::Maximize);
         cx += 36 + gap;
-        button(cr, cx, y + 8, "󰅖", "", true, Button::Close);
+        button(cr, cx, y + 6, "󰅖", "", Kind::Close, Button::Close);
+        cx += 36 + gap;
+        button(cr, cx, y + 6, "󰄄", tr("Capture"), Kind::Primary, Button::Capture);
     }
 }
 
 void draw_qr(cairo_t* cr) {
     const auto& tr = g.tr;
+    const auto& p = g.pal;
     for (size_t i = 0; i < g.qr.size(); ++i) {
         const QrResult& q = g.qr[i];
         if (q.found && q.box.w > 0) {
-            const Rect b{q.box.x - 5, q.box.y - 5, q.box.w + 10, q.box.h + 10};
-            rounded(cr, b, 8);
-            set(cr, g.pal.ok, 0.25);
+            const Rect b{q.box.x - 6, q.box.y - 6, q.box.w + 12, q.box.h + 12};
+            rounded(cr, b, 10);
+            set(cr, p.ok, 0.14);
             cairo_fill_preserve(cr);
-            set(cr, g.pal.ok);
-            cairo_set_line_width(cr, 3);
+            set(cr, p.ok);
+            cairo_set_line_width(cr, 2);
             cairo_stroke(cr);
         }
         // The pill: the text, copy, open for a link, close.
         std::string text = q.found ? q.text : tr("No QR code found.");
-        font(cr, 13, true);
+        font(cr, 13, false);
         while (text.size() > 4 && text_width(cr, text) > 400) {
             size_t cut = text.size() - 1;
             while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80) --cut;
@@ -530,42 +572,119 @@ void draw_qr(cairo_t* cr) {
             if (text_width(cr, text + "…") <= 400) { text += "…"; break; }
         }
         const bool link = q.found && (q.text.rfind("http://", 0) == 0 || q.text.rfind("https://", 0) == 0);
+        font(cr, 16, false, true);
+        const double iw = text_width(cr, "󰐲");
+        font(cr, 13, false);
         const double tw = text_width(cr, text);
-        double pw = 16 + 8 + tw + 8 + 2 + 8 + 36 + 16;
-        if (q.found) pw += 2 + 8 + 36 + 8 + (link ? 36 + 8 : 0);
-        const double ph = 52;
+        double pw = 18 + iw + 8 + tw + 10 + 1 + 6 + 36 + 6;
+        if (q.found) pw += 36 + 6 + (link ? 36 + 6 : 0);
+        const double ph = 48;
         const double cx = q.box.w > 0 ? q.box.x + q.box.w / 2 : sel_x() + sel_w() / 2;
         const double top = q.box.w > 0 ? q.box.y : sel_y() + sel_h() / 2;
-        const bool fits_top = top - ph - 15 >= sel_y();
+        const bool fits_top = top - ph - 16 >= sel_y();
         const double x = std::max(10.0, std::min(g.width - pw - 10.0, cx - pw / 2));
-        const double y = q.box.w > 0 ? (fits_top ? top - ph - 15 : top + q.box.h + 15) : top;
-        const Rect pill{x, y, pw, ph};
-        rounded(cr, pill, 26);
-        set(cr, g.pal.low);
-        cairo_fill_preserve(cr);
-        set(cr, q.found ? g.pal.ok : g.pal.error);
-        cairo_set_line_width(cr, 2);
-        cairo_stroke(cr);
-        g.hits.push_back({pill, Button::None, static_cast<int>(i)});
-        double px = x + 24;
-        set(cr, q.found ? g.pal.text : g.pal.error);
-        font(cr, 13, true);
+        const double y = q.box.w > 0 ? (fits_top ? top - ph - 16 : top + q.box.h + 16) : top;
+        panel(cr, {x, y, pw, ph}, ph / 2);
+        g.hits.push_back({{x, y, pw, ph}, Button::None, static_cast<int>(i)});
+        double px = x + 18;
+        set(cr, q.found ? p.ok : p.error);
+        font(cr, 16, false, true);
+        boxed(cr, q.found ? "󰐲" : "󰀦", {px, y, iw, ph});
+        px += iw + 8;
+        set(cr, q.found ? p.text : p.dim);
+        font(cr, 13, false);
         boxed(cr, text, {px, y, tw, ph});
-        px += tw + 8;
+        px += tw + 10;
+        separator(cr, px, y);
+        px += 1 + 6;
         if (q.found) {
-            separator(cr, px, y);
-            px += 2 + 8;
-            button(cr, px, y + 8, "󰆏", "", false, Button::QrCopy, static_cast<int>(i));
-            px += 36 + 8;
+            button(cr, px, y + 6, "󰆏", "", Kind::Plain, Button::QrCopy, static_cast<int>(i));
+            px += 36 + 6;
             if (link) {
-                button(cr, px, y + 8, "󰌹", "", false, Button::QrOpen, static_cast<int>(i));
-                px += 36 + 8;
+                button(cr, px, y + 6, "󰌹", "", Kind::Plain, Button::QrOpen, static_cast<int>(i));
+                px += 36 + 6;
             }
         }
-        separator(cr, px, y);
-        px += 2 + 8;
-        button(cr, px, y + 8, "󰅖", "", true, Button::QrClose, static_cast<int>(i));
+        button(cr, px, y + 6, "󰅖", "", Kind::Close, Button::QrClose, static_cast<int>(i));
     }
+}
+
+// The selection's size, in a small pill over its top-left corner (inside
+// it when there is no room above).
+void draw_size(cairo_t* cr) {
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%ld × %ld", std::lround(sel_w()), std::lround(sel_h()));
+    font(cr, 12, true);
+    const double w = text_width(cr, buf) + 20, h = 24;
+    const double y = sel_y() - h - 8 >= 0 ? sel_y() - h - 8 : sel_y() + 8;
+    const Rect r{std::max(4.0, std::min(g.width - w - 4.0, sel_x())), y, w, h};
+    panel(cr, r, h / 2);
+    set(cr, g.pal.text);
+    font(cr, 12, true);
+    boxed(cr, buf, r);
+}
+
+// The overlay, on a clear surface the size of the screen.
+void paint(cairo_t* cr) {
+    g.hits.clear();
+    const auto& p = g.pal;
+    const double W = g.width, H = g.height;
+    const bool shown = g.selecting || g.has_selection;
+
+    // The dim, with the selection cut out of it.
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
+    cairo_rectangle(cr, 0, 0, W, H);
+    if (shown) cairo_rectangle(cr, sel_x(), sel_y(), sel_w(), sel_h());
+    cairo_set_source_rgba(cr, 0, 0, 0, 0.40);
+    cairo_fill(cr);
+    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_WINDING);
+    if (shown) {
+        cairo_rectangle(cr, sel_x(), sel_y(), sel_w(), sel_h());
+        cairo_set_source_rgba(cr, 0, 0, 0, 0);
+        cairo_fill(cr);
+    }
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+    if (!shown) {
+        // What to do, in a pill in the middle.
+        const std::string text = g.video ? g.tr("Click Record (Portal handles area selection)")
+                                         : g.tr("Select region to capture");
+        font(cr, 15, false);
+        const double tw = text_width(cr, text);
+        const Rect r{(W - tw - 70) / 2, (H - 48) / 2, tw + 70, 48};
+        panel(cr, r, 24);
+        set(cr, p.text);
+        font(cr, 18, false, true);
+        boxed(cr, g.video ? "󰕧" : "󰄄", {r.x + 16, r.y, 24, r.h});
+        font(cr, 15, false);
+        boxed(cr, text, {r.x + 48, r.y, tw, r.h});
+        return;
+    }
+
+    // The edge: white, as the shell's focus rings; red while it is for a
+    // recording, green round codes found.
+    const bool qr_ok = g.qr_shown && std::any_of(g.qr.begin(), g.qr.end(), [](const QrResult& q) { return q.found; });
+    cairo_rectangle(cr, sel_x() - 0.75, sel_y() - 0.75, sel_w() + 1.5, sel_h() + 1.5);
+    if (qr_ok) set(cr, p.ok);
+    else if (g.video) set(cr, p.error);
+    else cairo_set_source_rgba(cr, 1, 1, 1, 0.95);
+    cairo_set_line_width(cr, g.video || qr_ok ? 2 : 1.5);
+    cairo_stroke(cr);
+    if (!g.video && !g.qr_shown) {
+        for (int i = 0; i < 4; ++i) {
+            const double hx = i % 2 ? sel_x() + sel_w() : sel_x(), hy = i / 2 ? sel_y() + sel_h() : sel_y();
+            cairo_arc(cr, hx, hy + 1, 7, 0, 2 * M_PI);
+            cairo_set_source_rgba(cr, 0, 0, 0, 0.18);
+            cairo_fill(cr);
+            cairo_arc(cr, hx, hy, 6, 0, 2 * M_PI);
+            cairo_set_source_rgb(cr, 1, 1, 1);
+            cairo_fill(cr);
+        }
+    }
+    if (!g.qr_shown && sel_w() > 0 && sel_h() > 0) draw_size(cr);
+    if (g.qr_shown && !g.selecting) draw_qr(cr);
+    else if (g.has_selection && !g.selecting) draw_toolbar(cr);
 }
 
 void buffer_release(void*, struct wl_buffer* buffer) { wl_buffer_destroy(buffer); }
@@ -590,54 +709,7 @@ void draw() {
         cairo_image_surface_create_for_data(static_cast<unsigned char*>(data), CAIRO_FORMAT_ARGB32, w, h, stride);
     cairo_t* cr = cairo_create(target);
     cairo_scale(cr, scale, scale);
-    g.hits.clear();
-    const auto& p = g.pal;
-    const double W = g.width, H = g.height;
-    const bool shown = g.selecting || g.has_selection;
-
-    // The dim, with the selection cut out of it.
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
-    cairo_rectangle(cr, 0, 0, W, H);
-    if (shown) cairo_rectangle(cr, sel_x(), sel_y(), sel_w(), sel_h());
-    set(cr, p.ground, 0.5);
-    cairo_fill(cr);
-    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_WINDING);
-    if (shown) {
-        cairo_rectangle(cr, sel_x(), sel_y(), sel_w(), sel_h());
-        cairo_set_source_rgba(cr, 0, 0, 0, 0);
-        cairo_fill(cr);
-    }
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-
-    if (!shown) {
-        set(cr, p.text);
-        font(cr, 24, true);
-        boxed(cr, g.video ? g.tr("Click Record (Portal handles area selection)") : g.tr("Select region to capture"),
-              {0, 0, W, H});
-    } else {
-        const bool qr_ok = g.qr_shown && std::any_of(g.qr.begin(), g.qr.end(), [](const QrResult& q) { return q.found; });
-        const Colour& edge = qr_ok ? p.ok : g.video ? p.error : p.tertiary;
-        cairo_rectangle(cr, sel_x(), sel_y(), sel_w(), sel_h());
-        set(cr, edge, qr_ok ? 0.15 : 0.05);
-        cairo_fill_preserve(cr);
-        set(cr, edge);
-        cairo_set_line_width(cr, 4);
-        cairo_stroke(cr);
-        if (!g.video && !g.qr_shown) {
-            for (int i = 0; i < 4; ++i) {
-                const double hx = i % 2 ? sel_x() + sel_w() : sel_x(), hy = i / 2 ? sel_y() + sel_h() : sel_y();
-                cairo_arc(cr, hx, hy, 10, 0, 2 * M_PI);
-                set(cr, p.text);
-                cairo_fill_preserve(cr);
-                set(cr, p.tertiary);
-                cairo_set_line_width(cr, 4);
-                cairo_stroke(cr);
-            }
-        }
-        if (g.qr_shown && !g.selecting) draw_qr(cr);
-        else if (g.has_selection && !g.selecting) draw_toolbar(cr);
-    }
+    paint(cr);
 
     cairo_destroy(cr);
     cairo_surface_flush(target);

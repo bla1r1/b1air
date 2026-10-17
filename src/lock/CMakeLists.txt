@@ -31,6 +31,7 @@ add_custom_command(
 
 add_executable(b1air-lock
     main.cpp
+    look.cpp
     ${PROJECT_SOURCE_DIR}/bg/image.cpp
     ${LOCK_GEN}/ext-session-lock-v1-client-protocol.h
     ${LOCK_GEN}/ext-session-lock-v1-protocol.c)

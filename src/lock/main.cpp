@@ -5,7 +5,7 @@
 //
 //   b1air-lock
 //
-// Every screen shows its own wallpaper, blurred and darkened, the time, the
+// Every screen shows its own wallpaper, blurred under a light veil, the time, the
 // date, the account's picture and name and the password field — one
 // password, the same on every screen — with the keyboard layout, the
 // battery, the weather already fetched and a power menu (reboot, sleep,
@@ -58,6 +58,7 @@
 #include "ext-session-lock-v1-client-protocol.h"
 #include "fingerprint.hpp"
 #include "image.hpp"            // b1air-bg's decoder
+#include "look.hpp"
 #include "runtime.hpp"
 #include "settings_manager.hpp"
 #include "system_control.hpp"
@@ -66,12 +67,10 @@ namespace {
 
 // ── State ────────────────────────────────────────────────────────────────────
 
-enum class Status { Idle, Typing, Checking, Denied, Unavailable };
-
-struct Rect {
-    double x = 0, y = 0, w = 0, h = 0;
-    bool contains(double px, double py) const { return w > 0 && px >= x && px < x + w && py >= y && py < y + h; }
-};
+using look::Colour;
+using look::Palette;
+using look::Rect;
+using look::Status;
 
 enum class Action { None, Menu, Reboot, Suspend, PowerOff, Reveal };
 
@@ -86,25 +85,9 @@ struct Output {
     bool configured = false;
     cairo_surface_t* wallpaper = nullptr;   // small: drawn up, which blurs it
     bool wallpaper_tried = false;
-    // Where the power button and its menu were drawn, for the pointer; and
-    // the eye that shows the password.
-    Rect power, items[3], eye;
-};
-
-struct Colour {
-    double r, g, b;
-};
-
-// The desktop theme's colours, Breeze Dark's until it is read.
-struct Palette {
-    Colour ground{0x20 / 255.0, 0x23 / 255.0, 0x26 / 255.0};
-    Colour mid{0x29 / 255.0, 0x2c / 255.0, 0x30 / 255.0};
-    Colour text{0xfc / 255.0, 0xfc / 255.0, 0xfc / 255.0};
-    Colour dim{0xb4 / 255.0, 0xbb / 255.0, 0xc2 / 255.0};
-    Colour primary{0x3d / 255.0, 0xae / 255.0, 0xe9 / 255.0};
-    Colour tertiary{0xb0 / 255.0, 0x7a / 255.0, 0xd9 / 255.0};
-    Colour error{0xed / 255.0, 0x4b / 255.0, 0x5b / 255.0};
-    Colour warn{0xfd / 255.0, 0xbc / 255.0, 0x4b / 255.0};
+    // Where the power button, its menu and the eye that shows the password
+    // were drawn, for the pointer.
+    look::Hits hits;
 };
 
 struct App {
@@ -253,8 +236,6 @@ void load_palette() {
     parse_colour(j, "error", g.pal.error);
     parse_colour(j, "yellow", g.pal.warn);
 }
-
-void set(cairo_t* cr, const Colour& c, double a = 1.0) { cairo_set_source_rgba(cr, c.r, c.g, c.b, a); }
 
 // The account's picture where the login screen keeps it, and the full name
 // from the account (what Settings → User sets), else the login.
@@ -408,103 +389,6 @@ void load_wallpaper(Output* o) {
     o->wallpaper = s;
 }
 
-void rounded(cairo_t* cr, double x, double y, double w, double h, double r) {
-    cairo_new_sub_path(cr);
-    cairo_arc(cr, x + w - r, y + r, r, -M_PI / 2, 0);
-    cairo_arc(cr, x + w - r, y + h - r, r, 0, M_PI / 2);
-    cairo_arc(cr, x + r, y + h - r, r, M_PI / 2, M_PI);
-    cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
-    cairo_close_path(cr);
-}
-
-// The desktop's: Design.qml's sans for words, its Nerd Font for icons.
-constexpr const char* kFont = "Inter";
-constexpr const char* kIconFont = "b1air Symbols";
-
-void font(cairo_t* cr, double size, bool bold, bool icon = false) {
-    cairo_select_font_face(cr, icon ? kIconFont : kFont, CAIRO_FONT_SLANT_NORMAL,
-                           bold ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, size);
-}
-
-double text_width(cairo_t* cr, const std::string& text) {
-    cairo_text_extents_t e;
-    cairo_text_extents(cr, text.c_str(), &e);
-    return e.x_advance;
-}
-
-// Text centred on cx, its baseline at y.
-void centred_text(cairo_t* cr, const std::string& text, double cx, double y, double size, bool bold) {
-    font(cr, size, bold);
-    cairo_text_extents_t e;
-    cairo_text_extents(cr, text.c_str(), &e);
-    cairo_move_to(cr, cx - e.width / 2 - e.x_bearing, y);
-    cairo_show_text(cr, text.c_str());
-    cairo_new_path(cr);   // or the next arc is joined to where the text ended
-}
-
-// An icon then words, centred on cx.
-void centred_line(cairo_t* cr, const std::string& icon, const std::string& text, double cx, double y, double size) {
-    font(cr, size, false, true);
-    const double iw = text_width(cr, icon), gap = size * 0.6;
-    font(cr, size, false);
-    const double tw = text_width(cr, text);
-    const double x = cx - (iw + gap + tw) / 2;
-    font(cr, size, false, true);
-    cairo_move_to(cr, x, y);
-    cairo_show_text(cr, icon.c_str());
-    font(cr, size, false);
-    cairo_move_to(cr, x + iw + gap, y);
-    cairo_show_text(cr, text.c_str());
-    cairo_new_path(cr);
-}
-
-// Text centred in a box, both ways.
-void boxed_text(cairo_t* cr, const std::string& text, const Rect& r) {
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
-    cairo_text_extents_t e;
-    cairo_text_extents(cr, text.c_str(), &e);
-    cairo_move_to(cr, r.x + (r.w - e.x_advance) / 2, r.y + (r.h + fe.ascent - fe.descent) / 2);
-    cairo_show_text(cr, text.c_str());
-    cairo_new_path(cr);
-}
-
-// A pill of an icon and a word.
-double pill_width(cairo_t* cr, double u, const std::string& icon, const std::string& text) {
-    font(cr, 17 * u, false, true);
-    const double iw = icon.empty() ? 0 : text_width(cr, icon);
-    font(cr, 16 * u, false);
-    const double tw = text.empty() ? 0 : text_width(cr, text);
-    return 32 * u + iw + (icon.empty() || text.empty() ? 0 : 8 * u) + tw;
-}
-
-Rect pill(cairo_t* cr, double x, double y, double h, double u, const std::string& icon, const std::string& text,
-          const Colour& ink, double fill_alpha) {
-    const Rect r{x, y, pill_width(cr, u, icon, text), h};
-    cairo_new_path(cr);
-    rounded(cr, r.x, r.y, r.w, r.h, h / 2);
-    set(cr, g.pal.ground, fill_alpha);
-    cairo_fill_preserve(cr);
-    set(cr, g.pal.text, 0.10);
-    cairo_set_line_width(cr, 1 * u);
-    cairo_stroke(cr);
-    font(cr, 17 * u, false, true);
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
-    const double iw = icon.empty() ? 0 : text_width(cr, icon);
-    set(cr, ink, 0.95);
-    cairo_move_to(cr, x + 16 * u, y + (h + fe.ascent - fe.descent) / 2);
-    cairo_show_text(cr, icon.c_str());
-    font(cr, 16 * u, false);
-    cairo_font_extents(cr, &fe);
-    set(cr, g.pal.text, 0.9);
-    cairo_move_to(cr, x + 16 * u + iw + (icon.empty() ? 0 : 8 * u), y + (h + fe.ascent - fe.descent) / 2);
-    cairo_show_text(cr, text.c_str());
-    cairo_new_path(cr);
-    return r;
-}
-
 const char* battery_icon() {
     static const char* levels[] = {"󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"};
     if (g.charging) return "󰂄";
@@ -536,200 +420,42 @@ void draw(Output* o) {
         cairo_image_surface_create_for_data(static_cast<unsigned char*>(data), CAIRO_FORMAT_RGB24, w, h, stride);
     cairo_t* cr = cairo_create(target);
     cairo_scale(cr, scale, scale);
-    const double W = o->width, H = o->height;
-
-    // The picture, blurred, and a veil over it.
-    set(cr, g.pal.ground);
-    cairo_paint(cr);
-    if (o->wallpaper) {
-        cairo_save(cr);
-        cairo_scale(cr, W / cairo_image_surface_get_width(o->wallpaper), H / cairo_image_surface_get_height(o->wallpaper));
-        cairo_set_source_surface(cr, o->wallpaper, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD);
-        cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_PAD);
-        cairo_paint(cr);
-        cairo_restore(cr);
-    }
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.35);
-    cairo_paint(cr);
-
-    const double u = std::min(W, H) / 1080.0;   // one unit at 1080p
-    const double cx = W / 2, cy = H / 2;
-    const Palette& p = g.pal;
-
-    // The time and the date.
-    set(cr, p.text, 0.96);
-    centred_text(cr, clock_text(), cx, cy - 150 * u, 150 * u, true);
-    set(cr, p.text, 0.80);
-    centred_text(cr, date_text(), cx, cy - 100 * u, 24 * u, false);
-
-    // The account: the picture in a ring, or the initial on a tinted disc.
-    const double ar = 46 * u, ay = cy - 10 * u;
-    cairo_new_path(cr);
-    cairo_arc(cr, cx, ay, ar + 3 * u, 0, 2 * M_PI);
-    set(cr, p.primary, 0.55);
-    cairo_fill(cr);
-    cairo_save(cr);
-    cairo_arc(cr, cx, ay, ar, 0, 2 * M_PI);
-    cairo_clip(cr);
-    if (g.avatar) {
-        const double side = cairo_image_surface_get_width(g.avatar);
-        cairo_translate(cr, cx - ar, ay - ar);
-        cairo_scale(cr, 2 * ar / side, 2 * ar / side);
-        cairo_set_source_surface(cr, g.avatar, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD);
-        cairo_paint(cr);
-    } else {
-        set(cr, p.mid, 1.0);
-        cairo_paint(cr);
-        set(cr, p.primary, 1.0);
-        std::string initial;
-        if (!g.name.empty()) {   // the first code point, upper-cased if ASCII
-            size_t n = 1;
-            while (n < g.name.size() && (static_cast<unsigned char>(g.name[n]) & 0xC0) == 0x80) ++n;
-            initial = g.name.substr(0, n);
-            if (n == 1) initial[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(initial[0])));
-        }
-        font(cr, 40 * u, true);
-        boxed_text(cr, initial, {cx - ar, ay - ar, 2 * ar, 2 * ar});
-    }
-    cairo_restore(cr);
-    set(cr, p.text, 0.95);
-    centred_text(cr, g.name, cx, ay + ar + 40 * u, 26 * u, true);
-
-    // The field: dots for what is typed, the layout at its right end.
-    const double fw = 380 * u, fh = 56 * u, fx = cx - fw / 2, fy = ay + ar + 64 * u;
-    const bool denied = g.status == Status::Denied || g.status == Status::Unavailable;
-    rounded(cr, fx, fy, fw, fh, fh / 2);
-    set(cr, p.ground, 0.70);
-    cairo_fill_preserve(cr);
-    if (denied) set(cr, p.error, 0.9);
-    else if (g.status == Status::Checking) set(cr, p.warn, 0.9);
-    else set(cr, p.primary, g.password.empty() ? 0.35 : 0.9);
-    cairo_set_line_width(cr, 2 * u);
-    cairo_stroke(cr);
-
-    double layout_w = 0;
-    if (g.layouts.size() > 1 && g.group < g.layouts.size()) {
-        font(cr, 15 * u, true);
-        const Rect lr{fx + fw - 64 * u, fy + 12 * u, 48 * u, fh - 24 * u};
-        rounded(cr, lr.x, lr.y, lr.w, lr.h, lr.h / 2);
-        set(cr, p.primary, 0.18);
-        cairo_fill(cr);
-        set(cr, p.primary, 0.95);
-        boxed_text(cr, g.layouts[g.group], lr);
-        layout_w = 64 * u;
-    }
-
-    // The eye at the left end, once something is typed: a click shows the
-    // password as text, another hides it again. It hid what was typed with
-    // no way to check it, and a typo was found by being refused.
-    double eye_w = 0;
-    o->eye = {};
-    if (!g.password.empty()) {
-        o->eye = {fx + 12 * u, fy + 10 * u, 40 * u, fh - 20 * u};
-        eye_w = 52 * u;
-        const bool over = g.pointer_on == o && o->eye.contains(g.px, g.py);
-        if (over) {
-            rounded(cr, o->eye.x, o->eye.y, o->eye.w, o->eye.h, o->eye.h / 2);
-            set(cr, p.primary, 0.18);
-            cairo_fill(cr);
-        }
-        font(cr, 20 * u, false, true);
-        set(cr, g.reveal ? p.primary : p.dim, 0.95);
-        boxed_text(cr, g.reveal ? "\U000F0209" : "\U000F0208", o->eye);   // eye-off / eye
-    }
-
-    const double inner_l = fx + 24 * u + eye_w, inner_r = fx + fw - 24 * u - layout_w;
-    if (g.reveal && !g.password.empty()) {
-        // As text, its end in view when it is wider than the field.
-        cairo_save(cr);
-        cairo_rectangle(cr, inner_l, fy, inner_r - inner_l, fh);
-        cairo_clip(cr);
-        font(cr, 20 * u, false);
-        cairo_font_extents_t fe;
-        cairo_font_extents(cr, &fe);
-        const double tw = text_width(cr, g.password);
-        const double tx = tw <= inner_r - inner_l ? (inner_l + inner_r - tw) / 2 : inner_r - tw;
-        set(cr, p.text, 0.95);
-        cairo_move_to(cr, tx, fy + (fh + fe.ascent - fe.descent) / 2);
-        cairo_show_text(cr, g.password.c_str());
-        cairo_new_path(cr);
-        cairo_restore(cr);
-    } else {
-        // A dot a character (counted as UTF-8 code points), as many as fit.
-        size_t chars = 0;
-        for (unsigned char c : g.password)
-            if ((c & 0xC0) != 0x80) ++chars;
-        const double gap = 16 * u, r = 5 * u;
-        const size_t fit = static_cast<size_t>(std::max(1.0, (inner_r - inner_l) / gap));
-        const size_t shown = std::min(chars, fit);
-        double x = (inner_l + inner_r) / 2 - (static_cast<double>(shown) - 1) * gap / 2;
-        set(cr, p.text, 0.95);
-        for (size_t i = 0; i < shown; ++i, x += gap) {
-            cairo_arc(cr, x, fy + fh / 2, r, 0, 2 * M_PI);
-            cairo_fill(cr);
-        }
-    }
 
     const Words& wd = words();
-    std::string line = g.status == Status::Checking ? wd.checking
-                     : g.status == Status::Denied ? wd.denied
-                     : g.status == Status::Unavailable ? wd.unavailable
-                     : wd.enter;
-    if (denied) set(cr, p.error, 0.95);
-    else set(cr, p.text, 0.70);
-    centred_text(cr, line, cx, fy + fh + 36 * u, 18 * u, false);
-    double below = fy + fh + 64 * u;
-    if (g.caps) {
-        set(cr, p.warn, 0.95);
-        centred_line(cr, "󰪛", wd.caps, cx, below, 16 * u);
-        below += 26 * u;
-    }
-    const bool miss = std::chrono::steady_clock::now() < g.fp_miss_until;
-    if (g.fp_listening || miss) {
-        set(cr, miss ? p.error : p.primary, 0.95);
-        centred_line(cr, "󰈷", miss ? wd.finger_miss : wd.finger, cx, below, 16 * u);
-    }
-
-    // The corners: weather at the top left, the battery at the top right.
-    const double ph = 40 * u, m = 28 * u;
-    if (!g.weather_temp.empty()) pill(cr, m, m, ph, u, g.weather_icon, g.weather_temp, p.tertiary, 0.55);
-    if (!g.battery.empty()) {
-        const double bw = pill_width(cr, u, battery_icon(), g.battery);
-        const bool low = !g.charging && g.battery_level <= 15;
-        pill(cr, W - m - bw, m, ph, u, battery_icon(), g.battery, low ? p.error : p.primary, 0.55);
-    }
-
-    // The power menu, bottom right: the button, and when it is open, the
-    // three things it does to its left.
-    const double bs = 52 * u;
-    o->power = {W - m - bs, H - m - bs, bs, bs};
-    const bool hover_power = g.pointer_on == o && o->power.contains(g.px, g.py);
-    cairo_new_path(cr);
-    cairo_arc(cr, o->power.x + bs / 2, o->power.y + bs / 2, bs / 2, 0, 2 * M_PI);
-    set(cr, g.menu_open ? p.error : p.ground, g.menu_open ? 0.25 : (hover_power ? 0.8 : 0.55));
-    cairo_fill_preserve(cr);
-    set(cr, p.text, 0.12);
-    cairo_set_line_width(cr, 1 * u);
-    cairo_stroke(cr);
-    font(cr, 22 * u, false, true);
-    set(cr, g.menu_open || hover_power ? p.error : p.text, 0.9);
-    boxed_text(cr, "󰐥", o->power);
-    for (auto& it : o->items) it = {};
-    if (g.menu_open) {
-        const char* icons[3] = {"󰜉", "󰒲", "󰐥"};
-        const char* labels[3] = {wd.reboot, wd.suspend, wd.poweroff};
-        const Colour* inks[3] = {&p.primary, &p.tertiary, &p.error};
-        double right = o->power.x - 12 * u;
-        for (int i = 2; i >= 0; --i) {
-            const double w = pill_width(cr, u, icons[i], labels[i]);
-            const bool hover = g.pointer_on == o && Rect{right - w, o->power.y + 6 * u, w, bs - 12 * u}.contains(g.px, g.py);
-            o->items[i] = pill(cr, right - w, o->power.y + 6 * u, bs - 12 * u, u, icons[i], labels[i], *inks[i],
-                               hover ? 0.85 : 0.6);
-            right -= w + 10 * u;
-        }
-    }
+    look::View v;
+    v.width = o->width;
+    v.height = o->height;
+    v.wallpaper = o->wallpaper;
+    v.avatar = g.avatar;
+    v.name = g.name;
+    v.clock = clock_text();
+    v.date = date_text();
+    v.password = g.password;
+    v.reveal = g.reveal;
+    v.status = g.status;
+    if (g.layouts.size() > 1 && g.group < g.layouts.size()) v.layout = g.layouts[g.group];
+    v.placeholder = wd.enter;
+    v.message = g.status == Status::Checking ? wd.checking
+              : g.status == Status::Denied ? wd.denied
+              : g.status == Status::Unavailable ? wd.unavailable
+              : "";
+    if (g.caps) v.caps = wd.caps;
+    v.finger_miss = std::chrono::steady_clock::now() < g.fp_miss_until;
+    if (g.fp_listening || v.finger_miss) v.finger = v.finger_miss ? wd.finger_miss : wd.finger;
+    v.weather_icon = g.weather_icon;
+    v.weather_temp = g.weather_temp;
+    v.battery = g.battery;
+    v.battery_icon = battery_icon();
+    v.battery_low = !g.charging && g.battery_level <= 15;
+    v.menu_open = g.menu_open;
+    v.items[0] = wd.reboot;
+    v.items[1] = wd.suspend;
+    v.items[2] = wd.poweroff;
+    v.pointer = g.pointer_on == o;
+    v.px = g.px;
+    v.py = g.py;
+    v.pal = g.pal;
+    look::paint(cr, v, o->hits);
 
     cairo_destroy(cr);
     cairo_surface_flush(target);
@@ -950,12 +676,12 @@ void pt_leave(void*, struct wl_pointer*, uint32_t, struct wl_surface*) {
 }
 
 Action hit(const Output* o, double x, double y) {
-    if (o->power.contains(x, y)) return Action::Menu;
-    if (o->eye.contains(x, y)) return Action::Reveal;
+    if (o->hits.power.contains(x, y)) return Action::Menu;
+    if (o->hits.eye.contains(x, y)) return Action::Reveal;
     if (!g.menu_open) return Action::None;
-    if (o->items[0].contains(x, y)) return Action::Reboot;
-    if (o->items[1].contains(x, y)) return Action::Suspend;
-    if (o->items[2].contains(x, y)) return Action::PowerOff;
+    if (o->hits.items[0].contains(x, y)) return Action::Reboot;
+    if (o->hits.items[1].contains(x, y)) return Action::Suspend;
+    if (o->hits.items[2].contains(x, y)) return Action::PowerOff;
     return Action::None;
 }
 

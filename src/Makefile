@@ -73,7 +73,7 @@ install:
 	install -m 755 $(BUILD)/bin/b1air-* $(DESTDIR)$(PREFIX)/
 	# The handlers Files opens Windows programs and downloaded packages with,
 	# and Spotlight's software search (scripts/: shell, so nothing to build).
-	install -m 755 scripts/b1air-run-windows scripts/b1air-install-package scripts/b1air-software \
+	install -m 755 scripts/b1air-run-windows scripts/b1air-windows scripts/b1air-install-package scripts/b1air-software \
 		scripts/b1air-gamemode-hook $(DESTDIR)$(PREFIX)/
 	mkdir -p $(DESTDIR)$(QMLDIR)
 	# -rlpt, not -a: run as root, -a kept the checkout's owner, and the

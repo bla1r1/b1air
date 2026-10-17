@@ -598,6 +598,21 @@ PopupShell {
                 elide: Text.ElideRight
             }
 
+            // A Windows program (b1air-windows): its settings, components
+            // and removing it are on a Settings page of their own.
+            Button {
+                readonly property bool windowsApp: !!(window.selectedApp
+                    && String(window.selectedApp.cmd || "").indexOf("b1air-windows run ") === 0)
+                visible: windowsApp
+                size: "sm"
+                variant: "ghost"
+                icon: "\u{f05b3}"
+                label: I18n.tr("Windows program settings")
+                onClicked: {
+                    Quickshell.execDetached(["b1air-shell", "open", "settings", "winapps"]);
+                }
+            }
+
             Label {
                 text: I18n.tr("↑↓←→ move    ↵ open    right-click pin")
                 role: "caption"

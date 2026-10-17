@@ -28,3 +28,4 @@ WallpaperSettingsSection 1.0 WallpaperSettingsSection.qml
 WeatherSettingsSection 1.0 WeatherSettingsSection.qml
 WidgetsSettingsSection 1.0 WidgetsSettingsSection.qml
 WindowSettingsSection 1.0 WindowSettingsSection.qml
+WinAppsSettingsSection 1.0 WinAppsSettingsSection.qml

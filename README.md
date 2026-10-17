@@ -161,7 +161,7 @@ Each edition is the one before it plus what it adds
 | Edition | What it is |
 |---|---|
 | `minimal` | The desktop and its apps, nothing more |
-| `default` | minimal + Windows programs (Wine, Bottles), `.deb` on Arch (debtap), software search in Spotlight (Flatpak), containers (Distrobox), VPN (OpenVPN, WireGuard, Tailscale) and a firewall |
+| `default` | minimal + Windows programs (Proton through umu-launcher, in the Launchpad; Wine and Bottles too), `.deb` on Arch (debtap), software search in Spotlight (Flatpak), containers (Distrobox), VPN (OpenVPN, WireGuard, Tailscale) and a firewall |
 | `gaming` | default + Steam, Heroic, ProtonUp-Qt, MangoHud, GameMode, gamescope and the 32-bit graphics drivers |
 
 ```bash

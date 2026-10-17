@@ -84,7 +84,7 @@ ColumnLayout {
                   "application/vnd.microsoft.portable-executable"],
           names: ["bottles", "wine", "lutris", "heroic"],
           ids: ["com.usebottles.bottles", "net.lutris.lutris", "com.heroicgameslauncher.hgl", "wine"],
-          builtin: { desktopFile: "b1air-run-windows.desktop", name: I18n.tr("Bottles or Wine") },
+          builtin: { desktopFile: "b1air-run-windows.desktop", name: I18n.tr("b1air, with Proton") },
           missing: I18n.tr("Neither Bottles nor Wine is installed. They come with b1air: run the installer again, or install Bottles with your package manager.") },
         { kind: "packages", title: I18n.tr("Downloaded Packages"), subtitle: I18n.tr(".deb, .rpm, Flatpak and AppImage files"),
           icon: "\u{f03d3}",

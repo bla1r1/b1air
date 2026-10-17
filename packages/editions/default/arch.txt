@@ -4,6 +4,9 @@
 # Windows programs, opened from Files (src/scripts/b1air-run-windows). Wine is
 # in [multilib], which install.sh switches on (x86_64 only, hence optional).
 ?wine ?winetricks ?wine-mono ?wine-gecko
+# Proton outside Steam (src/scripts/b1air-windows): umu-launcher runs it and
+# fetches GE-Proton. From the AUR where [extra] has none (arch-aur.txt).
+?umu-launcher
 # Flatpak: the software search (b1air-software) and .flatpakref files.
 flatpak
 # Containers: another distribution's programs in the Launchpad.

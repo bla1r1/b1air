@@ -1,0 +1,3 @@
+# b1air: /dev/ntsync for every program (Proton and Wine open it as the user).
+# It holds nothing but the synchronisation objects a process makes itself.
+KERNEL=="ntsync", MODE="0666"

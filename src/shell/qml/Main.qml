@@ -749,7 +749,7 @@ Scope {
             const target = pageFor(newWidget, arg);
             if (target && widgetStack.currentItem.page !== undefined)
                 widgetStack.currentItem.page = target;
-            if (newWidget === "quicklook" && widgetStack.currentItem.filePath !== undefined)
+            if ((newWidget === "quicklook" || newWidget === "windows") && widgetStack.currentItem.filePath !== undefined)
                 widgetStack.currentItem.filePath = arg;
             if (newWidget === "settings" && arg && !target && widgetStack.currentItem.searchQuery !== undefined)
                 widgetStack.currentItem.searchQuery = arg;
@@ -766,7 +766,7 @@ Scope {
         const page = pageFor(newWidget, arg);
         if (page)
             props["page"] = page;
-        if (newWidget === "quicklook" && arg)
+        if ((newWidget === "quicklook" || newWidget === "windows") && arg)
             props["filePath"] = arg;
         if ((newWidget === "spotlight" || newWidget === "launchpad") && arg)
             props["query"] = arg;
@@ -826,6 +826,10 @@ Scope {
                 if (wantPage !== "" && currentItem && currentItem.page !== undefined
                     && currentItem.page !== wantPage) {
                     currentItem.page = wantPage;
+                }
+                // Another file for the sheet that shows one (a Windows program).
+                else if (targetWidget === "windows" && arg !== "" && currentItem && currentItem.filePath !== undefined) {
+                    currentItem.filePath = arg;
                 }
                 else if (arg !== "" && currentItem && currentItem.activeMode !== undefined && currentItem.activeMode !== arg) {
                     currentItem.activeMode = arg;

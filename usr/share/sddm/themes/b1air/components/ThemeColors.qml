@@ -22,9 +22,9 @@ import QtQuick
 // right colours is a theme that will one day show the wrong ones. A component
 // needs no permission.
 //
-// Every value falls back to the Tokyo Night default it replaces, so a machine
-// where the daemon has never run — or where the wallpaper group was never set
-// up — looks exactly as it did before.
+// Every value falls back to the desktop's default palette (Breeze Dark's), so
+// a machine where the daemon has never run — or where the wallpaper group was
+// never set up — still looks like the desktop it logs into.
 // =============================================================================
 
 QtObject {

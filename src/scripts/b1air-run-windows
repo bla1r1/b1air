@@ -2,16 +2,15 @@
 # =============================================================================
 # b1air-run-windows FILE — open a Windows program (.exe, .msi, .bat, .lnk)
 #
-# What Files and the Launchpad hand a Windows executable to when nothing else
-# is the default for it. b1air has no prefix manager of its own (docs/ROADMAP:
-# Bottles, Lutris and Steam do that, and better); this only finds whichever of
-# them is installed and gives it the file:
+# What Files and the Launchpad hand a Windows file to. b1air-windows does the
+# work: the shell's sheet asks which bottle and which Proton (the shared one
+# and the newest GE-Proton, recommended), then an installer is installed and
+# its shortcuts go to the Launchpad, or a program is added or run once.
 #
-#   1. Bottles, native or Flatpak — it asks which bottle to run the file in.
-#   2. Wine, in the default prefix.
-#   3. Neither: a notification saying how to get one, instead of nothing.
+# Without it (python3 missing, or b1air-windows not installed), the old way:
+# Bottles if it is there, then Wine in the default prefix.
 #
-# Settings → Default Apps → Windows Programs picks a different one for good.
+# Settings → Default Apps → Windows Programs picks Bottles or another for good.
 # =============================================================================
 set -u
 
@@ -24,6 +23,10 @@ note() {
 }
 
 [[ -n "$file" && -e "$file" ]] || { note "Nothing to open" "No such file: ${file:-(none)}"; exit 2; }
+
+if command -v b1air-windows >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    exec b1air-windows open "$file"
+fi
 
 # A desktop entry by id, wherever XDG keeps it, so a Flatpak app is started
 # the way its entry says (file forwarding into the sandbox included).
