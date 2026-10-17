@@ -160,12 +160,21 @@ Item {
             // rail is the panel itself there, set apart by the hairline. In
             // its own window the page is opaque and the rail is the window's
             // one pane of glass, as in Files, Git and Monitor.
-            color: app.standalone ? Design.glassSidebar : "transparent"
-            radius: app.standalone ? 0 : Design.s(Design.radius.panel)
+            // In its own window, the apps' sidebar (Ui/AppSidebar): a rounded
+            // pane set in from the edges — glass, or without blur a solid
+            // card one step up.
+            Layout.leftMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            Layout.topMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            Layout.bottomMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            color: app.standalone ? (Design.translucent ? Design.glassSidebar : Design.raised) : "transparent"
+            radius: app.standalone ? Design.s(Design.radius.card) : Design.s(Design.radius.panel)
+            border.width: app.standalone ? Design.border : 0
+            border.color: Design.glassBorder
 
-            // Square the right-hand corners: only the window's outer corners
-            // are round.
+            // In the shell, square the right-hand corners — only the panel's
+            // outer corners are round — and set the rail apart by a hairline.
             Rectangle {
+                visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
@@ -173,6 +182,7 @@ Item {
                 color: parent.color
             }
             Rectangle {
+                visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right

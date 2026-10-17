@@ -37,6 +37,11 @@ ScrollBar {
     // Extra room above the bar, for a view whose top is a heading rather
     // than the content that scrolls (Settings' page name).
     property real startOffset: 0
+    // Whatever it scrolls is moving (a Flickable, ListView or ScrollView's).
+    readonly property bool flicking: {
+        const v = root.view || root.parent;
+        return !!(v && (v.moving || (v.flickableItem && v.flickableItem.moving)));
+    }
     Binding { when: root.view !== null; target: root; property: "x"
               value: root.view ? (root.view.mirrored ? Design.s(Design.space.xs)
                                                      : root.view.width - root.width - Design.s(Design.space.xs)) : 0 }
@@ -64,7 +69,10 @@ ScrollBar {
         implicitHeight: implicitWidth
         radius: width / 2
         color: root.pressed ? Design.textDim : Design.textFaint
-        opacity: root.hovered || root.pressed ? 1.0 : 0.8
+        // Quiet while nothing moves — there, but not a line drawn down the
+        // panel — and plain while scrolling or under the pointer.
+        opacity: root.hovered || root.pressed ? 1.0 : root.flicking ? 0.85 : 0.45
+        Behavior on opacity { NumberAnimation { duration: Design.duration.base } }
         Behavior on implicitWidth { NumberAnimation { duration: Design.duration.fast } }
     }
 }

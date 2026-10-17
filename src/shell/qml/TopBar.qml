@@ -14,6 +14,17 @@ import Qt.labs.folderlistmodel
 import "./Services"
 
 PanelWindow {
+    // A bar island under the pointer: a faint wash over the same glass and
+    // rim, not a lighter pane with a bright rim of its own colour.
+    component HoverWash: Rectangle {
+        property bool shown: false
+        anchors.fill: parent
+        radius: parent.radius
+        color: Design.tint(Design.text, 0.06)
+        opacity: shown ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
+    }
+
     id: topBar
 
     // sway itself is reached through B1air.Daemon's Sway, which finds its
@@ -476,12 +487,16 @@ PanelWindow {
                 width: appRow.implicitWidth + Design.s(Design.space.md * 2)
                 height: Design.s(Design.size.island)
                 radius: Design.s(Design.radius.ctl)
-                color: appMenuArea.containsMouse ? Design.glassHover : Design.glassBg
-                border.color: appMenuArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
+                // The same glass and rim as the islands beside it. Hovered it
+                // turned a lighter pane with a bright 22% rim — a colour none
+                // of the rest of the bar has, and the pointer rests in this
+                // corner often (the hot corner), so it looked so most of the
+                // time. Now a faint wash (HoverWash), as every island has.
+                color: Design.glassBg
+                border.color: Design.glassBorder
                 border.width: Design.border
                 GlassRim { radius: parent.radius; sheen: false }
-                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
+                HoverWash { shown: appMenuArea.containsMouse }
 
                 Row {
                     id: appRow
@@ -741,10 +756,11 @@ PanelWindow {
             radius: Design.s(Design.radius.pill)
             // Glass like the islands beside it: a solid accent pill was the
             // loudest thing on the screen, for the one thing glanced at most.
-            color: clockArea.containsMouse ? Design.glassHover : Design.glassBg
-            border.color: clockArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
+            color: Design.glassBg
+            border.color: Design.glassBorder
             border.width: Design.border
             GlassRim { radius: parent.radius; sheen: false }
+            HoverWash { shown: clockArea.containsMouse }
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             Text {
@@ -861,10 +877,11 @@ PanelWindow {
                 height: Design.s(Design.size.island)
                 width: mediaRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: mediaArea.containsMouse ? Design.glassHover : Design.glassBg
-                border.color: mediaArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
+                color: Design.glassBg
+                border.color: Design.glassBorder
                 border.width: Design.border
                 GlassRim { radius: parent.radius; sheen: false }
+                HoverWash { shown: mediaArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
                 // Only when asked for, and only when there is something to say.
@@ -911,10 +928,11 @@ PanelWindow {
                 height: Design.s(Design.size.island)
                 width: weatherRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: weatherArea.containsMouse ? Design.glassHover : Design.glassBg
-                border.color: weatherArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
+                color: Design.glassBg
+                border.color: Design.glassBorder
                 border.width: Design.border
                 GlassRim { radius: parent.radius; sheen: false }
+                HoverWash { shown: weatherArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
                 visible: Settings.barShowWeather && Weather.loaded && !topBar.reduced
@@ -1040,10 +1058,11 @@ PanelWindow {
                 width: statsRow.implicitWidth + Design.s(Design.space.md * 2)
                 visible: Settings.barShowStats && !topBar.reduced
                 radius: Design.s(Design.radius.ctl)
-                color: statsArea.containsMouse ? Design.glassHover : Design.glassBg
-                border.color: statsArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
+                color: Design.glassBg
+                border.color: Design.glassBorder
                 border.width: Design.border
                 GlassRim { radius: parent.radius; sheen: false }
+                HoverWash { shown: statsArea.containsMouse }
                 Row {
                     id: statsRow
                     anchors.centerIn: parent
@@ -1167,6 +1186,7 @@ PanelWindow {
 
                     // Keyboard Layout Pill
                     Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
                         width: kbdText.implicitWidth + Design.s(Design.space.md)
                         height: Design.s(Design.size.mini)
                         radius: Design.s(Design.radius.sm)
@@ -1347,6 +1367,7 @@ PanelWindow {
                     // published one — so the only sign that anything had
                     // arrived was a toast you had to catch before it faded.
                     Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.mini); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
                         color: bellArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
                         Text {
@@ -1391,6 +1412,7 @@ PanelWindow {
                     // Power Button (opens Session Menu)
                     Rectangle {
                         id: powerBtn
+                        anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.xs); height: Design.s(Design.size.xs); radius: Design.s(Design.radius.sm)
                         // Opening a menu is not a danger: the glyph in the
                         // bar's own colour. Red is kept for the menu's armed

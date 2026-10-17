@@ -309,6 +309,9 @@ ApplicationWindow {
         property bool open: false
         // compact: sized to its text — for the tools on the right.
         property bool compact: false
+        // flat: a row of the sidebar (the repository, the branch) — its whole
+        // width, no fill or outline until it is pointed at or open.
+        property bool flat: false
         property bool leftDivider: false
         signal clicked()
         signal rightClicked()
@@ -317,14 +320,16 @@ ApplicationWindow {
         Layout.preferredHeight: Design.s(Design.size.md)
         // The three main cells share the bar's width up to their natural
         // size: in a window tiled to half a screen they still fit.
-        Layout.preferredWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.select)
-        Layout.maximumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.select)
-        Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : Design.s(Design.width.field)
+        Layout.preferredWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : flat ? -1 : Design.s(Design.width.select)
+        Layout.maximumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : flat ? Number.POSITIVE_INFINITY : Design.s(Design.width.select)
+        Layout.minimumWidth: compact ? cellRow.implicitWidth + Design.s(Design.space.md) * 2 : flat ? 0 : Design.s(Design.width.field)
         Layout.fillWidth: !compact
         radius: Design.s(Design.radius.ctl)
-        border.width: Design.border
+        border.width: flat ? 0 : Design.border
         border.color: open ? Design.tint(Design.accent, 0.35) : Design.glassBorder
         color: open ? Design.selection
+             : flat ? (cellArea.pressed && enabled ? Design.active
+                       : cellArea.containsMouse && enabled ? Design.glassHover : "transparent")
              : Design.translucent
                ? (cellArea.pressed && enabled ? Design.tint(Design.text, 0.20)
                   : cellArea.containsMouse && enabled ? Design.veilBold : Design.well)
@@ -562,7 +567,7 @@ ApplicationWindow {
         readonly property string picture: (Avatars.revision, Avatars.url(av.email))
         width: Design.s(Design.size.mini); height: width; radius: width / 2
         color: av.tone
-        border.color: Design.tint(Design.ground, 0.8)
+        border.color: "transparent"
         border.width: av.ring
 
         Text {
@@ -638,166 +643,6 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 0
 
-            // ══════════════════════════════════════════════════════════════════
-            // TOOLBAR — GitHub Desktop's
-            // ══════════════════════════════════════════════════════════════════
-            // Flush cells the full height of the bar, divided by a hairline,
-            // square, with the open one lit — the shape GitHub Desktop has. The
-            // bar before this was a row of rounded, outlined pills with gaps
-            // between them and two loose arrow buttons for push and pull, which
-            // read as a web form rather than that app. The arrows are gone into
-            // the third cell, which is one action at a time as in the original:
-            // Publish branch, Pull origin, Push origin, or Fetch origin.
-            //
-            // A full border on a bar that spans the window draws its left and
-            // right edges on top of the frame's own; what separates the bar from
-            // what is under it is one line, so that is what it has.
-            // Restyled to the suite's toolbar: no bar of its own colour and no
-            // rule; the three cells are capsules like every other app's
-            // controls, and still open the same dropdowns.
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.rowTall)
-                color: "transparent"
-                z: 20
-
-                // AppToolbar's hairline: the bar is AppToolbar's size and look,
-                // but it also carries the progress line along its bottom edge.
-                Rectangle {
-                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                    height: Design.border
-                    color: Design.separator
-                }
-
-                // Progress of the running operation: fills when git reports a
-                // percentage, slides back and forth when it doesn't.
-                Item {
-                    id: progressLine
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: Design.s(Design.focusWidth)
-                    visible: window.busy
-                    clip: true
-                    z: 2
-
-                    Rectangle {
-                        visible: GitBackend.progress >= 0
-                        height: parent.height
-                        width: parent.width * Math.max(0, GitBackend.progress) / 100
-                        color: Design.accent
-                        Behavior on width { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
-                    }
-                    Rectangle {
-                        id: slider
-                        visible: GitBackend.progress < 0
-                        height: parent.height
-                        width: parent.width * 0.25
-                        radius: 1
-                        color: Design.accent
-                        SequentialAnimation on x {
-                            running: progressLine.visible && GitBackend.progress < 0
-                            loops: Animation.Infinite
-                            NumberAnimation { from: -slider.width; to: progressLine.width; duration: 1100; easing.type: Easing.InOutQuad }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.md)
-                    anchors.rightMargin: Design.s(Design.space.md)
-                    anchors.topMargin: Design.s(Design.space.sm)
-                    anchors.bottomMargin: Design.s(Design.space.xs)
-                    spacing: Design.s(Design.space.sm)
-
-                    ToolbarCell {
-                        id: repoBtn
-                        icon: "󰊢"
-                        caption: I18n.tr("Current repository")
-                        title: GitBackend.repoName || I18n.tr("No repository")
-                        dropdown: true
-                        open: window.repoDropdownOpen
-                        onRightClicked: if (window.hasRepo) window.showMenu(repoMenu, "")
-                        onClicked: {
-                            window.repoDropdownOpen = !window.repoDropdownOpen;
-                            window.branchDropdownOpen = false;
-                            window.accountsDropdownOpen = false;
-                        }
-                    }
-
-                    ToolbarCell {
-                        id: branchBtn
-                        // The branch name is the one value here that can be
-                        // arbitrarily long, so this cell elides instead of
-                        // pushing the rest of the bar along.
-                        icon: ""
-                        spinning: GitBackend.busy === "checkout" || GitBackend.busy === "merge"
-                        caption: spinning ? GitBackend.busyText : I18n.tr("Current branch")
-                        title: window.hasRepo ? GitBackend.branchName : "—"
-                        dropdown: true
-                        open: window.branchDropdownOpen
-                        enabled: window.hasRepo && !window.busy
-                        onClicked: {
-                            window.branchDropdownOpen = !window.branchDropdownOpen;
-                            window.repoDropdownOpen = false;
-                            window.accountsDropdownOpen = false;
-                        }
-                    }
-
-                    ToolbarCell {
-                        id: syncBtn
-                        enabled: window.syncAction !== "none" && !window.busy
-                        spinning: window.syncBusy || GitBackend.fetching
-                        icon: window.syncAction === "publish" ? "󰅧"
-                            : window.syncAction === "pull" ? "󰁅"
-                            : window.syncAction === "push" ? "󰁝" : "󰑐"
-                        title: window.syncAction === "publish" ? I18n.tr("Publish branch")
-                             : window.syncAction === "pull" ? I18n.tr("Pull %1", GitBackend.remoteName)
-                             : window.syncAction === "push" ? I18n.tr("Push %1", GitBackend.remoteName)
-                             : window.syncAction === "fetch" ? I18n.tr("Fetch %1", GitBackend.remoteName)
-                             : I18n.tr("Fetch origin")
-                        caption: window.syncBusy ? GitBackend.busyText
-                               : !window.hasRepo ? I18n.tr("No repository")
-                               : !GitBackend.hasRemote ? I18n.tr("This repository has no remote")
-                               : GitBackend.fetching ? I18n.tr("Fetching…")
-                               : GitBackend.upstreamGone ? I18n.tr("Deleted on %1 — publish again?", GitBackend.remoteName)
-                               : window.syncAction === "publish" ? I18n.tr("Publish this branch to %1", GitBackend.remoteName)
-                               : window.lastFetchText
-                        // Counts beside the title, as the original draws them:
-                        // what is waiting in each direction.
-                        badge: (GitBackend.behindCount > 0 ? GitBackend.behindCount + "↓" : "")
-                             + (GitBackend.behindCount > 0 && GitBackend.aheadCount > 0 ? " " : "")
-                             + (GitBackend.aheadCount > 0 && window.syncAction !== "publish" ? GitBackend.aheadCount + "↑" : "")
-                        onClicked: {
-                            if (window.syncAction === "pull") GitBackend.pull();
-                            else if (window.syncAction === "push" || window.syncAction === "publish") GitBackend.push();
-                            else GitBackend.fetch();
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
-
-                    // Beyond the original: accounts. Terminal and Files were
-                    // two more cells here; they moved to the right-click menus
-                    // (on the repository, a file, a commit), where they open
-                    // the thing clicked rather than always the repository root.
-                    ToolbarCell {
-                        id: accountsBtn
-                        compact: true
-                        leftDivider: true
-                        icon: "󰀉"
-                        title: window.githubAccount && window.githubAccount.login ? window.githubAccount.login : I18n.tr("Accounts")
-                        open: window.accountsDropdownOpen
-                        onClicked: {
-                            window.accountsDropdownOpen = !window.accountsDropdownOpen;
-                            window.repoDropdownOpen = false;
-                            window.branchDropdownOpen = false;
-                            if (window.accountsDropdownOpen) GitBackend.refreshAccounts();
-                        }
-                    }
-                }
-            }
 
             // ══════════════════════════════════════════════════════════════════
             // MAIN WORKSPACE (Left: Changes/History Sidebar, Right: Diff View)
@@ -822,17 +667,69 @@ ApplicationWindow {
                         // was left with too little room to read.
                         Layout.preferredWidth: Math.round(Math.max(Design.s(Design.width.sidebar), Math.min(Design.s(Design.width.dialog), window.width * 0.28)))
                         Layout.fillHeight: true
-                        // The sidebar of every app (Ui/AppSidebar's look): the
-                        // sidebar glass, flush with the window edge, a hairline
-                        // on the right. It holds a list and a commit box that
-                        // fill its height, so it is not an AppSidebar itself.
-                        color: Design.translucent ? Design.glassSidebar : Design.sunken
+                        // The sidebar of every app (Ui/AppSidebar's look): a
+                        // pane of its own, rounded and set in from the window's
+                        // edges — the glass, or without blur a solid card one
+                        // step up. It holds a list and a commit box that fill
+                        // its height, so it is not an AppSidebar itself.
+                        Layout.leftMargin: Design.s(Design.space.sm)
+                        Layout.topMargin: Design.s(Design.space.sm)
+                        Layout.bottomMargin: Design.s(Design.space.sm)
+                        radius: Design.s(Design.radius.card)
+                        color: Design.translucent ? Design.glassSidebar : Design.raised
+                        border.width: Design.border
+                        border.color: Design.glassBorder
                         clip: true
-                        Rectangle { anchors.right: parent.right; width: Design.border; height: parent.height; color: Design.separator; z: 5 }
 
                         ColumnLayout {
                             anchors.fill: parent
                             spacing: 0
+
+                            // Where you are: the repository and the branch, at the head
+                            // of the sidebar as Files has its places — the toolbar holds
+                            // only what acts on them.
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.margins: Design.s(Design.space.sm)
+                                Layout.bottomMargin: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xxs)
+
+                                ToolbarCell {
+                                    id: repoBtn
+                                    flat: true
+                                    icon: "\u{f024b}"   // the repository: a folder
+                                    caption: I18n.tr("Current repository")
+                                    title: GitBackend.repoName || I18n.tr("No repository")
+                                    dropdown: true
+                                    open: window.repoDropdownOpen
+                                    onRightClicked: if (window.hasRepo) window.showMenu(repoMenu, "")
+                                    onClicked: {
+                                        window.repoDropdownOpen = !window.repoDropdownOpen;
+                                        window.branchDropdownOpen = false;
+                                        window.accountsDropdownOpen = false;
+                                    }
+                                }
+
+                                ToolbarCell {
+                                    id: branchBtn
+                                    flat: true
+                                    // The branch name is the one value here that can be
+                                    // arbitrarily long, so this cell elides instead of
+                                    // pushing the rest of the bar along.
+                                    icon: "\u{f062c}"
+                                    spinning: GitBackend.busy === "checkout" || GitBackend.busy === "merge"
+                                    caption: spinning ? GitBackend.busyText : I18n.tr("Current branch")
+                                    title: window.hasRepo ? GitBackend.branchName : "—"
+                                    dropdown: true
+                                    open: window.branchDropdownOpen
+                                    enabled: window.hasRepo && !window.busy
+                                    onClicked: {
+                                        window.branchDropdownOpen = !window.branchDropdownOpen;
+                                        window.repoDropdownOpen = false;
+                                        window.accountsDropdownOpen = false;
+                                    }
+                                }
+                            }
 
                             // Top Sidebar Tab Switcher: [ Changes (N) ] [ History ]
 Item {
@@ -872,7 +769,7 @@ Item {
                                     Rectangle {
                                         Layout.fillWidth: true
                                         height: Design.s(Design.size.sm)
-                                        color: Design.tint(Design.ground, 0.40)
+                                        color: "transparent"
 
                                         Rectangle {
                                             anchors.left: parent.left
@@ -1076,7 +973,12 @@ Item {
 
                                         delegate: Rectangle {
                                             id: fileCard
-                                            width: changedList.width
+                                            // A rounded row set in from the pane's edges, as
+                                            // Files' sidebar rows: a square band inside a
+                                            // rounded pane was the one square thing in it.
+                                            x: Design.s(Design.space.xs)
+                                            width: changedList.width - Design.s(Design.space.xs) * 2
+                                            radius: Design.s(Design.radius.ctl)
                                             height: Design.s(Design.size.md)
                                             color: isSelected ? Design.selection : (fArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
 
@@ -1168,7 +1070,7 @@ Item {
                                         Layout.fillWidth: true
                                         height: Design.s(Design.width.label) + (lastCommitBar.visible ? Design.s(Design.size.row) : 0)
                                                 + (identityWarning.visible ? Design.s(Design.space.lg) : 0)
-                                        color: Design.tint(Design.ground, 0.90)
+                                        color: "transparent"
 
                                         Connections {
                                             target: GitBackend
@@ -1454,13 +1356,13 @@ Item {
                                     // happened on click, so a commit's files
                                     // and changes could not be seen at all.
                                     delegate: Rectangle {
-                                        width: historyList.width
+                                        x: Design.s(Design.space.xs)
+                                        width: historyList.width - Design.s(Design.space.xs) * 2
+                                        radius: Design.s(Design.radius.ctl)
                                         height: Design.s(Design.size.rowTall)
                                         readonly property bool isSelected: GitBackend.selectedCommit === model.fullHash
                                         color: isSelected ? Design.selection
                                                           : (hArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
-                                        border.color: Design.tint(Design.accent, 0.08)
-                                        border.width: Design.border
 
                                         ColumnLayout {
                                             anchors.fill: parent
@@ -1545,250 +1447,375 @@ Item {
                         }
                     }
 
-                    // ── RIGHT MAIN PANEL (File Diff Viewer) ───────────────────
-                    Rectangle {
+                    // ── RIGHT: the toolbar, the diff, the status bar ─────────────
+                    ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: "transparent"
-                        clip: true
+                        spacing: 0
 
-                        // One diff row, shared by the working-tree diff and a
-                        // commit's: two copies of this delegate would drift.
-                        Component {
-                            id: diffRowDelegate
+                        // The toolbar over the diff, as every app has it over its
+                        // content: the one thing to do with the remote (publish,
+                        // pull, push or fetch), and the accounts at its right.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(Design.size.rowTall)
+                            color: "transparent"
+                            z: 20
 
+                            // AppToolbar's hairline: the bar is AppToolbar's size and look,
+                            // but it also carries the progress line along its bottom edge.
                             Rectangle {
-                                width: ListView.view ? ListView.view.width : 0
-                                height: Math.max(20, diffLineText.implicitHeight + 4)
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                                height: Design.border
+                                color: Design.separator
+                            }
 
-                                color: {
-                                    if (modelData.type === "add") return Design.tint(Design.ok, 0.14);
-                                    if (modelData.type === "del") return Design.tint(Design.danger, 0.16);
-                                    if (modelData.type === "header") return Design.tint(Design.accent, 0.12);
-                                    return "transparent";
+                            // Progress of the running operation: fills when git reports a
+                            // percentage, slides back and forth when it doesn't.
+                            Item {
+                                id: progressLine
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: Design.s(Design.focusWidth)
+                                visible: window.busy
+                                clip: true
+                                z: 2
+
+                                Rectangle {
+                                    visible: GitBackend.progress >= 0
+                                    height: parent.height
+                                    width: parent.width * Math.max(0, GitBackend.progress) / 100
+                                    color: Design.accent
+                                    Behavior on width { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutCubic } }
+                                }
+                                Rectangle {
+                                    id: slider
+                                    visible: GitBackend.progress < 0
+                                    height: parent.height
+                                    width: parent.width * 0.25
+                                    radius: 1
+                                    color: Design.accent
+                                    SequentialAnimation on x {
+                                        running: progressLine.visible && GitBackend.progress < 0
+                                        loops: Animation.Infinite
+                                        NumberAnimation { from: -slider.width; to: progressLine.width; duration: 1100; easing.type: Easing.InOutQuad }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(Design.space.md)
+                                anchors.rightMargin: Design.s(Design.space.md)
+                                anchors.topMargin: Design.s(Design.space.sm)
+                                anchors.bottomMargin: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.sm)
+
+
+                                ToolbarCell {
+                                    id: syncBtn
+                                    enabled: window.syncAction !== "none" && !window.busy
+                                    spinning: window.syncBusy || GitBackend.fetching
+                                    icon: window.syncAction === "publish" ? "󰅧"
+                                        : window.syncAction === "pull" ? "󰁅"
+                                        : window.syncAction === "push" ? "󰁝" : "󰑐"
+                                    title: window.syncAction === "publish" ? I18n.tr("Publish branch")
+                                         : window.syncAction === "pull" ? I18n.tr("Pull %1", GitBackend.remoteName)
+                                         : window.syncAction === "push" ? I18n.tr("Push %1", GitBackend.remoteName)
+                                         : window.syncAction === "fetch" ? I18n.tr("Fetch %1", GitBackend.remoteName)
+                                         : I18n.tr("Fetch origin")
+                                    caption: window.syncBusy ? GitBackend.busyText
+                                           : !window.hasRepo ? I18n.tr("No repository")
+                                           : !GitBackend.hasRemote ? I18n.tr("This repository has no remote")
+                                           : GitBackend.fetching ? I18n.tr("Fetching…")
+                                           : GitBackend.upstreamGone ? I18n.tr("Deleted on %1 — publish again?", GitBackend.remoteName)
+                                           : window.syncAction === "publish" ? I18n.tr("Publish this branch to %1", GitBackend.remoteName)
+                                           : window.lastFetchText
+                                    // Counts beside the title, as the original draws them:
+                                    // what is waiting in each direction.
+                                    badge: (GitBackend.behindCount > 0 ? GitBackend.behindCount + "↓" : "")
+                                         + (GitBackend.behindCount > 0 && GitBackend.aheadCount > 0 ? " " : "")
+                                         + (GitBackend.aheadCount > 0 && window.syncAction !== "publish" ? GitBackend.aheadCount + "↑" : "")
+                                    onClicked: {
+                                        if (window.syncAction === "pull") GitBackend.pull();
+                                        else if (window.syncAction === "push" || window.syncAction === "publish") GitBackend.push();
+                                        else GitBackend.fetch();
+                                    }
                                 }
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
+                                Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
 
-                                    // Old Line Num
-                                    // Layout.preferredWidth, not width: a
-                                    // RowLayout ignores width, so both number
-                                    // columns shrank to their text and the
-                                    // new-line number sat on top of the old.
-                                    Text {
-                                        Layout.preferredWidth: Design.s(Design.size.row)
-                                        text: modelData.oldLine || ""
-                                        horizontalAlignment: Text.AlignRight
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        color: Design.textDim
-                                        rightPadding: 8
-                                    }
-
-                                    // New Line Num
-                                    Text {
-                                        Layout.preferredWidth: Design.s(Design.size.row)
-                                        text: modelData.newLine || ""
-                                        horizontalAlignment: Text.AlignRight
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        color: Design.textDim
-                                        rightPadding: 8
-                                    }
-
-                                    // Line Content
-                                    Text {
-                                        id: diffLineText
-                                        Layout.fillWidth: true
-                                        text: modelData.text || ""
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        color: {
-                                            if (modelData.type === "add") return Design.ok;
-                                            if (modelData.type === "del") return Design.danger;
-                                            if (modelData.type === "header") return Design.accent;
-                                            return Design.text;
-                                        }
+                                // Beyond the original: accounts. Terminal and Files were
+                                // two more cells here; they moved to the right-click menus
+                                // (on the repository, a file, a commit), where they open
+                                // the thing clicked rather than always the repository root.
+                                ToolbarCell {
+                                    id: accountsBtn
+                                    compact: true
+                                    leftDivider: true
+                                    icon: "󰀉"
+                                    title: window.githubAccount && window.githubAccount.login ? window.githubAccount.login : I18n.tr("Accounts")
+                                    open: window.accountsDropdownOpen
+                                    onClicked: {
+                                        window.accountsDropdownOpen = !window.accountsDropdownOpen;
+                                        window.repoDropdownOpen = false;
+                                        window.branchDropdownOpen = false;
+                                        if (window.accountsDropdownOpen) GitBackend.refreshAccounts();
                                     }
                                 }
                             }
                         }
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 0
-                            visible: window.currentTab === 0
+                        // ── File Diff Viewer
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: "transparent"
+                            clip: true
 
-                            // Diff File Header Bar
-                            // Names the file being shown, and nothing else. It
-                            // used to state the panel's empty condition too —
-                            // "Open a repository" — directly above the centred
-                            // empty state reading "No Git Repository Open", so
-                            // the same sentence was on screen twice in two
-                            // wordings. One message, in the middle, where there
-                            // is room for it.
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: Design.s(Design.size.knob)
-                                visible: GitBackend.selectedFile !== ""
-                                color: Design.tint(Design.ground, 0.8)
+                            // One diff row, shared by the working-tree diff and a
+                            // commit's: two copies of this delegate would drift.
+                            Component {
+                                id: diffRowDelegate
 
                                 Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: 1
-                                    color: Design.glassBorder
-                                }
+                                    width: ListView.view ? ListView.view.width : 0
+                                    height: Math.max(20, diffLineText.implicitHeight + 4)
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Design.s(Design.space.md)
-                                    anchors.rightMargin: Design.s(Design.space.md)
-                                    spacing: Design.s(Design.space.sm)
-
-                                    Text {
-                                        text: "󰈙"
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(Design.font.body)
-                                        color: Design.textDim
+                                    // A soft wash and a mark at the edge say added or
+                                    // removed; the code itself stays in the text
+                                    // colour, which green on green was not.
+                                    color: {
+                                        if (modelData.type === "add") return Design.tint(Design.ok, 0.10);
+                                        if (modelData.type === "del") return Design.tint(Design.danger, 0.11);
+                                        if (modelData.type === "header") return Design.tint(Design.accent, 0.08);
+                                        return "transparent";
+                                    }
+                                    Rectangle {
+                                        visible: modelData.type === "add" || modelData.type === "del"
+                                        width: Design.s(Design.focusWidth)
+                                        height: parent.height
+                                        color: modelData.type === "add" ? Design.ok : Design.danger
                                     }
 
-                                    Text {
-                                        text: GitBackend.selectedFile
-                                        font.family: Design.font.mono
-                                        font.pixelSize: Design.s(Design.font.body)
-                                        font.weight: Design.weight.semibold
-                                        color: Design.text
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideMiddle
-                                    }
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        spacing: 0
 
-                                    Text {
-                                        text: GitBackend.statusSummary
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        color: Design.textDim
+                                        // Old Line Num
+                                        // Layout.preferredWidth, not width: a
+                                        // RowLayout ignores width, so both number
+                                        // columns shrank to their text and the
+                                        // new-line number sat on top of the old.
+                                        Text {
+                                            Layout.preferredWidth: Design.s(Design.size.row)
+                                            text: modelData.oldLine || ""
+                                            horizontalAlignment: Text.AlignRight
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: Design.textDim
+                                            rightPadding: 8
+                                        }
+
+                                        // New Line Num
+                                        Text {
+                                            Layout.preferredWidth: Design.s(Design.size.row)
+                                            text: modelData.newLine || ""
+                                            horizontalAlignment: Text.AlignRight
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: Design.textDim
+                                            rightPadding: 8
+                                        }
+
+                                        // Line Content
+                                        Text {
+                                            id: diffLineText
+                                            Layout.fillWidth: true
+                                            text: modelData.text || ""
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: modelData.type === "header" ? Design.accent : Design.text
+                                        }
                                     }
                                 }
                             }
 
-                            // Diff Lines ListView
-                            ListView {
-                                id: diffList
-                                ScrollBar.vertical: OverflowBar {}
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                clip: true
-                                model: GitBackend.currentDiff
-                                delegate: diffRowDelegate
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 0
+                                visible: window.currentTab === 0
 
-                                // Empty State when clean
-                                ColumnLayout {
-                                    anchors.centerIn: parent
-                                    spacing: Design.s(Design.space.md)
-                                    visible: GitBackend.currentDiff.length === 0
+                                // Diff File Header Bar
+                                // Names the file being shown, and nothing else. It
+                                // used to state the panel's empty condition too —
+                                // "Open a repository" — directly above the centred
+                                // empty state reading "No Git Repository Open", so
+                                // the same sentence was on screen twice in two
+                                // wordings. One message, in the middle, where there
+                                // is room for it.
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: Design.s(Design.size.knob)
+                                    visible: GitBackend.selectedFile !== ""
+                                    color: "transparent"
 
-                                    EmptyState {
-                                        icon: "󰊢"
-                                        title: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
-                                        hint: GitBackend.isRepo ? I18n.tr("Working directory is clean") : I18n.tr("Select a repository from the top menu or open a folder.")
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 1
+                                        color: Design.glassBorder
                                     }
 
-                                    // What to do next, as GitHub Desktop suggests it.
-                                    ColumnLayout {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        Layout.topMargin: Design.s(Design.space.sm)
-                                        Layout.preferredWidth: Math.min(Design.s(Design.width.menuMax), diffList.width - Design.s(Design.size.row))
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Design.s(Design.space.md)
+                                        anchors.rightMargin: Design.s(Design.space.md)
                                         spacing: Design.s(Design.space.sm)
-                                        visible: GitBackend.isRepo && GitBackend.changedFiles.length === 0
 
-                                        Repeater {
-                                            model: {
-                                                const items = [];
-                                                const remote = GitBackend.remoteName || "origin";
-                                                if (window.syncAction === "publish")
-                                                    items.push({ title: I18n.tr("Publish your branch"), text: I18n.tr("Put %1 on %2.", GitBackend.branchName, remote), button: I18n.tr("Publish branch"), run: "push" });
-                                                else if (GitBackend.behindCount > 0)
-                                                    items.push({ title: I18n.trn("Pull %1 commit from %2", "Pull %1 commits from %2", GitBackend.behindCount, remote), text: I18n.tr("They're on the remote and not here yet."), button: I18n.tr("Pull"), run: "pull" });
-                                                else if (GitBackend.aheadCount > 0)
-                                                    items.push({ title: I18n.trn("Push %1 commit to %2", "Push %1 commits to %2", GitBackend.aheadCount, remote), text: I18n.tr("They're only on this machine."), button: I18n.tr("Push"), run: "push" });
-                                                if (window.canOpenPr)
-                                                    items.push({ title: I18n.tr("Create a pull request"), text: I18n.tr("From %1 into %2.", GitBackend.branchName, GitBackend.defaultBranch), button: I18n.tr("Create pull request"), run: "pr" });
-                                                items.push({ title: I18n.tr("Open in the terminal"), text: GitBackend.repoPath, button: I18n.tr("Terminal"), run: "term" });
-                                                items.push({ title: I18n.tr("Show in Files"), text: I18n.tr("Browse the repository's folder."), button: I18n.tr("Files"), run: "files" });
-                                                if (GitBackend.webUrl !== "")
-                                                    items.push({ title: I18n.tr("View on the web"), text: GitBackend.webUrl, button: I18n.tr("Open"), run: "web" });
-                                                return items;
-                                            }
-                                            delegate: Rectangle {
-                                                required property var modelData
-                                                required property int index
-                                                Layout.fillWidth: true
-                                                Layout.preferredHeight: Design.s(Design.size.rowTall)
-                                                radius: Design.s(Design.radius.ctl)
-                                                color: Design.glassCard
-                                                border.color: Design.glassBorder
-                                                border.width: Design.border
-                                                RowLayout {
-                                                    anchors.fill: parent
-                                                    anchors.leftMargin: Design.s(Design.space.md)
-                                                    anchors.rightMargin: Design.s(Design.space.sm)
-                                                    spacing: Design.s(Design.space.sm)
-                                                    ColumnLayout {
-                                                        Layout.fillWidth: true
-                                                        spacing: Design.s(Design.space.xxs)
-                                                        Text {
-                                                            text: modelData.title
-                                                            font.family: Design.font.sans
-                                                            font.pixelSize: Design.s(Design.font.body)
-                                                            font.weight: Design.weight.semibold
-                                                            color: Design.text
-                                                        }
-                                                        Text {
+                                        Text {
+                                            text: "󰈙"
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.body)
+                                            color: Design.textDim
+                                        }
+
+                                        Text {
+                                            text: GitBackend.selectedFile
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.body)
+                                            font.weight: Design.weight.semibold
+                                            color: Design.text
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideMiddle
+                                        }
+
+                                        Text {
+                                            text: GitBackend.statusSummary
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: Design.textDim
+                                        }
+                                    }
+                                }
+
+                                // Diff Lines ListView
+                                ListView {
+                                    id: diffList
+                                    ScrollBar.vertical: OverflowBar {}
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    model: GitBackend.currentDiff
+                                    delegate: diffRowDelegate
+
+                                    // Empty State when clean
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: Design.s(Design.space.md)
+                                        visible: GitBackend.currentDiff.length === 0
+
+                                        EmptyState {
+                                            icon: "󰊢"
+                                            title: GitBackend.isRepo ? I18n.tr("No changes to display") : I18n.tr("No Git Repository Open")
+                                            hint: GitBackend.isRepo ? I18n.tr("Working directory is clean") : I18n.tr("Select a repository from the top menu or open a folder.")
+                                        }
+
+                                        // What to do next, as GitHub Desktop suggests it.
+                                        ColumnLayout {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            Layout.topMargin: Design.s(Design.space.sm)
+                                            Layout.preferredWidth: Math.min(Design.s(Design.width.menuMax), diffList.width - Design.s(Design.size.row))
+                                            spacing: Design.s(Design.space.sm)
+                                            visible: GitBackend.isRepo && GitBackend.changedFiles.length === 0
+
+                                            Repeater {
+                                                model: {
+                                                    const items = [];
+                                                    const remote = GitBackend.remoteName || "origin";
+                                                    if (window.syncAction === "publish")
+                                                        items.push({ title: I18n.tr("Publish your branch"), text: I18n.tr("Put %1 on %2.", GitBackend.branchName, remote), button: I18n.tr("Publish branch"), run: "push" });
+                                                    else if (GitBackend.behindCount > 0)
+                                                        items.push({ title: I18n.trn("Pull %1 commit from %2", "Pull %1 commits from %2", GitBackend.behindCount, remote), text: I18n.tr("They're on the remote and not here yet."), button: I18n.tr("Pull"), run: "pull" });
+                                                    else if (GitBackend.aheadCount > 0)
+                                                        items.push({ title: I18n.trn("Push %1 commit to %2", "Push %1 commits to %2", GitBackend.aheadCount, remote), text: I18n.tr("They're only on this machine."), button: I18n.tr("Push"), run: "push" });
+                                                    if (window.canOpenPr)
+                                                        items.push({ title: I18n.tr("Create a pull request"), text: I18n.tr("From %1 into %2.", GitBackend.branchName, GitBackend.defaultBranch), button: I18n.tr("Create pull request"), run: "pr" });
+                                                    items.push({ title: I18n.tr("Open in the terminal"), text: GitBackend.repoPath, button: I18n.tr("Terminal"), run: "term" });
+                                                    items.push({ title: I18n.tr("Show in Files"), text: I18n.tr("Browse the repository's folder."), button: I18n.tr("Files"), run: "files" });
+                                                    if (GitBackend.webUrl !== "")
+                                                        items.push({ title: I18n.tr("View on the web"), text: GitBackend.webUrl, button: I18n.tr("Open"), run: "web" });
+                                                    return items;
+                                                }
+                                                delegate: Rectangle {
+                                                    required property var modelData
+                                                    required property int index
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: Design.s(Design.size.rowTall)
+                                                    radius: Design.s(Design.radius.ctl)
+                                                    color: Design.glassCard
+                                                    border.color: Design.glassBorder
+                                                    border.width: Design.border
+                                                    RowLayout {
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: Design.s(Design.space.md)
+                                                        anchors.rightMargin: Design.s(Design.space.sm)
+                                                        spacing: Design.s(Design.space.sm)
+                                                        ColumnLayout {
                                                             Layout.fillWidth: true
-                                                            text: modelData.text
-                                                            font.family: Design.font.sans
-                                                            font.pixelSize: Design.s(Design.font.caption)
-                                                            color: Design.textDim
-                                                            elide: Text.ElideMiddle
+                                                            spacing: Design.s(Design.space.xxs)
+                                                            Text {
+                                                                text: modelData.title
+                                                                font.family: Design.font.sans
+                                                                font.pixelSize: Design.s(Design.font.body)
+                                                                font.weight: Design.weight.semibold
+                                                                color: Design.text
+                                                            }
+                                                            Text {
+                                                                Layout.fillWidth: true
+                                                                text: modelData.text
+                                                                font.family: Design.font.sans
+                                                                font.pixelSize: Design.s(Design.font.caption)
+                                                                color: Design.textDim
+                                                                elide: Text.ElideMiddle
+                                                            }
                                                         }
-                                                    }
-                                                    Rectangle {
-                                                        readonly property bool primary: index === 0 && ["push", "pull"].indexOf(modelData.run) >= 0
-                                                        Layout.preferredWidth: sugText.implicitWidth + Design.s(Design.space.lg)
-                                                        Layout.preferredHeight: Design.s(Design.size.xs)
-                                                        radius: Design.s(Design.radius.sm)
-                                                        opacity: window.busy ? Design.opacity.disabled : 1
-                                                        color: primary ? (sugArea.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent)
-                                                                       : (sugArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
-                                                        border.color: primary ? "transparent" : Design.glassBorder
-                                                        border.width: Design.border
-                                                        Text {
-                                                            id: sugText
-                                                            anchors.centerIn: parent
-                                                            text: modelData.button
-                                                            font.family: Design.font.sans
-                                                            font.pixelSize: Design.s(Design.font.caption)
-                                                            font.weight: Design.weight.semibold
-                                                            color: parent.primary ? Design.accentText : Design.text
-                                                        }
-                                                        Clickable {
-                                                            id: sugArea
-                                                            anchors.fill: parent
-                                                            hoverEnabled: true
-                                                            enabled: !window.busy
-                                                            cursorShape: Qt.PointingHandCursor
-                                                            onClicked: {
-                                                                const r = modelData.run;
-                                                                if (r === "push") GitBackend.push();
-                                                                else if (r === "pull") GitBackend.pull();
-                                                                else if (r === "pr") GitBackend.openPullRequest();
-                                                                else if (r === "term") GitBackend.openTerminal("");
-                                                                else if (r === "files") GitBackend.openFileManager("");
-                                                                else if (r === "web") GitBackend.openOnWeb();
+                                                        Rectangle {
+                                                            readonly property bool primary: index === 0 && ["push", "pull"].indexOf(modelData.run) >= 0
+                                                            Layout.preferredWidth: sugText.implicitWidth + Design.s(Design.space.lg)
+                                                            Layout.preferredHeight: Design.s(Design.size.xs)
+                                                            radius: Design.s(Design.radius.sm)
+                                                            opacity: window.busy ? Design.opacity.disabled : 1
+                                                            color: primary ? (sugArea.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent)
+                                                                           : (sugArea.containsMouse ? Design.tint(Design.text, 0.12) : "transparent")
+                                                            border.color: primary ? "transparent" : Design.glassBorder
+                                                            border.width: Design.border
+                                                            Text {
+                                                                id: sugText
+                                                                anchors.centerIn: parent
+                                                                text: modelData.button
+                                                                font.family: Design.font.sans
+                                                                font.pixelSize: Design.s(Design.font.caption)
+                                                                font.weight: Design.weight.semibold
+                                                                color: parent.primary ? Design.accentText : Design.text
+                                                            }
+                                                            Clickable {
+                                                                id: sugArea
+                                                                anchors.fill: parent
+                                                                hoverEnabled: true
+                                                                enabled: !window.busy
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: {
+                                                                    const r = modelData.run;
+                                                                    if (r === "push") GitBackend.push();
+                                                                    else if (r === "pull") GitBackend.pull();
+                                                                    else if (r === "pr") GitBackend.openPullRequest();
+                                                                    else if (r === "term") GitBackend.openTerminal("");
+                                                                    else if (r === "files") GitBackend.openFileManager("");
+                                                                    else if (r === "web") GitBackend.openOnWeb();
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1798,320 +1825,350 @@ Item {
                                     }
                                 }
                             }
-                        }
 
-                        // ── A commit from History ─────────────────────────────
-                        // With the History tab up this panel used to go on
-                        // showing the working-tree diff, which has nothing to
-                        // do with the commit list beside it. Now: what the
-                        // commit is, the files it touched, and the diff of the
-                        // one picked.
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 0
-                            visible: window.currentTab === 1
+                            // ── A commit from History ─────────────────────────────
+                            // With the History tab up this panel used to go on
+                            // showing the working-tree diff, which has nothing to
+                            // do with the commit list beside it. Now: what the
+                            // commit is, the files it touched, and the diff of the
+                            // one picked.
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 0
+                                visible: window.currentTab === 1
 
-                            // Commit header: subject, author, date, hash, body.
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: commitHead.implicitHeight + Design.s(Design.space.lg)
-                                visible: GitBackend.selectedCommit !== ""
-                                color: Design.tint(Design.ground, 0.8)
-
+                                // Commit header: subject, author, date, hash, body.
                                 Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: 1
-                                    color: Design.glassBorder
-                                }
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: commitHead.implicitHeight + Design.s(Design.space.lg)
+                                    visible: GitBackend.selectedCommit !== ""
+                                    color: "transparent"
 
-                                ColumnLayout {
-                                    id: commitHead
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: Design.s(Design.space.md)
-                                    anchors.rightMargin: Design.s(Design.space.md)
-                                    spacing: Design.s(Design.space.xs)
-
-                                    // Wrapped, not cut: the header grows
-                                    // with it (implicitHeight above), and a
-                                    // long subject or a list of authors was
-                                    // a line ending in "…" with no way to
-                                    // read the rest.
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: GitBackend.commitInfo.subject || ""
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.body)
-                                        font.weight: Design.weight.semibold
-                                        color: Design.text
-                                        wrapMode: Text.Wrap
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 1
+                                        color: Design.glassBorder
                                     }
 
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: Design.s(Design.space.sm)
+                                    ColumnLayout {
+                                        id: commitHead
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.leftMargin: Design.s(Design.space.md)
+                                        anchors.rightMargin: Design.s(Design.space.md)
+                                        spacing: Design.s(Design.space.xs)
 
-                                        // One initial-disc per person, the
-                                        // author first, overlapping as the
-                                        // original stacks its avatars. The
-                                        // full list is in the tooltip.
-                                        Row {
-                                            id: peopleRow
-                                            spacing: -Design.s(Design.space.xs)
-                                            readonly property var names: [GitBackend.commitInfo.author || ""]
-                                                .concat((GitBackend.commitInfo.coAuthors || [])
-                                                        .filter(n => n !== GitBackend.commitInfo.author))
-                                            Repeater {
-                                                model: peopleRow.names
-                                                delegate: AuthorAvatar {
-                                                    required property string modelData
-                                                    required property int index
-                                                    z: peopleRow.names.length - index
-                                                    name: modelData
-                                                    email: index === 0 ? (GitBackend.commitInfo.email || "")
-                                                         : ((GitBackend.commitInfo.coAuthorEmails || {})[modelData] || "")
-                                                    tone: [Design.accent, Design.mauve, Design.ok, Design.warn, Design.sapphire][index % 5]
-                                                }
-                                            }
-                                            // A handler, not a MouseArea: an
-                                            // Item child of a Row is laid out
-                                            // by it, and one sized to the Row
-                                            // widens the Row it is sized to —
-                                            // the layout pass never ends.
-                                            HoverHandler { id: peopleHover }
-                                            ToolTip.visible: peopleHover.hovered
-                                            ToolTip.delay: 300
-                                            ToolTip.text: peopleRow.names.join("\n")
-                                        }
-
+                                        // Wrapped, not cut: the header grows
+                                        // with it (implicitHeight above), and a
+                                        // long subject or a list of authors was
+                                        // a line ending in "…" with no way to
+                                        // read the rest.
                                         Text {
                                             Layout.fillWidth: true
-                                            text: window.people(GitBackend.commitInfo.author || "", GitBackend.commitInfo.coAuthors) + "  •  "
-                                                  + (GitBackend.commitInfo.date || "") + "  •  "
-                                                  + (GitBackend.commitInfo.hash || "") + "  •  "
-                                                  + GitBackend.commitFiles.length
-                                                  + (GitBackend.commitFiles.length === 1 ? " file" : " files")
-                                                  + (GitBackend.selectedCommitSync === "local" ? "  •  not pushed"
-                                                     : GitBackend.selectedCommitSync === "pushed" ? "  •  pushed" : "")
+                                            text: GitBackend.commitInfo.subject || ""
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.body)
+                                            font.weight: Design.weight.semibold
+                                            color: Design.text
+                                            wrapMode: Text.Wrap
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Design.s(Design.space.sm)
+
+                                            // One initial-disc per person, the
+                                            // author first, overlapping as the
+                                            // original stacks its avatars. The
+                                            // full list is in the tooltip.
+                                            Row {
+                                                id: peopleRow
+                                                spacing: -Design.s(Design.space.xs)
+                                                readonly property var names: [GitBackend.commitInfo.author || ""]
+                                                    .concat((GitBackend.commitInfo.coAuthors || [])
+                                                            .filter(n => n !== GitBackend.commitInfo.author))
+                                                Repeater {
+                                                    model: peopleRow.names
+                                                    delegate: AuthorAvatar {
+                                                        required property string modelData
+                                                        required property int index
+                                                        z: peopleRow.names.length - index
+                                                        name: modelData
+                                                        email: index === 0 ? (GitBackend.commitInfo.email || "")
+                                                             : ((GitBackend.commitInfo.coAuthorEmails || {})[modelData] || "")
+                                                        tone: [Design.accent, Design.mauve, Design.ok, Design.warn, Design.sapphire][index % 5]
+                                                    }
+                                                }
+                                                // A handler, not a MouseArea: an
+                                                // Item child of a Row is laid out
+                                                // by it, and one sized to the Row
+                                                // widens the Row it is sized to —
+                                                // the layout pass never ends.
+                                                HoverHandler { id: peopleHover }
+                                                ToolTip.visible: peopleHover.hovered
+                                                ToolTip.delay: 300
+                                                ToolTip.text: peopleRow.names.join("\n")
+                                            }
+
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: window.people(GitBackend.commitInfo.author || "", GitBackend.commitInfo.coAuthors) + "  •  "
+                                                      + (GitBackend.commitInfo.date || "") + "  •  "
+                                                      + (GitBackend.commitInfo.hash || "") + "  •  "
+                                                      + GitBackend.commitFiles.length
+                                                      + (GitBackend.commitFiles.length === 1 ? " file" : " files")
+                                                      + (GitBackend.selectedCommitSync === "local" ? "  •  not pushed"
+                                                         : GitBackend.selectedCommitSync === "pushed" ? "  •  pushed" : "")
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(Design.font.caption)
+                                                color: Design.textDim
+                                                wrapMode: Text.Wrap
+                                            }
+                                        }
+
+                                        // Four lines, and all of it on request —
+                                        // scrolling in its own box past a third
+                                        // of the window, so the diff stays.
+                                        ScrollView {
+                                            id: commitBodyBox
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: Math.min(commitBody.implicitHeight, window.height / 3)
+                                            visible: commitBody.text !== ""
+                                            clip: true
+                                            contentWidth: availableWidth
+                                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                                            ScrollBar.vertical: OverflowBar { view: commitBodyBox }
+                                            Text {
+                                                id: commitBody
+                                                property bool open: false
+                                                width: commitBodyBox.availableWidth
+                                                text: GitBackend.commitInfo.body || ""
+                                                onTextChanged: open = false
+                                                font.family: Design.font.sans
+                                                font.pixelSize: Design.s(Design.font.caption)
+                                                color: Design.text
+                                                wrapMode: Text.Wrap
+                                                maximumLineCount: open ? 100000 : 4
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        Text {
+                                            visible: commitBodyBox.visible && (commitBody.truncated || commitBody.open)
+                                            text: commitBody.open ? I18n.tr("Show less") : I18n.tr("Show more")
                                             font.family: Design.font.sans
                                             font.pixelSize: Design.s(Design.font.caption)
                                             color: Design.textDim
-                                            wrapMode: Text.Wrap
-                                        }
-                                    }
-
-                                    // Four lines, and all of it on request —
-                                    // scrolling in its own box past a third
-                                    // of the window, so the diff stays.
-                                    ScrollView {
-                                        id: commitBodyBox
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: Math.min(commitBody.implicitHeight, window.height / 3)
-                                        visible: commitBody.text !== ""
-                                        clip: true
-                                        contentWidth: availableWidth
-                                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                                        ScrollBar.vertical: OverflowBar { view: commitBodyBox }
-                                        Text {
-                                            id: commitBody
-                                            property bool open: false
-                                            width: commitBodyBox.availableWidth
-                                            text: GitBackend.commitInfo.body || ""
-                                            onTextChanged: open = false
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(Design.font.caption)
-                                            color: Design.text
-                                            wrapMode: Text.Wrap
-                                            maximumLineCount: open ? 100000 : 4
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-                                    Text {
-                                        visible: commitBodyBox.visible && (commitBody.truncated || commitBody.open)
-                                        text: commitBody.open ? I18n.tr("Show less") : I18n.tr("Show more")
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        color: Design.textDim
-                                        Clickable {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: commitBody.open = !commitBody.open
+                                            Clickable {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: commitBody.open = !commitBody.open
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 0
-                                visible: GitBackend.selectedCommit !== ""
-
-                                // The commit's files.
-                                ListView {
-                                    id: commitFileList
-                                    Layout.preferredWidth: Math.round(Math.max(Design.s(Design.width.label), Math.min(Design.s(Design.size.canvas), window.width * 0.2)))
-                                    Layout.fillHeight: true
-                                    clip: true
-                                    model: GitBackend.commitFiles
-                                    spacing: 1
-                                    ScrollBar.vertical: OverflowBar {}
-
-                                    delegate: Rectangle {
-                                        id: commitFileRow
-                                        width: commitFileList.width
-                                        height: Design.s(Design.size.sm)
-                                        readonly property bool isSelected: GitBackend.commitFile === modelData.path
-                                        color: isSelected ? Design.selection
-                                                          : (cfArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Design.s(Design.space.sm)
-                                            anchors.rightMargin: Design.s(Design.space.sm)
-                                            spacing: Design.s(Design.space.sm)
-
-                                            Text {
-                                                text: window.statusIcon(modelData.status)
-                                                font.family: Design.font.mono
-                                                font.pixelSize: Design.s(Design.font.body)
-                                                color: window.statusColor(modelData.status)
-                                            }
-
-                                            // The name first, the directory
-                                            // after it dimmed: in a narrow
-                                            // column a middle-elided full path
-                                            // hides exactly the part that
-                                            // tells two files apart.
-                                            Text {
-                                                Layout.maximumWidth: commitFileRow.width * 0.6
-                                                text: modelData.name
-                                                font.family: Design.font.mono
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                color: Design.text
-                                                elide: Text.ElideRight
-                                            }
-                                            Text {
-                                                Layout.fillWidth: true
-                                                text: modelData.path.substring(0, modelData.path.length - modelData.name.length)
-                                                font.family: Design.font.mono
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                color: Design.textDim
-                                                elide: Text.ElideLeft
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: cfArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                            onClicked: (mouse) => {
-                                                GitBackend.selectCommitFile(modelData.path);
-                                                if (mouse.button === Qt.RightButton) {
-                                                    window.showMenu(commitFileMenu, modelData.path);
-                                                }
-                                            }
-                                        }
-
-                                        ToolTip.visible: cfArea.containsMouse
-                                        ToolTip.delay: 600
-                                        ToolTip.text: window.statusWord(modelData.status) + ": "
-                                                      + (modelData.oldPath ? modelData.oldPath + " → " + modelData.path
-                                                                           : modelData.path)
-                                    }
-                                }
-
-                                Rectangle {
-                                    Layout.preferredWidth: 1
-                                    Layout.fillHeight: true
-                                    color: Design.glassBorder
-                                }
-
-                                ColumnLayout {
+                                RowLayout {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     spacing: 0
+                                    visible: GitBackend.selectedCommit !== ""
 
-                                    // The path of the file shown, in full —
-                                    // the list beside it has room only for
-                                    // the name.
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        height: Design.s(Design.size.sm)
-                                        visible: GitBackend.commitFile !== ""
-                                        color: Design.tint(Design.ground, 0.4)
-
-                                        Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            anchors.bottom: parent.bottom
-                                            height: 1
-                                            color: Design.glassBorder
-                                        }
-
-                                        Text {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Design.s(Design.space.md)
-                                            anchors.rightMargin: Design.s(Design.space.md)
-                                            verticalAlignment: Text.AlignVCenter
-                                            text: GitBackend.commitFile
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.s(Design.font.caption)
-                                            font.weight: Design.weight.semibold
-                                            color: Design.text
-                                            elide: Text.ElideMiddle
-                                        }
-                                    }
-
+                                    // The commit's files.
                                     ListView {
-                                        id: commitDiffList
-                                        Layout.fillWidth: true
+                                        id: commitFileList
+                                        Layout.preferredWidth: Math.round(Math.max(Design.s(Design.width.label), Math.min(Design.s(Design.size.canvas), window.width * 0.2)))
                                         Layout.fillHeight: true
                                         clip: true
-                                        model: GitBackend.commitDiff
-                                        delegate: diffRowDelegate
+                                        model: GitBackend.commitFiles
+                                        spacing: 1
                                         ScrollBar.vertical: OverflowBar {}
 
-                                        EmptyState {
-                                            parent: commitDiffList
-                                            anchors.centerIn: parent
-                                            width: parent.width
-                                            visible: GitBackend.commitDiff.length === 0
-                                            // A rename with identical content
-                                            // has no hunks; say what happened
-                                            // to it instead of "nothing".
-                                            readonly property var shown: GitBackend.commitFiles.find(f => f.path === GitBackend.commitFile)
-                                            icon: "\u{f0219}"
-                                            title: GitBackend.commitFiles.length === 0
-                                                  ? I18n.tr("This commit changes no files")
-                                                  : (shown && shown.oldPath)
-                                                    ? I18n.tr("Renamed from %1, content unchanged", shown.oldPath)
-                                                    : I18n.tr("No textual changes in this file")
+                                        delegate: Rectangle {
+                                            id: commitFileRow
+                                            x: Design.s(Design.space.xs)
+                                            width: commitFileList.width - Design.s(Design.space.xs) * 2
+                                            radius: Design.s(Design.radius.ctl)
+                                            height: Design.s(Design.size.sm)
+                                            readonly property bool isSelected: GitBackend.commitFile === modelData.path
+                                            color: isSelected ? Design.selection
+                                                              : (cfArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Design.s(Design.space.sm)
+                                                anchors.rightMargin: Design.s(Design.space.sm)
+                                                spacing: Design.s(Design.space.sm)
+
+                                                Text {
+                                                    text: window.statusIcon(modelData.status)
+                                                    font.family: Design.font.mono
+                                                    font.pixelSize: Design.s(Design.font.body)
+                                                    color: window.statusColor(modelData.status)
+                                                }
+
+                                                // The name first, the directory
+                                                // after it dimmed: in a narrow
+                                                // column a middle-elided full path
+                                                // hides exactly the part that
+                                                // tells two files apart.
+                                                Text {
+                                                    Layout.maximumWidth: commitFileRow.width * 0.6
+                                                    text: modelData.name
+                                                    font.family: Design.font.mono
+                                                    font.pixelSize: Design.s(Design.font.caption)
+                                                    color: Design.text
+                                                    elide: Text.ElideRight
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: modelData.path.substring(0, modelData.path.length - modelData.name.length)
+                                                    font.family: Design.font.mono
+                                                    font.pixelSize: Design.s(Design.font.caption)
+                                                    color: Design.textDim
+                                                    elide: Text.ElideLeft
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: cfArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: (mouse) => {
+                                                    GitBackend.selectCommitFile(modelData.path);
+                                                    if (mouse.button === Qt.RightButton) {
+                                                        window.showMenu(commitFileMenu, modelData.path);
+                                                    }
+                                                }
+                                            }
+
+                                            ToolTip.visible: cfArea.containsMouse
+                                            ToolTip.delay: 600
+                                            ToolTip.text: window.statusWord(modelData.status) + ": "
+                                                          + (modelData.oldPath ? modelData.oldPath + " → " + modelData.path
+                                                                               : modelData.path)
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 1
+                                        Layout.fillHeight: true
+                                        color: Design.glassBorder
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        spacing: 0
+
+                                        // The path of the file shown, in full —
+                                        // the list beside it has room only for
+                                        // the name.
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            height: Design.s(Design.size.sm)
+                                            visible: GitBackend.commitFile !== ""
+                                            color: "transparent"
+
+                                            Rectangle {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.bottom: parent.bottom
+                                                height: 1
+                                                color: Design.glassBorder
+                                            }
+
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Design.s(Design.space.md)
+                                                anchors.rightMargin: Design.s(Design.space.md)
+                                                verticalAlignment: Text.AlignVCenter
+                                                text: GitBackend.commitFile
+                                                font.family: Design.font.mono
+                                                font.pixelSize: Design.s(Design.font.caption)
+                                                font.weight: Design.weight.semibold
+                                                color: Design.text
+                                                elide: Text.ElideMiddle
+                                            }
+                                        }
+
+                                        ListView {
+                                            id: commitDiffList
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            model: GitBackend.commitDiff
+                                            delegate: diffRowDelegate
+                                            ScrollBar.vertical: OverflowBar {}
+
+                                            EmptyState {
+                                                parent: commitDiffList
+                                                anchors.centerIn: parent
+                                                width: parent.width
+                                                visible: GitBackend.commitDiff.length === 0
+                                                // A rename with identical content
+                                                // has no hunks; say what happened
+                                                // to it instead of "nothing".
+                                                readonly property var shown: GitBackend.commitFiles.find(f => f.path === GitBackend.commitFile)
+                                                icon: "\u{f0219}"
+                                                title: GitBackend.commitFiles.length === 0
+                                                      ? I18n.tr("This commit changes no files")
+                                                      : (shown && shown.oldPath)
+                                                        ? I18n.tr("Renamed from %1, content unchanged", shown.oldPath)
+                                                        : I18n.tr("No textual changes in this file")
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            // Nothing picked yet.
-                            ColumnLayout {
-                                Layout.alignment: Qt.AlignCenter
-                                Layout.fillHeight: true
-                                spacing: Design.s(Design.space.md)
-                                visible: GitBackend.selectedCommit === ""
+                                // Nothing picked yet.
+                                ColumnLayout {
+                                    Layout.alignment: Qt.AlignCenter
+                                    Layout.fillHeight: true
+                                    spacing: Design.s(Design.space.md)
+                                    visible: GitBackend.selectedCommit === ""
 
-                                Item { Layout.fillHeight: true }
-                                EmptyState {
-                                    icon: "󰜘"
-                                    title: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
-                                    hint: GitBackend.isRepo ? I18n.tr("Its files and changes appear here.")
-                                                            : I18n.tr("Select a repository from the top menu or open a folder.")
+                                    Item { Layout.fillHeight: true }
+                                    EmptyState {
+                                        icon: "󰜘"
+                                        title: GitBackend.isRepo ? I18n.tr("Select a commit") : I18n.tr("No Git Repository Open")
+                                        hint: GitBackend.isRepo ? I18n.tr("Its files and changes appear here.")
+                                                                : I18n.tr("Select a repository from the top menu or open a folder.")
+                                    }
+                                    Item { Layout.fillHeight: true }
                                 }
-                                Item { Layout.fillHeight: true }
+                            }
+                        }
+
+                        // What state the repository is in, and what just happened: the
+                        // standard status bar. The notices were a toast of Git's own that
+                        // slid up over the diff.
+                        AppStatusBar {
+                            Layout.fillWidth: true
+                            visible: window.hasRepo
+                            Label {
+                                role: "caption"
+                                dim: true
+                                text: GitBackend.branchName + (GitBackend.upstream ? "  →  " + GitBackend.upstream : "")
+                                      + (GitBackend.aheadCount > 0 ? "   " + GitBackend.aheadCount + "↑" : "")
+                                      + (GitBackend.behindCount > 0 ? "   " + GitBackend.behindCount + "↓" : "")
+                            }
+                            InlineStatus {
+                                visible: notice.message !== ""
+                                Layout.fillWidth: true
+                                status: notice.isError ? "error" : "ok"
+                                message: notice.message
+                                showRetry: false
+                            }
+                            Item { Layout.fillWidth: !notice.message; visible: !notice.message }
+                            Label {
+                                role: "caption"
+                                color: Design.textFaint
+                                text: I18n.trn("%1 changed file", "%1 changed files", GitBackend.changedFiles.length)
                             }
                         }
                     }
@@ -3068,33 +3125,6 @@ Item {
                 }
             }
 
-            // What state the repository is in, and what just happened: the
-            // standard status bar. The notices were a toast of Git's own that
-            // slid up over the diff.
-            AppStatusBar {
-                Layout.fillWidth: true
-                visible: window.hasRepo
-                Label {
-                    role: "caption"
-                    dim: true
-                    text: GitBackend.branchName + (GitBackend.upstream ? "  →  " + GitBackend.upstream : "")
-                          + (GitBackend.aheadCount > 0 ? "   " + GitBackend.aheadCount + "↑" : "")
-                          + (GitBackend.behindCount > 0 ? "   " + GitBackend.behindCount + "↓" : "")
-                }
-                InlineStatus {
-                    visible: notice.message !== ""
-                    Layout.fillWidth: true
-                    status: notice.isError ? "error" : "ok"
-                    message: notice.message
-                    showRetry: false
-                }
-                Item { Layout.fillWidth: !notice.message; visible: !notice.message }
-                Label {
-                    role: "caption"
-                    color: Design.textFaint
-                    text: I18n.trn("%1 changed file", "%1 changed files", GitBackend.changedFiles.length)
-                }
-            }
         }
     }
 

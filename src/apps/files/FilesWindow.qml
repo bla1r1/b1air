@@ -531,12 +531,11 @@ C.ApplicationWindow {
         }
     }
 
-    // Everything right of the sidebar: the same glass as the shell's panels,
-    // denser than the sidebar's so a page of names stays easy to read.
+    // The window's glass, the same as the shell's panels: under the content
+    // and round the sidebar, which is a pane of its own set in from the edges
+    // (Ui/AppSidebar).
     Rectangle {
-        x: sidebar.width
-        width: parent.width - x
-        height: parent.height
+        anchors.fill: parent
         color: Design.glassBg
         visible: Design.translucent
     }

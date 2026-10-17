@@ -2,37 +2,58 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 
-// The left column of an app window: sunken, behind a hairline. Files and
-// Settings each drew their own with different widths, margins and headings.
-Rectangle {
+// The left column of an app window, the Air way: a pane of its own, rounded
+// and set in from the window's edges, beside the content rather than a strip
+// of the window behind a hairline. Files and Settings each drew their own
+// with different widths, margins and headings; then it was a full-height
+// square column, which beside the round rows, fields and buttons was the one
+// square thing in the window — on a solid window (no blur) most of all.
+//
+// With blur it is the sidebar glass; without, a solid card one step up from
+// the window, with the same hairline rim, so the shape is the same either
+// way.
+Item {
     id: root
     default property alias content: col.data
     property alias spacing: col.spacing
-    implicitWidth: Design.s(Design.width.sidebar)
-    // The same glass as the Settings sidebar: a pane of the window, not a
-    // dark slab beside it.
-    color: Design.translucent ? Design.glassSidebar : Design.sunken
-    Rectangle { anchors.right: parent.right; width: Design.border; height: parent.height; color: Design.separator }
-    // Scrolls when what it holds is taller than the window (Files' places,
-    // devices, bookmarks and tags), with the same bar as the rest.
-    Flickable {
-        id: flick
-        anchors.fill: parent
-        anchors.topMargin: Design.s(Design.space.md)
-        anchors.bottomMargin: Design.s(Design.space.md)
-        anchors.leftMargin: Design.s(Design.space.sm)
-        anchors.rightMargin: Design.s(Design.space.sm) + Design.border
-        contentWidth: width
-        contentHeight: col.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        interactive: contentHeight > height
-        ScrollBar.vertical: OverflowBar { view: flick }
+    // How far the pane sits in from the window's edges.
+    readonly property real inset: Design.s(Design.space.sm)
+    implicitWidth: Design.s(Design.width.sidebar) + inset
 
-        ColumnLayout {
-            id: col
-            width: flick.width
-            spacing: Design.s(Design.space.xxs)
+    Rectangle {
+        id: pane
+        anchors.fill: parent
+        anchors.leftMargin: root.inset
+        anchors.topMargin: root.inset
+        anchors.bottomMargin: root.inset
+        radius: Design.s(Design.radius.card)
+        color: Design.translucent ? Design.glassSidebar : Design.raised
+        border.width: Design.border
+        border.color: Design.glassBorder
+
+        // Scrolls when what it holds is taller than the window (Files' places,
+        // devices, bookmarks and tags), with the same bar as the rest.
+        Flickable {
+            id: flick
+            anchors.fill: parent
+            anchors.topMargin: Design.s(Design.space.sm)
+            anchors.bottomMargin: Design.s(Design.space.sm)
+            anchors.leftMargin: Design.s(Design.space.xs)
+            anchors.rightMargin: Design.s(Design.space.xs)
+            contentWidth: width
+            contentHeight: col.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height
+            ScrollBar.vertical: OverflowBar { id: bar }
+
+            // Narrower by the bar when there is one, so it runs beside the
+            // rows rather than over them.
+            ColumnLayout {
+                id: col
+                width: flick.width - (bar.visible ? bar.width + Design.s(Design.space.xxs) : 0)
+                spacing: Design.s(Design.space.xxs)
+            }
         }
     }
 }
