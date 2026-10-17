@@ -39,6 +39,29 @@ static std::string read_file_contents(const std::string& path) {
     return buffer.str();
 }
 
+// settings.json is written by the shell, the Settings app and this daemon.
+// Written in place, a reader could catch it truncated — empty — between the
+// open and the write, and two places here then wrote defaults over the whole
+// file on seeing "empty". Now every writer goes through a temporary file and
+// a rename, which a reader sees as all old or all new, never neither.
+static bool write_file_atomic(const std::string& path, const std::string& content) {
+    const std::string tmp = path + ".tmp." + std::to_string(getpid());
+    {
+        std::ofstream out(tmp, std::ios::trunc);
+        if (!out) return false;
+        out << content;
+        out.flush();
+        if (!out.good()) { out.close(); std::remove(tmp.c_str()); return false; }
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) { std::remove(tmp.c_str()); return false; }
+    return true;
+}
+
+static bool file_exists(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0;
+}
+
 static std::string find_json_string(const std::string& json, const std::string& key, const std::string& fallback) {
     std::string needle = "\"" + key + "\"";
     size_t pos = json.find(needle);
@@ -130,8 +153,10 @@ DesktopSettings SettingsManager::load(const std::string& path_arg) {
 
     std::string content = read_file_contents(path);
     if (content.empty()) {
-        // Create default settings.json
-        save(s, path);
+        // Created only when there is none. An empty read of one that exists
+        // is a write caught half-way, and saving defaults over it erased
+        // every setting not in DesktopSettings.
+        if (!file_exists(path)) save(s, path);
         return s;
     }
 
@@ -215,8 +240,7 @@ bool SettingsManager::save(const DesktopSettings& s, const std::string& path_arg
         mkdir(dir.c_str(), 0755);
     }
 
-    std::ofstream out(path);
-    if (!out) return false;
+    std::ostringstream out;
 
     out << "{\n"
         << "  \"language\": " << json_quote(s.language) << ",\n"
@@ -245,8 +269,7 @@ bool SettingsManager::save(const DesktopSettings& s, const std::string& path_arg
     }
 
     out << "]\n}\n";
-    out.close();
-    return true;
+    return write_file_atomic(path, out.str());
 }
 
 // ── Apply Settings directly to Sway IPC & configs ─────────────────────────────
@@ -265,11 +288,37 @@ bool SettingsManager::save(const DesktopSettings& s, const std::string& path_arg
 // it changes: setting xkb_layout rebuilds the keymap and drops the active
 // layout back to the first, and this runs on every write to settings.json —
 // moving a volume slider would otherwise have switched you out of Ukrainian.
-static void apply_keyboard(SwayIPC* ipc, const std::string& layout, const std::string& options) {
+//
+// sway turns every `bindsym --to-code` (all of keybinds.conf) into keys through
+// the FIRST layout. With "ua,de" that was Ukrainian, which has no q, t or e:
+// every shortcut was bound to nothing. us goes first, then — added only for
+// the shortcuts when it was not chosen — and the layout chosen first is
+// switched to, so the session still starts in it. (de first would not do:
+// z, /, - and ` are elsewhere on it.)
+static std::pair<std::string, int> layouts_for_bindings(const std::string& layout) {
+    std::vector<std::string> list;
+    std::stringstream ss(layout);
+    for (std::string item; std::getline(ss, item, ',');)
+        if (!item.empty()) list.push_back(item);
+    if (list.empty() || list.front() == "us") return {layout, 0};
+    const std::string chosen_first = list.front();
+    list.erase(std::remove(list.begin(), list.end(), std::string("us")), list.end());
+    list.insert(list.begin(), "us");
+    std::string joined;
+    int active = 0;
+    for (size_t i = 0; i < list.size(); ++i) {
+        if (list[i] == chosen_first) active = static_cast<int>(i);
+        joined += (i ? "," : "") + list[i];
+    }
+    return {joined, active};
+}
+
+static void apply_keyboard(SwayIPC* ipc, const std::string& chosen_layout, const std::string& options) {
     static std::mutex m;
     static std::string applied_layout, applied_options;
 
-    if (!valid_sway_token(layout, 128)) return;
+    if (!valid_sway_token(chosen_layout, 128)) return;
+    const auto [layout, active_layout] = layouts_for_bindings(chosen_layout);
     // Empty options are legitimate (no switch shortcut at all); anything else
     // must be a plain xkb token list.
     if (!options.empty() && !valid_sway_token(options, 256)) return;
@@ -288,8 +337,11 @@ static void apply_keyboard(SwayIPC* ipc, const std::string& layout, const std::s
             << "# Included after conf.d/input.conf, which holds the shipped defaults.\n\n"
             << "input type:keyboard {\n"
             << "    xkb_layout \"" << layout << "\"\n"
-            << "    xkb_options \"" << options << "\"\n"
-            << "}\n";
+            << "    xkb_options \"" << options << "\"\n";
+        if (active_layout > 0)
+            out << "    # us first for the shortcuts; the session starts in the layout chosen first.\n"
+                << "    xkb_switch_layout " << active_layout << "\n";
+        out << "}\n";
         if (!out.good()) return;
     }
     if (std::rename(tmp.c_str(), path.c_str()) != 0) return;
@@ -301,6 +353,8 @@ static void apply_keyboard(SwayIPC* ipc, const std::string& layout, const std::s
     // "xkb_layout us,de" applied "us" and then failed on a command named "de".
     ipc->send_command(0, "input type:keyboard xkb_layout \"" + layout + "\"");
     ipc->send_command(0, "input type:keyboard xkb_options \"" + options + "\"");
+    if (active_layout > 0)
+        ipc->send_command(0, "input type:keyboard xkb_switch_layout " + std::to_string(active_layout));
     applied_layout = layout;
     applied_options = options;
 }
@@ -454,6 +508,12 @@ void SettingsManager::apply_primary_output(SwayIPC& ipc, const DesktopSettings& 
 }
 
 bool SettingsManager::apply_from_file(const std::string& path) {
+    // A file that is there but reads empty is being written by someone else.
+    // load() then hands back the defaults, and applying them put the
+    // keyboard back to "us,ua" — in custom_keyboard.conf too, for good.
+    // The next change notification brings the finished file.
+    const std::string file = path.empty() ? get_settings_filepath() : path;
+    if (file_exists(file) && read_file_contents(file).empty()) return false;
     DesktopSettings s = load(path);
     return apply_to_sway(s);
 }
@@ -478,7 +538,11 @@ bool SettingsManager::set_json_value(const std::string& key, const std::string& 
     if (quoted_val.empty()) return false;
     std::string path = get_settings_filepath();
     std::string content = read_file_contents(path);
-    if (content.empty()) content = "{}";
+    if (content.empty()) {
+        // Not "{}": that wrote a file of this one key over every other.
+        if (file_exists(path)) return false;
+        content = "{}";
+    }
 
     std::string needle = "\"" + key + "\"";
     size_t pos = content.find(needle);
@@ -500,12 +564,7 @@ bool SettingsManager::set_json_value(const std::string& key, const std::string& 
         }
     }
 
-    std::ofstream ofs(path);
-    if (ofs) {
-        ofs << content;
-        return true;
-    }
-    return false;
+    return write_file_atomic(path, content);
 }
 
 // ── Native inotify watcher ───────────────────────────────────────────────────
@@ -606,10 +665,7 @@ bool write_json(const std::string& path, const nlohmann::json& j) {
     const size_t slash = path.find_last_of('/');
     if (slash != std::string::npos)
         std::filesystem::create_directories(path.substr(0, slash));
-    std::ofstream out(path);
-    if (!out) return false;
-    out << j.dump(2) << "\n";
-    return out.good();
+    return write_file_atomic(path, j.dump(2) + "\n");
 }
 
 } // namespace

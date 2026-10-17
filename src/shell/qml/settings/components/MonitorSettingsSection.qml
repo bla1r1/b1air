@@ -95,6 +95,12 @@ ColumnLayout {
 
     function reload() {
         const list = Monitors.outputs;
+        // The screen that was selected stays selected, by name: after a drag
+        // the outputs come back in another order, and the selection jumped to
+        // whichever screen the pointer had ended up on.
+        const keep = section.activeEditIndex >= 0 && section.activeEditIndex < monitorsModel.count
+            ? monitorsModel.get(section.activeEditIndex).name : "";
+        let kept = -1;
         monitorsModel.clear();
 
         let minX = 999999, minY = 999999;
@@ -117,9 +123,13 @@ ColumnLayout {
                 uiX: (o.x - minX) * section.uiScale,
                 uiY: (o.y - minY) * section.uiScale
             });
-            if (o.focused)
+            if (o.name === keep)
+                kept = i;
+            else if (o.focused && keep === "")
                 section.activeEditIndex = i;
         }
+        if (kept >= 0)
+            section.activeEditIndex = kept;
         if (section.activeEditIndex >= monitorsModel.count)
             section.activeEditIndex = 0;
         section.dirty = false;
@@ -172,6 +182,36 @@ ColumnLayout {
         else if (Math.abs(cy - (sY + sH / 2 - mH / 2)) < snapT) cy = sY + sH / 2 - mH / 2;
 
         return { x: cx, y: cy };
+    }
+
+    // Where a screen dragged to (pX, pY) lands: the nearest place against an
+    // edge of another screen, sliding along that edge, that overlaps nothing —
+    // then lined up with an edge or the centre when it is close. Where the
+    // drag was let go of is never refused: there is always a spot to show.
+    function dockedSpot(pX, pY, mW, mH, skipIdx) {
+        let best = null, bestDist = Infinity;
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+        for (let j = 0; j < monitorsModel.count; j++) {
+            if (j === skipIdx) continue;
+            const o = monitorsModel.get(j);
+            const sW = (o.resW / o.sysScale) * section.uiScale;
+            const sH = (o.resH / o.sysScale) * section.uiScale;
+            const alongY = clamp(pY, o.uiY - mH + 1, o.uiY + sH - 1);
+            const alongX = clamp(pX, o.uiX - mW + 1, o.uiX + sW - 1);
+            const sides = [
+                { x: o.uiX + sW, y: alongY }, { x: o.uiX - mW, y: alongY },
+                { x: alongX, y: o.uiY + sH }, { x: alongX, y: o.uiY - mH }
+            ];
+            for (const c of sides) {
+                const aligned = section.getPerimeterSnap(c.x, c.y, o.uiX, o.uiY, sW, sH, mW, mH, 12);
+                // The side it is docked on stays exact; only the slide snaps.
+                const spot = (c.x === o.uiX + sW || c.x === o.uiX - mW) ? { x: c.x, y: aligned.y } : { x: aligned.x, y: c.y };
+                if (section.isOverlappingAny(spot.x, spot.y, mW, mH, skipIdx)) continue;
+                const d = Math.hypot(pX - spot.x, pY - spot.y);
+                if (d < bestDist) { bestDist = d; best = spot; }
+            }
+        }
+        return best;
     }
 
     // =========================================================================
@@ -283,11 +323,18 @@ ColumnLayout {
                             required property real uiY
 
                             readonly property bool isActive: section.activeEditIndex === monitorNode.index
+                            // Being dragged: the card follows the pointer and a
+                            // frame shows where it will land. It used to move only
+                            // to places that overlapped nothing, so across the
+                            // screen beside it — most of any drag — it sat still
+                            // and looked as if it could not be moved at all.
+                            readonly property bool dragging: dragArea.drag.active
+                            property var spot: null
 
                             Rectangle {
                                 id: monitorCard
-                                x: monitorNode.uiX
-                                y: monitorNode.uiY
+                                x: monitorNode.dragging ? ghostDrag.x : monitorNode.uiX
+                                y: monitorNode.dragging ? ghostDrag.y : monitorNode.uiY
                                 width: (monitorNode.resW / monitorNode.sysScale) * section.uiScale
                                 height: (monitorNode.resH / monitorNode.sysScale) * section.uiScale
 
@@ -295,10 +342,11 @@ ColumnLayout {
                                 color: monitorNode.isActive ? Design.tint(section.selectedResAccent, 0.18) : Design.ground
                                 border.color: monitorNode.isActive ? section.selectedResAccent : Design.active
                                 border.width: monitorNode.isActive ? 2 : 1
-                                z: monitorNode.isActive ? 5 : 0
+                                z: monitorNode.dragging ? 8 : monitorNode.isActive ? 5 : 0
+                                opacity: monitorNode.dragging ? 0.85 : 1
 
-                                Behavior on x { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
-                                Behavior on y { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
+                                Behavior on x { enabled: !monitorNode.dragging; NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
+                                Behavior on y { enabled: !monitorNode.dragging; NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
                                 Behavior on color { ColorAnimation { duration: Design.duration.base } }
                                 Behavior on border.color { ColorAnimation { duration: Design.duration.base } }
                                 Behavior on width { NumberAnimation { duration: Design.duration.slow; easing.type: Easing.OutQuint } }
@@ -357,8 +405,22 @@ ColumnLayout {
                                 }
                             }
 
-                            // Invisible dragger: the card animates to the snapped
-                            // position, this one follows the pointer.
+                            // Where it lands on release.
+                            Rectangle {
+                                visible: monitorNode.dragging && monitorNode.spot !== null
+                                x: monitorNode.spot ? monitorNode.spot.x : 0
+                                y: monitorNode.spot ? monitorNode.spot.y : 0
+                                width: monitorCard.width
+                                height: monitorCard.height
+                                radius: Design.s(8)
+                                color: Design.tint(section.selectedResAccent, 0.10)
+                                border.color: section.selectedResAccent
+                                border.width: 2
+                                z: 7
+                            }
+
+                            // Invisible dragger: follows the pointer; the card
+                            // follows it while the drag lasts.
                             Item {
                                 id: ghostDrag
                                 x: monitorNode.uiX
@@ -368,6 +430,7 @@ ColumnLayout {
                                 z: monitorNode.isActive ? 10 : 1
 
                                 MouseArea {
+                                    id: dragArea
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: monitorsModel.count > 1 ? Qt.SizeAllCursor : Qt.PointingHandCursor
@@ -378,63 +441,24 @@ ColumnLayout {
                                         section.activeEditIndex = monitorNode.index;
                                         ghostDrag.x = monitorNode.uiX;
                                         ghostDrag.y = monitorNode.uiY;
+                                        monitorNode.spot = null;
                                     }
 
                                     onPositionChanged: {
                                         if (!drag.active || monitorsModel.count < 2)
                                             return;
-
-                                        const mW = monitorCard.width;
-                                        const mH = monitorCard.height;
-                                        const padding = 40;
-
-                                        let boundMinX = 999999, boundMinY = 999999;
-                                        let boundMaxX = -999999, boundMaxY = -999999;
-
-                                        for (let j = 0; j < monitorsModel.count; j++) {
-                                            if (j === monitorNode.index) continue;
-                                            const sModel = monitorsModel.get(j);
-                                            const sW = (sModel.resW / sModel.sysScale) * section.uiScale;
-                                            const sH = (sModel.resH / sModel.sysScale) * section.uiScale;
-
-                                            boundMinX = Math.min(boundMinX, sModel.uiX - mW - padding);
-                                            boundMinY = Math.min(boundMinY, sModel.uiY - mH - padding);
-                                            boundMaxX = Math.max(boundMaxX, sModel.uiX + sW + padding);
-                                            boundMaxY = Math.max(boundMaxY, sModel.uiY + sH + padding);
-                                        }
-
-                                        ghostDrag.x = Math.max(boundMinX, Math.min(ghostDrag.x, boundMaxX));
-                                        ghostDrag.y = Math.max(boundMinY, Math.min(ghostDrag.y, boundMaxY));
-
-                                        let bestX = ghostDrag.x, bestY = ghostDrag.y, bestDist = 999999;
-
-                                        for (let j = 0; j < monitorsModel.count; j++) {
-                                            if (j === monitorNode.index) continue;
-                                            const sModel = monitorsModel.get(j);
-                                            const sW = (sModel.resW / sModel.sysScale) * section.uiScale;
-                                            const sH = (sModel.resH / sModel.sysScale) * section.uiScale;
-
-                                            const snapped = section.getPerimeterSnap(
-                                                ghostDrag.x, ghostDrag.y,
-                                                sModel.uiX, sModel.uiY,
-                                                sW, sH, mW, mH, 20);
-
-                                            const dist = Math.hypot(ghostDrag.x - snapped.x, ghostDrag.y - snapped.y);
-                                            if (dist < bestDist) {
-                                                bestDist = dist;
-                                                bestX = snapped.x;
-                                                bestY = snapped.y;
-                                            }
-                                        }
-
-                                        if (!section.isOverlappingAny(bestX, bestY, mW, mH, monitorNode.index)) {
-                                            monitorsModel.setProperty(monitorNode.index, "uiX", bestX);
-                                            monitorsModel.setProperty(monitorNode.index, "uiY", bestY);
-                                            section.markMoved();
-                                        }
+                                        monitorNode.spot = section.dockedSpot(ghostDrag.x, ghostDrag.y,
+                                            monitorCard.width, monitorCard.height, monitorNode.index);
                                     }
 
                                     onReleased: {
+                                        const spot = monitorNode.spot;
+                                        monitorNode.spot = null;
+                                        if (spot && (spot.x !== monitorNode.uiX || spot.y !== monitorNode.uiY)) {
+                                            monitorsModel.setProperty(monitorNode.index, "uiX", spot.x);
+                                            monitorsModel.setProperty(monitorNode.index, "uiY", spot.y);
+                                            section.markMoved();
+                                        }
                                         ghostDrag.x = monitorNode.uiX;
                                         ghostDrag.y = monitorNode.uiY;
                                         section.layoutRev++;

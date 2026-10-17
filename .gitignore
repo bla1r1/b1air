@@ -18,3 +18,11 @@ tools/controller
 # tree on purpose: it is guidance for a tool, not part of the desktop, and it
 # names paths on this machine.
 CLAUDE.md
+
+# makepkg's work in packaging/arch (the git sources, src/, pkg/, packages).
+packaging/arch/*/src/
+packaging/arch/*/pkg/
+packaging/arch/*/*.pkg.tar.*
+packaging/arch/b1air-swayfx/swayfx/
+packaging/arch/b1air-swayfx/scenefx/
+packaging/arch/b1air-swayfx/wlroots/

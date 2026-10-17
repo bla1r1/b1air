@@ -416,8 +416,7 @@ PanelWindow {
             // Cutting the name down gave "UK" for Ukrainian, "GE"
             // for German and "PO" for Polish, though the comment
             // here promised "UA".
-            const codes = String(Settings.language || "").split(",")
-                .map(x => x.trim()).filter(x => x !== "");
+            const codes = Settings.swayLayouts;
             const idx = Number(dev.xkb_active_layout_index);
             if (idx >= 0 && idx < codes.length && codes.length === (dev.xkb_layout_names || []).length) {
                 topBar.kbdLayout = codes[idx].slice(0, 3).toUpperCase();

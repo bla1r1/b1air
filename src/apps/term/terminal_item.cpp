@@ -4,6 +4,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QMimeData>
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QDateTime>
@@ -71,6 +72,7 @@ TerminalItem::TerminalItem(QQuickItem *parent)
     setFlag(ItemIsFocusScope, true);
     setAcceptedMouseButtons(Qt::AllButtons);
     setAcceptHoverEvents(true);
+    setFlag(ItemAcceptsDrops, true);
 
     updateFontMetrics();
     initTerminal(m_rows, m_cols);
@@ -148,6 +150,11 @@ void TerminalItem::initTerminal(int rows, int cols) {
     m_screenCallbacks.sb_popline = cbSbPopline;
 
     vterm_screen_set_callbacks(m_vts, &m_screenCallbacks, this);
+    m_selectionCallbacks = {};
+    m_selectionCallbacks.set = cbSelectionSet;
+    // No `query`: a program does not get to read the clipboard back.
+    vterm_state_set_selection_callbacks(vterm_obtain_state(m_vt), &m_selectionCallbacks, this,
+                                        m_selectionBuf, sizeof(m_selectionBuf));
     vterm_screen_reset(m_vts, 1);
     // The reset reports a blinking block through settermprop; the default
     // here is the bar. A program that wants a block still gets one by asking.
@@ -852,6 +859,47 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     }
 }
 
+// A program that turned mouse reporting on (Claude Code's full screen, vim,
+// tmux, htop) gets the clicks and drags, not only the wheel: it selects, and
+// copies with OSC 52, by itself. Before, every click made a selection here
+// instead, over a screen the program kept redrawing, and its own selection
+// never started. Shift held keeps the terminal's selection, as in xterm,
+// Konsole and GNOME Terminal.
+bool TerminalItem::forwardMouse(QMouseEvent *event, bool pressed) {
+    if (m_mouseMode == VTERM_PROP_MOUSE_NONE || !m_vt || m_masterFd < 0) return false;
+    if (pressed && (event->modifiers() & Qt::ShiftModifier)) return false;
+    int button = 0;
+    switch (event->button()) {
+    case Qt::LeftButton:   button = 1; break;
+    case Qt::MiddleButton: button = 2; break;
+    case Qt::RightButton:  button = 3; break;
+    default: return false;
+    }
+    int mod = VTERM_MOD_NONE;
+    if (event->modifiers() & Qt::ControlModifier) mod |= VTERM_MOD_CTRL;
+    if (event->modifiers() & Qt::AltModifier)     mod |= VTERM_MOD_ALT;
+    const int row = std::clamp(static_cast<int>(event->position().y() / m_cellHeight), 0, m_rows - 1);
+    const int col = std::clamp(static_cast<int>(event->position().x() / m_cellWidth), 0, m_cols - 1);
+    vterm_mouse_move(m_vt, row, col, static_cast<VTermModifier>(mod));
+    vterm_mouse_button(m_vt, button, pressed, static_cast<VTermModifier>(mod));
+    return true;
+}
+
+int TerminalItem::cbSelectionSet(VTermSelectionMask mask, VTermStringFragment frag, void *user) {
+    auto *term = static_cast<TerminalItem*>(user);
+    if (frag.initial) term->m_osc52.clear();
+    // A runaway stream is not let to grow without end.
+    if (term->m_osc52.size() < 16 * 1024 * 1024) term->m_osc52.append(frag.str, static_cast<qsizetype>(frag.len));
+    if (!frag.final) return 1;
+    const QString text = QString::fromUtf8(term->m_osc52);
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (mask & VTERM_SELECTION_CLIPBOARD) clipboard->setText(text, QClipboard::Clipboard);
+    if ((mask & VTERM_SELECTION_PRIMARY) && clipboard->supportsSelection())
+        clipboard->setText(text, QClipboard::Selection);
+    term->m_osc52.clear();
+    return 1;
+}
+
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier)) {
@@ -861,6 +909,11 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
             QDesktopServices::openUrl(QUrl(link.url));
             return;
         }
+    }
+    if (forwardMouse(event, true)) {
+        m_mouseForwarding = true;
+        if (m_hasSelection) { m_hasSelection = false; update(); }
+        return;
     }
     if (event->button() == Qt::LeftButton) {
         int col = (int)(event->pos().x() / m_cellWidth);
@@ -928,6 +981,13 @@ void TerminalItem::selectLineAt(int row) {
 }
 
 void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
+    if (m_mouseForwarding && m_vt) {
+        // libvterm reports the drag only in the modes that ask for it.
+        const int row = std::clamp(static_cast<int>(event->position().y() / m_cellHeight), 0, m_rows - 1);
+        const int col = std::clamp(static_cast<int>(event->position().x() / m_cellWidth), 0, m_cols - 1);
+        vterm_mouse_move(m_vt, row, col, VTERM_MOD_NONE);
+        return;
+    }
     if (m_selecting) {
         int col = std::max(0, std::min(m_cols - 1, (int)(event->pos().x() / m_cellWidth)));
         int row = std::max(0, std::min(m_rows - 1, (int)(event->pos().y() / m_cellHeight)));
@@ -938,6 +998,11 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_mouseForwarding) {
+        forwardMouse(event, false);
+        if (!event->buttons()) m_mouseForwarding = false;
+        return;
+    }
     if (event->button() == Qt::LeftButton && m_selecting) {
         m_selecting = false;
     }
@@ -1132,8 +1197,11 @@ void TerminalItem::copySelection() {
 }
 
 void TerminalItem::pasteClipboard() {
+    pasteText(QGuiApplication::clipboard()->text());
+}
+
+void TerminalItem::pasteText(const QString &text) {
     if (m_masterFd < 0) return;
-    QString text = QGuiApplication::clipboard()->text();
     if (!text.isEmpty()) {
         // Bracketed, when the program asked for it (libvterm emits the markers
         // only then): a shell or an editor can tell a pasted block from typed
@@ -1268,6 +1336,59 @@ void TerminalItem::cbOutput(const char *s, size_t len, void *user) {
     if (term && term->m_masterFd >= 0 && s && len > 0) {
         writeAll(term->m_masterFd, s, len);
     }
+}
+
+// ── Drag and drop ───────────────────────────────────────────────────────────
+//
+// Files dropped from a file manager are typed in as their paths, quoted for
+// the shell where they need it and a space after each, as Konsole and GNOME
+// Terminal do; dropped text goes in as it is. It took no drops at all.
+//
+// Always a copy: Files proposes a move, and a drop accepted as one would have
+// it take the file away.
+
+static bool acceptableDrop(const QMimeData *mime) {
+    return mime && (mime->hasUrls() || mime->hasText());
+}
+
+void TerminalItem::dragEnterEvent(QDragEnterEvent *event) {
+    if (m_masterFd < 0 || !acceptableDrop(event->mimeData())) { event->ignore(); return; }
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+}
+
+void TerminalItem::dragMoveEvent(QDragMoveEvent *event) {
+    if (m_masterFd < 0 || !acceptableDrop(event->mimeData())) { event->ignore(); return; }
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+}
+
+// 'it'\''s' — unquoted when every character is one a shell leaves alone.
+static QString shellQuote(const QString &s) {
+    static const QRegularExpression safe(QStringLiteral("^[A-Za-z0-9_./+=:@%,-]+$"));
+    if (safe.match(s).hasMatch()) return s;
+    QString quoted = s;
+    quoted.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
+    return QLatin1Char('\'') + quoted + QLatin1Char('\'');
+}
+
+void TerminalItem::dropEvent(QDropEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (m_masterFd < 0 || !acceptableDrop(mime)) { event->ignore(); return; }
+    QString text;
+    if (mime->hasUrls()) {
+        for (const QUrl &url : mime->urls()) {
+            const QString item = url.isLocalFile() ? url.toLocalFile() : url.toString();
+            if (!item.isEmpty()) text += shellQuote(item) + QLatin1Char(' ');
+        }
+    } else {
+        text = mime->text();
+    }
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+    forceActiveFocus();
+    if (m_viewOffset > 0) { m_viewOffset = 0; update(); }
+    pasteText(text);
 }
 
 } // namespace b1air

@@ -1,0 +1,90 @@
+# swayfx with its own wlroots and scenefx, as tools/build-swayfx.sh builds it,
+# but as a pacman package: every file it puts down is owned, `pacman -Qo`
+# answers for it and `pacman -R` takes it away again. That script installed
+# the same build into /usr/local, where nothing kept track of it.
+#
+# The versions and patches are the script's, read from it, so the two cannot
+# drift apart. Built by install.sh (Arch); by hand:
+#
+#     cd packaging/arch/b1air-swayfx && makepkg -si
+
+_repo="$(cd "$startdir/../../.." && pwd)"
+eval "$(grep -E '^(SWAYFX|SCENEFX|WLROOTS)_(REPO|REF)=' "$_repo/tools/build-swayfx.sh")"
+
+pkgname=b1air-swayfx
+# The patches are in the version too (their hash, as the script's stamp has
+# it), so changing one makes a new package rather than "up to date".
+_patchhash="$(cat "$_repo"/src/swayfx/patches/*.patch "$_repo"/src/scenefx/patches/*.patch 2>/dev/null | sha256sum | cut -c1-12)"
+pkgver="${SWAYFX_REF}.${WLROOTS_REF}.${_patchhash}"
+pkgrel=1
+pkgdesc="swayfx $SWAYFX_REF with its own wlroots $WLROOTS_REF and scenefx $SCENEFX_REF, for b1air"
+arch=(x86_64 aarch64)
+url="https://github.com/WillPower3309/swayfx"
+license=(MIT)
+# The two private libraries live in /usr/lib/b1air-swayfx, found through the
+# rpath only; nothing else on the system can link them.
+depends=(cairo gdk-pixbuf2 glib2 json-c lcms2 libdisplay-info libdrm libevdev
+         libglvnd libinput libliftoff libxcb libxkbcommon mesa pango pcre2 pixman
+         seatd systemd-libs wayland xcb-util-errors xcb-util-renderutil xcb-util-wm
+         xorg-xwayland hwdata)
+makedepends=(meson ninja pkgconf git wayland-protocols)
+provides=(sway swayfx)
+conflicts=(sway swayfx swayfx-git sway-git)
+options=(!debug)
+source=("swayfx::git+$SWAYFX_REPO#tag=$SWAYFX_REF"
+        "scenefx::git+$SCENEFX_REPO#tag=$SCENEFX_REF"
+        "wlroots::git+$WLROOTS_REPO#tag=$WLROOTS_REF")
+sha256sums=(SKIP SKIP SKIP)
+
+prepare() {
+    # makepkg reuses src/ between builds: start each from the bare tags.
+    local d
+    for d in swayfx scenefx wlroots; do
+        git -C "$d" reset -q --hard && git -C "$d" clean -qfdx
+    done
+    mkdir -p swayfx/subprojects
+    rm -rf swayfx/subprojects/{scenefx,wlroots}
+    cp -a scenefx wlroots swayfx/subprojects/
+    local p
+    for p in "$_repo"/src/swayfx/patches/*.patch; do
+        [[ -f $p ]] && git -C swayfx apply --whitespace=nowarn "$p"
+    done
+    for p in "$_repo"/src/scenefx/patches/*.patch; do
+        [[ -f $p ]] && git -C swayfx/subprojects/scenefx apply --whitespace=nowarn "$p"
+    done
+    return 0
+}
+
+build() {
+    # The options and their reasons: tools/build-swayfx.sh. Plain meson, not
+    # arch-meson: that forces every auto feature on (sd-bus-provider=auto
+    # then fails), and the build is meant to be the script's.
+    meson setup build swayfx \
+        --prefix=/usr \
+        --libdir=lib/b1air-swayfx \
+        --buildtype=release \
+        --wrap-mode=nodownload \
+        -Dwerror=false \
+        -Dc_link_args="-Wl,-rpath,/usr/lib/b1air-swayfx" \
+        -Dforce_fallback_for=wlroots,scenefx \
+        -Dwlroots:examples=false \
+        -Dwlroots:backends=drm,libinput \
+        -Dwlroots:renderers=gles2 \
+        -Dwlroots:xwayland=enabled \
+        -Dscenefx:examples=false \
+        -Dscenefx:renderers=gles2 \
+        -Dman-pages=disabled \
+        -Ddefault-wallpaper=false \
+        -Dbash-completions=false \
+        -Dzsh-completions=false \
+        -Dfish-completions=false
+    meson compile -C build
+}
+
+package() {
+    meson install -C build --destdir "$pkgdir" --tags runtime
+    ln -sf sway "$pkgdir/usr/bin/swayfx"
+    # b1air's session is the one at the login screen.
+    rm -f "$pkgdir/usr/share/wayland-sessions/sway.desktop"
+    install -Dm644 swayfx/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

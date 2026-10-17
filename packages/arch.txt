@@ -2,6 +2,10 @@
 # Format: see lib/distro.sh. `?name` = optional. The compositor (our swayfx built
 # from source, see packages/swayfx-build/arch.txt; else swayfx from the AUR, or
 # sway with --no-aur) is chosen by install.sh, not listed here.
+#
+# The b1air package (packaging/arch/b1air) depends on everything here, `?`
+# entries included, so pacman keeps all of it: add a runtime need here, not
+# in the PKGBUILD. Build-only tools are filtered out there.
 
 # Core & build
 base-devel git rsync curl unzip cmake ccache openssl polkit pkgconf wayland wayland-protocols cairo libxkbcommon pam

@@ -347,18 +347,13 @@ ColumnLayout {
         icon: "\u{f04e1}"
         accentColor: Design.peach
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-
-            Repeater {
-                model: section.switchOptions
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: section.switchOption === modelData.val
-                    onClicked: section.setSwitch(modelData.val)
-                }
+        FormRow {
+            title: I18n.tr("Switch with")
+            Dropdown {
+                // "" is a real choice here (no shortcut), so it gets a name of its own.
+                model: section.switchOptions.map(o => ({ id: o.val === "" ? "__none" : o.val, label: o.label }))
+                current: section.switchOption === "" ? "__none" : section.switchOption
+                onPicked: id => section.setSwitch(id === "__none" ? "" : id)
             }
         }
 

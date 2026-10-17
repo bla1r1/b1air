@@ -229,18 +229,94 @@ strip_swayfx_directives() {
     done
 }
 
+# ── Arch: b1air as pacman packages ───────────────────────────────────────────
+#
+# On Arch the suite and our swayfx are built into packages
+# (packaging/arch/b1air, packaging/arch/b1air-swayfx) and installed with
+# pacman, so every file they put in the system is owned and removable. The
+# other distributions still get `make install` and tools/build-swayfx.sh.
+# B1AIR_NO_PACKAGE=1 keeps the old way on Arch too.
+
+arch_packaging() {
+    [[ "${DISTRO:-}" == arch && "${B1AIR_NO_PACKAGE:-0}" != 1 ]] && command -v makepkg >/dev/null 2>&1
+}
+
+# arch_package_current <name> — true when the installed package is the
+# version its PKGBUILD in this checkout would build now.
+arch_package_current() {
+    local dir="$REPO_DIR/packaging/arch/$1" have want
+    have="$(pacman -Q "$1" 2>/dev/null | cut -d' ' -f2)" || return 1
+    want="$(cd "$dir" && makepkg --printsrcinfo 2>/dev/null \
+        | awk '$1=="pkgver"{v=$3} $1=="pkgrel"{r=$3} END{print v"-"r}')"
+    [[ -n "$have" && "$have" == "$want" ]]
+}
+
+# What `sudo make install` and install.sh's own copies put in /usr before
+# there was a package. pacman will not install over a file it does not own,
+# so the first package install takes these over (--overwrite); after that
+# they are the package's.
+B1AIR_PACKAGE_OVERWRITE=(
+    '/usr/bin/b1air-*' '/usr/share/b1air/*' '/usr/share/b1air-shell/*'
+    '/usr/share/applications/b1air-*' '/usr/share/icons/hicolor/scalable/apps/b1air-*'
+    '/usr/share/icons/b1air-cursors/*' '/usr/share/fonts/b1air/*'
+    '/usr/share/wayland-sessions/b1air.desktop' '/usr/share/xdg-desktop-portal/b1air-portals.conf'
+    '/usr/share/sddm/themes/b1air/*' '/usr/lib/qt6/qml/B1air/*' '/usr/lib64/qt6/qml/B1air/*'
+)
+
+# arch_build_package <name> — build packaging/arch/<name> as this user
+# (makepkg refuses root; -s asks sudo for the build dependencies only) and
+# install the result with pacman. --ask 4 answers yes to "remove the
+# conflicting package" (sway for b1air-swayfx), which --noconfirm answers no.
+arch_build_package() {
+    local dir="$REPO_DIR/packaging/arch/$1" files=() glob overwrite=()
+    for glob in "${B1AIR_PACKAGE_OVERWRITE[@]}"; do overwrite+=(--overwrite "$glob"); done
+    (cd "$dir" && makepkg -sf --noconfirm --needed) || return 1
+    mapfile -t files < <(cd "$dir" && makepkg --packagelist)
+    sudo pacman -U --noconfirm --ask 4 "${overwrite[@]}" "${files[@]}" || return 1
+    rm -f "${files[@]}"
+}
+
+# retire_unpackaged_b1air — what earlier installs put outside the package and
+# would now shadow it: the suite and swayfx in /usr/local (ahead of /usr/bin
+# on PATH), per-user copies in ~/.local/bin (ahead of both), and copies in
+# /etc of a unit and udev rules the package ships in /usr/lib (/etc wins).
+retire_unpackaged_b1air() {
+    local sys=() f
+    for f in /usr/local/bin/b1air-* /usr/local/lib/b1air-swayfx /usr/local/share/b1air \
+             /etc/systemd/system/b1air-fido-uhid.service /etc/udev/rules.d/99-b1air-*.rules \
+             /etc/udev/rules.d/99-uinput.rules; do
+        [[ -e "$f" ]] && sys+=("$f")
+    done
+    # sway* in /usr/local only when it is ours (the stamp build-swayfx.sh left).
+    if [[ -f /usr/local/share/b1air/swayfx.stamp ]]; then
+        for f in /usr/local/bin/{sway,swayfx,swaybar,swaymsg,swaynag}; do
+            [[ -e "$f" || -L "$f" ]] && sys+=("$f")
+        done
+    fi
+    if (( ${#sys[@]} > 0 )); then
+        sudo rm -rf "${sys[@]}"
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo udevadm control --reload-rules 2>/dev/null || true
+    fi
+    rm -f "$HOME"/.local/bin/b1air-*
+    hash -r
+}
+
 # ── Where the suite is installed, and configs that point there ───────────────
 #
-# install.sh puts the b1air binaries in /usr/local/bin when it has root and in
-# ~/.local/bin when it does not. The sway config and the systemd user units
-# name that directory in one place each ($b1airBin, ExecStart/ExecReload), and
-# the copies in this repository say ~/.local/bin. So every deployment of
+# install.sh puts the b1air binaries in /usr/bin as the b1air package (Arch),
+# else in /usr/local/bin when it has root and in ~/.local/bin when it does not.
+# The sway config and the systemd user units name that directory in one
+# place each ($b1airBin, ExecStart/ExecReload), and the copies in this
+# repository say ~/.local/bin. So every deployment of
 # .config has to be "rendered" for this machine — or an update that copies the
 # repository's variables.conf over the installed one leaves autostart and every
 # key binding pointing at an empty directory: no daemon, no shell.
 
 b1air_install_prefix() {
-    if [[ -x /usr/local/bin/b1air-daemon ]]; then
+    if pacman -Qq b1air >/dev/null 2>&1; then
+        echo /usr/bin
+    elif [[ -x /usr/local/bin/b1air-daemon ]]; then
         echo /usr/local/bin
     else
         echo "$HOME/.local/bin"

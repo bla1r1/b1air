@@ -125,33 +125,48 @@ ColumnLayout {
         onTriggered: Quickshell.execDetached(["b1air-shell", "forceReload"])
     }
 
-    // ── Interface language ───────────────────────────────────────────────────
+    function setUiLanguage(id) {
+        if ((Settings.uiLanguage || "auto") === id) return;
+        Settings.set("uiLanguage", id);
+        restartSoon.restart();
+    }
+    function setSystemLanguage(id) {
+        if (id === "__system") section.write({ LANG: "", LANGUAGE: "" });
+        else section.write({ LANG: id + ".UTF-8", LANGUAGE: id.split("_")[0] });
+    }
+    function setFormats(id) {
+        const code = id === "__interface" ? "" : id;
+        Settings.set("formatsLocale", code);
+        const w = {};
+        for (const k of section.formatKeys) w[k] = code === "" ? "" : code + ".UTF-8";
+        section.write(w);
+        restartSoon.restart();
+    }
+
+    // One entry per installed locale, named in its own language.
+    readonly property var installedChoices: section.installed.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
+
+    // ── Language ─────────────────────────────────────────────────────────────
+    // Rows with a list each, as Windows and KDE lay it out. These were three
+    // cards of pills, one per installed locale every time.
     Card {
-        title: I18n.tr("Interface language")
-        subtitle: I18n.tr("Menus, settings and apps of this desktop; the shell restarts to switch")
+        title: I18n.tr("Language")
+        subtitle: I18n.tr("What this desktop and other programs speak")
         icon: "\u{f05ca}"
         accentColor: Design.blue
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
+        FormRow {
+            title: I18n.tr("Interface language")
+            subtitle: I18n.tr("Menus, settings and apps of this desktop; the shell restarts to switch")
+            Dropdown {
                 model: [
                     { id: "auto", label: I18n.tr("Like the system") },
-                    { id: "en",   label: "English" },
-                    { id: "uk",   label: "Українська" },
-                    { id: "ru",   label: "Русский" }
+                    { id: "en",   label: "English",    detail: "en" },
+                    { id: "uk",   label: "Українська", detail: "uk" },
+                    { id: "ru",   label: "Русский",    detail: "ru" }
                 ]
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: (Settings.uiLanguage || "auto") === modelData.id
-                    onClicked: {
-                        if ((Settings.uiLanguage || "auto") === modelData.id) return;
-                        Settings.set("uiLanguage", modelData.id);
-                        restartSoon.restart();
-                    }
-                }
+                current: Settings.uiLanguage || "auto"
+                onPicked: id => section.setUiLanguage(id)
             }
         }
         Label {
@@ -161,73 +176,60 @@ ColumnLayout {
             text: I18n.tr("The system is in %1, which has no translation here: English is used, dates included.", Qt.locale(sys).nativeLanguageName || sys)
             role: "caption"; dim: true; wrapMode: Text.WordWrap
         }
-    }
 
-    // ── System language ──────────────────────────────────────────────────────
-    Card {
-        title: I18n.tr("System language")
-        subtitle: I18n.tr("What other programs speak: the browser, GTK and Qt apps. From the next login")
-        icon: "\u{f0ac}"
-        accentColor: Design.teal
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                label: section.defaultLang
-                    ? I18n.tr("As the system: %1", section.nameOf(section.defaultLang))
-                    : I18n.tr("As the system")
-                active: section.systemLang === ""
-                onClicked: section.write({ LANG: "", LANGUAGE: "" })
+        FormRow {
+            title: I18n.tr("System language")
+            subtitle: I18n.tr("What other programs speak: the browser, GTK and Qt apps. From the next login")
+            Dropdown {
+                model: [{
+                    id: "__system",
+                    label: section.defaultLang
+                        ? I18n.tr("As the system: %1", section.nameOf(section.defaultLang))
+                        : I18n.tr("As the system")
+                }].concat(section.installedChoices)
+                current: section.systemLang === "" ? "__system" : section.systemLang
+                onPicked: id => section.setSystemLanguage(id)
             }
-            Repeater {
-                model: section.installed
-                delegate: Pill {
-                    required property string modelData
-                    label: section.nameOf(modelData)
-                    active: section.systemLang === modelData
-                    onClicked: section.write({ LANG: modelData + ".UTF-8", LANGUAGE: modelData.split("_")[0] })
-                }
+        }
+
+        FormRow {
+            title: I18n.tr("Add a language")
+            subtitle: I18n.tr("A language has to be added to the system before it can be picked above. Needs the administrator password")
+            visible: section.missing.length > 0 || section.adding !== ""
+            Dropdown {
+                model: section.missing.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
+                current: ""
+                placeholder: section.adding !== ""
+                    ? I18n.tr("Adding %1…", section.nameOf(section.adding))
+                    : I18n.tr("Choose a language…")
+                enabled: section.adding === ""
+                onPicked: id => section.add(id)
+            }
+            Label {
+                visible: section.addError !== "" && section.adding === ""
+                Layout.fillWidth: true
+                text: section.addError
+                color: Design.danger
+                role: "caption"; wrapMode: Text.WordWrap
             }
         }
     }
 
-    // ── Formats ──────────────────────────────────────────────────────────────
+    // ── Region ───────────────────────────────────────────────────────────────
     Card {
         id: formatsCard
-        title: I18n.tr("Formats")
+        title: I18n.tr("Region")
         subtitle: I18n.tr("Dates, times, numbers, money and units, here and in other programs")
         icon: "\u{f00f0}"
         accentColor: Design.peach
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                label: I18n.tr("Like the interface language")
-                active: (Settings.formatsLocale || "") === ""
-                onClicked: {
-                    Settings.set("formatsLocale", "");
-                    const w = {};
-                    for (const k of section.formatKeys) w[k] = "";
-                    section.write(w);
-                    restartSoon.restart();
-                }
-            }
-            Repeater {
-                model: section.installed
-                delegate: Pill {
-                    required property string modelData
-                    label: section.nameOf(modelData)
-                    active: Settings.formatsLocale === modelData
-                    onClicked: {
-                        Settings.set("formatsLocale", modelData);
-                        const w = {};
-                        for (const k of section.formatKeys) w[k] = modelData + ".UTF-8";
-                        section.write(w);
-                        restartSoon.restart();
-                    }
-                }
+        FormRow {
+            title: I18n.tr("Formats")
+            subtitle: I18n.tr("Independent of the language: English menus with German dates is fine")
+            Dropdown {
+                model: [{ id: "__interface", label: I18n.tr("Like the interface language") }].concat(section.installedChoices)
+                current: (Settings.formatsLocale || "") === "" ? "__interface" : Settings.formatsLocale
+                onPicked: id => section.setFormats(id)
             }
         }
 
@@ -247,37 +249,6 @@ ColumnLayout {
             Label { text: Number(1234567.89).toLocaleString(formatsCard.preview, "f", 2); role: "caption" }
             Label { text: I18n.tr("Money"); role: "caption"; dim: true }
             Label { text: Number(1234.5).toLocaleCurrencyString(formatsCard.preview); role: "caption" }
-        }
-    }
-
-    // ── More languages ───────────────────────────────────────────────────────
-    Card {
-        visible: section.missing.length > 0
-        title: I18n.tr("More languages")
-        subtitle: I18n.tr("A language has to be added to the system before it can be picked above. Needs the administrator password")
-        icon: "\u{f0415}"
-        accentColor: Design.green
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: section.missing
-                delegate: Pill {
-                    required property string modelData
-                    icon: section.adding === modelData ? "\u{f0450}" : "\u{f0415}"
-                    label: section.nameOf(modelData)
-                    active: section.adding === modelData
-                    onClicked: if (section.adding === "") section.add(modelData)
-                }
-            }
-        }
-        Label {
-            visible: section.addError !== "" || section.adding !== ""
-            Layout.fillWidth: true
-            text: section.adding !== "" ? I18n.tr("Adding %1…", section.nameOf(section.adding)) : section.addError
-            color: section.addError !== "" && section.adding === "" ? Design.danger : Design.text
-            role: "caption"; wrapMode: Text.WordWrap
         }
     }
 }

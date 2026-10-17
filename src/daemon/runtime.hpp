@@ -45,14 +45,27 @@ inline std::string qml_entry(const char* name) {
     return {};
 }
 
+// Made if missing, and put back to 0700 only when it is not: an
+// unconditional chmod is an IN_ATTRIB on the directory every time, and the
+// idle thread (idle.cpp) watches this one and calls runtime_path() on every
+// wake — each chmod woke it for the next. It spun a core at 100% for the
+// whole session, and everything watching $XDG_RUNTIME_DIR (the portals)
+// woke with it.
+inline void private_dir(const std::string& path) {
+    struct stat st{};
+    if (stat(path.c_str(), &st) != 0) {
+        mkdir(path.c_str(), 0700);
+    } else if ((st.st_mode & 07777) != 0700 && st.st_uid == getuid()) {
+        chmod(path.c_str(), 0700);
+    }
+}
+
 inline std::string runtime_dir() {
     const char* configured = std::getenv("XDG_RUNTIME_DIR");
     std::string base = configured && *configured ? configured : ("/tmp/b1air-" + std::to_string(static_cast<unsigned long>(getuid())));
     std::string dir = base + "/b1air";
-    mkdir(base.c_str(), 0700);
-    chmod(base.c_str(), 0700);
-    mkdir(dir.c_str(), 0700);
-    chmod(dir.c_str(), 0700);
+    private_dir(base);
+    private_dir(dir);
     return dir;
 }
 

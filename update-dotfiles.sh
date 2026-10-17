@@ -182,6 +182,7 @@ check_packages() {
             # every update had yay build the AUR swayfx all over again, since
             # pacman does not know ours.
             [[ "$pkg" == "swayfx" && ( -x /usr/local/bin/swayfx || "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ) ]] && continue
+            [[ "$pkg" == "swayfx" ]] && pacman -Qq b1air-swayfx >/dev/null 2>&1 && continue
             pkg_installed arch "$pkg" || missing_aur+=("$pkg")
         done < <(read_package_list "$REPO_DIR/packages/arch-aur.txt" required)
     fi
@@ -378,6 +379,16 @@ SUITE_LOG="${XDG_CACHE_HOME:-$HOME/.cache}/b1air/suite-build.log"
 # Our swayfx, when this machine runs it: the script keeps a stamp of the
 # versions and patches it built, and rebuilds only when those differ.
 update_compositor() {
+    if pacman -Qq b1air-swayfx >/dev/null 2>&1; then
+        DISTRO=arch
+        if arch_package_current b1air-swayfx; then
+            ok "b1air-swayfx is up to date."
+            return 0
+        fi
+        log "swayfx patches or versions changed; rebuilding the b1air-swayfx package (takes a few minutes)..."
+        arch_build_package b1air-swayfx >&2 || warn "b1air-swayfx rebuild failed; keeping the installed one."
+        return 0
+    fi
     local script="$REPO_DIR/tools/build-swayfx.sh"
     [[ -x "$script" && -x /usr/local/bin/swayfx ]] || return 0
     if "$script" --check; then
@@ -417,6 +428,19 @@ update_suite() {
         log "b1air suite: $(git -C "$REPO_DIR" diff --name-only "$(cat "$SUITE_STAMP")" HEAD -- src | wc -l) changed file(s) in src/; rebuilding what depends on them..."
     else
         log "Building b1air suite..."
+    fi
+    # Installed as the b1air package (install.sh on Arch): rebuilt as one.
+    if pacman -Qq b1air >/dev/null 2>&1; then
+        DISTRO=arch
+        arch_build_package b1air || { err "b1air package rebuild failed."; exit 1; }
+        retire_unpackaged_b1air
+        if [[ -d "$REPO_DIR/.git" ]]; then
+            mkdir -p "$(dirname "$SUITE_STAMP")"
+            git -C "$REPO_DIR" rev-parse HEAD > "$SUITE_STAMP"
+        fi
+        retire_old_apps >/dev/null || true
+        ok "b1air package updated."
+        return 0
     fi
     mkdir -p "$(dirname "$SUITE_LOG")"
     # What was compiled, not the hundred "Built target" lines around it.

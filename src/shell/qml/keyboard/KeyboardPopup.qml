@@ -70,17 +70,21 @@ PopupShell {
         for (const dev of inputs) {
             if (dev.type !== "keyboard")
                 continue;
+            // sway's index is into its own order (us first), not this list's.
             const idx = Number(dev.xkb_active_layout_index || 0);
-            window.activeIndex = idx;
-            if (window.configuredLanguages.length > idx)
-                window.activeCode = window.configuredLanguages[idx];
+            if (Settings.swayLayouts.length > idx)
+                window.activeCode = Settings.swayLayouts[idx];
+            window.activeIndex = window.configuredLanguages.indexOf(window.activeCode);
             return;
         }
     })
 
     function switchLayout(idx) {
         window.activeIndex = idx;
-        Sway.command("input type:keyboard xkb_switch_layout " + Number(idx));
+        window.activeCode = window.configuredLanguages[idx];
+        const swayIdx = Settings.swayLayouts.indexOf(window.activeCode);
+        if (swayIdx < 0) return;
+        Sway.command("input type:keyboard xkb_switch_layout " + swayIdx);
         window.close();
     }
 

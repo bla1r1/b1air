@@ -254,6 +254,15 @@ install_packages() {
 # strip_swayfx_directives), and the daemon tiles by itself where the
 # compositor does not.
 install_compositor() {
+    if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]] && arch_packaging; then
+        install_swayfx_package && return 0
+        warn "Building the b1air-swayfx package failed — see makepkg's output above."
+        if pkg_installed "$DISTRO" sway || install_one_of sway; then
+            warn "Using plain sway for now; run install.sh again to retry."
+            return 0
+        fi
+        err "Neither our swayfx nor plain sway could be installed."; exit 1
+    fi
     if [[ "${B1AIR_SWAYFX_FROM_SOURCE:-1}" == "1" ]]; then
         if build_swayfx_from_source; then
             remove_distro_sway
@@ -313,6 +322,23 @@ remove_distro_sway() {
     pm_remove "$DISTRO" "${found[@]}" \
         || warn "Could not remove ${found[*]} (something depends on it); both stay installed, ours is the one b1air starts."
     hash -r
+}
+
+# Arch: the same build as a package (packaging/arch/b1air-swayfx), which
+# replaces a packaged sway or swayfx itself (it conflicts with them).
+install_swayfx_package() {
+    if arch_package_current b1air-swayfx; then
+        ok "b1air-swayfx is up to date"
+        return 0
+    fi
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would build and install the b1air-swayfx package"
+        return 0
+    fi
+    log "Building the b1air-swayfx package (takes a few minutes)..."
+    arch_build_package b1air-swayfx || return 1
+    retire_unpackaged_b1air
+    ok "Compositor: b1air-swayfx (pacman)"
 }
 
 # swayfx with its own wlroots and scenefx (tools/build-swayfx.sh), into
@@ -668,7 +694,10 @@ deploy_sddm_theme() {
     local cache_dir="/var/cache/wallpaper"
     local cache_wall="$cache_dir/current.jpg"
 
-    if [[ -d "$sddm_src" ]]; then
+    # The b1air package has the theme and its sddm.conf.d drop-in.
+    if arch_packaging; then
+        :
+    elif [[ -d "$sddm_src" ]]; then
         log "Deploying b1air SDDM theme to $sddm_dst..."
         if [[ "$DRY_RUN" -eq 1 ]]; then
             log "Would install $sddm_src -> $sddm_dst"
@@ -678,7 +707,7 @@ deploy_sddm_theme() {
         fi
     fi
 
-    if [[ -f "$REPO_DIR/etc/sddm.conf" ]]; then
+    if ! arch_packaging && [[ -f "$REPO_DIR/etc/sddm.conf" ]]; then
         log "Installing /etc/sddm.conf..."
         if [[ "$DRY_RUN" -eq 1 ]]; then
             log "Would install $REPO_DIR/etc/sddm.conf -> /etc/sddm.conf"
@@ -712,6 +741,8 @@ deploy_sddm_theme() {
 }
 
 deploy_session_files() {
+    # The b1air package has every one of these.
+    arch_packaging && return 0
     log "Deploying b1air FreeDesktop Wayland session files & portals..."
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "Would install b1air.desktop, b1air-session, and b1air-portals.conf"
@@ -1046,7 +1077,40 @@ enable_services() {
     enable_sddm || { err "Failed to enable SDDM."; exit 1; }
 }
 
+# Arch: the suite, session and system defaults as the b1air package.
+build_b1air_package() {
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "Would build and install the b1air package"
+        return 0
+    fi
+    log "Building the b1air package (the suite, the session, the defaults)..."
+    if command -v ccache >/dev/null 2>&1; then
+        ccache -M 10G >/dev/null 2>&1 || true
+    fi
+    arch_build_package b1air || { err "Failed to build the b1air package — see the output above."; exit 1; }
+    retire_unpackaged_b1air
+    retire_old_apps >/dev/null || true
+    B1AIR_PREFIX=/usr/bin
+    render_config_tree "$HOME/.config" /usr/bin
+    ok "b1air installed with pacman (pacman -Ql b1air lists its files)"
+
+    if [[ -d "$REPO_DIR/.git" ]]; then
+        mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/b1air" "$HOME/.config/b1air"
+        git -C "$REPO_DIR" rev-parse HEAD > "${XDG_STATE_HOME:-$HOME/.local/state}/b1air/suite-installed"
+        # This account has its .config deployed already: nothing for
+        # b1air-session to copy from the package's skel at its next login.
+        cp /usr/share/b1air/skel-version "$HOME/.config/b1air/skel-version" 2>/dev/null || true
+    fi
+    local pruned
+    pruned="$(prune_stale_desktop_entries "$BACKUP_DIR")"
+    if (( pruned > 0 )); then ok "Removed $pruned stale per-user desktop entries"; fi
+}
+
 build_b1air_suite() {
+    if arch_packaging; then
+        build_b1air_package
+        return
+    fi
     log "Building and installing b1air-daemon & b1air-shell (Native C++20 Desktop Suite)..."
     if [[ -d "$REPO_DIR/src" ]]; then
         if command -v ccache >/dev/null 2>&1; then
@@ -1159,7 +1223,8 @@ build_b1air_suite() {
 
 configure_remote_desktop_permissions() {
     log "Configuring uinput & screencast permissions for prompt-free remote desktop..."
-    echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules >/dev/null 2>&1 || true
+    # The b1air package has this rule (99-b1air-uinput.rules).
+    arch_packaging || echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules >/dev/null 2>&1 || true
     sudo udevadm control --reload-rules >/dev/null 2>&1 || true
     sudo udevadm trigger --name-match=uinput >/dev/null 2>&1 || true
     sudo usermod -aG input "$USER" >/dev/null 2>&1 || true

@@ -531,6 +531,19 @@ Scope {
                     masterWindow.refitHeight();
                 }
 
+                // A panel left on screen under the next one, frozen part-way
+                // through its exit fade: seen as a faint copy of Notifications
+                // behind Control Center (an AMD session, not reproduced after a
+                // shell restart). Whatever the stack has let go of is hidden
+                // once it is idle, however its transition ended.
+                onBusyChanged: {
+                    if (busy) return;
+                    for (const child of widgetStack.children) {
+                        if (child !== widgetStack.currentItem && child.StackView.status === StackView.Inactive)
+                            child.visible = false;
+                    }
+                }
+
                 // The height is not settled when the surface first appears —
                 // a card that has not loaded its data yet, or a widget switched
                 // off while the panel is open, changes it afterwards. Follow it.

@@ -85,6 +85,9 @@ protected:
     void hoverMoveEvent(QHoverEvent *event) override;
     void hoverLeaveEvent(QHoverEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
 
@@ -94,6 +97,8 @@ private slots:
 
 private:
     void initTerminal(int rows, int cols);
+    // Into the program as if typed — bracketed when it asked for that.
+    void pasteText(const QString &text);
     void childExited();
     void restartBlink();
     void updateFontMetrics();
@@ -188,8 +193,19 @@ private:
 
     // What the running program asked for, so the wheel can do what it expects.
     int m_mouseMode = 0;        // VTERM_PROP_MOUSE_*: nonzero = it wants mouse events
+    // Clicks and drags go to such a program, as in xterm; Shift held makes
+    // them select here instead. True from a forwarded press to its release.
+    bool m_mouseForwarding = false;
+    bool forwardMouse(QMouseEvent *event, bool pressed);
     bool m_altScreen = false;   // less, man, htop, an editor
     int m_wheelAccum = 0;       // eighths of a degree not yet turned into lines
+
+    // OSC 52: a program putting text on the clipboard (Claude Code, nvim,
+    // tmux — over ssh too). libvterm decodes the base64 into fragments.
+    static int cbSelectionSet(VTermSelectionMask mask, VTermStringFragment frag, void *user);
+    VTermSelectionCallbacks m_selectionCallbacks{};
+    char m_selectionBuf[4096];
+    QByteArray m_osc52;
 };
 
 } // namespace b1air

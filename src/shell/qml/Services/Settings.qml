@@ -38,6 +38,14 @@ Singleton {
     readonly property alias topbarHelpIcon: data.topbarHelpIcon
     readonly property alias guideShortcut: data.guideShortcut
     readonly property alias language: data.language
+    // The layouts in the order sway has them: us first, for the shortcuts,
+    // whatever the order chosen (settings_manager.cpp, layouts_for_bindings).
+    // An index from sway means a place in this list, not in `language`.
+    readonly property var swayLayouts: {
+        const list = String(data.language || "us").split(",").map(x => x.trim()).filter(x => x !== "");
+        if (list.length === 0 || list[0] === "us") return list.length ? list : ["us"];
+        return ["us"].concat(list.filter(x => x !== "us"));
+    }
     readonly property alias kbOptions: data.kbOptions
     // Keybindings changed on the Keyboard page: a JSON object of binding id to
     // key combo, rendered into conf.d/custom_keybinds.conf. A string because
@@ -334,6 +342,7 @@ Singleton {
         if (data[key] === value)
             return;
         data[key] = value;
+        root._unsaved[key] = value;
         root.flush();
     }
 
@@ -466,6 +475,7 @@ Singleton {
             }
             if (data[key] !== obj[key]) {
                 data[key] = obj[key];
+                root._unsaved[key] = obj[key];
                 touched = true;
             }
         }
@@ -490,7 +500,22 @@ Singleton {
             root.set(key, defaults[key]);
     }
 
+    // What this process changed since it last wrote.
+    property var _unsaved: ({})
+
+    // A merge, not a dump of this process's copy. The shell, the Settings
+    // app and the lock screen each hold the whole file in memory, and whoever
+    // wrote last put back everything as *it* last saw it: picking Ukrainian in
+    // Settings was undone by the shell's next unrelated write (a slider, Do
+    // Not Disturb), and the language came back as "auto" after a restart.
+    // The file is read again first, and only our own changes go on top.
     function flush() {
+        const mine = root._unsaved;
+        root._unsaved = ({});
+        file.reload();
+        file.waitForJob();
+        for (const key in mine)
+            data[key] = mine[key];
         file.writeAdapter();
         root.changed();
     }

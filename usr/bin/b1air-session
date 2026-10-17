@@ -14,7 +14,8 @@ export XDG_SESSION_TYPE="wayland"
 # "command not found" with nothing surfacing the failure. Everything spawned
 # from this session (sway, quickshell, the daemon) inherits this PATH.
 export PATH="$HOME/.local/bin:$PATH"
-# swayfx built from source (tools/build-swayfx.sh) lives in /usr/local/bin,
+# swayfx built by tools/build-swayfx.sh (not the b1air-swayfx package, which
+# is in /usr/bin) lives in /usr/local/bin,
 # which a display manager's PATH does not always carry.
 case ":$PATH:" in *:/usr/local/bin:*) ;; *) export PATH="/usr/local/bin:$PATH" ;; esac
 
@@ -80,8 +81,13 @@ fi
 # systemd's own file for them: LANG, LANGUAGE and the LC_* it sets. Arch's
 # /etc/profile reads it for login shells, but nothing guaranteed that this
 # session went through one — Debian and Fedora's display managers do not.
-LOCALE_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/locale.conf"
-if [ -r "$LOCALE_CONF" ]; then
+#
+# The system's /etc/locale.conf first, then the account's over it: "As the
+# system" in Settings leaves LANG out of the account's file, and SDDM hands
+# the session LANG=C.UTF-8 — so the language picked for the machine never
+# arrived, and every program ran in C (English, ASCII sorting) after a restart.
+for LOCALE_CONF in /etc/locale.conf "${XDG_CONFIG_HOME:-$HOME/.config}/locale.conf"; do
+    [ -r "$LOCALE_CONF" ] || continue
     while IFS='=' read -r key value; do
         case "$key" in
             LANG|LANGUAGE|LC_CTYPE|LC_NUMERIC|LC_TIME|LC_COLLATE|LC_MONETARY|LC_MESSAGES|LC_PAPER|LC_NAME|LC_ADDRESS|LC_TELEPHONE|LC_MEASUREMENT)
@@ -89,7 +95,7 @@ if [ -r "$LOCALE_CONF" ]; then
                 [ -n "$value" ] && export "$key=$value" ;;
         esac
     done < "$LOCALE_CONF"
-fi
+done
 
 # Import environment to systemd user instance & D-Bus
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
