@@ -77,9 +77,9 @@ Scope {
 
             Rectangle {
                 id: box
-                implicitWidth: Math.max(Design.s(220), column.implicitWidth + Design.s(64))
-                implicitHeight: column.implicitHeight + Design.s(48)
-                radius: Design.s(28)
+                implicitWidth: Math.max(Design.s(Design.width.control), column.implicitWidth + Design.s(Design.size.tile))
+                implicitHeight: column.implicitHeight + Design.s(Design.size.art)
+                radius: Design.s(Design.radius.panel)
                 color: Design.ground
                 border.color: Design.glassBorder
                 border.width: 1
@@ -87,14 +87,14 @@ Scope {
                 ColumnLayout {
                     id: column
                     anchors.centerIn: parent
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: card.label ? card.label.number : ""
                         font.family: Design.font.mono
                         font.weight: Font.Bold
-                        font.pixelSize: Design.s(120)
+                        font.pixelSize: Design.s(Design.font.jumbo)
                         color: Screens.primaryName === card.modelData.name ? Design.accent : Design.text
                     }
                     Label {

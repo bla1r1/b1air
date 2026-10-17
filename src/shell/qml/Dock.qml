@@ -95,10 +95,10 @@ Scope {
 
             readonly property real base: Design.s(Settings.dockIconSize || 48)
             readonly property real zoom: Settings.dockMagnify !== false ? 1.6 : 1.0
-            readonly property real bar: dock.base + Design.s(18)
+            readonly property real bar: dock.base + Design.s(Design.space.lg)
             // Room above for the icons that grow.
-            implicitHeight: dock.bar + dock.base * (dock.zoom - 1) + Design.s(8)
-            exclusiveZone: Settings.dockAutohide ? 0 : dock.bar + Design.s(8)
+            implicitHeight: dock.bar + dock.base * (dock.zoom - 1) + Design.s(Design.space.sm)
+            exclusiveZone: Settings.dockAutohide ? 0 : dock.bar + Design.s(Design.space.sm)
             exclusionMode: Settings.dockAutohide ? ExclusionMode.Ignore : ExclusionMode.Normal
 
             // Shown unless hiding: when the pointer is near the bottom edge or on it.
@@ -122,11 +122,11 @@ Scope {
             Rectangle {
                 id: plate
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: dock.shown ? parent.height - height - Design.s(8) : parent.height + Design.s(4)
+                y: dock.shown ? parent.height - height - Design.s(Design.space.sm) : parent.height + Design.s(Design.space.xs)
                 Behavior on y { NumberAnimation { duration: Design.duration.fast + 60; easing.type: Easing.OutCubic } }
-                width: row.width + Design.s(16)
+                width: row.width + Design.s(Design.space.lg)
                 height: dock.bar
-                radius: Design.s(18)
+                radius: Design.s(Design.radius.panel)
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: 1
@@ -151,8 +151,8 @@ Scope {
                     id: row
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: Design.s(9)
-                    spacing: Design.s(6)
+                    anchors.bottomMargin: Design.s(Design.space.sm)
+                    spacing: Design.s(Design.space.xs)
 
                     Repeater {
                         model: root.items
@@ -188,8 +188,8 @@ Scope {
                                 visible: cell.modelData.wins.length > 0
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.top: parent.bottom
-                                anchors.topMargin: Design.s(2)
-                                width: Design.s(4); height: width; radius: width / 2
+                                anchors.topMargin: Design.s(Design.space.xxs)
+                                width: Design.s(Design.space.xs); height: width; radius: width / 2
                                 color: Design.text
                                 opacity: 0.8
                             }
@@ -198,9 +198,9 @@ Scope {
                                 visible: tipArea.containsMouse
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.bottom: parent.top
-                                anchors.bottomMargin: Design.s(8)
-                                width: tipText.implicitWidth + Design.s(16)
-                                height: tipText.implicitHeight + Design.s(8)
+                                anchors.bottomMargin: Design.s(Design.space.sm)
+                                width: tipText.implicitWidth + Design.s(Design.space.lg)
+                                height: tipText.implicitHeight + Design.s(Design.space.sm)
                                 radius: height / 2
                                 color: Design.glassBg
                                 border.color: Design.glassBorder

@@ -172,9 +172,8 @@ MiniView {
 
             Label {
                 text: I18n.tr("AI Noise Suppression (RNNoise)")
-                role: "caption"
-                weight: Design.weight.medium
                 Layout.fillWidth: true
+                elide: Text.ElideRight
             }
 
             Button {
@@ -194,7 +193,7 @@ MiniView {
             id: appsList
             visible: Audio.apps.count > 0
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(Design.s(120), Audio.apps.count * Design.s(36))
+            Layout.preferredHeight: Math.min(Design.s(Design.size.thumb), Audio.apps.count * Design.s(Design.size.header))
             clip: true
             spacing: Design.s(Design.space.xs)
             model: Audio.apps
@@ -215,12 +214,12 @@ MiniView {
                     text: appStreamRow.model.description || appStreamRow.model.name || I18n.tr("App")
                     role: "caption"
                     elide: Text.ElideRight
-                    Layout.preferredWidth: Design.s(100)
+                    Layout.preferredWidth: Design.s(Design.width.field)
                 }
 
                 Slider {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(28)
+                    Layout.preferredHeight: Design.s(Design.size.sm)
                     value: appStreamRow.model.volume
                     muted: appStreamRow.model.mute
                     tone: Design.accent

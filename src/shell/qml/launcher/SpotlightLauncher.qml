@@ -253,9 +253,9 @@ PopupShell {
         // As tall as what it found, up to the window; at least room for the
         // preview.
         height: window.hasQuery
-            ? Math.min(parent.height, Design.s(59) + Math.max(Design.s(320), list.contentHeight + Design.s(Design.space.sm) * 2))
-            : Design.s(58)
-        radius: Design.s(16)
+            ? Math.min(parent.height, Design.s(Design.size.tile) + Math.max(Design.s(Design.width.text), list.contentHeight + Design.s(Design.space.sm) * 2))
+            : Design.s(Design.size.tile)
+        radius: Design.s(Design.radius.panel)
         color: Design.glassBg
         border.color: Design.glassBorder
         border.width: 1
@@ -279,10 +279,10 @@ PopupShell {
             // ── The field ───────────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(58)
-                Layout.leftMargin: Design.s(18)
-                Layout.rightMargin: Design.s(18)
-                spacing: Design.s(12)
+                Layout.preferredHeight: Design.s(Design.size.tile)
+                Layout.leftMargin: Design.s(Design.space.lg)
+                Layout.rightMargin: Design.s(Design.space.lg)
+                spacing: Design.s(Design.space.md)
 
                 Icon { text: "\u{f002}"; role: "subhead"; color: Design.textDim }
 
@@ -291,7 +291,7 @@ PopupShell {
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
                     font.family: Design.font.sans
-                    font.pixelSize: Design.s(20)
+                    font.pixelSize: Design.s(Design.font.title)
                     color: Design.text
                     selectByMouse: true
                     clip: true
@@ -348,7 +348,7 @@ PopupShell {
                         required property string section
                         width: list.width
                         topPadding: Design.s(Design.space.sm)
-                        bottomPadding: Design.s(2)
+                        bottomPadding: Design.s(Design.space.xxs)
                         leftPadding: Design.s(Design.space.sm)
                         text: section
                         role: "caption"
@@ -362,8 +362,8 @@ PopupShell {
                         required property int index
                         readonly property bool on: index === window.selectedIndex
                         width: list.width
-                        height: Design.s(38)
-                        radius: Design.s(7)
+                        height: Design.s(Design.size.knob)
+                        radius: Design.s(Design.radius.ctl)
                         color: row.on ? Design.accent : (rowMa.containsMouse ? Design.glassHover : "transparent")
 
                         RowLayout {
@@ -372,8 +372,8 @@ PopupShell {
                             anchors.rightMargin: Design.s(Design.space.sm)
                             spacing: Design.s(Design.space.sm)
                             Item {
-                                Layout.preferredWidth: Design.s(22)
-                                Layout.preferredHeight: Design.s(22)
+                                Layout.preferredWidth: Design.s(Design.size.mini)
+                                Layout.preferredHeight: Design.s(Design.size.mini)
                                 IconImage {
                                     anchors.fill: parent
                                     visible: !!row.modelData.image
@@ -431,8 +431,8 @@ PopupShell {
                         visible: !!preview.it
                         Item {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: preview.picture ? parent.width : Design.s(88)
-                            Layout.preferredHeight: preview.picture ? Design.s(160) : Design.s(88)
+                            Layout.preferredWidth: preview.picture ? parent.width : Design.s(Design.size.avatar)
+                            Layout.preferredHeight: preview.picture ? Design.s(Design.width.label) : Design.s(Design.size.avatar)
                             Image {
                                 anchors.fill: parent
                                 visible: preview.picture
@@ -440,7 +440,7 @@ PopupShell {
                                 source: !preview.picture ? ""
                                       : window.isImage(preview.it.path) ? Paths.fileUrl(preview.it.path)
                                       : "image://thumb/" + encodeURIComponent(preview.it.path)
-                                sourceSize: Qt.size(Design.s(400), Design.s(340))
+                                sourceSize: Qt.size(Design.s(Design.width.menuMax), Design.s(Design.width.dialog))
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                             }
@@ -453,13 +453,13 @@ PopupShell {
                             Rectangle {
                                 anchors.fill: parent
                                 visible: !preview.picture && !!preview.it && !preview.it.image
-                                radius: Design.s(20)
+                                radius: Design.s(Design.radius.panel)
                                 color: Design.tint(Design.accent, 0.16)
                                 Text {
                                     anchors.centerIn: parent
                                     text: preview.it ? (preview.it.glyph || "") : ""
                                     font.family: Design.font.icon
-                                    font.pixelSize: Design.s(44)
+                                    font.pixelSize: Design.s(Design.font.hero)
                                     color: Design.accent
                                 }
                             }

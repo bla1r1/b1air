@@ -129,7 +129,7 @@ PopupShell {
                     required property int index
 
                     width: ListView.view ? ListView.view.width : 0
-                    height: Design.s(44)
+                    height: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.ctl)
                     color: fileHover.containsMouse ? Design.glassHover : Design.glassCard
                     border.color: fileHover.containsMouse ? Design.accent : Design.glassBorder

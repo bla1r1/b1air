@@ -34,8 +34,8 @@ PanelWindow {
     anchors.bottom: true
     anchors.left: false
 
-    implicitWidth: osdCard.implicitWidth + Design.s(32)
-    implicitHeight: osdCard.implicitHeight + Design.s(90)
+    implicitWidth: osdCard.implicitWidth + Design.s(Design.space.xxl)
+    implicitHeight: osdCard.implicitHeight + Design.s(Design.size.avatar)
 
     visible: osdOpacity > 0.0
     onVisibleChanged: if (visible) Screens.refresh()
@@ -169,26 +169,26 @@ PanelWindow {
         Behavior on opacity { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
         Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
 
-        implicitWidth: osdWindow.osdHasLevel ? Design.s(260)
-            : Math.min(Design.s(440), Math.max(Design.s(260), statusText.implicitWidth + Design.s(84)))
-        implicitHeight: Design.s(60)
+        implicitWidth: osdWindow.osdHasLevel ? Design.s(Design.size.canvas)
+            : Math.min(Design.s(Design.width.menuMax), Math.max(Design.s(Design.size.canvas), statusText.implicitWidth + Design.s(Design.size.avatar)))
+        implicitHeight: Design.s(Design.size.tile)
 
-        radius: Design.s(30)
+        radius: height / 2
         color: Design.ground
         border.color: Design.glassBorder
         border.width: 1
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Design.s(16)
-            anchors.rightMargin: Design.s(18)
-            spacing: Design.s(12)
+            anchors.leftMargin: Design.s(Design.space.lg)
+            anchors.rightMargin: Design.s(Design.space.lg)
+            spacing: Design.s(Design.space.md)
 
             // Icon circle
             Rectangle {
-                Layout.preferredWidth: Design.s(36)
-                Layout.preferredHeight: Design.s(36)
-                radius: Design.s(18)
+                Layout.preferredWidth: Design.s(Design.size.knob)
+                Layout.preferredHeight: Design.s(Design.size.knob)
+                radius: Design.s(Design.radius.panel)
                 color: Design.glassCard
 
                 Icon {
@@ -202,7 +202,7 @@ PanelWindow {
             // Label & Bar Column
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(4)
+                spacing: Design.s(Design.space.xs)
 
                 // A status line: title, and the detail under it.
                 ColumnLayout {
@@ -247,8 +247,8 @@ PanelWindow {
                 Rectangle {
                     visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(6)
-                    radius: Design.s(3)
+                    Layout.preferredHeight: Design.s(Design.space.xs)
+                    radius: Design.s(Design.radius.sm)
                     color: Design.well
 
                     Rectangle {
@@ -256,7 +256,7 @@ PanelWindow {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: osdWindow.osdMuted ? 0 : (parent.width * (osdWindow.osdValue / 100.0))
-                        radius: Design.s(3)
+                        radius: Design.s(Design.radius.sm)
                         color: osdWindow.osdColor
 
                         Behavior on width {

@@ -139,8 +139,8 @@ PopupShell {
 
                     // Type Icon
                     Rectangle {
-                        Layout.preferredWidth: Design.s(32)
-                        Layout.preferredHeight: Design.s(32)
+                        Layout.preferredWidth: Design.s(Design.size.md)
+                        Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
                         color: clipCard.modelData.type === "color" ? clipCard.modelData.text.trim() : Design.sunken
                         Layout.alignment: Qt.AlignTop
@@ -193,7 +193,7 @@ PopupShell {
 
                     // Action buttons
                     RowLayout {
-                        spacing: Design.s(2)
+                        spacing: Design.s(Design.space.xxs)
                         Layout.alignment: Qt.AlignTop
 
                         // A template is not in the history, so there is
@@ -238,11 +238,11 @@ PopupShell {
             ColumnLayout {
                 anchors.centerIn: parent
                 visible: root.filteredItems.length === 0
-                spacing: Design.s(8)
+                spacing: Design.s(Design.space.sm)
 
                 Icon {
                     text: "\u{f0ea}"
-                    font.pixelSize: Design.s(36)
+                    font.pixelSize: Design.s(Design.font.hero)
                     color: Design.textDim
                     Layout.alignment: Qt.AlignHCenter
                 }

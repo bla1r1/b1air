@@ -20,7 +20,6 @@ PopupShell {
     readonly property int introDuration: 800
     readonly property int tintDuration: 1000
     readonly property int pulsePeriod: 1500
-    readonly property int driftPeriod: 90000
 
 
 
@@ -42,12 +41,6 @@ PopupShell {
         "artUrl": ""
     }
 
-    property var eqData: {
-        "b1": 0, "b2": 0, "b3": 0, "b4": 0, "b5": 0,
-        "b6": 0, "b7": 0, "b8": 0, "b9": 0, "b10": 0,
-        "preset": "Flat", "pending": false
-    }
-
     // MultiEffect needs a shader. Under the software rasterizer — a VM,
     // llvmpipe, or this session's own "turn effects off on a software
     // rasterizer" tuning — an item carrying layer.enabled plus a shader effect
@@ -59,12 +52,12 @@ PopupShell {
 
     // ── Wiring to Services/Media ─────────────────────────────────────────────
     //
-    // musicData and eqData above are the shapes this window draws, and nothing
-    // ever wrote to them. Services/Media was built for exactly this window —
+    // musicData above is the shape this window draws, and nothing
+    // ever wrote to it. Services/Media was built for exactly this window —
     // its own header says "MusicPopup reads Media.track.*" — but the window
     // was never moved onto it, so it drew its own defaults forever: the title
     // stayed "Loading...", the clock stayed 00:00, the source stayed
-    // "Offline", and every EQ band sat at 0 no matter what the daemon held.
+    // "Offline".
     // The transport buttons were already calling Media.playPause() and friends,
     // so the window could drive a player it could not show.
     //
@@ -88,24 +81,15 @@ PopupShell {
         root.musicData = merged;
     }
 
-    function _syncEqFromService() {
-        const e = Media.eq || {};
-        if (Object.keys(e).length === 0)
-            return;
-        root.eqData = Object.assign({}, root.eqData, e);
-    }
-
     Connections {
         target: Media
         function onTrackChanged()  { root._syncFromService(); }
         function onStatusChanged() { root._syncFromService(); }
-        function onEqChanged()     { root._syncEqFromService(); }
     }
 
     Component.onCompleted: {
         Media.acquire();
         root._syncFromService();
-        root._syncEqFromService();
         Media.refresh();
     }
 
@@ -113,60 +97,11 @@ PopupShell {
 
     // Accumulators for Process standard output
     property string accumulatedMusicOut: ""
-    property string accumulatedEqOut: ""
 
     // UI State for debouncing the slider and play button
     property bool userIsSeeking: false
     property bool userToggledPlay: false
     
-    // ANTI-JITTER LOCK: Prevents background polling from reverting UI during processing
-    property real lastEqUpdate: 0
-
-    // Decoupled Global Animation States
-    property real catppuccinFlowOffset: 0
-    NumberAnimation on catppuccinFlowOffset {
-        from: 0; to: 1.0
-        duration: root.introDuration // Slowed down significantly for a graceful, constant flow
-        loops: Animation.Infinite
-        running: root.visible
-    }
-
-    property real globalOrbitAngle: 0
-    NumberAnimation on globalOrbitAngle {
-        from: 0; to: Math.PI * 2
-        duration: root.driftPeriod
-        loops: Animation.Infinite
-        running: false
-    }
-
-    // --- CANVAS LIGHTNING ANIMATION STATE ---
-    property real eqLightningProgress: 0.0
-    property real eqLightningFade: 1.0 // 1.0 = fully faded out
-
-    SequentialAnimation {
-        id: eqLightningAnim
-        running: false
-        ScriptAction { script: { root.eqLightningFade = 0.0; root.eqLightningProgress = 0.0; } }
-        NumberAnimation { 
-            target: root; property: "eqLightningProgress"; 
-            from: 0.0; to: 10.0; // 10 points = 9 segments
-            duration: root.introDuration; // Fast, snappy, energetic strike
-            easing.type: Easing.OutSine 
-        }
-        PauseAnimation { duration: Design.duration.fast } // Hold the core flash at the end
-        NumberAnimation { 
-            target: root; property: "eqLightningFade"; 
-            from: 0.0; to: 1.0; 
-            duration: root.introDuration; // Smooth dissipation
-            easing.type: Easing.OutQuad 
-        }
-        ScriptAction { script: { root.eqLightningProgress = 0.0; } }
-    }
-
-    function triggerEqLightning() {
-        eqLightningAnim.restart();
-    }
-
     // --- GLOBAL PLAY/PAUSE EVENT LISTENER ---
     property string lastMusicStatus: "Stopped"
     onMusicDataChanged: {
@@ -183,10 +118,6 @@ PopupShell {
     property real introCover: 0
     property real introText: 0
     property real introControls: 0
-    property real introSeparator: 0
-    property real introEqHeader: 0
-    property real introEqSliders: 0
-    property real introPresets: 0
 
     ParallelAnimation {
         running: true
@@ -212,51 +143,9 @@ PopupShell {
             NumberAnimation { target: root; property: "introControls"; from: 0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
         }
 
-        // 5. Separator line drops and fades
-        SequentialAnimation {
-            PauseAnimation { duration: 310 }
-            NumberAnimation { target: root; property: "introSeparator"; from: 0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutQuart }
-        }
-
-        // 6. EQ header follows down seamlessly
-        SequentialAnimation {
-            PauseAnimation { duration: 370 }
-            NumberAnimation { target: root; property: "introEqHeader"; from: 0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutQuart }
-        }
-
-        // 7. EQ Sliders sweep up in a sequential waterfall wave
-        SequentialAnimation {
-            PauseAnimation { duration: 430 }
-            NumberAnimation { target: root; property: "introEqSliders"; from: 0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutExpo }
-        }
-
-        // 8. Presets finish the orchestration with a final pop
-        SequentialAnimation {
-            PauseAnimation { duration: 550 }
-            NumberAnimation { target: root; property: "introPresets"; from: 0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
-        }
     }
 
     // --- FIXED COLOR PARSING LOGIC ---
-    property var borderColors: {
-        var defaultColors = [Design.accentAlt, Design.accent, Design.danger, Design.accentAlt];
-        if (!root.musicData || !root.musicData.grad) return defaultColors;
-        
-        var hexRegex = /#[0-9a-fA-F]{6}/g;
-        var matches = root.musicData.grad.match(hexRegex);
-        
-        if (matches && matches.length >= 3) {
-            return [matches[0], matches[1], matches[2], matches[0]]; // Wrap around for looping
-        }
-        return defaultColors;
-    }
-
-    // PROPER EXCEPTION-FREE FIX: Explicit bindings so GradientStop actually repaints
-    property color bc1: borderColors[0] || Design.accentAlt
-    property color bc2: borderColors[1] || Design.accent
-    property color bc3: borderColors[2] || Design.danger
-    property color bc4: borderColors[3] || Design.accentAlt
-
     property color dynamicTextColor: {
         if (root.musicData && root.musicData.textColor) {
             var c = String(root.musicData.textColor).trim();
@@ -267,34 +156,6 @@ PopupShell {
         return Design.text;
     }
 
-
-    function applyPresetOptimistically(presetName) {
-        var presets = {
-            "Flat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            "Bass": [5, 7, 5, 2, 1, 0, 0, 0, 1, 2],
-            "Treble": [-2, -1, 0, 1, 2, 3, 4, 5, 6, 6],
-            "Vocal": [-2, -1, 1, 3, 5, 5, 4, 2, 1, 0],
-            "Pop": [2, 4, 2, 0, 1, 2, 4, 2, 1, 2],
-            "Rock": [5, 4, 2, -1, -2, -1, 2, 4, 5, 6],
-            "Jazz": [3, 3, 1, 1, 1, 1, 2, 1, 2, 3],
-            "Classic": [0, 1, 2, 2, 2, 2, 1, 2, 3, 4]
-        };
-        if (presets[presetName]) {
-            var temp = Object.assign({}, root.eqData);
-            for (var i = 0; i < 10; i++) {
-                temp["b" + (i + 1)] = presets[presetName][i];
-            }
-            temp.preset = presetName;
-            temp.pending = false; 
-            root.eqData = temp; 
-            
-            // Blind the polling process to stop it from fetching old data
-            root.lastEqUpdate = Date.now(); 
-            
-            root.triggerEqLightning();
-            Media.setEqPreset(presetName, presets[presetName]);
-        }
-    }
 
     // --- DATA POLLING ---
     Timer {
@@ -317,128 +178,22 @@ PopupShell {
         // Deepened scale effect and introduced a gentle Y-axis translation for the main container
         scale: 0.92 + (0.08 * root.introMain)
         opacity: root.introMain
-        transform: Translate { y: Design.s(15) * (1 - root.introMain) }
+        transform: Translate { y: Design.s(Design.space.lg) * (1 - root.introMain) }
 
-        // OUTER ANIMATED BORDER WITH PROPER CLIPPING
-        Item {
-            anchors.fill: parent
-
-            Shape {
-                id: maskRectOuter
-                anchors.fill: parent
-                visible: false // Hidden because MultiEffect will render it as a mask
-                layer.enabled: root.canShade
-                preferredRendererType: Shape.GeometryRenderer // Fixes lag by hardware accelerating the stroke
-
-                property real sw: Design.s(6)
-                property real inset: (sw / 2) + Design.s(0.5) 
-                property real w: width
-                property real h: height
-                property real r: Design.s(14) - inset
-                
-                // Mathematical perimeter
-                property real straightLines: 2 * (w - 2 * inset - 2 * r) + 2 * (h - 2 * inset - 2 * r)
-                property real arcLines: 2 * Math.PI * r
-                property real perimeter: straightLines + arcLines
-
-                property real drawProgress: 0
-
-                NumberAnimation on drawProgress {
-                    id: chargeAnim
-                    from: 0
-                    to: maskRectOuter.perimeter
-                    duration: root.introDuration // The time it takes to "charge" the whole wick
-                    easing.type: Easing.OutCubic
-                    running: true // Ensure it starts reliably
-                }
-
-                ShapePath {
-                    strokeWidth: maskRectOuter.sw
-                    strokeColor: "black" 
-                    fillColor: "transparent"
-                    capStyle: ShapePath.FlatCap 
-
-                    // QML Shape dash patterns are measured in units of strokeWidth! 
-                    dashPattern: [maskRectOuter.perimeter / maskRectOuter.sw, maskRectOuter.perimeter / maskRectOuter.sw]
-                    dashOffset: (maskRectOuter.perimeter - maskRectOuter.drawProgress) / maskRectOuter.sw
-
-                    // Start exactly at Bottom-Left corner, going UP clockwise
-                    startX: maskRectOuter.inset
-                    startY: maskRectOuter.h - maskRectOuter.inset - maskRectOuter.r
-
-                    // 1. Up to top-left corner
-                    PathLine { x: maskRectOuter.inset; y: maskRectOuter.inset + maskRectOuter.r }
-                    // 2. Arc top-left
-                    PathArc { 
-                        x: maskRectOuter.inset + maskRectOuter.r; y: maskRectOuter.inset 
-                        radiusX: maskRectOuter.r; radiusY: maskRectOuter.r; direction: PathArc.Clockwise 
-                    }
-                    // 3. Right to top-right corner
-                    PathLine { x: maskRectOuter.w - maskRectOuter.inset - maskRectOuter.r; y: maskRectOuter.inset }
-                    // 4. Arc top-right
-                    PathArc { 
-                        x: maskRectOuter.w - maskRectOuter.inset; y: maskRectOuter.inset + maskRectOuter.r 
-                        radiusX: maskRectOuter.r; radiusY: maskRectOuter.r; direction: PathArc.Clockwise 
-                    }
-                    // 5. Down to bottom-right corner
-                    PathLine { x: maskRectOuter.w - maskRectOuter.inset; y: maskRectOuter.h - maskRectOuter.inset - maskRectOuter.r }
-                    // 6. Arc bottom-right
-                    PathArc { 
-                        x: maskRectOuter.w - maskRectOuter.inset - maskRectOuter.r; y: maskRectOuter.h - maskRectOuter.inset 
-                        radiusX: maskRectOuter.r; radiusY: maskRectOuter.r; direction: PathArc.Clockwise 
-                    }
-                    // 7. Left to bottom-left corner
-                    PathLine { x: maskRectOuter.inset + maskRectOuter.r; y: maskRectOuter.h - maskRectOuter.inset }
-                    // 8. Arc bottom-left to finish
-                    PathArc { 
-                        x: maskRectOuter.inset; y: maskRectOuter.h - maskRectOuter.inset - maskRectOuter.r 
-                        radiusX: maskRectOuter.r; radiusY: maskRectOuter.r; direction: PathArc.Clockwise 
-                    }
-                }
-            }
-
-            Item {
-                id: gradContainer
-                anchors.fill: parent
-                visible: false // Hidden for MultiEffect mapping
-                clip: true // Prevents the rotated gradient bounding box from bulging out the sides!
-
-                Rectangle {
-                    width: Math.max(parent.width, parent.height) * 2
-                    height: width
-                    anchors.centerIn: parent
-                    
-                    NumberAnimation on rotation {
-                        from: 0; to: 360; duration: root.introDuration
-                        loops: Animation.Infinite
-                        running: true
-                    }
-
-                    gradient: Gradient {
-                        // FIXED: Using securely unpacked color bindings
-                        GradientStop { position: 0.0; color: root.bc1; Behavior on color { ColorAnimation { duration: root.tintDuration; easing.type: Easing.InOutQuad } } }
-                        GradientStop { position: 0.33; color: root.bc2; Behavior on color { ColorAnimation { duration: root.tintDuration; easing.type: Easing.InOutQuad } } }
-                        GradientStop { position: 0.66; color: root.bc3; Behavior on color { ColorAnimation { duration: root.tintDuration; easing.type: Easing.InOutQuad } } }
-                        GradientStop { position: 1.0; color: root.bc4; Behavior on color { ColorAnimation { duration: root.tintDuration; easing.type: Easing.InOutQuad } } }
-                    }
-                }
-            }
-
-            MultiEffect {
-                source: gradContainer
-                anchors.fill: parent
-                maskEnabled: true
-                maskSource: maskRectOuter
-            }
-        }
+        // An animated border stood here: a rotating four-colour gradient,
+        // masked to a stroke that "charged" round the edge on open. The
+        // popup's own frame is the border now, as on every other popup.
 
         // INNER WINDOW BOX
         Rectangle {
             id: innerBg
             anchors.fill: parent
-            anchors.margins: Design.s(3)
-            color: Design.glassCard
-            radius: Design.s(10)
+            // No fill of its own: a glass card inset in the popup's glass
+            // drew a second frame inside the first. It is the clip and the
+            // cover's blur, no more.
+            anchors.margins: Design.s(Design.border)
+            color: "transparent"
+            radius: Design.s(Design.radius.panel)
 
             // FIX: This forces the entire background to render as a single hardware texture,
             // preventing the UI from dragging and causing "shadow boxes" during the StackView transition!
@@ -448,7 +203,7 @@ PopupShell {
             Rectangle {
                 id: innerBgMask
                 anchors.fill: parent
-                radius: Design.s(10)
+                radius: Design.s(Design.radius.panel)
                 visible: false
                 
                 // FIX: Masks in MultiEffect strictly require layer.enabled to correctly capture the radius during scaling!
@@ -504,7 +259,7 @@ PopupShell {
             // LAYER 2: UI Content
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: Design.s(20)
+                anchors.margins: Design.s(Design.space.lg)
                 spacing: 0
 
                 // ==========================================
@@ -512,18 +267,18 @@ PopupShell {
                 // ==========================================
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(220)
-                    spacing: Design.s(25)
+                    Layout.preferredHeight: Design.s(Design.width.control)
+                    spacing: Design.s(Design.space.xl)
 
                     // Cover Art Wrapper
                     Item {
-                        Layout.preferredWidth: Design.s(220)
-                        Layout.preferredHeight: Design.s(220)
+                        Layout.preferredWidth: Design.s(Design.width.control)
+                        Layout.preferredHeight: Design.s(Design.width.control)
                         Layout.alignment: Qt.AlignVCenter
 
                         opacity: root.introCover
                         // Enhanced 2D drift animation
-                        transform: Translate { x: Design.s(-40) * (1 - root.introCover); y: Design.s(10) * (1 - root.introCover) }
+                        transform: Translate { x: Design.s(-40) * (1 - root.introCover); y: Design.s(Design.space.sm) * (1 - root.introCover) }
 
                         // Elastic response to play/pause state
                         scale: root.musicData.status === "Playing" ? 1.0 : 0.90
@@ -531,9 +286,9 @@ PopupShell {
 
                         Rectangle {
                             anchors.fill: parent
-                            radius: Design.s(110)
+                            radius: width / 2
                             color: Design.hover
-                            border.width: Design.s(4)
+                            border.width: Design.s(Design.focusWidth)
                             border.color: root.musicData.status === "Playing" ? Design.accent : Design.textFaint
                             Behavior on border.color { ColorAnimation { duration: Design.duration.slow } }
 
@@ -541,8 +296,8 @@ PopupShell {
                             Rectangle {
                                 z: -1
                                 anchors.centerIn: parent
-                                width: parent.width + Design.s(20)
-                                height: parent.height + Design.s(20)
+                                width: parent.width + Design.s(Design.space.lg)
+                                height: parent.height + Design.s(Design.space.lg)
                                 radius: width / 2
                                 color: Design.accent
                                 opacity: root.musicData.status === "Playing" ? 0.5 : 0.0
@@ -557,7 +312,7 @@ PopupShell {
 
                             Item {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
                                 Image {
                                     id: artImg
                                     anchors.fill: parent
@@ -593,8 +348,8 @@ PopupShell {
                                 }
 
                                 Rectangle {
-                                    width: Design.s(40); height: Design.s(40)
-                                    radius: Design.s(20); color: "#000000"
+                                    width: Design.s(Design.size.row); height: Design.s(Design.size.row)
+                                    radius: width / 2; color: "#000000"
                                     opacity: 0.8; anchors.centerIn: parent
                                 }
                             }
@@ -611,23 +366,23 @@ PopupShell {
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
-                        spacing: Design.s(15)
+                        spacing: Design.s(Design.space.lg)
 
                         // TEXT INFO CHUNK
                         ColumnLayout {
-                            spacing: Design.s(6)
+                            spacing: Design.s(Design.space.xs)
                             opacity: root.introText
-                            transform: Translate { x: Design.s(30) * (1 - root.introText) }
+                            transform: Translate { x: Design.s(Design.space.xxl) * (1 - root.introText) }
                             
                             // HARD-LOCKED SEAMLESS INFINITE MARQUEE
                             Item {
                                 id: titleClipRect
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Design.s(28) 
+                                Layout.preferredHeight: Design.s(Design.size.sm) 
                                 clip: true
 
                                 // This is the distance between the end of the text and the clone
-                                property int marqueeSpacing: Design.s(60)
+                                property int marqueeSpacing: Design.s(Design.size.tile)
 
                                 Item {
                                     id: marqueeContainer
@@ -640,7 +395,7 @@ PopupShell {
                                             text: root.musicData.title
                                             color: root.dynamicTextColor
                                             font.family: Design.font.sans
-                                            font.pixelSize: Design.s(20)
+                                            font.pixelSize: Design.s(Design.font.title)
                                             font.weight: Design.weight.semibold
                                             Behavior on color { ColorAnimation { duration: root.tintDuration } }
 
@@ -660,7 +415,7 @@ PopupShell {
                                             text: root.musicData.title
                                             color: root.dynamicTextColor
                                             font.family: Design.font.sans
-                                            font.pixelSize: Design.s(20)
+                                            font.pixelSize: Design.s(Design.font.title)
                                             font.weight: Design.weight.semibold
                                             visible: titleTextMain.implicitWidth > titleClipRect.width
                                         }
@@ -692,33 +447,33 @@ PopupShell {
                                 text: root.musicData.artist ? I18n.tr("BY %1", root.musicData.artist) : ""
                                 color: Design.textDim // Better matugen match
                                 font.family: Design.font.sans
-                                font.pixelSize: Design.s(14)
+                                font.pixelSize: Design.s(Design.font.glyphSm)
                                 font.weight: Design.weight.semibold
                                 elide: Text.ElideRight
                                 maximumLineCount: 1 // Strict 1 line
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Design.s(20)
+                                Layout.preferredHeight: Design.s(Design.size.mini)
                             }
                             RowLayout {
-                                spacing: Design.s(10)
+                                spacing: Design.s(Design.space.sm)
                                 Rectangle {
                                     color: Design.glassCard
-                                    radius: Design.s(4)
-                                    Layout.preferredHeight: Design.s(24)
-                                    Layout.preferredWidth: pillContent.width + Design.s(20)
+                                    radius: Design.s(Design.radius.sm)
+                                    Layout.preferredHeight: Design.s(Design.size.xs)
+                                    Layout.preferredWidth: pillContent.width + Design.s(Design.space.lg)
                                     RowLayout {
                                         id: pillContent
                                         anchors.centerIn: parent
-                                        spacing: Design.s(6)
+                                        spacing: Design.s(Design.space.xs)
                                         Icon { role: "body"; text: root.musicData.deviceIcon || "󰓃"; color: Design.accent }
-                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(12); font.weight: Design.weight.semibold }
+                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.footnote); font.weight: Design.weight.semibold }
                                     }
                                 }
                                 Text {
                                     text: I18n.tr("VIA %1", I18n.tr(root.musicData.source || "Offline"))
                                     color: Design.textFaint // Better matugen match
                                     font.family: Design.font.mono
-                                    font.pixelSize: Design.s(12)
+                                    font.pixelSize: Design.s(Design.font.footnote)
                                     font.weight: Design.weight.semibold
                                     font.italic: true
                                 }
@@ -728,14 +483,14 @@ PopupShell {
                         // PROGRESS AREA CHUNK
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: Design.s(5)
+                            spacing: Design.s(Design.space.xs)
                             opacity: root.introControls
-                            transform: Translate { x: Design.s(20) * (1 - root.introControls); y: Design.s(10) * (1 - root.introControls) }
+                            transform: Translate { x: Design.s(Design.space.lg) * (1 - root.introControls); y: Design.s(Design.space.sm) * (1 - root.introControls) }
 
                             QQC.Slider {
                                 id: progBar
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: Design.s(20) 
+                                Layout.preferredHeight: Design.s(Design.size.mini) 
                                 from: 0; to: 100
 
                                 Connections {
@@ -773,89 +528,41 @@ PopupShell {
 
                                 background: Item {
                                     x: progBar.leftPadding
-                                    y: progBar.topPadding + (progBar.availableHeight - Design.s(12)) / 2
+                                    y: progBar.topPadding + (progBar.availableHeight - Design.s(Design.space.md)) / 2
                                     width: progBar.availableWidth
-                                    height: Design.s(12)
+                                    height: Design.s(Design.space.md)
 
-                                    // Shadows mimicking the EQ slider background
+                                    // The track and how far along, in one colour: the
+                                    // fill was a 2000px seven-stop gradient sliding
+                                    // under a mask, the track a shadowed raised bar.
                                     Rectangle {
                                         anchors.fill: parent
-                                        radius: Design.s(6)
-                                        // Dynamic tint: surface0 with 70% opacity for a softer dark look
-                                        color: Qt.rgba(Design.raised.r, Design.raised.g, Design.raised.b, 0.7)
-
-                                        layer.enabled: root.canShade
-                                        layer.effect: MultiEffect {
-                                            shadowEnabled: true
-                                            shadowColor: "#000000"
-                                            shadowOpacity: 0.9
-                                            shadowBlur: 0.5
-                                            shadowVerticalOffset: 1
-                                        }
+                                        radius: height / 2
+                                        color: Design.well
                                     }
 
-                                    // Masked Gradient Fill (Completely redesigned for smooth, light, synergistic palette)
-                                    Item {
+                                    Rectangle {
                                         width: progBar.handle.x - progBar.leftPadding + (progBar.handle.width / 2)
                                         height: parent.height
-
-                                        // The fill inside is a 2000px gradient that slides; the mask
-                                        // was the only thing keeping it inside this Item. With no
-                                        // shader to run the mask, that gradient painted straight
-                                        // across the whole popup, over the cover art and out past
-                                        // the card. clip is what actually bounds it; the mask only
-                                        // rounds the corners.
-                                        clip: true
-
-                                        layer.enabled: root.canShade
-                                        layer.effect: MultiEffect {
-                                            maskEnabled: true
-                                            maskSource: sliderFillMask
-                                        }
-
-                                        Rectangle {
-                                            id: sliderFillMask
-                                            width: parent.width
-                                            height: parent.height
-                                            radius: Design.s(6)
-                                            visible: false
-                                            layer.enabled: root.canShade 
-                                        }
-
-                                        Rectangle {
-                                            width: Design.s(2000)
-                                            height: parent.height
-                                            // Sliding the gradient perfectly by exactly half its width (1000px)
-                                            x: -(root.catppuccinFlowOffset * Design.s(1000)) 
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                // Mathematically precise loops with lighter, cooler colors & theme change support
-                                                GradientStop { position: 0.0000; color: Qt.lighter(Design.accent, 1.2); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 0.1666; color: Qt.lighter(Design.accentSoft, 1.15); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 0.3333; color: Qt.lighter(Design.accentAlt, 1.15); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 0.5000; color: Qt.lighter(Design.accent, 1.2); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 0.6666; color: Qt.lighter(Design.accentSoft, 1.15); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 0.8333; color: Qt.lighter(Design.accentAlt, 1.15); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                                GradientStop { position: 1.0000; color: Qt.lighter(Design.accent, 1.2); Behavior on color { ColorAnimation { duration: root.tintDuration } } }
-                                            }
-                                        }
+                                        radius: height / 2
+                                        color: Design.accent
                                     }
                                 }
 
                                 handle: Rectangle {
                                     x: progBar.leftPadding + progBar.visualPosition * (progBar.availableWidth - width)
                                     y: progBar.topPadding + (progBar.availableHeight - height) / 2
-                                    implicitWidth: Design.s(18) 
-                                    implicitHeight: Design.s(18)
-                                    width: Design.s(18); height: Design.s(18)
+                                    implicitWidth: Design.s(Design.size.micro) 
+                                    implicitHeight: Design.s(Design.size.micro)
+                                    width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                                     // A knob on an accent track, not a cream
                                     // dot: the handles were Design.text, the
                                     // near-white used for prose, which is the
                                     // one colour in the palette that says
                                     // "this is a letter, not a control".
-                                    radius: Design.s(9)
+                                    radius: Design.s(Design.radius.ctl)
                                     color: Design.glassCard
-                                    border.width: Math.max(1, Design.s(2))
+                                    border.width: Math.max(1, Design.s(Design.focusWidth))
                                     border.color: Design.accent
                                     scale: progBar.pressed ? 1.3 : 1.0
                                     Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutBack } }
@@ -864,28 +571,28 @@ PopupShell {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: root.musicData.positionStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(13) }
+                                Text { text: root.musicData.positionStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.body) }
                                 Item { Layout.fillWidth: true }
-                                Text { text: root.musicData.lengthStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(13) }
+                                Text { text: root.musicData.lengthStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.body) }
                             }
                         }
 
                         // MEDIA CONTROLS CHUNK
                         RowLayout {
                             Layout.alignment: Qt.AlignHCenter
-                            spacing: Design.s(30)
+                            spacing: Design.s(Design.space.xxl)
                             opacity: root.introControls
-                            transform: Translate { y: Design.s(20) * (1 - root.introControls) }
+                            transform: Translate { y: Design.s(Design.space.lg) * (1 - root.introControls) }
 
                             MouseArea {
-                                width: Design.s(30); height: Design.s(30)
+                                width: Design.s(Design.size.sm); height: Design.s(Design.size.sm)
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: Media.previous()
                                 Icon { role: "title"; anchors.centerIn: parent; text: ""; color: parent.pressed ? Design.text : Design.textFaint }
                             }
                             MouseArea {
                                 id: playPauseBtn
-                                width: Design.s(50); height: Design.s(50)
+                                width: Design.s(Design.size.art); height: Design.s(Design.size.art)
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     root.userToggledPlay = true;
@@ -935,12 +642,12 @@ PopupShell {
                                     text: root.musicData.status === "Playing" ? "" : ""
                                     color: parent.pressed ? Design.accent : Design.accent
                                     font.family: Design.font.icon
-                                    font.pixelSize: Design.s(42) 
+                                    font.pixelSize: Design.s(Design.font.hero) 
                                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                                 }
                             }
                             MouseArea {
-                                width: Design.s(30); height: Design.s(30)
+                                width: Design.s(Design.size.sm); height: Design.s(Design.size.sm)
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: Media.next()
                                 Icon { role: "title"; anchors.centerIn: parent; text: ""; color: parent.pressed ? Design.text : Design.textFaint }
@@ -949,504 +656,8 @@ PopupShell {
                     }
                 }
 
-                // ==========================================
-                // SEPARATOR
-                // ==========================================
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(2)
-                    Layout.topMargin: Design.s(20)
-                    Layout.bottomMargin: Design.s(20)
-                    color: Design.line
-                    radius: Design.s(1)
-
-                    opacity: root.introSeparator
-                    transform: Translate { y: Design.s(15) * (1 - root.introSeparator) }
-                }
-
-                // ==========================================
-                // EQUALIZER
-                // ==========================================
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(15)
-
-                    // Header Row
-                    RowLayout {
-                        Layout.fillWidth: true
-                        opacity: root.introEqHeader
-                        transform: Translate { y: Design.s(15) * (1 - root.introEqHeader) }
-
-                        Text { text: I18n.tr("Equalizer"); color: Design.accent; font.family: Design.font.sans; font.pixelSize: Design.s(16); font.weight: Design.weight.semibold; Layout.fillWidth: true }
-                        
-                        // Ui/Button, like every other button in the
-                        // shell. This was a bespoke rectangle with its own
-                        // radius, a mauve fill and a drop shadow, sitting
-                        // beside a bare word for the current preset — so the
-                        // row read as the two-word phrase "Saved Flat" rather
-                        // than a button and a value.
-                        Label {
-                            text: I18n.tr("Preset: %1", I18n.tr(root.eqData.preset || "Flat"))
-                            role: "caption"
-                            dim: true
-                            Layout.rightMargin: Design.s(Design.space.sm)
-                        }
-
-                        Button {
-                            Layout.fillWidth: false
-                            enabled: root.eqData.pending
-                            icon: "\u{f012c}"
-                            label: root.eqData.pending ? I18n.tr("Apply") : I18n.tr("Saved")
-                            onActivated: {
-                                if (!root.eqData.pending)
-                                    return;
-                                var temp = Object.assign({}, root.eqData);
-                                temp.pending = false;
-                                root.eqData = temp;
-
-                                // Blind the polling process to stop it from fetching old data
-                                root.lastEqUpdate = Date.now();
-
-                                root.triggerEqLightning();
-                                Daemon.eqApply();
-                            }
-                        }
-                    }
-
-                    // Eq Sliders Container with Canvas Lightning Overlay
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(180)
-
-                        Row {
-                            id: eqSliderRow
-                            anchors.fill: parent
-                            z: 1 // Ensures sliders (and their handles) render over the lightning
-
-                            Repeater {
-                                model: [
-                                    {"idx": 1, "lbl": "31"}, {"idx": 2, "lbl": "63"}, {"idx": 3, "lbl": "125"},
-                                    {"idx": 4, "lbl": "250"}, {"idx": 5, "lbl": "500"}, {"idx": 6, "lbl": "1k"},
-                                    {"idx": 7, "lbl": "2k"}, {"idx": 8, "lbl": "4k"}, {"idx": 9, "lbl": "8k"},
-                                    {"idx": 10, "lbl": "16k"}
-                                ]
-                                delegate: Item {
-                                    id: sliderDelegate
-                                    width: eqSliderRow.width / 10 
-                                    height: eqSliderRow.height
-
-                                    // --- ENHANCED SLIDER CASCADING ANIMATION ---
-                                    opacity: root.introEqSliders
-                                    transform: Translate {
-                                        y: Design.s(30) * (1 - root.introEqSliders) + (index * Design.s(8) * (1 - root.introEqSliders))
-                                    }
-
-                                    // Mathematical evaluation mapping to the exact timeline of the strike
-                                    property real dist: root.eqLightningProgress - (modelData.idx - 1)
-                                    property real hitPulse: dist >= 0 && dist < 1.0 ? Math.sin((dist) * Math.PI) : 0.0
-                                    
-                                    // Massive Energy Pulses
-                                    property real trackPulse: 0.0
-                                    property real ringPulse: 0.0
-                                    property real flashFade: 0.0
-                                    property bool hasFired: false
-
-                                    onDistChanged: {
-                                        // Reset the fire lock when the animation sweeps past or starts over
-                                        if (dist <= 0.05) {
-                                            hasFired = false;
-                                        } else if (dist > 0.4 && !hasFired) {
-                                            // Trigger strictly once per bolt passing over
-                                            hasFired = true;
-                                            trackPulseAnim.restart();
-                                            ringPulseAnim.restart();
-                                            flashFadeAnim.restart();
-                                        }
-                                    }
-
-                                    SequentialAnimation {
-                                        id: trackPulseAnim
-                                        // Animates the bolt perfectly down the track
-                                        NumberAnimation { target: sliderDelegate; property: "trackPulse"; from: 0.0; to: 1.0; duration: root.introDuration; easing.type: Easing.OutQuart }
-                                    }
-                                    SequentialAnimation {
-                                        id: ringPulseAnim
-                                        // Explodes outward creating a physical shockwave
-                                        NumberAnimation { target: sliderDelegate; property: "ringPulse"; from: 1.0; to: 0.0; duration: root.introDuration; easing.type: Easing.OutExpo }
-                                    }
-                                    SequentialAnimation {
-                                        id: flashFadeAnim
-                                        // Slowly cools the inner track gradient back to normal
-                                        NumberAnimation { target: sliderDelegate; property: "flashFade"; from: 1.0; to: 0.0; duration: root.introDuration; easing.type: Easing.OutSine }
-                                    }
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        spacing: Design.s(5)
-                                        QQC.Slider {
-                                            id: eqSlider
-                                            Layout.fillHeight: true
-                                            Layout.alignment: Qt.AlignHCenter
-                                            orientation: Qt.Vertical
-                                            from: -12; to: 12
-                                            stepSize: 1
-
-                                            Connections {
-                                                target: root
-                                                function onEqDataChanged() {
-                                                    if (!eqSlider.pressed) {
-                                                        if (root.eqData && root.eqData["b" + modelData.idx] !== undefined) {
-                                                            var p = Number(root.eqData["b" + modelData.idx]);
-                                                            if (!isNaN(p)) eqSlider.value = p;
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            Behavior on value {
-                                                enabled: !eqSlider.pressed
-                                                NumberAnimation {
-                                                    duration: Design.duration.base
-                                                    easing.type: Easing.OutQuart
-                                                }
-                                            }
-
-                                            onPressedChanged: {
-                                                if (!pressed) {
-                                                    var temp = Object.assign({}, root.eqData);
-                                                    temp["b" + modelData.idx] = Math.round(value);
-                                                    temp.preset = "Custom";
-                                                    temp.pending = true;
-                                                    root.eqData = temp;
-                                                    
-                                                    // Set lock here too to protect individual slider tweaks
-                                                    root.lastEqUpdate = Date.now();
-                                                    
-                                                    Daemon.eqSetBand(modelData.idx, Math.round(value));
-                                                }
-                                            }
-
-                                            background: Rectangle {
-                                                id: trackBg
-                                                x: eqSlider.leftPadding + (eqSlider.availableWidth - width) / 2
-                                                y: eqSlider.topPadding
-                                                implicitWidth: Design.s(10) 
-                                                implicitHeight: Design.s(150)
-                                                width: Design.s(10); height: eqSlider.availableHeight
-                                                radius: Design.s(4); 
-                                                
-                                                // Dynamic tint: surface0 with 70% opacity for a softer dark look
-                                                color: Qt.rgba(Design.raised.r, Design.raised.g, Design.raised.b, 0.7)
-
-                                                layer.enabled: root.canShade
-                                                layer.effect: MultiEffect {
-                                                    id: trackEffect
-                                                    shadowEnabled: true
-                                                    shadowColor: "#000000"
-                                                    shadowOpacity: 0.9
-                                                    shadowBlur: 0.5
-                                                    shadowVerticalOffset: 1
-                                                }
-
-                                                // MASSIVE Outer Energy Shockwave Ring 
-                                                Rectangle {
-                                                    z: -1
-                                                    anchors.centerIn: parent
-                                                    // Geometry is fixed at the pulse peak and the pulse drives
-                                                    // scale instead: resizing a blurred layer re-renders and
-                                                    // re-blurs its FBO every frame, scaling one does not.
-                                                    width: parent.width + Design.s(60)
-                                                    height: parent.height + Design.s(80)
-                                                    radius: parent.radius + Design.s(30)
-                                                    color: "transparent"
-                                                    border.color: Design.accent
-                                                    border.width: Design.s(6)
-                                                    opacity: sliderDelegate.ringPulse * 0.8 * (1.0 - root.eqLightningFade)
-                                                    scale: 0.7 + sliderDelegate.ringPulse * 0.3
-
-                                                    layer.enabled: root.canShade
-                                                    layer.effect: MultiEffect { blurEnabled: true; blurMax: 32; blur: 1.0 }
-                                                }
-
-                                                // The Track Fill Base (FIXED THE SQUARE CORNERS ISSUE)
-                                                Item {
-                                                    width: parent.width
-                                                    height: (1 - eqSlider.visualPosition) * parent.height
-                                                    y: eqSlider.visualPosition * parent.height
-
-                                                    // Same reason as the seek bar: the surge bolt
-                                                    // inside is taller than this Item and rides
-                                                    // past both ends of it.
-                                                    clip: true
-
-                                                    layer.enabled: root.canShade
-                                                    layer.effect: MultiEffect {
-                                                        maskEnabled: true
-                                                        maskSource: eqFillMask
-                                                    }
-
-                                                    Rectangle {
-                                                        id: eqFillMask
-                                                        anchors.fill: parent
-                                                        radius: Design.s(4)
-                                                        visible: false
-                                                        layer.enabled: root.canShade 
-                                                    }
-
-                                                    Rectangle {
-                                                        anchors.fill: parent
-                                                        color: Design.accent
-
-                                                        // Track Override: Changes entire gradient of track
-                                                        Rectangle {
-                                                            anchors.fill: parent
-                                                            opacity: sliderDelegate.flashFade
-                                                            gradient: Gradient {
-                                                                orientation: Gradient.Vertical
-                                                                GradientStop { position: 0.0; color: Design.accentAlt }
-                                                                GradientStop { position: 0.5; color: Design.accent }
-                                                                GradientStop { position: 1.0; color: "transparent" }
-                                                            }
-                                                        }
-
-                                                        // The Internal Charging Surge Bolt 
-                                                        Rectangle {
-                                                            width: parent.width
-                                                            height: Design.s(80) // Massive physical bolt
-                                                            y: (sliderDelegate.trackPulse * (parent.height + height)) - height
-                                                            opacity: Math.sin(sliderDelegate.trackPulse * Math.PI) * 2.0 * (1.0 - root.eqLightningFade)
-                                                            
-                                                            gradient: Gradient {
-                                                                orientation: Gradient.Vertical
-                                                                GradientStop { position: 0.0; color: "transparent" }
-                                                                GradientStop { position: 0.2; color: Design.accent }
-                                                                GradientStop { position: 0.5; color: Design.text } // Theme integrated bright center
-                                                                GradientStop { position: 0.8; color: Design.accentAlt }
-                                                                GradientStop { position: 1.0; color: "transparent" }
-                                                            }
-                                                            
-                                                            layer.enabled: root.canShade
-                                                            layer.effect: MultiEffect {
-                                                                shadowEnabled: true; shadowColor: Design.accent; shadowBlur: 1.0; shadowOpacity: 1.0
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            handle: Rectangle {
-                                                x: eqSlider.leftPadding + (eqSlider.availableWidth - width) / 2
-                                                y: eqSlider.topPadding + eqSlider.visualPosition * (eqSlider.availableHeight - height)
-                                                implicitWidth: Design.s(18)
-                                                implicitHeight: Design.s(18)
-                                                width: Design.s(18); height: Design.s(18)
-                                                radius: Design.s(9)
-                                                color: Design.glassCard
-                                                border.width: Math.max(1, Design.s(2))
-                                                border.color: Design.accent
-
-                                                property var catColors: [Design.accent, Design.accent, root.lavender, Design.accent, Design.accent]
-
-                                                // Core glow flare that cleanly fades out matching the canvas
-                                                Rectangle {
-                                                    anchors.centerIn: parent
-                                                    // Fixed size + scale: see the shockwave ring above.
-                                                    width: parent.width + Design.s(36)
-                                                    height: width
-                                                    radius: width / 2
-                                                    color: parent.catColors[index % parent.catColors.length]
-                                                    opacity: sliderDelegate.hitPulse * (1.0 - root.eqLightningFade)
-                                                    scale: 0.5 + sliderDelegate.hitPulse * 0.5
-                                                    layer.enabled: root.canShade
-                                                    layer.effect: MultiEffect { blurEnabled: true; blurMax: 32; blur: 1.0 }
-                                                }
-
-                                                // Pop the handle itself slightly as the beam passes
-                                                scale: 1.0 + (sliderDelegate.hitPulse * 0.4 * (1.0 - root.eqLightningFade))
-                                            }
-                                        }
-                                        Text {
-                                            text: modelData.lbl
-                                            color: Design.textFaint
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.s(10)
-                                            font.weight: Design.weight.semibold
-                                            Layout.alignment: Qt.AlignHCenter
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // --- THE FLUID CANVAS LIGHTNING (Optimized for Realism and multiple waves) ---
-                        Canvas {
-                            id: lightningCanvas
-                            anchors.fill: parent
-                            opacity: 1.0 - root.eqLightningFade
-                            z: 0 // Draw securely behind the sliders
-
-                            // Force hardware FBO backend instead of slow software rendering
-                            renderTarget: Canvas.FramebufferObject 
-
-                            // GPU Layer effect to provide bloom WITHOUT locking up the CPU via ctx.shadowBlur
-                            layer.enabled: root.canShade
-                            layer.effect: MultiEffect {
-                                shadowEnabled: true
-                                shadowColor: Design.accent
-                                shadowBlur: 1.0 // 1.0 is max blur in MultiEffect
-                                shadowOpacity: 0.6
-                                shadowVerticalOffset: 0
-                                shadowHorizontalOffset: 0
-                            }
-
-                            Timer {
-                                interval: 16 // ~60fps for silky smooth arcs
-                                running: root.eqLightningFade < 1.0 && root.eqLightningProgress > 0.0
-                                repeat: true
-                                onTriggered: lightningCanvas.requestPaint()
-                            }
-
-                            onPaint: {
-                                var ctx = getContext("2d");
-                                ctx.clearRect(0, 0, width, height);
-
-                                if (root.eqLightningProgress <= 0.0 || root.eqLightningFade >= 1.0) return;
-
-                                var time = Date.now() / 1000;
-                                var maxIdx = root.eqLightningProgress; // 0 to 9
-
-                                ctx.lineJoin = "round";
-                                ctx.lineCap = "round";
-
-                                // Step 1: Map the spatial coordinates of the 10 handles
-                                var pts = [];
-                                for (var i = 1; i <= 10; i++) {
-                                    var val = root.eqData["b" + i] !== undefined ? Number(root.eqData["b" + i]) : 0;
-                                    var norm = 1.0 - ((val + 12) / 24);
-                                    
-                                    // Py uses margins rough mapping to the handles visible track
-                                    var py = Design.s(10) + norm * (height - Design.s(35)); 
-                                    var px = (i - 0.5) * (width / 10);
-                                    pts.push({ x: px, y: py });
-                                }
-
-                                // Step 2: Draw the multi-wave arcing structure
-                                // Strand 0: Slow erratic mauve glow/wave
-                                // Strand 1: Complex pink glow
-                                // Strand 2: Crackling secondary core
-                                // Strand 3: Hot white center core
-                                for (var s = 0; s < 4; s++) { 
-                                    ctx.beginPath();
-                                    ctx.moveTo(pts[0].x, pts[0].y);
-
-                                    for (var i = 0; i < pts.length - 1; i++) {
-                                        if (i > maxIdx) break; // Stop drawing ahead of current progress
-
-                                        var p1 = pts[i];
-                                        var p2 = pts[i+1];
-
-                                        var fraction = 1.0;
-                                        if (maxIdx < i + 1) {
-                                            fraction = maxIdx - i;
-                                        }
-
-                                        // Subdivision steps create the crackle noise
-                                        var steps = s === 3 ? 6 : 8; // Ultra smooth subdivision, s=3 core has less subdiv for straighter look
-                                        for (var j = 1; j <= steps; j++) {
-                                            var t = j / steps;
-                                            if (t > fraction) t = fraction;
-
-                                            var cx = p1.x + (p2.x - p1.x) * t;
-                                            var cy = p1.y + (p2.y - p1.y) * t;
-
-                                            // Wave calculations: create distinct arcs and noise branching
-                                            var envelope = Math.sin(t * Math.PI);
-
-                                            // s=3 core noise (straightest) to s=0 outer glow noise (most waves)
-                                            var noiseAmpX = s === 3 ? 1.0 : (4 - s) * 4; 
-                                            var noiseAmpY = s === 3 ? 1.0 : (4 - s) * 5; 
-                                            
-                                            // Combine multiple frequencies for complex branching/crackle appearance
-                                            // Glow strands (0, 1) also get a sweeping sine wave applied to create distinct separating waves
-                                            var sepWaveX = (s < 2) ? Math.sin(time * 3 + i + j + s) * Design.s(10) * envelope : 0;
-                                            var sepWaveY = (s < 2) ? Math.cos(time * 2.5 + i - j - s) * Design.s(15) * envelope : 0;
-
-                                            // Primary erratic crackle noise using high frequency combined sine/cos
-                                            var noiseX = Math.sin(time * (10+s) + i + j) * Math.cos(time * 8 - i + j) * noiseAmpX * envelope * (1 - root.eqLightningFade);
-                                            var noiseY = Math.cos(time * (9-s) + i - j) * Math.sin(time * 7 + i - j) * noiseAmpY * envelope * (1 - root.eqLightningFade);
-
-                                            ctx.lineTo(cx + sepWaveX + noiseX, cy + sepWaveY + noiseY);
-
-                                            if (t === fraction) break;
-                                        }
-                                    }
-
-                                    // Step 3: Theme and render each distinct strand
-                                    if (s === 0) { // Massive Sweeping Outer Glow (Mauve)
-                                        ctx.lineWidth = Design.s(20);
-                                        ctx.strokeStyle = Design.accent;
-                                        ctx.globalAlpha = 0.2;
-                                    } else if (s === 1) { // Medium Sweeping Wave (Pink)
-                                        ctx.lineWidth = Design.s(8);
-                                        ctx.strokeStyle = Design.accent;
-                                        ctx.globalAlpha = 0.45;
-                                    } else if (s === 2) { // Tight erratic core (Lavender)
-                                        ctx.lineWidth = Design.s(3.5);
-                                        ctx.strokeStyle = root.lavender;
-                                        ctx.globalAlpha = 0.85;
-                                    } else if (s === 3) { // Pure white straight hot core - heavily transparent
-                                        ctx.lineWidth = Design.s(1.0);
-                                        ctx.strokeStyle = Design.text;
-                                        ctx.globalAlpha = 0.1;
-                                    }
-
-                                    ctx.stroke();
-                                }
-                            }
-                        }
-                    }
-
-                    // Presets Grid
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Design.s(8)
-                        
-                        opacity: root.introPresets
-                        transform: Translate { y: Design.s(20) * (1 - root.introPresets) }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Design.s(10)
-                            Repeater {
-                                model: ["Flat", "Bass", "Treble", "Vocal"]
-                                delegate: PresetButton { name: modelData }
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Design.s(10)
-                            Repeater {
-                                model: ["Pop", "Rock", "Jazz", "Classic"]
-                                delegate: PresetButton { name: modelData }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
 
-    // --- HELPER COMPONENT FOR PRESETS ---
-    //
-    // Ui/Pill, which is what every other exclusive option group in the shell
-    // is made of. This was a hand-built rectangle with its own radius, its own
-    // mono type, its own 1.05 hover pop and Design.accent for the selected
-    // state — eight buttons that matched nothing else on screen.
-    component PresetButton : Chip {
-        property string name: ""
-        Layout.fillWidth: true
-        label: I18n.tr(name)
-        active: root.eqData && root.eqData.preset === name
-        onClicked: root.applyPresetOptimistically(name)
-    }
 }

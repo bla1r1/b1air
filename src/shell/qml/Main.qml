@@ -445,7 +445,7 @@ Scope {
         // right-hand one crawls away from the edge it belongs to.
         if (item.contentWidth !== undefined && item.contentWidth > 0) {
             const wRoom = Screen.width - Design.s(Design.space.md) * 2;
-            const fittedW = Math.max(Design.s(200), Math.min(wRoom, item.contentWidth));
+            const fittedW = Math.max(Design.s(Design.width.control), Math.min(wRoom, item.contentWidth));
             const centred = Math.abs(t.rx - (Screen.width - t.w) / 2) <= 2;
             masterWindow.animX = centred ? Math.floor((Screen.width - fittedW) / 2)
                                          : (t.rx + t.w - fittedW);
@@ -461,7 +461,7 @@ Scope {
         // between the bar and the bottom edge, less a margin so a full-height
         // panel does not sit flush against it.
         const room = Screen.height - t.ry - Design.s(Design.space.md);
-        const fitted = Math.max(Design.s(120), Math.min(room, item.contentHeight));
+        const fitted = Math.max(Design.s(Design.size.thumb), Math.min(room, item.contentHeight));
         // Both, and this is the whole of it: targetH sizes the content and
         // animH sizes the surface it sits in. Setting only the first left the
         // window at its full height with the shrunken panel centred inside,

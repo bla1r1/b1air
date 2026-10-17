@@ -17,17 +17,31 @@ PopupShell {
     readonly property var actions: [
         { id: "lock",     icon: "\u{f023}", label: I18n.tr("Lock"),     key: "1", cmd: ["b1air-daemon", "power", "lock"] },
         { id: "suspend",  icon: "\u{f186}", label: I18n.tr("Sleep"),    key: "2", cmd: ["b1air-daemon", "power", "suspend"] },
-        { id: "reboot",   icon: "\u{f021}", label: I18n.tr("Reboot"),   key: "3", cmd: ["b1air-daemon", "power", "reboot"] },
-        { id: "poweroff", icon: "\u{f011}", label: I18n.tr("Shut Down"),key: "4", cmd: ["b1air-daemon", "power", "shutdown"] },
+        { id: "reboot",   icon: "\u{f021}", label: I18n.tr("Reboot"),   key: "3", cmd: ["b1air-daemon", "power", "reboot"],   confirm: true },
+        { id: "poweroff", icon: "\u{f011}", label: I18n.tr("Shut Down"),key: "4", cmd: ["b1air-daemon", "power", "shutdown"], confirm: true },
         { id: "logout",   icon: "\u{f08b}", label: I18n.tr("Log Out"),  key: "5", cmd: ["b1air-daemon", "power", "logout"] }
     ]
 
+    // Reboot and Shut Down ask once more, as the same buttons in the Control
+    // Center do: the first press (or key) arms the tile, red and saying
+    // "Sure?"; the second carries it out. Here one stray key press or click
+    // ended the session with everything open in it.
+    property int armedIndex: -1
+    Timer { id: disarm; interval: 3000; onTriggered: window.armedIndex = -1 }
+
     function executeAction(idx) {
-        if (idx >= 0 && idx < actions.length) {
-            const item = actions[idx];
-            window.close();
-            Quickshell.execDetached(item.cmd);
+        if (idx < 0 || idx >= actions.length)
+            return;
+        const item = actions[idx];
+        if (item.confirm && window.armedIndex !== idx) {
+            window.armedIndex = idx;
+            window.selectedIndex = idx;
+            disarm.restart();
+            return;
         }
+        window.armedIndex = -1;
+        window.close();
+        Quickshell.execDetached(item.cmd);
     }
 
     // Keyboard navigation
@@ -48,7 +62,7 @@ PopupShell {
         // Header
         ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
-            spacing: Design.s(4)
+            spacing: Design.s(Design.space.xs)
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
@@ -78,18 +92,25 @@ PopupShell {
                     required property var modelData
                     required property int index
 
-                    Layout.preferredWidth: Design.s(105)
-                    Layout.preferredHeight: Design.s(120)
+                    Layout.preferredWidth: Design.s(Design.width.segmentSm)
+                    Layout.preferredHeight: Design.s(Design.size.thumb)
                     radius: Design.s(Design.radius.card)
 
-                    readonly property bool isHovered: tileMa.containsMouse || window.selectedIndex === tile.index
+                    // The keyboard's choice is focus, so the accent ring; the
+                    // pointer only lightens the tile. Red only while armed.
+                    readonly property bool isSelected: window.selectedIndex === tile.index
+                    readonly property bool isHovered: tileMa.containsMouse || tile.isSelected
+                    readonly property bool armed: window.armedIndex === tile.index
                     // One look for every action. Each used to light up in a
                     // colour of its own (sapphire, teal, yellow, red, mauve)
                     // and grow on hover; the colour said nothing about the
-                    // action and the red one read as an error.
-                    color: tile.isHovered ? Design.tint(Design.accent, 0.22) : Design.sunken
-                    border.color: tile.isHovered ? Design.accent : Design.glassBorder
-                    border.width: 1
+                    // action and the red one read as an error. The tiles were
+                    // Design.sunken, near black: holes in the glass.
+                    color: tile.armed ? Design.tint(Design.danger, 0.22)
+                         : tile.isHovered ? Design.glassHover : Design.well
+                    border.color: tile.armed ? Design.danger
+                                : tile.isSelected ? Design.focusRing : Design.glassBorder
+                    border.width: tile.isSelected || tile.armed ? Design.focusWidth : Design.border
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
@@ -101,7 +122,7 @@ PopupShell {
                         // Key Number Badge
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
-                            width: Design.s(22); height: Design.s(22); radius: Design.s(11)
+                            width: Design.s(Design.size.mini); height: width; radius: width / 2
                             color: Design.well
 
                             Label {
@@ -118,14 +139,14 @@ PopupShell {
                             Layout.alignment: Qt.AlignHCenter
                             text: tile.modelData.icon
                             role: "display"
-                            color: tile.isHovered ? Design.accent : Design.text
+                            color: tile.armed ? Design.danger : Design.text
                         }
 
                         // Label
                         Label {
                             Layout.alignment: Qt.AlignHCenter
-                            text: tile.modelData.label
-                            color: tile.isHovered ? Design.text : Design.textDim
+                            text: tile.armed ? I18n.tr("Sure?") : tile.modelData.label
+                            color: tile.armed ? Design.danger : tile.isHovered ? Design.text : Design.textDim
                         }
                     }
 

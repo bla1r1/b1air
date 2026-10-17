@@ -106,7 +106,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.leftMargin: Design.s(Design.space.xs)
             Layout.rightMargin: Design.s(Design.space.xs)
-            Layout.topMargin: Design.s(2)
+            Layout.topMargin: Design.s(Design.space.xxs)
             spacing: Design.s(Design.space.xs)
 
             Icon {
@@ -134,7 +134,7 @@ PopupShell {
         // Layouts List
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             Repeater {
                 model: window.configuredLanguages
@@ -145,7 +145,7 @@ PopupShell {
                     required property int index
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(34)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isActive: window.activeIndex === row.index
@@ -163,7 +163,7 @@ PopupShell {
 
                         // macOS-style Layout Badge
                         Rectangle {
-                            width: Design.s(32); height: Design.s(20); radius: Design.s(4)
+                            width: Design.s(Design.size.md); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
                             color: row.isActive ? Design.accent : Design.sunken
                             border.color: row.isActive ? Design.accent : Design.glassBorder
                             border.width: 1
@@ -215,7 +215,7 @@ PopupShell {
         // "Keyboard Settings..." Action Row
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(32)
+            Layout.preferredHeight: Design.s(Design.size.md)
             radius: Design.s(Design.radius.ctl)
             color: settMa.containsMouse ? Design.glassHover : "transparent"
 

@@ -29,7 +29,6 @@ Singleton {
 
     /** The shape MusicPopup consumes. Live fields from MPRIS, derived from the script. */
     property var track: ({})
-    property var eq: ({})
 
     readonly property var player: Mpris.players.values.find(p => p.canControl) || null
     readonly property bool hasPlayer: root.player !== null
@@ -58,24 +57,6 @@ Singleton {
     function seek(seconds) {
         if (root.player && root.player.canSeek)
             root.player.position = Number(seconds);
-    }
-
-    // ── Equaliser ────────────────────────────────────────────────────────────
-    // Stays a script: it is our own EQ over a PipeWire filter chain, not
-    // anything MPRIS or PipeWire expose as a property.
-
-    property real _lastEqWrite: 0
-
-    function setEqBands(bands) {
-        root.eq = Object.assign({}, root.eq, { bands: bands });
-        root._lastEqWrite = Date.now();
-        Daemon.eqSetAll(bands);
-    }
-
-    function setEqPreset(name, bands) {
-        root.eq = Object.assign({}, root.eq, { preset: name, bands: bands });
-        root._lastEqWrite = Date.now();
-        Daemon.eqSetPreset(name);
     }
 
     function refresh() { infoProc.running = true; }
@@ -155,21 +136,7 @@ Singleton {
         }
     }
 
-    Process {
-        id: eqProc
-        command: ["b1air-daemon", "eq", "get"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (Date.now() - root._lastEqWrite < 2000) return;
-                const out = (this.text || "").trim();
-                if (!out) return;
-                try { root.eq = JSON.parse(out); } catch (e) {}
-            }
-        }
-    }
-
     Component.onCompleted: {
         root._merge();
-        eqProc.running = true;
     }
 }

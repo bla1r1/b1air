@@ -3,7 +3,7 @@
 # Design system conformance and metric tracker for b1air.
 #
 # Measures:
-#   - Design.s(<number>) literal usages (0 in Ui/ and settings/, decreasing elsewhere)
+#   - Design.s(<number>) literal usages (0 in the shell, src/shell/qml; the apps still have theirs)
 #   - Hex color literals outside palette files
 #   - Gradient usages
 #   - Font weight bold usages (should be restricted to display hero numbers)
@@ -21,6 +21,7 @@ shell_dir = os.path.join(repo, "src/shell/qml")
 apps_dir = os.path.join(repo, "src/apps")
 ui_dir = os.path.join(repo, "src/shell/qml/Ui")
 settings_dir = os.path.join(repo, "src/shell/qml/settings")
+shell_dir_only = os.path.join(repo, "src/shell/qml")
 
 qml_files = glob.glob(os.path.join(shell_dir, "**/*.qml"), recursive=True) + \
             glob.glob(os.path.join(apps_dir, "**/*.qml"), recursive=True)
@@ -28,6 +29,7 @@ qml_files = glob.glob(os.path.join(shell_dir, "**/*.qml"), recursive=True) + \
 s_lit_total = 0
 s_lit_ui = 0
 s_lit_settings = 0
+s_lit_shell = 0
 hex_colors = []
 gradients = 0
 bolds = 0
@@ -58,6 +60,8 @@ for path in qml_files:
             s_lit_ui += count
         if path.startswith(settings_dir):
             s_lit_settings += count
+        if path.startswith(shell_dir_only):
+            s_lit_shell += count
 
     # 2. Hex colors outside whitelist
     if fname not in HEX_WHITELIST:
@@ -78,6 +82,7 @@ print("=== Design System Metrics ===")
 print(f"Design.s(<literal>) total:   {s_lit_total}")
 print(f"Design.s(<literal>) in Ui/:  {s_lit_ui}")
 print(f"... in settings/:            {s_lit_settings}")
+print(f"... in the shell (all):       {s_lit_shell}")
 print(f"Hex colors outside themes:   {len(hex_colors)}")
 print(f"Gradient declarations:       {gradients}")
 print(f"Design.weight.bold usages:   {bolds}")
@@ -92,8 +97,8 @@ LEGACY_TOKENS = r"\bDesign\.(base|mantle|crust|subtext[01]|surface[012]|overlay[
 failures = []
 if s_lit_ui > 0:
     failures.append(f"{s_lit_ui} Design.s(<literal>) in Ui/: use the scales in Design.qml")
-if s_lit_settings > 0:
-    failures.append(f"{s_lit_settings} Design.s(<literal>) in settings/: use the scales in Design.qml")
+if s_lit_shell > 0:
+    failures.append(f"{s_lit_shell} Design.s(<literal>) in src/shell/qml: use the scales in Design.qml")
 for path in qml_files:
     rel = os.path.relpath(path, repo)
     text = re.sub(r"//.*$", "", open(path, encoding="utf-8").read(), flags=re.M)

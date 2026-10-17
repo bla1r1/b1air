@@ -185,7 +185,7 @@ PopupShell {
         // ── Search Bar ───────────────────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(40)
+            Layout.preferredHeight: Design.s(Design.size.row)
             radius: Design.s(Design.radius.ctl)
             color: Design.well
             border.color: searchInput.activeFocus ? Design.accent : Design.veilStrong
@@ -208,7 +208,7 @@ PopupShell {
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
                     font.family: Design.font.sans
-                    font.pixelSize: Design.s(14)
+                    font.pixelSize: Design.s(Design.font.glyphSm)
                     color: Design.text
                     selectByMouse: true
                     clip: true
@@ -250,8 +250,8 @@ PopupShell {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            cellWidth: Design.s(46)
-            cellHeight: Design.s(46)
+            cellWidth: Design.s(Design.size.art)
+            cellHeight: Design.s(Design.size.art)
             model: window.filteredList
             boundsBehavior: Flickable.StopAtBounds
 
@@ -262,8 +262,8 @@ PopupShell {
                 required property var modelData
                 required property int index
 
-                width: Design.s(40)
-                height: Design.s(40)
+                width: Design.s(Design.size.row)
+                height: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
                 color: cellHover.containsMouse ? Design.tint(Design.accent, 0.2) : "transparent"
                 border.color: cellHover.containsMouse ? Design.accent : "transparent"
@@ -275,7 +275,7 @@ PopupShell {
                 Text {
                     anchors.centerIn: parent
                     text: emojiCell.modelData.e
-                    font.pixelSize: Design.s(22)
+                    font.pixelSize: Design.s(Design.font.title)
                 }
 
                 Clickable {

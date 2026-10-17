@@ -235,8 +235,8 @@ PopupShell {
     // is measured: the row is not a fillWidth child of anything that would make
     // its implicit width a minimum.
     readonly property real dashWidth: (window.calShown("metrics") || window.calShown("forecast"))
-        ? Design.s(520)
-        : Math.max(Design.s(320), clockRow.implicitWidth + 2 * Design.s(14))
+        ? Design.s(Design.width.dash)
+        : Math.max(Design.s(Design.width.text), clockRow.implicitWidth + 2 * Design.s(Design.space.md))
 
     // Added up from the parts, not read off the layout.
     //
@@ -268,9 +268,9 @@ PopupShell {
     readonly property real contentHeight: {
         let h = 0;
         if (window.calShown("calendar"))
-            h = Math.max(h, monthColumn.implicitHeight + 2 * Design.s(12));
+            h = Math.max(h, monthColumn.implicitHeight + 2 * Design.s(Design.space.md));
         if (window.dashShown)
-            h = Math.max(h, dashColumn.implicitHeight + 2 * Design.s(14));
+            h = Math.max(h, dashColumn.implicitHeight + 2 * Design.s(Design.space.md));
         if (window.editing)
             h += partTray.implicitHeight + Design.s(Design.space.md);
         return h > 0 ? h + 2 * Design.s(window.padding) : 0;
@@ -377,19 +377,19 @@ PopupShell {
                 z: 40
                 anchors.top: parent.top
                 anchors.right: parent.right
-                anchors.margins: Design.s(12)
+                anchors.margins: Design.s(Design.space.md)
             }
 
             ColumnLayout {
                 id: monthColumn
                 anchors.fill: parent
-                anchors.margins: Design.s(12)
-                spacing: Design.s(8)
+                anchors.margins: Design.s(Design.space.md)
+                spacing: Design.s(Design.space.sm)
 
                 // Month / Year Navigation Header
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Design.s(4)
+                    spacing: Design.s(Design.space.xs)
 
                     Label {
                         text: window.editing ? I18n.tr("Arrange") : (window.monthNames[window.viewMonth] + " " + window.viewYear)
@@ -402,7 +402,7 @@ PopupShell {
 
                     Rectangle {
                         visible: !window.editing
-                        width: Design.s(26); height: Design.s(26)
+                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
                         radius: Design.s(Design.radius.ctl)
                         color: prevMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
@@ -422,7 +422,7 @@ PopupShell {
 
                     Rectangle {
                         visible: !window.editing
-                        width: Design.s(26); height: Design.s(26)
+                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
                         radius: Design.s(Design.radius.ctl)
                         color: todayMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
@@ -442,7 +442,7 @@ PopupShell {
 
                     Rectangle {
                         visible: !window.editing
-                        width: Design.s(26); height: Design.s(26)
+                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
                         radius: Design.s(Design.radius.ctl)
                         color: nextMa.containsMouse ? Design.glassHover : Design.glassCard
                         border.color: Design.line; border.width: 1
@@ -463,7 +463,7 @@ PopupShell {
                     // Room for the arrange toggle, which is not in this row:
                     // it is a child of the card so that it can sit above the
                     // arrange frame and stay clickable (see monthToggle).
-                    Item { width: Design.s(26); height: Design.s(26) }
+                    Item { width: Design.s(Design.size.xs); height: Design.s(Design.size.xs) }
                 }
 
                 // Days of week header (Mo Tu We Th Fr Sa Su)
@@ -489,8 +489,8 @@ PopupShell {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     columns: 7
-                    rowSpacing: Design.s(2)
-                    columnSpacing: Design.s(2)
+                    rowSpacing: Design.s(Design.space.xxs)
+                    columnSpacing: Design.s(Design.space.xxs)
 
                     Repeater {
                         model: window.calendarGrid
@@ -544,14 +544,14 @@ PopupShell {
                 // Bottom Date Stamp
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(28)
+                    Layout.preferredHeight: Design.s(Design.size.sm)
                     radius: Design.s(Design.radius.ctl)
                     color: Design.well
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Design.s(8)
-                        anchors.rightMargin: Design.s(8)
+                        anchors.leftMargin: Design.s(Design.space.sm)
+                        anchors.rightMargin: Design.s(Design.space.sm)
                         spacing: Design.s(Design.space.xs)
 
                         Icon {
@@ -593,7 +593,7 @@ PopupShell {
                 visible: !window.calShown("calendar")
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
-                anchors.margins: Design.s(10)
+                anchors.margins: Design.s(Design.space.sm)
             }
 
             // Three rows in the saved order. A one-column GridLayout because a
@@ -603,7 +603,7 @@ PopupShell {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: Design.s(14)
+                anchors.margins: Design.s(Design.space.md)
                 columns: 1
                 // Wider while arranging, for the toolbars on each row's edge.
                 rowSpacing: Design.s(window.editing ? 20 : 10)
@@ -618,7 +618,7 @@ PopupShell {
 
                     PartFrame {
                         anchors.fill: parent
-                        anchors.margins: -Design.s(6)
+                        anchors.margins: -Design.s(Design.space.xs)
                         partId: "weather"
                     }
 
@@ -634,7 +634,7 @@ PopupShell {
                         spacing: 0
                         Label {
                             text: Qt.formatTime(window.currentTime, "HH:mm")
-                            font.pixelSize: Design.s(48)
+                            font.pixelSize: Design.s(Design.font.hero)
                             font.family: Design.font.mono
                             font.weight: Design.weight.bold
                             color: Design.text
@@ -651,27 +651,27 @@ PopupShell {
 
                     // Weather Hero Card
                     Rectangle {
-                        Layout.preferredWidth: Design.s(240)
-                        Layout.preferredHeight: Design.s(68)
+                        Layout.preferredWidth: Design.s(Design.width.menuMin)
+                        Layout.preferredHeight: Design.s(Design.size.stat)
                         radius: Design.s(Design.radius.ctl)
                         color: Design.well
                         border.color: Design.glassBorder; border.width: 1
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(8)
-                            spacing: Design.s(10)
+                            anchors.margins: Design.s(Design.space.sm)
+                            spacing: Design.s(Design.space.sm)
 
                             // Weather Icon
                             Rectangle {
-                                width: Design.s(44); height: Design.s(44)
-                                radius: Design.s(10)
+                                width: Design.s(Design.size.row); height: Design.s(Design.size.row)
+                                radius: Design.s(Design.radius.ctl)
                                 color: Design.glassCard
 
                                 Icon {
                                     anchors.centerIn: parent
                                     text: window.todayForecast ? (window.todayForecast.icon || "\u{f0c2}") : "\u{f0c2}"
-                                    font.pixelSize: Design.s(24)
+                                    font.pixelSize: Design.s(Design.font.title)
                                     color: window.todayForecast ? (window.todayForecast.hex || Design.accent) : Design.accent
                                 }
                             }
@@ -696,7 +696,7 @@ PopupShell {
                                         text: window.selectedDayOffset === 0 && Weather.loaded
                                               ? Weather.temp
                                               : (window.todayForecast ? (window.todayForecast.max + "°" + Weather.unit) : "--°")
-                                        font.pixelSize: Design.s(20)
+                                        font.pixelSize: Design.s(Design.font.title)
                                         font.family: Design.font.mono
                                         font.weight: Design.weight.bold
                                         color: Design.text
@@ -739,7 +739,7 @@ PopupShell {
 
                     PartFrame {
                         anchors.fill: parent
-                        anchors.margins: -Design.s(6)
+                        anchors.margins: -Design.s(Design.space.xs)
                         partId: "metrics"
                     }
 
@@ -761,12 +761,12 @@ PopupShell {
                         color: Design.well
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
-                            spacing: Design.s(6)
+                            anchors.margins: Design.s(Design.space.xs)
+                            spacing: Design.s(Design.space.xs)
                             Icon { text: "\u{f0590}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: I18n.tr("Wind"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Wind"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(Design.font.caption) }
                                 Label { text: window.todayForecast ? (window.todayForecast.wind + (Weather.unit === "F" ? " " + I18n.tr("mph") : " " + I18n.tr("km/h"))) : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
@@ -781,12 +781,12 @@ PopupShell {
                         color: Design.well
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
-                            spacing: Design.s(6)
+                            anchors.margins: Design.s(Design.space.xs)
+                            spacing: Design.s(Design.space.xs)
                             Icon { text: "\u{f043}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: I18n.tr("Humidity"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Humidity"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(Design.font.caption) }
                                 Label { text: window.todayForecast ? (window.todayForecast.humidity + "%") : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
@@ -802,12 +802,12 @@ PopupShell {
                         color: Design.well
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
-                            spacing: Design.s(6)
+                            anchors.margins: Design.s(Design.space.xs)
+                            spacing: Design.s(Design.space.xs)
                             Icon { text: "\u{f0597}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: I18n.tr("Rain"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Rain"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(Design.font.caption) }
                                 Label { text: (window.todayForecast && window.todayForecast.rain_chance !== undefined) ? (window.todayForecast.rain_chance + "%") : "0%"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
@@ -823,12 +823,12 @@ PopupShell {
                         color: Design.well
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
-                            spacing: Design.s(6)
+                            anchors.margins: Design.s(Design.space.xs)
+                            spacing: Design.s(Design.space.xs)
                             Icon { text: "\u{f2c9}"; role: "caption"; color: Design.textDim }
                             ColumnLayout {
                                 spacing: 0
-                                Label { text: I18n.tr("Range"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(10) }
+                                Label { text: I18n.tr("Range"); role: "caption"; color: Design.textDim; font.pixelSize: Design.s(Design.font.caption) }
                                 Label { text: window.todayForecast ? (window.todayForecast.min + "° - " + window.todayForecast.max + "°") : "--"; role: "caption"; weight: Design.weight.semibold; color: Design.text }
                             }
                         }
@@ -846,7 +846,7 @@ PopupShell {
 
                     PartFrame {
                         anchors.fill: parent
-                        anchors.margins: -Design.s(6)
+                        anchors.margins: -Design.s(Design.space.xs)
                         partId: "forecast"
                     }
 
@@ -866,15 +866,15 @@ PopupShell {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(68)
+                            Layout.preferredHeight: Design.s(Design.size.stat)
                             radius: Design.s(Design.radius.ctl)
                             color: Design.well
                             border.color: Design.glassBorder; border.width: 1
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(2)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xxs)
 
                                 Label {
                                     Layout.alignment: Qt.AlignHCenter
@@ -895,7 +895,7 @@ PopupShell {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: (modelData.min || "-") + "° / " + (modelData.max || "-") + "°"
                                     role: "caption"
-                                    font.pixelSize: Design.s(10)
+                                    font.pixelSize: Design.s(Design.font.caption)
                                     color: Design.textDim
                                     isMono: true
                                 }

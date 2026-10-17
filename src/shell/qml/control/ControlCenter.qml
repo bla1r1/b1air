@@ -915,7 +915,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.row: center.cardRow("weather")
             visible: center.cardShown("weather")
-            Layout.preferredHeight: Design.s(52)
+            Layout.preferredHeight: Design.s(Design.size.rowTall)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
@@ -923,17 +923,19 @@ PopupShell {
 
             CardFrame { cardId: "weather" }
 
+            // Inset as a tile is, glyph in a disc-wide column: its text starts
+            // where the tiles' text does.
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.md)
+                anchors.leftMargin: Design.s(Design.space.sm)
                 anchors.rightMargin: Design.s(Design.space.md)
-                spacing: Design.s(Design.space.md)
+                spacing: Design.s(Design.space.sm)
 
                 // The weather's own glyph, in the text colour: it was on a
                 // yellow tile, with a green "Live" badge at the end of the
                 // row that told nothing the row did not.
                 Icon {
-                    Layout.preferredWidth: Design.s(34)
+                    Layout.preferredWidth: Design.s(Design.size.knob)
                     horizontalAlignment: Text.AlignHCenter
                     text: Weather.icon
                     role: "subhead"
@@ -967,7 +969,9 @@ PopupShell {
             id: mediaCard
             Layout.fillWidth: true
             Layout.row: center.cardRow("media")
-            visible: center.cardShown("media")
+            // With no player there is nothing to control: the card was a
+            // 76px box saying so. Hidden then, except while arranging.
+            visible: center.cardShown("media") && (Media.hasPlayer || center.editing)
             Layout.preferredHeight: Design.s(Design.size.media)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
@@ -1008,11 +1012,11 @@ PopupShell {
 
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(36)
+                    Layout.preferredHeight: Design.s(Design.size.header)
 
                     ColumnLayout {
                         anchors.fill: parent
-                        spacing: 2
+                        spacing: Design.s(Design.space.xxs)
 
                         Label {
                             text: Media.track.title || (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"))

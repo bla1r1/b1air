@@ -36,10 +36,10 @@ PanelWindow {
     anchors.top: true
     anchors.right: true
 
-    readonly property int topOffset: (Settings.barPosition === "bottom") ? Design.s(16) : Design.s(56)
+    readonly property int topOffset: (Settings.barPosition === "bottom") ? Design.s(Design.space.lg) : Design.s(Design.size.tile)
 
-    implicitWidth: Design.s(390)
-    implicitHeight: toastColumn.implicitHeight + topOffset + Design.s(20)
+    implicitWidth: Design.s(Design.width.dialog)
+    implicitHeight: toastColumn.implicitHeight + topOffset + Design.s(Design.size.mini)
 
     // Only toasts that got through are queued (Services/Notifications): a focus
     // mode lets some apps through, so it cannot hide the layer.
@@ -49,14 +49,14 @@ PanelWindow {
     Item {
         anchors.fill: parent
         anchors.topMargin: toastWindow.topOffset
-        anchors.rightMargin: Design.s(16)
-        anchors.bottomMargin: Design.s(16)
-        anchors.leftMargin: Design.s(16)
+        anchors.rightMargin: Design.s(Design.space.lg)
+        anchors.bottomMargin: Design.s(Design.space.lg)
+        anchors.leftMargin: Design.s(Design.space.lg)
 
         ColumnLayout {
             id: toastColumn
             width: parent.width
-            spacing: Design.s(10)
+            spacing: Design.s(Design.space.sm)
 
         Repeater {
             model: Notifications.activeToasts
@@ -67,7 +67,7 @@ PanelWindow {
                 required property int index
 
                 Layout.fillWidth: true
-                implicitHeight: cardContent.implicitHeight + Design.s(16)
+                implicitHeight: cardContent.implicitHeight + Design.s(Design.space.lg)
 
                 radius: Design.s(Design.radius.card)
                 color: Design.ground
@@ -105,24 +105,24 @@ PanelWindow {
                 ColumnLayout {
                     id: cardContent
                     anchors.fill: parent
-                    anchors.margins: Design.s(10)
-                    spacing: Design.s(8)
+                    anchors.margins: Design.s(Design.space.sm)
+                    spacing: Design.s(Design.space.sm)
 
                     // ── Header Row ───────────────────────────────────────────
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: Design.s(8)
+                        spacing: Design.s(Design.space.sm)
 
                         Rectangle {
-                            Layout.preferredWidth: Design.s(28)
-                            Layout.preferredHeight: Design.s(28)
-                            radius: Design.s(6)
+                            Layout.preferredWidth: Design.s(Design.size.sm)
+                            Layout.preferredHeight: Design.s(Design.size.sm)
+                            radius: Design.s(Design.radius.sm)
                             color: Design.glassCard
 
                             Image {
                                 id: toastIcon
                                 anchors.centerIn: parent
-                                width: Design.s(18)
+                                width: Design.s(Design.size.micro)
                                 height: width
                                 // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                                 sourceSize: Qt.size(128, 128)
@@ -165,7 +165,7 @@ PanelWindow {
                     // ── Summary & Body ───────────────────────────────────────
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: Design.s(2)
+                        spacing: Design.s(Design.space.xxs)
 
                         Label {
                             text: toastCard.model.summary
@@ -189,7 +189,7 @@ PanelWindow {
                     // ── Action Buttons ───────────────────────────────────────
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: Design.s(6)
+                        spacing: Design.s(Design.space.xs)
                         visible: toastCard.model.obj && toastCard.model.obj.actions && toastCard.model.obj.actions.length > 0
 
                         Repeater {
@@ -211,7 +211,7 @@ PanelWindow {
                     // ── Progress Bar ─────────────────────────────────────────
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(2)
+                        Layout.preferredHeight: Design.s(Design.space.xxs)
                         radius: 1
                         color: Design.well
 

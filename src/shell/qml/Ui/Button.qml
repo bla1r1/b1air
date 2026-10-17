@@ -25,7 +25,7 @@ Rectangle {
     property string size: "md"           // "sm" (28) | "md" (32)
     property bool checked: false
     property bool destructive: false
-    property string confirmText: "Sure?"
+    property string confirmText: I18n.tr("Sure?")
     property bool iconOnly: false
     property bool snug: false
 

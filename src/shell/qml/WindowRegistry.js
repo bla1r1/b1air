@@ -72,13 +72,12 @@ function getLayout(name, mx, my, mw, mh, userScale, barAtBottom) {
         "focusmenu":   { w: s(280, scale), h: s(400, scale), rx: mw - s(410, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
         "batterymenu": { w: s(280, scale), h: s(360, scale), rx: mw - s(330, scale), ry: barEdge, comp: "control/MenuExtra.qml" },
         "calendar":  { w: s(860, scale), h: s(480, scale), rx: Math.floor((mw/2)-(s(860, scale)/2)), ry: barAtBottom ? s(28, scale) : s(75, scale), comp: "calendar/CalendarPopup.qml" },
-        // 760: the cover block, the transport row, the ten EQ bands and the preset
-        // buttons need about 730px, and at 620 the preset row was sliced in half
-        // against the bottom edge with nothing on screen offering to scroll.
+        // 330: the cover block and the transport row. It was 760 while the
+        // window also held a ten-band equaliser and its presets.
         // Centred like every other popup. It was pinned to the left edge at
         // x = 12, so the one window in the shell that opens in the corner was
         // the music player, with no reason for it.
-        "music":     { w: s(700, scale), h: s(760, scale), rx: Math.floor((mw/2)-(s(700, scale)/2)), ry: barEdge, comp: "music/MusicPopup.qml" },
+        "music":     { w: s(700, scale), h: s(330, scale), rx: Math.floor((mw/2)-(s(700, scale)/2)), ry: barEdge, comp: "music/MusicPopup.qml" },
         "audioFull":  { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
         "powerFull":  { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
         "netFull":    { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
@@ -87,7 +86,7 @@ function getLayout(name, mx, my, mw, mh, userScale, barAtBottom) {
         "input":      { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
         "wallpaper":     { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
         "clipboard":     { w: s(620, scale), h: s(520, scale), rx: Math.floor((mw/2)-(s(620, scale)/2)), ry: Math.floor((mh/2)-(s(520, scale)/2)), comp: "clipboard/ClipboardPopup.qml" },
-        "mediaFull":     { w: s(700, scale), h: s(760, scale), rx: s(12, scale), ry: barEdge, comp: "music/MusicPopup.qml" },
+        "mediaFull":     { w: s(700, scale), h: s(330, scale), rx: s(12, scale), ry: barEdge, comp: "music/MusicPopup.qml" },
         "monitors":  { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },
         "focustime": { w: s(900, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(900, scale)/2)), ry: Math.floor((mh/2)-(s(720, scale)/2)), comp: "focustime/FocusTimePopup.qml" },
         "guide":     { w: s(980, scale), h: s(720, scale), rx: Math.floor((mw/2)-(s(980, scale)/2)), ry: barAtBottom ? s(24, scale) : s(70, scale), comp: "settings/SettingsApp.qml" },

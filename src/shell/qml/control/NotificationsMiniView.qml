@@ -135,27 +135,27 @@ MiniView {
                         // A folded stack: the cards under the top one peek out below it.
                         readonly property int under: group.open ? 0 : Math.min(2, group.modelData.items.length - 1)
                         Layout.fillWidth: true
-                        implicitHeight: card.implicitHeight + cell.under * Design.s(6)
+                        implicitHeight: card.implicitHeight + cell.under * Design.s(Design.space.xs)
 
                         // Only what shows below the top card: drawn whole under
                         // it, the glass would let them show through.
                         Item {
                             y: card.implicitHeight
                             width: parent.width
-                            height: cell.under * Design.s(6)
+                            height: cell.under * Design.s(Design.space.xs)
                             clip: true
                             Repeater {
                                 model: cell.under
                                 Rectangle {
                                     required property int index
-                                    x: Design.s(8) * (index + 1)
+                                    x: Design.s(Design.space.sm) * (index + 1)
                                     width: card.width - 2 * x
-                                    y: -Design.s(24) + Design.s(6) * (index + 1)
-                                    height: Design.s(24)
+                                    y: -Design.s(Design.size.xs) + Design.s(Design.space.xs) * (index + 1)
+                                    height: Design.s(Design.size.xs)
                                     radius: Design.s(Design.radius.card)
                                     color: Design.glassCard
                                     border.color: Design.glassBorder
-                                    border.width: 1
+                                    border.width: Design.border
                                     opacity: 0.8 - index * 0.25
                                     z: -index
                                 }
@@ -169,7 +169,7 @@ MiniView {
                             radius: Design.s(Design.radius.card)
                             color: cardMa.containsMouse ? Design.glassHover : Design.glassCard
                             border.color: Design.glassBorder
-                            border.width: 1
+                            border.width: Design.border
 
                             MouseArea {
                                 id: cardMa
@@ -186,15 +186,15 @@ MiniView {
                                 spacing: Design.s(Design.space.sm)
 
                                 Rectangle {
-                                    Layout.preferredWidth: Design.s(32)
-                                    Layout.preferredHeight: Design.s(32)
+                                    Layout.preferredWidth: Design.s(Design.size.md)
+                                    Layout.preferredHeight: Design.s(Design.size.md)
                                     Layout.alignment: Qt.AlignTop
                                     radius: Design.s(Design.radius.ctl)
                                     color: Design.well
                                     Image {
                                         id: appIcon
                                         anchors.centerIn: parent
-                                        width: Design.s(20); height: width
+                                        width: Design.s(Design.size.mini); height: width
                                         sourceSize: Qt.size(64, 64)
                                         source: String(cell.modelData.icon || "").indexOf("://") >= 0 ? cell.modelData.icon : ""
                                         visible: status === Image.Ready
@@ -211,7 +211,7 @@ MiniView {
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: Design.s(2)
+                                    spacing: Design.s(Design.space.xxs)
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label {
@@ -286,18 +286,18 @@ MiniView {
             Rectangle {
                 visible: Weather.loaded
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(92)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: Design.s(Design.radius.card)
                 color: Design.glassCard
                 border.color: Design.glassBorder
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
                     spacing: 0
                     Label { text: Weather.location; role: "caption"; weight: Design.weight.semibold; elide: Text.ElideRight; Layout.fillWidth: true }
                     RowLayout {
-                        Label { text: Weather.temp; font.pixelSize: Design.s(28); weight: Design.weight.medium; tabular: true }
+                        Label { text: Weather.temp; role: "display"; weight: Design.weight.medium; tabular: true }
                         Item { Layout.fillWidth: true }
                         Icon { text: Weather.icon; role: "title"; color: Design.textDim }
                     }
@@ -307,11 +307,11 @@ MiniView {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(92)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: Design.s(Design.radius.card)
                 color: Design.glassCard
                 border.color: Design.glassBorder
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
@@ -319,7 +319,7 @@ MiniView {
                     Label { text: I18n.tr("Focus"); role: "caption"; weight: Design.weight.semibold }
                     Label {
                         text: Focus.active ? Focus.remainingText : I18n.tr("%1 min", Focus.workMinutes)
-                        font.pixelSize: Design.s(28)
+                        role: "display"
                         weight: Design.weight.medium
                         tabular: true
                     }

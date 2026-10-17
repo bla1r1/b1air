@@ -28,6 +28,8 @@ QtObject {
         readonly property int subhead: 15   // card titles, device names
         readonly property int title: 20     // page and popup titles
         readonly property int display: 28   // popup headlines, hero numbers
+        readonly property int hero: 44      // a clock or a big glyph that is the popup
+        readonly property int jumbo: 120    // a screen's number when identifying screens
         readonly property int glyph: 16     // an icon in a button or row
         readonly property int glyphSm: 14   // an icon in a small button, menu item, tab
 
@@ -103,6 +105,10 @@ QtObject {
         readonly property int avatar: 88    // a user picture
         readonly property int thumb: 120    // a wallpaper thumbnail
         readonly property int canvas: 260   // the display arrangement canvas
+        readonly property int bar: 38       // the top bar
+        readonly property int barZone: 40   // the space the bar keeps from windows
+        readonly property int island: 30    // one group of items in the bar
+        readonly property int dot: 6        // an unread or status dot
     }
 
     // Widths that repeat: the same sidebar, menu or field in every app.
@@ -114,6 +120,7 @@ QtObject {
         readonly property int dialog: 340      // a dialog's message column
         readonly property int tab: 220         // one tab, widest
         readonly property int text: 320        // a short centred paragraph
+        readonly property int dash: 520        // the calendar's dashboard with weather
         readonly property int field: 120       // a field with no layout width
         readonly property int segment: 220     // a segmented control, narrowest
         readonly property int segmentSm: 110   // one segment, small

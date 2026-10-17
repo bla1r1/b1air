@@ -36,7 +36,7 @@ PopupShell {
             id: wifiCol
             visible: menu.page === "wifi"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
             readonly property bool on: Network.wifi.power === "on"
             readonly property var connected: Network.wifi.connected || null
             readonly property var others: (Network.wifi.networks || []).filter(n => !n.connected)
@@ -80,7 +80,7 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "sound"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             MenuHeader { title: I18n.tr("Sound") }
             Slider {
@@ -112,7 +112,7 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "focus"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
             MenuHeader { title: I18n.tr("Focus") }
             Repeater {
                 model: Notifications.modes.filter(m => m.id !== "game")
@@ -133,7 +133,7 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "battery"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             MenuHeader {
                 title: I18n.tr("Battery")

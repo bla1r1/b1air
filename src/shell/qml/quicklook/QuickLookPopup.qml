@@ -139,7 +139,7 @@ PopupShell {
                     role: "caption"
                     dim: true
                     elide: Text.ElideMiddle
-                    Layout.preferredWidth: Design.s(450)
+                    Layout.preferredWidth: Design.s(Design.width.menuMax)
                 }
             }
 
@@ -223,7 +223,7 @@ PopupShell {
                     readOnly: true
                     selectByMouse: true
                     font.family: Design.font.mono
-                    font.pixelSize: Design.s(12)
+                    font.pixelSize: Design.s(Design.font.footnote)
                     color: Design.text
                     background: null
                     wrapMode: TextEdit.WrapAnywhere
