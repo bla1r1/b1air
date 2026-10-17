@@ -156,7 +156,7 @@ ApplicationWindow {
         // No corners or outline of our own: sway draws both (see the app
         // windows' frames elsewhere in this suite).
         radius: 0
-        color: Design.ground
+        color: Design.glassBg
 
         ColumnLayout {
             anchors.fill: parent
@@ -311,7 +311,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.media)
-                color: Design.surface
+                color: "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -324,7 +324,7 @@ ApplicationWindow {
                         Layout.preferredWidth: Design.s(Design.size.rowTall)
                         Layout.preferredHeight: Design.s(Design.size.rowTall)
                         radius: Design.s(Design.radius.ctl)
-                        color: Design.sunken
+                        color: Design.well
                         border.color: Design.line
                         border.width: Design.border
                         clip: true

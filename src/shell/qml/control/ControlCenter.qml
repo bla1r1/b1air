@@ -392,7 +392,8 @@ PopupShell {
                 Icon {
                     anchors.centerIn: parent
                     text: tile.glyph
-                    role: tile.tall ? "title" : "subhead"
+                    // About half the disc, as a control centre's glyphs are.
+                    role: tile.tall ? "display" : "title"
                     color: tile.glyphTone
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 }
@@ -496,7 +497,7 @@ PopupShell {
             Icon {
                 text: "\u{f062e}"   // sliders; the bar's button uses the same
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {

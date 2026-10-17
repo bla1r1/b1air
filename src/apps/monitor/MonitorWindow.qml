@@ -105,7 +105,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -221,7 +221,7 @@ Window {
                     Layout.fillHeight: true
                     Layout.minimumHeight: Design.s(Design.width.control)
                     radius: Design.s(Design.radius.card)
-                    color: Design.ground
+                    color: Design.glassCard
                     border.color: Design.glassBorder
                     border.width: Design.border
 
@@ -386,7 +386,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: Design.s(Design.size.md)
-                color: Design.ground
+                color: Design.veil
 
                 RowLayout {
                     anchors.fill: parent
@@ -674,7 +674,7 @@ Window {
         width: killError.implicitWidth + Design.s(Design.space.xl)
         height: Design.s(Design.size.md)
         radius: Design.s(Design.radius.ctl)
-        color: Design.surface
+        color: Design.raised
         border.color: Design.danger
         border.width: Design.border
         Label { id: killError; anchors.centerIn: parent; color: Design.danger }

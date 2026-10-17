@@ -55,7 +55,7 @@ PopupShell {
             Icon {
                 text: "\u{f07c}" // folder-open / stash
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {

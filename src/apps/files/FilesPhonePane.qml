@@ -288,7 +288,7 @@ Item {
                 visible: list.count > 0
                 implicitHeight: listColumn.implicitHeight
                 radius: Design.s(Design.radius.card)
-                color: Design.sunken
+                color: Design.glassCard
                 border.color: Design.line
                 border.width: Design.border
                 ColumnLayout {

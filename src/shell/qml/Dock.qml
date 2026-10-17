@@ -130,15 +130,7 @@ Scope {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: 1
-                // The lit top edge of the glass.
-                Rectangle {
-                    visible: Design.translucent
-                    anchors.top: parent.top; anchors.topMargin: 1
-                    anchors.left: parent.left; anchors.right: parent.right
-                    anchors.leftMargin: parent.radius; anchors.rightMargin: parent.radius
-                    height: 1
-                    color: Design.glassEdge
-                }
+                GlassRim { radius: parent.radius; sheen: false }
 
                 HoverHandler {
                     id: hover

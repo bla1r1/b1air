@@ -631,7 +631,7 @@ ApplicationWindow {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -1202,7 +1202,7 @@ Item {
                                                 Layout.preferredHeight: Design.s(Design.size.md)
                                                 visible: GitBackend.lastCommit.canUndo === true
                                                 radius: Design.s(Design.radius.sm)
-                                                color: Design.surface
+                                                color: Design.glassCard
                                                 border.color: Design.glassBorder
                                                 border.width: Design.border
 
@@ -1549,7 +1549,7 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: Design.surface
+                        color: "transparent"
                         clip: true
 
                         // One diff row, shared by the working-tree diff and a
@@ -1729,7 +1729,7 @@ Item {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: Design.s(Design.size.rowTall)
                                                 radius: Design.s(Design.radius.ctl)
-                                                color: Design.surface
+                                                color: Design.glassCard
                                                 border.color: Design.glassBorder
                                                 border.width: Design.border
                                                 RowLayout {
@@ -2197,7 +2197,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.sm)
                             radius: Design.s(Design.radius.sm)
-                            color: Design.surface
+                            color: Design.well
                             border.color: Design.glassBorder
                             border.width: Design.border
 
@@ -2457,7 +2457,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.sm)
                             radius: Design.s(Design.radius.sm)
-                            color: Design.surface
+                            color: Design.well
                             border.color: Design.glassBorder
                             border.width: Design.border
 
@@ -2989,7 +2989,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.s(Design.size.art)
                                 radius: Design.s(Design.radius.sm)
-                                color: Design.surface
+                                color: Design.glassCard
                                 border.color: Design.glassBorder
                                 border.width: Design.border
 

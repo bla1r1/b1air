@@ -66,7 +66,7 @@ PopupShell {
             Icon {
                 text: "\u{f0ea}" // clipboard
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {
@@ -143,7 +143,7 @@ PopupShell {
                         Layout.preferredWidth: Design.s(Design.size.md)
                         Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
-                        color: clipCard.modelData.type === "color" ? clipCard.modelData.text.trim() : Design.sunken
+                        color: clipCard.modelData.type === "color" ? clipCard.modelData.text.trim() : Design.well
                         Layout.alignment: Qt.AlignTop
 
                         Icon {
@@ -152,7 +152,7 @@ PopupShell {
                             text: clipCard.modelData.type === "code" ? "\u{f0169}"
                                 : (clipCard.modelData.type === "link" ? "\u{f0339}" : "\u{f0219}")
                             role: "caption"
-                            color: Design.accent
+                            color: Design.textDim
                         }
                     }
 
@@ -167,7 +167,6 @@ PopupShell {
                                 text: clipCard.modelData.title ? clipCard.modelData.title : clipCard.modelData.type.toUpperCase()
                                 role: "caption"
                                 weight: Design.weight.semibold
-                                color: Design.accent
                             }
                             Label {
                                 text: "• " + (clipCard.modelData.time || I18n.tr("Template"))

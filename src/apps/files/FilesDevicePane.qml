@@ -291,7 +291,7 @@ Item {
                 visible: pane.tab === "playlists"
                 Layout.fillHeight: true
                 Layout.preferredWidth: Design.s(Design.width.control)
-                color: Design.sunken
+                color: Design.veil
                 Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
                 ColumnLayout {
                     anchors.fill: parent

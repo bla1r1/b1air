@@ -51,7 +51,7 @@ PopupShell {
             Icon {
                 text: "\u{f046d}" // ruler
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {

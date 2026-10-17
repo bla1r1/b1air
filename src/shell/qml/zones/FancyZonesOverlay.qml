@@ -43,7 +43,7 @@ PopupShell {
             Icon {
                 text: "\u{f009}" // th-large / grid
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {

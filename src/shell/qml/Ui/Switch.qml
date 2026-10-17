@@ -35,7 +35,9 @@ Rectangle {
         width: Math.round(parent.height * 0.75)
         height: width
         radius: width / 2
-        color: root.checked ? Design.accentText : Design.ground
+        // White in both states, as a switch's knob is on macOS: the accent's
+        // own text colour made it a dark dot on a light-blue track.
+        color: Design.knob
         y: (parent.height - height) / 2
         x: root.checked ? parent.width - width - y : y
 

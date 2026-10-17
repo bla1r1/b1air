@@ -80,7 +80,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -176,7 +176,7 @@ Window {
                             // so the one window that fills its whole area with
                             // a single colour was the one that ignored the
                             // theme picker.
-                            backgroundColor: Design.ground
+                            backgroundColor: Qt.alpha(Design.ground, 0)
                             foregroundColor: Design.text
 
                             Component.onCompleted: {

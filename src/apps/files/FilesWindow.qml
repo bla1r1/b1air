@@ -531,12 +531,13 @@ C.ApplicationWindow {
         }
     }
 
-    // Everything right of the sidebar, opaque: reading wants a solid page.
+    // Everything right of the sidebar: the same glass as the shell's panels,
+    // denser than the sidebar's so a page of names stays easy to read.
     Rectangle {
         x: sidebar.width
         width: parent.width - x
         height: parent.height
-        color: Design.surface
+        color: Design.glassBg
         visible: Design.translucent
     }
 
@@ -1272,7 +1273,7 @@ C.ApplicationWindow {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(Design.size.md)
-                        color: Design.surface
+                        color: "transparent"
                         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
                         RowLayout {
                             anchors.fill: parent
@@ -1718,7 +1719,7 @@ C.ApplicationWindow {
             clip: true   // nothing it shows may reach into the folder beside it
             visible: window.showInfo && window.width > 980 && !window.device
                      && window.viewMode !== "columns" && window.viewMode !== "gallery"
-            color: Design.sunken
+            color: Design.veil
             Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
 
             // What it describes: the one selected item, or the folder itself.
@@ -2355,7 +2356,7 @@ C.ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: renamePreview.implicitHeight + Design.s(Design.space.sm) * 2
                     radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
+                    color: Design.well
                     Column {
                         id: renamePreview
                         anchors.fill: parent

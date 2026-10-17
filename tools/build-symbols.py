@@ -4,7 +4,7 @@
 The interface draws its icons as glyphs of JetBrainsMono Nerd Font Mono, by
 codepoint ("\\u{f05a9}" is Wi-Fi) — a few hundred of them across the shell
 and the apps, from half a dozen icon sets of different weights and sizes.
-This builds a font with the same codepoints and the same advances, in which
+This builds a font with the same codepoints, each in a square cell, in which
 each of those glyphs is redrawn with the Lucide icon of the same meaning:
 one 2px stroke on one grid, the way a desktop's own symbol set is drawn.
 Design.font.icon names it, so not one call site changes; a codepoint with no
@@ -101,15 +101,24 @@ SYNONYMS = {
 }
 
 # Lucide draws on a 1000-unit square from the baseline up, with a margin of
-# 1/12 all round. A Nerd Font Mono icon's ink fills one 600-unit cell centred
-# on y = 360 (md-wifi: 0..600, 109..611). At 0.72 Lucide's ink is that cell
-# wide — at 0.6 the icons came out a fifth smaller than the ones they replace
-# — and its 2-unit stroke lands at about 1.3 px at the 13 px of a body icon.
+# 1/12 all round. The Nerd Font Mono cell it replaces is 600 units wide, and
+# drawn into that the icons were 0.6 em of ink: a Wi-Fi glyph 8 px across in
+# a 36 px Control Center circle, a third smaller than the text beside it. Each
+# glyph gets a square cell of its own now, ink 0.77 em, the size of a symbol
+# set drawn to sit with text, centred on y = 360 — the middle of the line box
+# (ascent 1020, descent 300) — so an icon centred in a box is centred in it.
 # (md-code_greater_than_or_equal is the source's "screen frame" glyph: the
 # screenshot tile, the capture page, screen sharing — hence "scan".)
-SCALE = 0.72
-X_OFFSET = (600 - 1000 * SCALE) / 2
+SCALE = 0.92
+ADVANCE = round(1000 * SCALE)
+X_OFFSET = 0
 Y_OFFSET = 360 - 1000 * SCALE / 2
+# A Nerd Font Mono icon's ink fills its 600-unit cell centred on (300, 360);
+# the ones with no Lucide match are scaled about that point to the same ink
+# and moved into the same square cell.
+NERD_SCALE = 1000 * SCALE * (10 / 12) / 600
+NERD_X = ADVANCE / 2 - 300 * NERD_SCALE
+NERD_Y = 360 - 360 * NERD_SCALE
 
 
 def used_codepoints() -> set[int]:
@@ -149,23 +158,35 @@ def main(argv: list[str]) -> int:
     lucide_cmap = lucide.getBestCmap()
     lucide_glyphs = lucide.getGlyphSet()
     glyf = nerd["glyf"]
+    nerd_glyphs = nerd.getGlyphSet()
 
-    replaced, kept = [], []
+    replaced, kept, new_glyphs = [], [], {}
     for cp in sorted(used):
         glyph_name = nerd_cmap.get(cp)
         nerd_name = names.get(cp, "")
         base = nerd_name.split("-", 1)[1].replace("_", "-") if "-" in nerd_name else nerd_name
         target = SYNONYMS.get(nerd_name) or (base if base in lucide_cp else None)
-        if not glyph_name or not target or lucide_cp.get(target) not in lucide_cmap:
-            kept.append(f"{cp:x} {nerd_name or '?'}")
+        if not glyph_name:
             continue
         pen = TTGlyphPen(None)
-        lucide_glyphs[lucide_cmap[lucide_cp[target]]].draw(
-            TransformPen(pen, (SCALE, 0, 0, SCALE, X_OFFSET, Y_OFFSET)))
+        if not target or lucide_cp.get(target) not in lucide_cmap:
+            nerd_glyphs[glyph_name].draw(
+                TransformPen(pen, (NERD_SCALE, 0, 0, NERD_SCALE, NERD_X, NERD_Y)))
+            kept.append(f"{cp:x} {nerd_name or '?'}")
+        else:
+            lucide_glyphs[lucide_cmap[lucide_cp[target]]].draw(
+                TransformPen(pen, (SCALE, 0, 0, SCALE, X_OFFSET, Y_OFFSET)))
+            replaced.append(f"{cp:x} {nerd_name} -> {target}")
         new = pen.glyph()
         new.recalcBounds(glyf)
+        new_glyphs[glyph_name] = new
+
+    # Written after every glyph is drawn: a kept glyph may be a composite of
+    # others, which have to be read as they were.
+    for glyph_name, new in new_glyphs.items():
         glyf[glyph_name] = new
-        replaced.append(f"{cp:x} {nerd_name} -> {target}")
+        _, lsb = nerd["hmtx"][glyph_name]
+        nerd["hmtx"][glyph_name] = (ADVANCE, new.xMin if hasattr(new, "xMin") else lsb)
 
     # Only what is used, and ASCII.
     keep = used | set(range(0x20, 0x7F))

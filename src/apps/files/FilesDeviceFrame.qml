@@ -182,7 +182,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.stat)
-            color: Design.sunken
+            color: Design.veil
             Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
 
             RowLayout {

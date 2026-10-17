@@ -90,9 +90,11 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: app.standalone && Design.translucent ? Design.s(Design.width.sidebar) + Design.border : 0
         radius: app.standalone ? 0 : Design.s(Design.radius.panel)
-        color: app.standalone ? Design.surface : Design.glassBg
-        border.color: app.standalone ? "transparent" : Design.glassBorder
-        border.width: Design.border
+        // Standalone, the window itself is the glass (SettingsWindow).
+        color: app.standalone ? "transparent" : Design.glassBg
+        border.color: "transparent"
+
+        GlassRim { visible: !app.standalone && Design.translucent; radius: parent.radius }
     }
 
     // The current page's entry, for the header.

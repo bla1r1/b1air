@@ -130,7 +130,7 @@ PopupShell {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Icon { text: "\u{f06b0}"; role: "subhead"; color: Design.accent }
+            Icon { text: "\u{f06b0}"; role: "subhead"; color: Design.textDim }
             Label { text: I18n.tr("Updates"); role: "subhead"; weight: Design.weight.semibold }
             Item { Layout.fillWidth: true }
             IconButton {

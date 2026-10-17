@@ -479,6 +479,7 @@ PanelWindow {
                 color: appMenuArea.containsMouse ? Design.glassHover : Design.glassBg
                 border.color: appMenuArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
 
@@ -530,6 +531,7 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 visible: Settings.barShowPinned && PinnedApps.pinnedList.length > 0
 
                 Row {
@@ -624,6 +626,7 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 Row {
                     id: workspacesRow
                     anchors.centerIn: parent
@@ -741,6 +744,7 @@ PanelWindow {
             color: clockArea.containsMouse ? Design.glassHover : Design.glassBg
             border.color: clockArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
             border.width: Design.border
+            GlassRim { radius: parent.radius; sheen: false }
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             Text {
@@ -860,6 +864,7 @@ PanelWindow {
                 color: mediaArea.containsMouse ? Design.glassHover : Design.glassBg
                 border.color: mediaArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 anchors.verticalCenter: parent.verticalCenter
 
                 // Only when asked for, and only when there is something to say.
@@ -909,6 +914,7 @@ PanelWindow {
                 color: weatherArea.containsMouse ? Design.glassHover : Design.glassBg
                 border.color: weatherArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 anchors.verticalCenter: parent.verticalCenter
 
                 visible: Settings.barShowWeather && Weather.loaded && !topBar.reduced
@@ -958,6 +964,7 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 anchors.verticalCenter: parent.verticalCenter
 
                 // No applets means no empty pill sitting in the bar.
@@ -1036,6 +1043,7 @@ PanelWindow {
                 color: statsArea.containsMouse ? Design.glassHover : Design.glassBg
                 border.color: statsArea.containsMouse ? Design.glassBorderStrong : Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 Row {
                     id: statsRow
                     anchors.centerIn: parent
@@ -1071,6 +1079,7 @@ PanelWindow {
                 color: Design.glassBg
                 border.color: Design.glassBorder
                 border.width: Design.border
+                GlassRim { radius: parent.radius; sheen: false }
                 Row {
                     id: systemRow
                     anchors.centerIn: parent

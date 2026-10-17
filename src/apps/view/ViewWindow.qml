@@ -106,7 +106,7 @@ ApplicationWindow {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         // Keyboard Shortcuts
@@ -431,7 +431,7 @@ ApplicationWindow {
                 id: controls
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.rowTall)
-                color: Design.sunken
+                color: Design.veil
                 // In a full-screen film it steps aside until the mouse moves.
                 property bool awake: true
                 function wake() { awake = true; sleepTimer.restart(); }
@@ -546,7 +546,7 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.stat)
-                color: Design.sunken
+                color: Design.veil
                 visible: window.showFilmstrip && window.hasSiblings
 
                 // One rule where the strip meets the picture, not a box: a full

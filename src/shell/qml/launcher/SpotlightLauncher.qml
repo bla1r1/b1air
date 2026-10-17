@@ -266,15 +266,7 @@ PopupShell {
         clip: true
         Behavior on height { NumberAnimation { duration: Design.duration.fast + 50; easing.type: Easing.OutCubic } }
 
-        // The lit top edge of the glass.
-        Rectangle {
-            visible: Design.translucent
-            anchors.top: parent.top; anchors.topMargin: 1
-            anchors.left: parent.left; anchors.right: parent.right
-            anchors.leftMargin: parent.radius; anchors.rightMargin: parent.radius
-            height: 1
-            color: Design.glassEdge
-        }
+        GlassRim { radius: parent.radius }
 
         ColumnLayout {
             anchors.fill: parent

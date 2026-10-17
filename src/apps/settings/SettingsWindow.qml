@@ -71,7 +71,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         SettingsApp {

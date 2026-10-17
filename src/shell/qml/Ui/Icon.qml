@@ -40,5 +40,11 @@ Text {
     font.family: Design.font.icon
     font.pixelSize: Design.s(root._size)
     color: Design.text
+    // Centred both ways in whatever box it is given. Vertically it was top
+    // aligned: an icon handed a row's height (Layout.fillHeight, a fixed
+    // height) sat at the top of it, a pixel or three above the text beside
+    // it. Each glyph of b1air Symbols is a square cell centred on the middle
+    // of the line (tools/build-symbols.py), so centring the box centres it.
     horizontalAlignment: Text.AlignHCenter
+    verticalAlignment: Text.AlignVCenter
 }

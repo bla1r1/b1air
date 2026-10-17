@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![b1air desktop in Breeze Dark: terminal and Files side by side under the top bar](docs/screenshots/desktop-breeze-dark.jpg)
+![b1air in Breeze Dark: the Control Center open under the top bar, over the Lagos coast wallpaper](docs/screenshots/control-center.jpg)
 
 **A keyboard-driven Wayland desktop for Linux — Arch, Debian/Ubuntu, Fedora and openSUSE.**  
 *Built with SwayFX, Qt6/QML and a native C++20 core daemon, in Breeze and Adwaita colours.*
@@ -42,10 +42,13 @@ Key components:
 
 | | |
 | :---: | :---: |
-| ![Control Center over the Lagos coast wallpaper, Breeze Dark](docs/screenshots/control-center.jpg) | ![Settings → Wallpaper with its categories, Breeze Light](docs/screenshots/settings-breeze-light.jpg) |
-| Control Center — Breeze Dark | Settings → Wallpaper — Breeze Light |
-| ![The Git app: history with GitHub avatars and a commit's diff, Adwaita Dark](docs/screenshots/git-adwaita-dark.jpg) | ![Terminal and Files, Breeze Dark](docs/screenshots/desktop-breeze-dark.jpg) |
-| Git — Adwaita Dark | Terminal and Files — Breeze Dark |
+| ![Control Center over the Lagos coast wallpaper, Breeze Dark](docs/screenshots/control-center.jpg) | ![Settings → Top Bar, Breeze Dark](docs/screenshots/settings-breeze-dark.jpg) |
+| Control Center | Settings → Top Bar |
+| ![The Git app: changes and a file's diff, Breeze Dark](docs/screenshots/git-breeze-dark.jpg) | ![Calendar and weather under the clock, Breeze Dark](docs/screenshots/calendar-breeze-dark.jpg) |
+| Git | Calendar and weather |
+
+*Rendered from the QML in this repository with sample data (offscreen, with
+the compositor's blur added), all in Breeze Dark.*
 
 ### Themes and wallpapers
 

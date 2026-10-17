@@ -70,12 +70,13 @@ PanelWindow {
                 implicitHeight: cardContent.implicitHeight + Design.s(Design.space.lg)
 
                 radius: Design.s(Design.radius.card)
-                color: Design.ground
+                color: Design.glassBg
                 // One quiet edge for every toast. Critical ones had a 2px red
                 // ring and a red timer bar, which read as an error frame
                 // round anything urgent (a low battery, a failed call).
                 border.color: Design.glassBorder
                 border.width: 1
+                GlassRim { radius: parent.radius; sheen: false }
 
                 property bool isHovered: hoverArea.containsMouse
                 property real progress: 1.0

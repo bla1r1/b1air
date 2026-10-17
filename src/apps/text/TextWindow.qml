@@ -118,7 +118,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.surface
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -149,7 +149,7 @@ Window {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Design.surface
+            color: "transparent"
 
             RowLayout {
                 anchors.fill: parent
@@ -159,7 +159,7 @@ Window {
                 Rectangle {
                     Layout.fillHeight: true
                     Layout.preferredWidth: Design.s(Design.size.rowTall)
-                    color: Design.ground
+                    color: Design.veil
 
                     ListView {
                         id: lineNumbersView

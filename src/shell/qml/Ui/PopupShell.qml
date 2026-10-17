@@ -69,21 +69,14 @@ Item {
         anchors.fill: parent
         radius: root.framed ? Design.s(root.cornerRadius) : 0
         color: root.framed ? root.background : "transparent"
-        border.color: root.framed ? root.borderColor : "transparent"
-        border.width: root.framed ? Design.border : 0
+        // Glass has its edge drawn by GlassRim; opaque, a plain border.
+        border.color: root.framed && !Design.translucent ? root.borderColor : "transparent"
+        border.width: root.framed && !Design.translucent ? Design.border : 0
         clip: true
 
-        // The lit top edge of the glass.
-        Rectangle {
+        GlassRim {
             visible: root.framed && Design.translucent
-            anchors.top: parent.top
-            anchors.topMargin: Design.border
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: parent.radius
-            anchors.rightMargin: parent.radius
-            height: 1
-            color: Design.glassEdge
+            radius: parent.radius
         }
 
         Item {
