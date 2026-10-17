@@ -2404,7 +2404,7 @@
  "Both slide sideways; the touchpad swipe moves them with your fingers": "Оба сдвигаются вбок; свайп по тачпаду ведёт их за пальцами",
  "Choose a language…": "Выберите язык…",
  "Choose…": "Выбрать…",
- "Click a workspace, or pick one with arrows and Enter; Escape leaves. 4 fingers swipe on touchpad brings it in": "Щёлкните рабочий стол или выберите стрелками и Enter; Escape — выход. Свайп четырьмя пальцами по тачпаду открывает обзор",
+ "Click a workspace, or pick one with arrows and Enter; drag a window onto another to move it; Escape leaves. 4 fingers swipe on touchpad brings it in": "Щёлкните рабочий стол или выберите стрелками и Enter; перетащите окно на другой стол, чтобы перенести его; Escape — выход. Свайп четырьмя пальцами по тачпаду открывает обзор",
  "Closing lid while docked keeps working on external screen": "Если крышку закрыть в доке, работа продолжится на внешнем экране",
  "Color scheme": "Цветовая схема",
  "Dates, times, numbers, money and units": "Даты, время, числа, деньги и единицы",
@@ -2555,5 +2555,7 @@
  "What the current one installed stays installed": "Установленное текущей редакцией останется",
  "Installed": "Установлена",
  "Switch": "Перейти",
- "Switch to %1?": "Перейти на %1?"
+ "Switch to %1?": "Перейти на %1?",
+ "Snap floating windows to the screen's edges": "Прилипание плавающих окон к краям экрана",
+ "Drag a window to the left or right edge for half the screen, near a corner for a quarter, to the top for all of it": "Перетащите окно к левому или правому краю — половина экрана, к углу — четверть, к верхнему краю — весь экран"
 }

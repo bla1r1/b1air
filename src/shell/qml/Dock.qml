@@ -16,21 +16,23 @@ import "Services"
 Scope {
     id: root
 
-    // Running windows: {id, appId, focused}, from sway's tree.
+    // Running windows: {id, appId, focused, output}, from sway's tree.
     property var windows: []
     function refresh() {
         Sway.query("tree", tree => {
             if (!tree) return;
             const out = [];
-            const walk = nodes => {
+            const walk = (nodes, output) => {
                 for (const n of (nodes || [])) {
                     const appId = n.app_id || (n.window_properties ? n.window_properties.class : "") || "";
                     const kids = (n.nodes || []).concat(n.floating_nodes || []);
-                    if (appId && n.pid && n.type !== "workspace") out.push({ id: n.id, appId: appId, focused: !!n.focused });
-                    else if (kids.length) walk(kids);
+                    const on = n.type === "output" ? n.name : output;
+                    if (appId && n.pid && n.type !== "workspace")
+                        out.push({ id: n.id, appId: appId, focused: !!n.focused, output: on });
+                    else if (kids.length) walk(kids, on);
                 }
             };
-            walk([tree]);
+            walk([tree], "");
             root.windows = out;
         });
     }
@@ -100,6 +102,40 @@ Scope {
             implicitHeight: dock.bar + dock.base * (dock.zoom - 1) + Design.s(Design.space.sm)
             exclusiveZone: Settings.dockAutohide ? 0 : dock.bar + Design.s(Design.space.sm)
             exclusionMode: Settings.dockAutohide ? ExclusionMode.Ignore : ExclusionMode.Normal
+
+            // Where each window shrinks to when minimized: its app's icon here,
+            // at rest (minimize_target, swayfx patch 0012). Sent for this
+            // screen's windows, and only what changed; a window already
+            // minimized keeps the place it went to.
+            property var sentTargets: ({})
+            function sendTargets() {
+                if (!Sway.swayfx) return;
+                const n = root.items.length, sp = Design.s(Design.space.xs);
+                const left = dock.width / 2 - (n * dock.base + (n - 1) * sp) / 2;
+                const top = dock.height - 2 * Design.s(Design.space.sm) - dock.base;
+                const sent = {}, cmds = [];
+                root.items.forEach((item, i) => {
+                    const box = [Math.round(dock.modelData.x + left + i * (dock.base + sp)),
+                                 Math.round(dock.modelData.y + top),
+                                 Math.round(dock.base), Math.round(dock.base)].join(" ");
+                    for (const w of item.wins) {
+                        if (w.output !== dock.modelData.name) continue;
+                        sent[w.id] = box;
+                        if (dock.sentTargets[w.id] !== box)
+                            cmds.push("[con_id=" + Number(w.id) + "] minimize_target " + box);
+                    }
+                });
+                dock.sentTargets = sent;
+                if (cmds.length > 0) Sway.command(cmds.join("; "));
+            }
+            Timer { id: targets; interval: 300; onTriggered: dock.sendTargets() }
+            Connections {
+                target: root
+                function onItemsChanged() { targets.restart(); }
+            }
+            onWidthChanged: targets.restart()
+            onBaseChanged: targets.restart()
+            Component.onCompleted: targets.restart()
 
             // Shown unless hiding: when the pointer is near the bottom edge or on it.
             property bool hovered: false

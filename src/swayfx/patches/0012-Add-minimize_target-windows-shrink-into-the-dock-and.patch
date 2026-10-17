@@ -1,0 +1,447 @@
+From 17cdf5ae525fcadf3ff41c81b43869dc7496a123 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 11:01:11 +0000
+Subject: [PATCH] Add minimize_target: windows shrink into the dock and come
+ back out
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A window sent to the scratchpad (`move scratchpad`, or hidden again by
+`scratchpad show`) leaves a copy of what it showed, which shrinks into
+its minimize_target and fades as it goes; shown again, the window grows
+back out of the same place. `minimize_target <x> <y> <w> <h>|none` sets
+the place per window, in layout coordinates — the dock sets each
+window's to its icon — and without one it is an icon's worth above the
+bottom of the window's output, where a dock is.
+
+The copy holds the window's buffers, so the window can close while it
+is in flight. Only with animation_duration_ms and a window_animation
+other than none. get_tree reports the target as "minimize_target".
+---
+ include/sway/commands.h         |   1 +
+ include/sway/desktop/minimize.h |  23 +++++
+ include/sway/tree/container.h   |   6 ++
+ sway/commands.c                 |   1 +
+ sway/commands/minimize_target.c |  44 +++++++++
+ sway/desktop/minimize.c         | 152 ++++++++++++++++++++++++++++++++
+ sway/desktop/transaction.c      |  33 +++++++
+ sway/ipc-json.c                 |   5 ++
+ sway/meson.build                |   2 +
+ sway/tree/root.c                |  11 +++
+ 10 files changed, 278 insertions(+)
+ create mode 100644 include/sway/desktop/minimize.h
+ create mode 100644 sway/commands/minimize_target.c
+ create mode 100644 sway/desktop/minimize.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index 0aca110..4a442f3 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -116,6 +116,7 @@ sway_cmd cmd_overview;
+ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_floating_snap;
+ sway_cmd cmd_snap;
++sway_cmd cmd_minimize_target;
+ sway_cmd cmd_workspace_animation;
+ sway_cmd cmd_window_animation;
+ sway_cmd cmd_workspace_swipe;
+diff --git a/include/sway/desktop/minimize.h b/include/sway/desktop/minimize.h
+new file mode 100644
+index 0000000..7c611c3
+--- /dev/null
++++ b/include/sway/desktop/minimize.h
+@@ -0,0 +1,23 @@
++#ifndef _SWAY_DESKTOP_MINIMIZE_H
++#define _SWAY_DESKTOP_MINIMIZE_H
++#include <stdbool.h>
++#include <wlr/util/box.h>
++
++struct sway_container;
++
++// b1air: a window sent to the scratchpad shrinks into where it is kept — its
++// minimize_target, the dock's icon for it, or the bottom of its output —
++// and comes back out of it when shown. With animation_duration_ms and a
++// window_animation other than none.
++
++// Where the container goes, in layout coordinates.
++void minimize_target_box(struct sway_container *con, struct wlr_box *box);
++
++// A copy of what the window shows now, shrinking into its target: called
++// before it is hidden.
++void minimize_animate_away(struct sway_container *con);
++
++// Whether windows are animated in and out of the scratchpad at all.
++bool minimize_animates(struct sway_container *con);
++
++#endif
+diff --git a/include/sway/tree/container.h b/include/sway/tree/container.h
+index 62cc70d..c4ae751 100644
+--- a/include/sway/tree/container.h
++++ b/include/sway/tree/container.h
+@@ -131,6 +131,10 @@ struct sway_container {
+ 	int snap_zone;
+ 	double snap_restore_width, snap_restore_height;
+ 
++	// b1air: where it goes when sent to the scratchpad (minimize_target),
++	// layout coordinates; empty for the bottom of its output
++	struct wlr_box minimize_target;
++
+ 	// The share of the space of parent container this container occupies
+ 	double width_fraction;
+ 	double height_fraction;
+@@ -178,6 +182,8 @@ struct sway_container {
+ 
+ 		bool seat_is_resizing;
+ 		bool seat_is_moving_float;
++		// b1air: shown from the scratchpad: comes out of its minimize_target
++		bool unminimizing;
+ 	} animation_state;
+ 
+ 	list_t *marks; // char *
+diff --git a/sway/commands.c b/sway/commands.c
+index 454cb4b..6a92783 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -156,6 +156,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "layout", cmd_layout },
+ 	{ "mark", cmd_mark },
+ 	{ "max_render_time", cmd_max_render_time },
++	{ "minimize_target", cmd_minimize_target },
+ 	{ "move", cmd_move },
+ 	{ "nop", cmd_nop },
+ 	{ "opacity", cmd_opacity },
+diff --git a/sway/commands/minimize_target.c b/sway/commands/minimize_target.c
+new file mode 100644
+index 0000000..55093f7
+--- /dev/null
++++ b/sway/commands/minimize_target.c
+@@ -0,0 +1,44 @@
++#include <stdlib.h>
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/tree/container.h"
++
++// minimize_target <x> <y> <width> <height> | none
++//
++// Where the window shrinks into when it is sent to the scratchpad, and
++// comes back out of when shown, in layout coordinates: its icon in the dock,
++// which the dock sets for each window it has. `none` (the default) is the
++// bottom of its output.
++struct cmd_results *cmd_minimize_target(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "minimize_target", EXPECTED_AT_LEAST, 1))) {
++		return error;
++	}
++	struct sway_container *con = config->handler_context.container;
++	if (!con) {
++		return cmd_results_new(CMD_FAILURE, "No window to set it for");
++	}
++	if (argc == 1 && strcasecmp(argv[0], "none") == 0) {
++		con->minimize_target = (struct wlr_box){0};
++		return cmd_results_new(CMD_SUCCESS, NULL);
++	}
++	if (argc != 4) {
++		return cmd_results_new(CMD_INVALID,
++			"Expected minimize_target <x> <y> <width> <height> or none");
++	}
++	int v[4];
++	for (int i = 0; i < 4; i++) {
++		char *end;
++		long n = strtol(argv[i], &end, 10);
++		if (*end || end == argv[i] || n < -100000 || n > 100000) {
++			return cmd_results_new(CMD_INVALID,
++				"minimize_target takes whole numbers of pixels");
++		}
++		v[i] = n;
++	}
++	if (v[2] <= 0 || v[3] <= 0) {
++		return cmd_results_new(CMD_INVALID, "minimize_target needs a size");
++	}
++	con->minimize_target = (struct wlr_box){ v[0], v[1], v[2], v[3] };
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/desktop/minimize.c b/sway/desktop/minimize.c
+new file mode 100644
+index 0000000..ddc36bc
+--- /dev/null
++++ b/sway/desktop/minimize.c
+@@ -0,0 +1,152 @@
++#include <math.h>
++#include <stdlib.h>
++#include <scenefx/types/wlr_scene.h>
++#include "sway/animation_manager.h"
++#include "sway/config.h"
++#include "sway/desktop/minimize.h"
++#include "sway/output.h"
++#include "sway/tree/container.h"
++#include "sway/tree/root.h"
++#include "sway/tree/view.h"
++#include "sway/tree/workspace.h"
++
++// The size of the place a window goes to without a target of its own: an
++// icon's worth, above the bottom edge of its output, where the dock is.
++#define MINIMIZE_DEFAULT_SIZE 48
++#define MINIMIZE_DEFAULT_MARGIN 12
++
++struct minimize_ghost {
++	struct wlr_scene_tree *tree;
++	struct animation animation;
++	struct wlr_box from;       // the window, layout coordinates
++	struct wlr_box to;         // where it goes
++	float scale;               // its size at the end
++	int dx, dy;                // from what is copied to the window's corner
++};
++
++bool minimize_animates(struct sway_container *con) {
++	return config->animation_duration_ms > 0
++		&& config->window_animation != WINDOW_ANIMATION_NONE
++		&& con && con->view;
++}
++
++void minimize_target_box(struct sway_container *con, struct wlr_box *box) {
++	if (con->minimize_target.width > 0 && con->minimize_target.height > 0) {
++		*box = con->minimize_target;
++		return;
++	}
++	struct sway_workspace *ws = con->pending.workspace ?
++		con->pending.workspace : con->current.workspace;
++	struct sway_output *output = ws ? ws->output : NULL;
++	if (!output) {
++		output = root->outputs->length ? root->outputs->items[0] : NULL;
++	}
++	struct wlr_box o = {0};
++	if (output) {
++		output_get_box(output, &o);
++	}
++	box->width = box->height = MINIMIZE_DEFAULT_SIZE;
++	box->x = o.x + (o.width - MINIMIZE_DEFAULT_SIZE) / 2;
++	box->y = o.y + o.height - MINIMIZE_DEFAULT_SIZE - MINIMIZE_DEFAULT_MARGIN;
++}
++
++static void copy_buffer_iterator(struct wlr_scene_buffer *buffer,
++		int sx, int sy, void *data) {
++	struct minimize_ghost *ghost = data;
++	if (!buffer->buffer) {
++		return;
++	}
++	struct wlr_scene_buffer *copy = wlr_scene_buffer_create(ghost->tree, NULL);
++	if (!copy) {
++		return;
++	}
++	wlr_scene_buffer_set_dest_size(copy, buffer->dst_width, buffer->dst_height);
++	wlr_scene_buffer_set_opacity(copy, buffer->opacity);
++	wlr_scene_buffer_set_filter_mode(copy, buffer->filter_mode);
++	wlr_scene_buffer_set_transfer_function(copy, buffer->transfer_function);
++	wlr_scene_buffer_set_primaries(copy, buffer->primaries);
++	wlr_scene_buffer_set_source_box(copy, &buffer->src_box);
++	wlr_scene_buffer_set_transform(copy, buffer->transform);
++	wlr_scene_buffer_set_buffer(copy, buffer->buffer);
++	wlr_scene_buffer_set_corner_radii(copy, buffer->corners);
++	// Where it was in the window.
++	wlr_scene_node_set_position(&copy->node, sx + ghost->dx, sy + ghost->dy);
++}
++
++static void set_opacity_iterator(struct wlr_scene_buffer *buffer,
++		int sx, int sy, void *data) {
++	wlr_scene_buffer_set_opacity(buffer, *(float *)data);
++}
++
++static void ghost_update(void *data) {
++	struct minimize_ghost *ghost = data;
++	float t = ghost->animation.multiplier;
++	float scale = 1.0f + (ghost->scale - 1.0f) * t;
++	// Its centre goes to the target's centre.
++	float fcx = ghost->from.x + ghost->from.width / 2.0f;
++	float fcy = ghost->from.y + ghost->from.height / 2.0f;
++	float tcx = ghost->to.x + ghost->to.width / 2.0f;
++	float tcy = ghost->to.y + ghost->to.height / 2.0f;
++	float cx = fcx + (tcx - fcx) * t, cy = fcy + (tcy - fcy) * t;
++	wlr_scene_tree_set_scale(ghost->tree, scale);
++	wlr_scene_node_set_position(&ghost->tree->node,
++		(int)lroundf(cx - ghost->from.width * scale / 2.0f),
++		(int)lroundf(cy - ghost->from.height * scale / 2.0f));
++	// Fading as it goes: gone as it reaches the icon.
++	float alpha = 1.0f - t * t;
++	wlr_scene_node_for_each_buffer(&ghost->tree->node, set_opacity_iterator, &alpha);
++}
++
++static void ghost_complete(void *data) {
++	struct minimize_ghost *ghost = data;
++	wlr_scene_node_destroy(&ghost->tree->node);
++	free(ghost);
++}
++
++void minimize_animate_away(struct sway_container *con) {
++	if (!minimize_animates(con) || !con->scene_tree->node.enabled) {
++		return;
++	}
++	struct minimize_ghost *ghost = calloc(1, sizeof(*ghost));
++	if (!ghost) {
++		return;
++	}
++	int lx, ly;
++	if (!wlr_scene_node_coords(&con->scene_tree->node, &lx, &ly)) {
++		free(ghost);
++		return; // not shown
++	}
++	ghost->from = (struct wlr_box){
++		lx, ly, con->current.width, con->current.height,
++	};
++	if (ghost->from.width <= 0 || ghost->from.height <= 0) {
++		free(ghost);
++		return;
++	}
++	minimize_target_box(con, &ghost->to);
++	ghost->scale = fminf((float)ghost->to.width / ghost->from.width,
++		(float)ghost->to.height / ghost->from.height);
++
++	// Over the windows and the dock, under the lock screen.
++	ghost->tree = wlr_scene_tree_create(root->layers.shell_overlay);
++	if (!ghost->tree) {
++		free(ghost);
++		return;
++	}
++	wlr_scene_node_set_position(&ghost->tree->node, lx, ly);
++	// What the view shows — its surfaces, or what was saved of them while a
++	// transaction is out — placed from the view's parent, as the iterator
++	// counts.
++	struct wlr_scene_node *view_node = &con->view->scene_tree->node;
++	int px = 0, py = 0;
++	if (view_node->parent) {
++		wlr_scene_node_coords(&view_node->parent->node, &px, &py);
++	}
++	ghost->dx = px - lx;
++	ghost->dy = py - ly;
++	wlr_scene_node_for_each_buffer(view_node, copy_buffer_iterator, ghost);
++
++	ghost->animation = init_animation(ghost);
++	add_animation(&ghost->animation, ghost_update, ghost_complete);
++	start_animations();
++}
+diff --git a/sway/desktop/transaction.c b/sway/desktop/transaction.c
+index f5d3e35..b3feb94 100644
+--- a/sway/desktop/transaction.c
++++ b/sway/desktop/transaction.c
+@@ -11,6 +11,7 @@
+ #include "sway/scene_descriptor.h"
+ #include "sway/desktop/idle_inhibit_v1.h"
+ #include "sway/desktop/transaction.h"
++#include "sway/desktop/minimize.h"
+ #include "sway/input/cursor.h"
+ #include "sway/input/input-manager.h"
+ #include "sway/output.h"
+@@ -819,6 +820,38 @@ static void arrange_container(struct sway_container *con,
+ 		return;
+ 	}
+ 
++	// b1air: shown from the scratchpad, it grows out of where it went
++	// (minimize_target), as it shrank into it.
++	if (con->animation_state.unminimizing && width > 0 && height > 0) {
++		con->animation_state.unminimizing = false;
++		struct wlr_box target;
++		minimize_target_box(con, &target);
++		float s = fminf((float)target.width / width, (float)target.height / height);
++		int px = 0, py = 0;
++		if (con->scene_tree->node.parent) {
++			wlr_scene_node_coords(&con->scene_tree->node.parent->node, &px, &py);
++		}
++		finish_animation(&con->animation_state.animation);
++		con->animation_state.to_x = x;
++		con->animation_state.to_y = y;
++		con->animation_state.to_width = width;
++		con->animation_state.to_height = height;
++		con->animation_state.to_alpha = 1.0f;
++		con->animation_state.from_width = (int)lroundf(width * s);
++		con->animation_state.from_height = (int)lroundf(height * s);
++		con->animation_state.from_x = target.x + target.width / 2
++			- con->animation_state.from_width / 2 - px;
++		con->animation_state.from_y = target.y + target.height / 2
++			- con->animation_state.from_height / 2 - py;
++		con->animation_state.from_alpha = 0.0f;
++		add_animation(&con->animation_state.animation, anim_update_callback, NULL);
++		_arrange_container(con, con->animation_state.from_width,
++			con->animation_state.from_height,
++			con->animation_state.from_x, con->animation_state.from_y,
++			con_has_title_bar(con), 0);
++		return;
++	}
++
+ 	if (con->animation_state.to_x == x &&
+ 			con->animation_state.to_y == y &&
+ 			con->animation_state.to_width == width &&
+diff --git a/sway/ipc-json.c b/sway/ipc-json.c
+index 5d37527..85518c7 100644
+--- a/sway/ipc-json.c
++++ b/sway/ipc-json.c
+@@ -817,6 +817,11 @@ static void ipc_json_describe_container(struct sway_container *c, json_object *o
+ 	// b1air: the zone it is snapped to (floating_snap, snap), or "none"
+ 	json_object_object_add(object, "snapped",
+ 			json_object_new_string(snap_zone_name(c->snap_zone)));
++	// b1air: where it goes when sent to the scratchpad (minimize_target)
++	if (c->minimize_target.width > 0) {
++		json_object_object_add(object, "minimize_target",
++				ipc_json_create_rect(&c->minimize_target));
++	}
+ 
+ 	// sway doesn't track the floating reason, so we can't use "auto_on" or "user_off"
+ 	json_object_object_add(object, "floating",
+diff --git a/sway/meson.build b/sway/meson.build
+index 3201cd4..c913b66 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -57,6 +57,8 @@ sway_sources = files(
+ 	'commands/workspace_swipe.c',
+ 	'desktop/workspace_swipe.c',
+ 	'desktop/overview.c',
++	'desktop/minimize.c',
++	'commands/minimize_target.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+ 	'commands/bar.c',
+diff --git a/sway/tree/root.c b/sway/tree/root.c
+index 7a5bac4..c55d3bf 100644
+--- a/sway/tree/root.c
++++ b/sway/tree/root.c
+@@ -13,6 +13,7 @@
+ #include "sway/tree/arrange.h"
+ #include "sway/tree/container.h"
+ #include "sway/tree/root.h"
++#include "sway/desktop/minimize.h"
+ #include "sway/tree/workspace.h"
+ #include "list.h"
+ #include "log.h"
+@@ -123,6 +124,11 @@ void root_scratchpad_add_container(struct sway_container *con, struct sway_works
+ 	struct sway_container *parent = con->pending.parent;
+ 	struct sway_workspace *workspace = con->pending.workspace;
+ 
++	// b1air: shrinks into the dock as it goes, when it is hidden
++	if (!ws) {
++		minimize_animate_away(con);
++	}
++
+ 	set_container_transform(workspace, con);
+ 
+ 	// Clear the fullscreen mode when sending to the scratchpad
+@@ -163,6 +169,8 @@ void root_scratchpad_add_container(struct sway_container *con, struct sway_works
+ 		root_scratchpad_set_minimize(con, true);
+ 	}
+ 
++	minimize_animate_away(con); // b1air: into the dock
++
+ 	ipc_event_window(con, "move");
+ }
+ 
+@@ -216,6 +224,9 @@ void root_scratchpad_show(struct sway_container *con) {
+ 		root_scratchpad_set_minimize(con, false);
+ 	}
+ 
++	// b1air: out of the dock, where it went
++	con->animation_state.unminimizing = minimize_animates(con);
++
+ 	if (new_ws->output) {
+ 		struct wlr_box output_box;
+ 		output_get_box(new_ws->output, &output_box);
+-- 
+2.43.0
+

@@ -527,7 +527,12 @@ bool SystemControl::enable_game_mode() {
         // every game-mode session whatever the toggle said, which on a monitor
         // that reports support and flickers with it is exactly the setting
         // someone would go looking for.
-        std::string cmd = "blur disable; shadows disable; corner_radius 0; default_border pixel 0";
+        // allow_tearing: a fullscreen game that asks for it (Vulkan's
+        // immediate mode, over wp_tearing_control) gets each frame on screen
+        // as soon as it is done instead of at the next refresh — the latency
+        // a competitive game wants. Nothing tears that did not ask.
+        std::string cmd = "blur disable; shadows disable; corner_radius 0; default_border pixel 0; "
+                          "output * allow_tearing yes";
         if (SettingsManager::get_json_bool("gameModeAdaptiveSync", false))
             cmd += "; output * adaptive_sync on";
         ipc.send_command(0, cmd);
@@ -561,7 +566,8 @@ bool SystemControl::disable_game_mode() {
             std::string("blur ") + (SettingsManager::get_json_bool("blurEnabled", true) ? "enable" : "disable")
             + "; shadows " + (SettingsManager::get_json_bool("shadowsEnabled", true) ? "enable" : "disable")
             + "; corner_radius " + std::to_string(SettingsManager::get_json_int("cornerRadius", 14))
-            + "; default_border pixel " + std::to_string(s.borderWidth);
+            + "; default_border pixel " + std::to_string(s.borderWidth)
+            + "; output * allow_tearing no";
         if (SettingsManager::get_json_bool("gameModeAdaptiveSync", false))
             cmd += "; output * adaptive_sync off";
         ipc.send_command(0, cmd);

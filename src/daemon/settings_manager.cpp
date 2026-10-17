@@ -416,6 +416,21 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
         (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+shift+s move scratchpad");
     }
 
+    // The shell's popups cast their own soft shadow (Ui/PopupShell), on the
+    // full-screen qs-master layer: with blur_ignore_alpha (swayfx 0009,
+    // scenefx 0003) what is at most 40% opaque — the shadow — has no blur
+    // behind it, and the panels (56%) keep theirs. Asked with a list that
+    // does not parse, on a namespace nothing uses: 0009 refuses it, and any
+    // other swayfx says success. There this is left alone — its parser would
+    // not know blur_ignore_alpha, and dropping the rule would take qs-master's
+    // blur with it. The rest of the line is windowrules.conf's.
+    std::string probe = ipc.send_command(0, "layer_effects b1air-probe \"b1air-probe\"");
+    probe.erase(std::remove_if(probe.begin(), probe.end(), ::isspace), probe.end());
+    const bool has_blur_alpha = probe.find("\"success\":false") != std::string::npos;
+    if (has_blur_alpha)
+        (void)ipc.send_command(0, "layer_effects qs-master \"blur enable; blur_ignore_transparent enable; "
+                                  "shadows disable; blur_ignore_alpha 0.4\"");
+
     // Mod+O lays every workspace of the screen out side by side (patch
     // 0007); a click or Enter goes to one, Escape leaves. Asked the same way.
     const bool has_overview =
@@ -431,6 +446,21 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
         (void)ipc.send_command(0, "overview_swipe off");
         (void)ipc.send_command(0, "unbindsym --to-code $mod+o");
     }
+    // Mod+Ctrl+scroll magnifies the screen round the cursor, and Mod+Ctrl+0
+    // puts it back (patch 0013). Asked as the overview is.
+    const bool has_zoom =
+        ipc.send_command(0, "zoom").find("Unknown/invalid command") == std::string::npos;
+    if (has_zoom) {
+        (void)ipc.send_command(0, "bindsym --whole-window $mod+ctrl+button4 zoom in");
+        (void)ipc.send_command(0, "bindsym --whole-window $mod+ctrl+button5 zoom out");
+        (void)ipc.send_command(0, "bindsym --to-code $mod+ctrl+0 zoom reset");
+    }
+
+    // A floating window dragged to within 12 px of an edge snaps to that
+    // half of the screen, a quarter near a corner, all of it at the top
+    // (patch 0010), with a preview while it is held there.
+    (void)ipc.send_command(0, get_json_bool("windowSnap", true) ? "floating_snap 12" : "floating_snap off");
+
     return command_ok(ipc.send_command(0, std::string("autotile ")
         + (get_json_bool("autotiling", true) ? "enable" : "disable")));
 }

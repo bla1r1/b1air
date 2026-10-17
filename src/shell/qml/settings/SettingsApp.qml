@@ -11,6 +11,8 @@ Item {
     id: app
 
     property bool framed: false
+    // In the shell the whole frame is one glass panel (Main.qml's PanelShadow).
+    readonly property bool castsShadow: !app.standalone
     property string page: "monitors"
     // Where "Back" goes from a page the setup's news opened ("setup.news").
     property string returnPage: ""

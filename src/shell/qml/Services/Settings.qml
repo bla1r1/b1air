@@ -123,6 +123,7 @@ Singleton {
     readonly property alias inactiveOpacityPercent: data.inactiveOpacityPercent
     readonly property alias specialWorkspace: data.specialWorkspace
     readonly property alias workspaceOverview: data.workspaceOverview
+    readonly property alias windowSnap: data.windowSnap
     readonly property alias uiLanguage: data.uiLanguage
     // Dates, numbers and units: a locale name ("de_DE"), or "" to follow
     // the interface language (Settings → Language & Region).
@@ -576,6 +577,7 @@ Singleton {
         inactiveOpacityPercent: 50,
         specialWorkspace: true,
         workspaceOverview: true,
+        windowSnap: true,
         uiLanguage: "auto",
         formatsLocale: "",
         magicMouseGestures: true,
@@ -742,6 +744,7 @@ Singleton {
             property int inactiveOpacityPercent: 50
             property bool specialWorkspace: true
             property bool workspaceOverview: true
+            property bool windowSnap: true
             property string uiLanguage: "auto"
             property string formatsLocale: ""
             property bool magicMouseGestures: true

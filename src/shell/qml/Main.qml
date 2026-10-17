@@ -501,6 +501,38 @@ Scope {
     // Keyboard focus comes from `focusable: isVisible` above; nothing else is
     // needed.
 
+    // The panel's shadow, outside the clipped frame below and moving with it.
+    // A surface says whether it is one panel the size of its frame:
+    // `castsShadow`, else PopupShell's `framed`. Spotlight's glass is shorter
+    // than its frame, and the full-screen overlays have no edge to shade.
+    PanelShadow {
+        readonly property var item: widgetStack.currentItem
+        visible: Design.panelShadows && Design.translucent && masterWindow.isVisible && !!item
+            && (item.castsShadow !== undefined ? item.castsShadow === true : item.framed === true)
+        x: masterWindow.animX
+        y: masterWindow.animY
+        width: masterWindow.animW
+        height: masterWindow.animH
+        radius: Design.s(Design.radius.panel)
+        opacity: masterWindow.isVisible ? 1.0 : 0.0
+        Behavior on x { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on y { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on width { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on height { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on opacity { NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.InOutSine } }
+    }
+
+    // Whether the compositor keeps the blur off a shadow (swayfx 0009): a
+    // `layer_effects` list that does not parse is refused there and taken by
+    // any other swayfx. A namespace nothing uses, so nothing is changed.
+    Process {
+        running: true
+        command: ["swaymsg", "-r", "--", "layer_effects", "b1air-probe", "\"b1air-probe\""]
+        stdout: StdioCollector {
+            onStreamFinished: Design.panelShadows = this.text.replace(/\s/g, "").indexOf("\"success\":false") >= 0
+        }
+    }
+
     Item {
         x: masterWindow.animX
         y: masterWindow.animY

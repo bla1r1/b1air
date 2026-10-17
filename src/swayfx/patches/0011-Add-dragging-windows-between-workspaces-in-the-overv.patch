@@ -1,0 +1,359 @@
+From 3722dfc2be6fd629f91737ef472b522545e8e3f7 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 10:49:51 +0000
+Subject: [PATCH] Add dragging windows between workspaces in the overview
+
+Pressed on a tiled window in one workspace's cell and let go in
+another's, the window goes to that workspace, as `move container to
+workspace` sends it, and the overview stays up to show it land. While
+it is held a pane its size in the overview, in the indicator colour,
+follows the cursor, and the workspace under it is the one outlined.
+
+A click still goes to the workspace it is on, and beside them all
+leaves; it is the release that does it now, so that a press can become
+a drag. A press that moves less than a few pixels is a click. A window
+that closes while held is let go.
+---
+ include/sway/desktop/overview.h |   5 +
+ sway/desktop/overview.c         | 212 ++++++++++++++++++++++++++++++--
+ sway/input/seatop_default.c     |   5 +
+ sway/tree/container.c           |   2 +
+ 4 files changed, 211 insertions(+), 13 deletions(-)
+
+diff --git a/include/sway/desktop/overview.h b/include/sway/desktop/overview.h
+index 5efaca4..03e338d 100644
+--- a/include/sway/desktop/overview.h
++++ b/include/sway/desktop/overview.h
+@@ -16,6 +16,11 @@ void overview_rearranged(struct sway_output *output);
+ // Input while the overview is up; true when it took the event.
+ bool overview_handle_button(double lx, double ly, bool pressed);
+ bool overview_handle_key(xkb_keysym_t sym);
++// The cursor moved while the overview is up: a window held is dragged.
++bool overview_handle_motion(double lx, double ly);
++// A window is going away: not held any more.
++struct sway_container;
++void overview_container_gone(struct sway_container *con);
+ 
+ // overview_swipe <fingers>: up brings it in with the fingers, down takes
+ // it away; sideways is handed back to the usual gesture bindings.
+diff --git a/sway/desktop/overview.c b/sway/desktop/overview.c
+index 21b9268..3ff860e 100644
+--- a/sway/desktop/overview.c
++++ b/sway/desktop/overview.c
+@@ -9,11 +9,14 @@
+ #include "sway/config.h"
+ #include "sway/desktop/overview.h"
+ #include "sway/input/seat.h"
++#include "sway/input/cursor.h"
++#include "sway/desktop/transaction.h"
+ #include "sway/output.h"
+ #include "sway/tree/arrange.h"
+ #include "sway/tree/root.h"
+ #include "sway/tree/workspace.h"
+ #include "list.h"
++#include "stringop.h"
+ #include "log.h"
+ 
+ // b1air: every workspace of one output side by side, live and scaled down,
+@@ -29,6 +32,8 @@
+ // the overview. The special workspace is not shown either.
+ 
+ #define OVERVIEW_GAP 24
++// How far a press goes before it is a drag rather than a click.
++#define OVERVIEW_DRAG_THRESHOLD 6
+ 
+ static struct {
+ 	struct sway_output *output;   // NULL when no overview
+@@ -39,6 +44,18 @@ static struct {
+ 	bool anim_ready;
+ 	int selected;                 // index in the shown workspaces
+ 	struct wlr_scene_tree *decor; // the cards behind the workspaces
++	// A press, and the window it took hold of when it was on one: let go
++	// in another workspace, the window goes there.
++	struct {
++		bool down;
++		double lx, ly;               // where it went down
++		int from;                    // the cell, or -1 beside them all
++		struct sway_container *con;  // the window under it, if any
++		double grab_x, grab_y;       // the cursor in the window, scaled
++		struct wlr_box size;         // the window, scaled
++		bool dragging;               // moved far enough to be a drag
++		struct wlr_scene_rect *ghost;
++	} press;
+ } ov;
+ 
+ static list_t *shown_workspaces(struct sway_output *output) {
+@@ -75,6 +92,59 @@ static void overview_cell(struct sway_output *output, int i, int n,
+ 	*scale = (float)s;
+ }
+ 
++// The shown workspace whose cell holds the point (layout coordinates), or
++// -1; `list` is shown_workspaces().
++static int overview_cell_at(list_t *list, double lx, double ly) {
++	struct sway_output *output = ov.output;
++	double ox = lx - output->lx, oy = ly - output->ly;
++	for (int i = 0; i < list->length; i++) {
++		struct wlr_box cell;
++		float s;
++		overview_cell(output, i, list->length, &cell, &s);
++		if (wlr_box_contains_point(&cell, ox, oy)) {
++			return i;
++		}
++	}
++	return -1;
++}
++
++struct window_at {
++	double x, y; // in the workspace's own layout, unscaled
++};
++
++static bool window_at_test(struct sway_container *con, void *data) {
++	struct window_at *at = data;
++	struct wlr_box box = {
++		con->current.x, con->current.y, con->current.width, con->current.height,
++	};
++	return con->view && wlr_box_contains_point(&box, at->x, at->y);
++}
++
++// The tiled window of cell i under the point, and where in it, scaled.
++static struct sway_container *overview_window_at(list_t *list, int i,
++		double lx, double ly, double *grab_x, double *grab_y, struct wlr_box *size) {
++	struct sway_output *output = ov.output;
++	struct sway_workspace *ws = list->items[i];
++	struct wlr_box cell;
++	float s;
++	overview_cell(output, i, list->length, &cell, &s);
++	// The cell shows the workspace from its gaps in, at scale s: back to
++	// where the point would be on the workspace drawn at full size.
++	double ox = lx - output->lx - cell.x - ws->current_gaps.left * s;
++	double oy = ly - output->ly - cell.y - ws->current_gaps.top * s;
++	struct window_at at = {
++		ws->current.x + ox / s, ws->current.y + oy / s,
++	};
++	struct sway_container *con = workspace_find_container(ws, window_at_test, &at);
++	if (con) {
++		*grab_x = (at.x - con->current.x) * s;
++		*grab_y = (at.y - con->current.y) * s;
++		size->width = (int)lround(con->current.width * s);
++		size->height = (int)lround(con->current.height * s);
++	}
++	return con;
++}
++
+ static float lerp(float a, float b, float t) {
+ 	return a + (b - a) * t;
+ }
+@@ -150,6 +220,18 @@ static void overview_place(void) {
+ 	wlr_scene_node_set_enabled(&root->layers.floating->node, ov.t <= 0.0f);
+ }
+ 
++static void overview_press_end(void) {
++	if (ov.press.ghost) {
++		wlr_scene_node_destroy(&ov.press.ghost->node);
++	}
++	memset(&ov.press, 0, sizeof(ov.press));
++	ov.press.from = -1;
++	struct sway_seat *seat = input_manager_current_seat();
++	if (seat && seat->cursor) {
++		cursor_set_image(seat->cursor, "default", NULL);
++	}
++}
++
+ static void overview_finish_hide(void) {
+ 	struct sway_output *output = ov.output;
+ 	if (!output) {
+@@ -165,6 +247,7 @@ static void overview_finish_hide(void) {
+ 		ov.decor = NULL;
+ 	}
+ 	wlr_scene_node_set_enabled(&root->layers.floating->node, true);
++	overview_press_end();
+ 	ov.output = NULL;
+ 	ov.closing = false;
+ 	ov.t = 0.0f;
+@@ -278,31 +361,134 @@ static void overview_go(struct sway_workspace *ws) {
+ 	overview_hide();
+ }
+ 
++// Sends the window to the workspace, as `move container to workspace`.
++static void overview_move_window(struct sway_container *con,
++		struct sway_workspace *ws) {
++	struct sway_seat *seat = input_manager_current_seat();
++	// The name quoted as one argument; a quote in it escaped.
++	size_t len = strlen(ws->name);
++	char *name = calloc(2 * len + 1, 1);
++	if (!name) {
++		return;
++	}
++	for (size_t i = 0, j = 0; i < len; i++) {
++		if (ws->name[i] == '"' || ws->name[i] == '\\') {
++			name[j++] = '\\';
++		}
++		name[j++] = ws->name[i];
++	}
++	char *command = format_str("move container to workspace \"%s\"", name);
++	free(name);
++	if (!command) {
++		return;
++	}
++	list_t *results = execute_command(command, seat, con);
++	free(command);
++	for (int i = 0; i < results->length; i++) {
++		free_cmd_results(results->items[i]);
++	}
++	list_free(results);
++	transaction_commit_dirty();
++}
++
+ bool overview_handle_button(double lx, double ly, bool pressed) {
+ 	if (!ov.output || ov.closing) {
+ 		return false;
+ 	}
+-	if (!pressed) {
++	list_t *list = shown_workspaces(ov.output);
++	int at = overview_cell_at(list, lx, ly);
++
++	if (pressed) {
++		overview_press_end();
++		ov.press.down = true;
++		ov.press.lx = lx;
++		ov.press.ly = ly;
++		ov.press.from = at;
++		if (at >= 0) {
++			ov.press.con = overview_window_at(list, at, lx, ly,
++				&ov.press.grab_x, &ov.press.grab_y, &ov.press.size);
++		}
++		list_free(list);
+ 		return true;
+ 	}
+-	struct sway_output *output = ov.output;
+-	double ox = lx - output->lx, oy = ly - output->ly;
+-	list_t *list = shown_workspaces(output);
+-	struct sway_workspace *picked = NULL;
+-	for (int i = 0; i < list->length; i++) {
+-		struct wlr_box cell;
+-		float s;
+-		overview_cell(output, i, list->length, &cell, &s);
+-		if (wlr_box_contains_point(&cell, ox, oy)) {
+-			picked = list->items[i];
+-		}
++	if (!ov.press.down) {
++		list_free(list);
++		return true;
+ 	}
++
++	// Let go: a window taken to another workspace goes there and the
++	// overview stays, to see it land; a click goes to the workspace it was
++	// on, and beside them all leaves.
++	bool moved = hypot(lx - ov.press.lx, ly - ov.press.ly) > OVERVIEW_DRAG_THRESHOLD;
++	struct sway_container *con = ov.press.con;
++	int from = ov.press.from;
++	overview_press_end();
++	if (con && moved && at >= 0 && at != from) {
++		struct sway_workspace *ws = list->items[at];
++		list_free(list);
++		ov.selected = at;
++		overview_move_window(con, ws);
++		overview_place();
++		return true;
++	}
++	struct sway_workspace *picked = !moved || at == from ?
++		(from >= 0 ? list->items[from] : NULL) : NULL;
+ 	list_free(list);
+-	// A click beside every workspace just leaves.
++	if (moved && at != from) {
++		// Dragged from one place to another with nothing in hand.
++		return true;
++	}
+ 	overview_go(picked);
+ 	return true;
+ }
+ 
++bool overview_handle_motion(double lx, double ly) {
++	if (!ov.output || ov.closing) {
++		return false;
++	}
++	if (!ov.press.down || !ov.press.con) {
++		return true;
++	}
++	if (!ov.press.dragging) {
++		if (hypot(lx - ov.press.lx, ly - ov.press.ly) <= OVERVIEW_DRAG_THRESHOLD) {
++			return true;
++		}
++		ov.press.dragging = true;
++		// The window in hand, as a pane of the indicator colour its size
++		// in the overview, over everything.
++		const float *c = config->border_colors.focused.indicator;
++		float color[4] = { c[0] * .5f, c[1] * .5f, c[2] * .5f, .5f };
++		struct sway_seat *seat = input_manager_current_seat();
++		ov.press.ghost = wlr_scene_rect_create(seat->scene_tree,
++			ov.press.size.width, ov.press.size.height, color);
++		if (ov.press.ghost) {
++			int r = MIN(config->corner_radius,
++				MIN(ov.press.size.width / 2, ov.press.size.height / 2));
++			wlr_scene_rect_set_corner_radii(ov.press.ghost, corner_radii_all(r));
++		}
++		cursor_set_image(seat->cursor, "grabbing", NULL);
++	}
++	if (ov.press.ghost) {
++		wlr_scene_node_set_position(&ov.press.ghost->node,
++			(int)lround(lx - ov.press.grab_x), (int)lround(ly - ov.press.grab_y));
++	}
++	// The workspace it would go to is the one picked.
++	list_t *list = shown_workspaces(ov.output);
++	int at = overview_cell_at(list, lx, ly);
++	list_free(list);
++	if (at >= 0 && at != ov.selected) {
++		ov.selected = at;
++		overview_place();
++	}
++	return true;
++}
++
++void overview_container_gone(struct sway_container *con) {
++	if (ov.press.con == con) {
++		overview_press_end();
++	}
++}
++
+ bool overview_handle_key(xkb_keysym_t sym) {
+ 	if (!ov.output || ov.closing) {
+ 		return false;
+diff --git a/sway/input/seatop_default.c b/sway/input/seatop_default.c
+index 85f88ac..b5b408e 100644
+--- a/sway/input/seatop_default.c
++++ b/sway/input/seatop_default.c
+@@ -611,6 +611,11 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
+ 	struct seatop_default_event *e = seat->seatop_data;
+ 	struct sway_cursor *cursor = seat->cursor;
+ 
++	// b1air: in the overview a window held is dragged to a workspace.
++	if (overview_handle_motion(cursor->cursor->x, cursor->cursor->y)) {
++		return;
++	}
++
+ 	struct wlr_surface *surface = NULL;
+ 	double sx, sy;
+ 	struct sway_node *node = node_at_coords(seat,
+diff --git a/sway/tree/container.c b/sway/tree/container.c
+index 9c4f329..7b6b1fb 100644
+--- a/sway/tree/container.c
++++ b/sway/tree/container.c
+@@ -16,6 +16,7 @@
+ #include "sway/sway_text_node.h"
+ #include "sway/output.h"
+ #include "sway/server.h"
++#include "sway/desktop/overview.h"
+ #include "sway/tree/arrange.h"
+ #include "sway/tree/view.h"
+ #include "sway/tree/workspace.h"
+@@ -596,6 +597,7 @@ void container_begin_destroy(struct sway_container *con) {
+ 	if (con->view) {
+ 		ipc_event_window(con, "close");
+ 	}
++	overview_container_gone(con); // b1air: not held in the overview any more
+ 	// The workspace must have the fullscreen pointer cleared so that the
+ 	// seat code can find an appropriate new focus.
+ 	if (con->pending.fullscreen_mode == FULLSCREEN_WORKSPACE && con->pending.workspace) {
+-- 
+2.43.0
+

@@ -166,9 +166,10 @@ cmd window_animation popin 150 && fail "popin takes 150%" || ok "popin refuses 1
 cmd window_animation wobble && fail "window_animation takes wobble" || ok "window_animation refuses wobble"
 
 # ── 0007 overview ───────────────────────────────────────────────────────────
-# Workspaces 1, 2 and 3 have windows. Clicks and keys need a seat with
-# devices, which this headless run has none of (tools/test-session.sh has
-# them), so only the commands and what they leave behind are checked.
+# Workspaces 1, 2 and 3 have windows. Keys need a seat with devices, which
+# this headless run has none of (tools/test-session.sh has them), so here
+# the commands and what they leave behind are checked; clicks, from the
+# seat's cursor, under 0011.
 msg workspace 2 >/dev/null; sleep 0.3
 cmd overview show && ok "overview show" || fail "overview show"
 sleep 0.4
@@ -197,6 +198,200 @@ cmd debug_overview_swipe update 0 40 && fail "a sideways swipe is taken" || ok "
 cmd debug_overview_swipe end >/dev/null
 cmd debug_overview_swipe begin 3 && fail "3 fingers taken" || ok "overview swipe: other fingers not taken"
 cmd overview_swipe off >/dev/null
+
+# ── 0011 overview: windows dragged to another workspace ──────────────────────
+# Pressed on a window in one workspace's cell and let go in another's, it
+# goes there; pressed and let go in one place goes to that workspace. The
+# seat's cursor is pressed and let go over IPC; where the cells are is
+# worked out as the overview does (overview_cell, 1280x800, no bar).
+cell_centre() { swaymsg -t get_workspaces -r | python3 -c '
+import json, math, sys
+names = [w["name"] for w in json.load(sys.stdin) if w["output"] == "HEADLESS-1" and w["name"] != "special"]
+n = len(names); i = names.index(sys.argv[1])
+W, H, GAP = 1280, 800, 24
+cols = n if n <= 3 else math.ceil(math.sqrt(n)); rows = (n + cols - 1) // cols
+m = 0.06 * min(W, H)
+s = min((W - 2*m - (cols-1)*GAP) / cols / W, (H - 2*m - (rows-1)*GAP) / rows / H)
+w, h = W*s, H*s
+row, col = i // cols, i % cols
+in_row = n - row*cols if row == rows - 1 else cols
+x = (W - (in_row*w + (in_row-1)*GAP)) / 2 + col*(w + GAP)
+y = (H - (rows*h + (rows-1)*GAP)) / 2 + row*(h + GAP)
+print(round(x + w/2), round(y + h/2))' "$1"; }
+cmd workspace dragb >/dev/null; open_window
+cmd workspace draga >/dev/null; open_window
+cmd overview show >/dev/null; sleep 0.4
+read -r ax ay <<<"$(cell_centre draga)"; read -r bx by <<<"$(cell_centre dragb)"
+cmd seat - cursor set "$ax" "$ay" >/dev/null; cmd seat - cursor press button1 >/dev/null
+cmd seat - cursor set "$bx" "$by" >/dev/null; cmd seat - cursor release button1 >/dev/null
+sleep 0.3
+[[ "$(ws_repr dragb)" == "H[foot foot]" ]] && ok "overview: a window dragged to another workspace goes there" \
+    || fail "overview drag" "dragb: $(ws_repr dragb)"
+alive && [[ "$(focused_ws)" == draga ]] && ok "overview: still up, still on the workspace it was" \
+    || fail "overview after the drag" "$(focused_ws)"
+cmd seat - cursor press button1 >/dev/null; cmd seat - cursor release button1 >/dev/null
+sleep 0.4
+[[ "$(focused_ws)" == dragb ]] && ok "overview: a click goes to the workspace" || fail "overview click" "$(focused_ws)"
+cmd '[workspace=dragb] kill' >/dev/null; sleep 0.3
+
+# ── 0009 layer_effects blur_ignore_alpha ─────────────────────────────────────
+# A layer that draws its own soft shadow keeps the blur to what is at least
+# this opaque. The value reaches the surface: a layer-shell client (fuzzel,
+# on the top layer) shows it in get_outputs; without fuzzel only the parsing
+# is checked.
+# One argument, quoted: over IPC a bare ';' would end the command.
+cmd layer_effects launcher '"blur enable; blur_ignore_alpha 0.4"' && ok "blur_ignore_alpha 0.4" || fail "blur_ignore_alpha 0.4"
+cmd layer_effects launcher '"blur_ignore_alpha 2"' && fail "blur_ignore_alpha takes 2" || ok "blur_ignore_alpha refuses 2"
+cmd layer_effects launcher '"blur_ignore_alpha half"' && fail "blur_ignore_alpha takes half" || ok "blur_ignore_alpha refuses half"
+# A list that does not parse is refused and leaves the rule that was there.
+cmd layer_effects launcher '"blur enable; corner_radius 7"' >/dev/null
+cmd layer_effects launcher '"nonsense"' && fail "layer_effects took nonsense" || ok "layer_effects refuses what does not parse"
+if command -v fuzzel >/dev/null; then
+    cmd layer_effects launcher '"blur enable; blur_ignore_alpha 0.4"' >/dev/null
+    msg exec "sh -c 'printf \"a\\nb\\n\" | fuzzel --dmenu'" >/dev/null
+    layer_alpha() { swaymsg -t get_outputs -r | python3 -c '
+import json,sys
+for o in json.load(sys.stdin):
+    for l in o.get("layer_shell_surfaces", []):
+        if l.get("namespace") == "launcher":
+            e = l.get("effects", {}); print(e.get("blur_ignore_transparent"), e.get("blur_ignore_alpha")); sys.exit()
+print("none")'; }
+    r=none
+    for _ in $(seq 1 50); do r="$(layer_alpha)"; [[ "$r" != none ]] && break; sleep 0.1; done
+    [[ "$r" == "True 0.4"* ]] && ok "blur_ignore_alpha on the surface" || fail "blur_ignore_alpha on the surface" "$r"
+    pkill -x fuzzel 2>/dev/null; sleep 0.2
+else
+    echo "skip blur_ignore_alpha on a surface: no fuzzel"
+fi
+
+# ── 0010 floating_snap, snap ─────────────────────────────────────────────────
+cmd floating_snap 12 && ok "floating_snap 12" || fail "floating_snap 12"
+cmd floating_snap -1 && fail "floating_snap took -1" || ok "floating_snap refuses -1"
+cmd floating_snap far && fail "floating_snap took far" || ok "floating_snap refuses far"
+cmd floating_snap off && ok "floating_snap off" || fail "floating_snap off"
+# The focused window's rect and zone: "x y w h zone".
+snapped() { swaymsg -t get_tree -r | python3 -c '
+import json,sys
+def walk(n):
+    if n.get("focused"): return n
+    for k in n.get("nodes",[]) + n.get("floating_nodes",[]):
+        r = walk(k)
+        if r: return r
+n = walk(json.load(sys.stdin)) or {}
+r = n.get("rect", {})
+print(r.get("x"), r.get("y"), r.get("width"), r.get("height"), n.get("snapped"))'; }
+# wait_snapped <expected>: the rect follows once the window has taken it.
+wait_snapped() { local r; for _ in $(seq 1 50); do r="$(snapped)"; [[ "$r" == "$1" ]] && break; sleep 0.1; done; echo "$r"; }
+cmd workspace snaptest >/dev/null
+open_window
+cmd snap left && fail "snap took a tiled window" || ok "snap refuses a tiled window"
+cmd floating enable >/dev/null; cmd resize set 400 300 >/dev/null; cmd move position 100 100 >/dev/null
+cmd snap sideways && fail "snap took sideways" || ok "snap refuses sideways"
+cmd snap left >/dev/null
+r="$(wait_snapped "0 0 640 800 left")"
+[[ "$r" == "0 0 640 800 left" ]] && ok "snap left: the left half" || fail "snap left" "$r"
+cmd snap top-right >/dev/null
+r="$(wait_snapped "640 0 640 400 top-right")"
+[[ "$r" == "640 0 640 400 top-right" ]] && ok "snap top-right: a quarter" || fail "snap top-right" "$r"
+cmd snap restore >/dev/null
+r="$(wait_snapped "760 50 400 300 none")"
+[[ "$r" == "760 50 400 300 none" ]] && ok "snap restore: its size back, centred" || fail "snap restore" "$r"
+cmd gaps inner current set 10 >/dev/null
+cmd snap right >/dev/null
+r="$(wait_snapped "645 10 625 780 right")"
+[[ "$r" == "645 10 625 780 right" ]] && ok "snap right keeps the gaps" || fail "snap right with gaps" "$r"
+cmd gaps inner current set 0 >/dev/null
+cmd snap maximize >/dev/null
+r="$(wait_snapped "0 0 1280 800 maximize")"
+[[ "$r" == "0 0 1280 800 maximize" ]] && ok "snap maximize" || fail "snap maximize" "$r"
+# A drag to an edge snaps to the same boxes, but cannot be tested here: the
+# seat's `cursor set` moves the cursor without the motion a drag follows.
+cmd floating disable >/dev/null
+[[ "$(snapped)" == *" none" ]] && ok "tiled again, no longer snapped" || fail "snapped after floating disable" "$(snapped)"
+cmd kill >/dev/null; sleep 0.2
+
+# ── 0012 minimize_target: into the dock and out ─────────────────────────────
+# Sent to the scratchpad a window shrinks into its target; shown, it grows out
+# of it. Nothing of that is seen here (no GPU, and IPC reports where it is
+# going), so: the target is kept and reported, the window is hidden and
+# shown where it was, and nothing breaks while the copies are in flight.
+cmd animation_duration_ms 200 >/dev/null; cmd window_animation popin 80 >/dev/null
+cmd workspace mintest >/dev/null; open_window
+cmd minimize_target 600 740 48 48 && ok "minimize_target 600 740 48 48" || fail "minimize_target"
+target() { swaymsg -t get_tree -r | python3 -c '
+import json,sys
+def walk(n):
+    if n.get("focused") or n.get("app_id") == "foot" and n.get("minimize_target"): return n
+    for k in n.get("nodes",[]) + n.get("floating_nodes",[]):
+        r = walk(k)
+        if r: return r
+t = (walk(json.load(sys.stdin)) or {}).get("minimize_target")
+print(" ".join(str(t[k]) for k in ("x","y","width","height")) if t else "none")'; }
+[[ "$(target)" == "600 740 48 48" ]] && ok "minimize_target reported" || fail "minimize_target reported" "$(target)"
+cmd minimize_target 1 2 3 && fail "minimize_target took three numbers" || ok "minimize_target refuses three numbers"
+cmd minimize_target a b c d && fail "minimize_target took letters" || ok "minimize_target refuses letters"
+cmd minimize_target 0 0 0 0 && fail "minimize_target took no size" || ok "minimize_target refuses no size"
+cmd move scratchpad >/dev/null; sleep 0.4
+[[ "$(ws_repr mintest)" == "" || "$(ws_repr mintest)" == "H[]" ]] && alive && ok "minimized: gone from the workspace" || fail "minimized" "$(ws_repr mintest)"
+cmd scratchpad show >/dev/null; sleep 0.4
+alive && [[ "$(views)" -ge 1 ]] && [[ "$(target)" == "600 740 48 48" ]] && ok "shown again, its target kept" \
+    || fail "shown from the scratchpad" "$(target)"
+# Hidden and shown again at once, and closed while the copy is in flight.
+cmd scratchpad show >/dev/null; cmd scratchpad show >/dev/null; cmd scratchpad show >/dev/null
+cmd minimize_target none >/dev/null; cmd scratchpad show >/dev/null
+cmd '[app_id=foot workspace=mintest] kill' >/dev/null; cmd '[app_id=foot] kill' >/dev/null
+sleep 0.5
+alive && ok "minimize: toggled at once and closed in flight, still running" || fail "swayfx died minimizing"
+cmd animation_duration_ms 0 >/dev/null
+
+# ── 0013 zoom (scenefx 0004 wlr_scene_set_zoom) ─────────────────────────────
+zoom_now() { swaymsg -t get_tree -r | python3 -c 'import json,sys; print(round(json.load(sys.stdin).get("zoom", -1), 3))'; }
+cmd zoom 2 && [[ "$(zoom_now)" == 2.0 ]] && ok "zoom 2" || fail "zoom 2" "$(zoom_now)"
+cmd zoom in && [[ "$(zoom_now)" == 2.5 ]] && ok "zoom in: 2.5" || fail "zoom in" "$(zoom_now)"
+cmd zoom out && [[ "$(zoom_now)" == 2.0 ]] && ok "zoom out: 2" || fail "zoom out" "$(zoom_now)"
+cmd zoom toggle && [[ "$(zoom_now)" == 1.0 ]] && ok "zoom toggle: off" || fail "zoom toggle off" "$(zoom_now)"
+cmd zoom out && [[ "$(zoom_now)" == 1.0 ]] && ok "zoom out stays at 1" || fail "zoom out at 1" "$(zoom_now)"
+cmd zoom 0.5 && fail "zoom took 0.5" || ok "zoom refuses 0.5"
+cmd zoom 11 && fail "zoom took 11" || ok "zoom refuses 11"
+cmd zoom big && fail "zoom took big" || ok "zoom refuses big"
+# Magnified, what is under the cursor is still what a click goes to: of two
+# windows side by side, a click on the right one, at 3x, focuses it.
+focused_x() { swaymsg -t get_tree -r | python3 -c '
+import json,sys
+def walk(n):
+    if n.get("focused"): return n
+    for k in n.get("nodes",[]) + n.get("floating_nodes",[]):
+        r = walk(k)
+        if r: return r
+print((walk(json.load(sys.stdin)) or {}).get("rect", {}).get("x"))'; }
+cmd workspace zoomtest >/dev/null; open_window; open_window
+cmd focus left >/dev/null
+cmd seat - cursor set 960 400 >/dev/null
+cmd zoom 3 >/dev/null
+cmd seat - cursor set 961 400 >/dev/null
+cmd seat - cursor press button1 >/dev/null; cmd seat - cursor release button1 >/dev/null
+[[ "$(focused_x)" == 640 ]] && ok "zoomed 3x, a click goes to the window under the cursor" || fail "click while zoomed" "x=$(focused_x)"
+# Two screens: only the one the cursor is on is magnified, and it moves
+# with the cursor; the screen going away while magnified is let go.
+zoom_out_name() { swaymsg -t get_tree -r | python3 -c 'import json,sys; print(json.load(sys.stdin).get("zoom_output", "none"))'; }
+[[ "$(zoom_out_name)" == HEADLESS-1 ]] && ok "zoom: the screen with the cursor" || fail "zoom output" "$(zoom_out_name)"
+cmd create_output >/dev/null; sleep 0.5
+two="$(swaymsg -t get_outputs -r | python3 -c 'import json,sys; print(next((o["name"] for o in json.load(sys.stdin) if o["name"] != "HEADLESS-1"), ""))')"
+if [[ -n "$two" ]]; then
+    cmd output "$two" resolution 1280x800 position 1280 0 >/dev/null; sleep 0.3
+    cmd seat - cursor set 1600 400 >/dev/null
+    [[ "$(zoom_out_name)" == "$two" ]] && ok "zoom follows the cursor to the other screen" || fail "zoom on the second screen" "$(zoom_out_name)"
+    cmd seat - cursor set 300 400 >/dev/null
+    [[ "$(zoom_out_name)" == HEADLESS-1 ]] && ok "and back" || fail "zoom back to the first screen" "$(zoom_out_name)"
+    cmd seat - cursor set 1600 400 >/dev/null
+    cmd output "$two" unplug >/dev/null; sleep 0.5
+    alive && [[ "$(zoom_out_name)" != "$two" ]] && ok "zoom: its screen unplugged, let go" || fail "zoom after unplug" "$(zoom_out_name)"
+    cmd seat - cursor set 300 400 >/dev/null
+else
+    fail "create_output" "no second screen"
+fi
+cmd zoom reset && [[ "$(zoom_now)" == 1.0 ]] && [[ "$(zoom_out_name)" == none ]] && alive && ok "zoom reset" || fail "zoom reset" "$(zoom_now) $(zoom_out_name)"
+cmd '[workspace=zoomtest] kill' >/dev/null; sleep 0.3
 
 # ── Every command sway has is still found ────────────────────────────────────
 # sway looks commands up by binary search; one patch adding its command out of

@@ -297,6 +297,11 @@ QtObject {
     // card, and text over a busy picture turned to mush. The shell sets it;
     // the standalone apps leave it true, where these sit on their own window.
     property bool translucent: true
+    // Popup panels cast a soft shadow (PanelShadow). Main.qml sets it where
+    // the compositor keeps the blur off a shadow (swayfx 0009's
+    // blur_ignore_alpha): elsewhere the blur would show through it as a
+    // blurred halo round every panel.
+    property bool panelShadows: false
 
     // How much of the wallpaper a glass panel lets through. 0.88 was glass in
     // name only: with the blur off on the shell's layers it read as a flat

@@ -230,9 +230,16 @@ ColumnLayout {
 
         SwitchRow {
             label: I18n.tr("Mod+O shows the overview")
-            note: I18n.tr("Click a workspace, or pick one with arrows and Enter; Escape leaves. 4 fingers swipe on touchpad brings it in")
+            note: I18n.tr("Click a workspace, or pick one with arrows and Enter; drag a window onto another to move it; Escape leaves. 4 fingers swipe on touchpad brings it in")
             checked: Settings.workspaceOverview
             onToggled: Settings.set("workspaceOverview", !Settings.workspaceOverview)
+        }
+
+        SwitchRow {
+            label: I18n.tr("Snap floating windows to the screen's edges")
+            note: I18n.tr("Drag a window to the left or right edge for half the screen, near a corner for a quarter, to the top for all of it")
+            checked: Settings.windowSnap
+            onToggled: Settings.set("windowSnap", !Settings.windowSnap)
         }
     }
 
