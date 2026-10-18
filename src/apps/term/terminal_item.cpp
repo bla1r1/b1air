@@ -1,4 +1,5 @@
 #include "terminal_item.hpp"
+#include <QFileInfo>
 
 #include <QPainter>
 #include <QKeyEvent>
@@ -195,6 +196,21 @@ void TerminalItem::setFontFamily(const QString &family) {
     updatePtySize();
     emit fontFamilyChanged();
     update();
+}
+
+QString TerminalItem::currentDirectory() const {
+    if (m_childPid <= 0) return {};
+    // The program in front if there is one (a shell started from this one,
+    // say), else the shell itself: /proc/<pid>/cwd is where it has cd'd to.
+    pid_t pid = m_childPid;
+    if (m_masterFd >= 0) {
+        const pid_t fg = tcgetpgrp(m_masterFd);
+        if (fg > 0) pid = fg;
+    }
+    QString dir = QFileInfo(QStringLiteral("/proc/%1/cwd").arg(pid)).symLinkTarget();
+    if (dir.isEmpty() && pid != m_childPid)
+        dir = QFileInfo(QStringLiteral("/proc/%1/cwd").arg(m_childPid)).symLinkTarget();
+    return QFileInfo(dir).isDir() ? dir : QString();
 }
 
 void TerminalItem::launch(const QString &command, const QString &workingDir) {

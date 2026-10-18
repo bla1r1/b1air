@@ -67,6 +67,8 @@ public:
     Q_INVOKABLE void resetZoom();
     Q_INVOKABLE void clear();
     Q_INVOKABLE void launch(const QString &command = QString(), const QString &workingDir = QString());
+    /** Where the shell is now (after its cd's), or "" when that cannot be read. */
+    Q_INVOKABLE QString currentDirectory() const;
     // A line drawn on the screen as if the program had printed it, for
     // after it has gone (b1air-term --hold).
     Q_INVOKABLE void showNotice(const QString &text);

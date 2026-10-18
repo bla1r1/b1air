@@ -53,6 +53,12 @@ Window {
         window.currentTabIndex = tabsModel.count - 1;
     }
 
+    // A new tab opens where the current one's shell is, as other terminals do.
+    function newTabHere() {
+        const view = window.currentTermView();
+        window.createNewTab("", view ? view.currentDirectory() : "");
+    }
+
     function closeTab(index) {
         if (index < 0 || index >= tabsModel.count)
             return;
@@ -126,7 +132,7 @@ Window {
                         onCloseRequested: window.closeTab(index)
                     }
                 }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.newTabHere() }
                 Button {
                     id: termMoreBtn
                     variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
@@ -245,7 +251,7 @@ Window {
     // Global Shortcuts
     Shortcut {
         sequences: ["Ctrl+Shift+T"]
-        onActivated: window.createNewTab("", "")
+        onActivated: window.newTabHere()
     }
     Shortcut {
         sequences: ["Ctrl+Shift+W"]
