@@ -87,6 +87,7 @@ package() {
 
     # udev rules: a package's go in /usr/lib, /etc stays the admin's.
     install -Dm644 "$r"/etc/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
+    install -Dm644 "$r"/etc/polkit-1/rules.d/*.rules -t "$pkgdir/usr/share/polkit-1/rules.d/"
     # More memory maps and ntsync, for Windows programs (install.sh: the
     # editions' own settings, gaming's, are not the package's).
     install -Dm644 "$r"/etc/sysctl.d/*.conf -t "$pkgdir/usr/lib/sysctl.d/"

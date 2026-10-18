@@ -27,7 +27,7 @@ Singleton {
         // A messenger's "reply here": the toast and the list show a field.
         inlineReplySupported: true
         // Hints outside the spec arrive only when named here.
-        extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value"]
+        extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value", "x-b1air-open"]
 
         onNotification: notif => {
             root._handleIncoming(notif);
@@ -249,6 +249,11 @@ Singleton {
             time: new Date().toLocaleTimeString(I18n.locale, "hh:mm"),
             ts: Date.now(),
             count: 1,
+            // What a click opens when the app offers no action of its own:
+            // the file it is about (a screenshot, a recording; the daemon's
+            // x-b1air-open hint), else the app that sent it.
+            open: String(hints["x-b1air-open"] || ""),
+            desktopEntry: notif.desktopEntry || "",
             obj: notif
         };
 
@@ -297,6 +302,16 @@ Singleton {
         const def = acts.find(a => a.identifier === "default");
         if (def && typeof def.invoke === "function") {
             def.invoke();
+            return true;
+        }
+        // No action of its own: the file, in the app that opens its type,
+        // or the app itself (gtk-launch raises one already running).
+        if (item && item.open) {
+            Quickshell.execDetached(["xdg-open", item.open]);
+            return true;
+        }
+        if (item && item.desktopEntry) {
+            Quickshell.execDetached(["gtk-launch", item.desktopEntry]);
             return true;
         }
         return false;
@@ -388,7 +403,8 @@ Singleton {
             arr.push({
                 id: it.id, appName: it.appName, summary: it.summary,
                 body: it.body, icon: keep(it.icon), image: keep(it.image), appIcon: keep(it.appIcon),
-                urgency: it.urgency, critical: !!it.critical, time: it.time, ts: it.ts || 0
+                urgency: it.urgency, critical: !!it.critical, time: it.time, ts: it.ts || 0,
+                open: it.open || "", desktopEntry: it.desktopEntry || ""
             });
         }
         root._pendingSave = JSON.stringify(arr);

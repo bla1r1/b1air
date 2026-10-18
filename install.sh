@@ -788,6 +788,14 @@ deploy_session_files() {
         sudo udevadm control --reload-rules 2>/dev/null || true
     fi
 
+    # polkit rules (Settings → Keyboard passes the layouts on to the login
+    # screen through systemd-localed)
+    for rule in "$REPO_DIR"/etc/polkit-1/rules.d/*.rules; do
+        [[ -f "$rule" ]] || continue
+        sudo install -D -m 644 "$rule" "/etc/polkit-1/rules.d/$(basename "$rule")"
+        ok "Installed /etc/polkit-1/rules.d/$(basename "$rule")"
+    done
+
     # 5. Kernel settings for Windows programs and games: more memory maps
     # (sysctl.d) and ntsync, loaded at boot (modules-load.d) and now.
     local conf

@@ -19,6 +19,7 @@
 #include <thread>
 #include <mutex>
 #include <cstdio>
+#include <systemd/sd-bus.h>
 
 namespace b1air {
 
@@ -313,9 +314,32 @@ static std::pair<std::string, int> layouts_for_bindings(const std::string& layou
     return {joined, active};
 }
 
+// The login screen. sddm's X server takes its keymap from
+// /etc/X11/xorg.conf.d/00-keyboard.conf, which systemd-localed writes, so
+// the layouts chosen here never reached it: it showed whatever the installer
+// had set (de,ru on one machine) and had no switch shortcut at all. localed
+// is told the same layouts in the same order (so index N is the same layout
+// on both screens) and the same options. Not interactive: the polkit rule
+// (50-b1air-keyboard.rules) lets the person at the seat do it without a
+// password; without it this fails quietly and the desktop is unaffected.
+static void apply_system_keyboard(const std::string& layout, const std::string& options) {
+    sd_bus* bus = nullptr;
+    if (sd_bus_open_system(&bus) < 0) return;
+    sd_bus_error e = SD_BUS_ERROR_NULL;
+    // layout, model, variant, options, convert to the console keymap, interactive
+    const int r = sd_bus_call_method(bus, "org.freedesktop.locale1", "/org/freedesktop/locale1",
+                                     "org.freedesktop.locale1", "SetX11Keyboard", &e, nullptr, "ssssbb",
+                                     layout.c_str(), "", "", options.c_str(), 0, 0);
+    if (r < 0)
+        std::cerr << "[Settings] Login screen keyboard not set: " << (e.message ? e.message : std::strerror(-r)) << "\n";
+    sd_bus_error_free(&e);
+    sd_bus_flush_close_unref(bus);
+}
+
 static void apply_keyboard(SwayIPC* ipc, const std::string& chosen_layout, const std::string& options) {
     static std::mutex m;
     static std::string applied_layout, applied_options;
+    static std::string system_layout, system_options;
 
     if (!valid_sway_token(chosen_layout, 128)) return;
     const auto [layout, active_layout] = layouts_for_bindings(chosen_layout);
@@ -324,6 +348,13 @@ static void apply_keyboard(SwayIPC* ipc, const std::string& chosen_layout, const
     if (!options.empty() && !valid_sway_token(options, 256)) return;
 
     std::lock_guard<std::mutex> lock(m);
+    // Once per change, whether it took or not: this runs on every write to
+    // settings.json, and a refusal would otherwise be asked again on each.
+    if (layout != system_layout || options != system_options) {
+        apply_system_keyboard(layout, options);
+        system_layout = layout;
+        system_options = options;
+    }
     if (layout == applied_layout && options == applied_options) return;
 
     const char* home = std::getenv("HOME");

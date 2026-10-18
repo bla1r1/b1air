@@ -5060,7 +5060,8 @@ bool SystemControl::capture(const std::string& mode, const std::string& geom, bo
     }
 
     play_feedback_sound("soundScreenshotFeedback", "camera-shutter");
-    notify_user("Screenshot", "Screenshot Saved", filepath, filepath);
+    // x-b1air-open: a click on the banner opens the file (Services/Notifications).
+    notify_user("Screenshot", "Screenshot Saved", filepath, filepath, "string:x-b1air-open:" + filepath);
     return true;
 }
 
@@ -5106,7 +5107,7 @@ bool SystemControl::record_stop() {
         unlink((cache_dir + "/processing.lock").c_str());
 
         if (!final_file.empty()) {
-            notify_user("Screen Recorder", "⏺ Recording Saved", final_file, final_file);
+            notify_user("Screen Recorder", "⏺ Recording Saved", final_file, final_file, "string:x-b1air-open:" + final_file);
         }
         return true;
     }
@@ -6173,7 +6174,8 @@ bool SystemControl::record_gif(const std::string& geom) {
     // Copy to clipboard
     const std::string gif_data = read_file_string(gif_path);
     if (!gif_data.empty()) (void)run_argv_with_raw_stdin({"b1air-clip", "copy", "-t", "image/gif"}, gif_data);
-    notify_user("Screen-to-GIF", "GIF Saved & Copied", "Copied animated GIF to clipboard", gif_path);
+    notify_user("Screen-to-GIF", "GIF Saved & Copied", "Copied animated GIF to clipboard", gif_path,
+                "string:x-b1air-open:" + gif_path);
     return true;
 }
 
