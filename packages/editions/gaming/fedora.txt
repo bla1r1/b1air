@@ -1,0 +1,3 @@
+# The gaming edition on Fedora: what it adds to default. Steam is in RPM
+# Fusion's nonfree; without it, Steam comes from Flathub (flatpak.txt).
+?steam gamemode mangohud ?gamescope

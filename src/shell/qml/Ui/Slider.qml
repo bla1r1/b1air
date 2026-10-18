@@ -34,7 +34,7 @@ Item {
     property int settleDelay: 600       // poller round-trip allowance
     property int cornerRadius: Design.radius.ctl
 
-    implicitHeight: Design.s(Design.size.ctl)
+    implicitHeight: Design.s(Design.size.md)
 
     // ── Internals ────────────────────────────────────────────────────────────
     property int _local: 0
@@ -152,6 +152,10 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        // A slider sits in scrolling panels (Control Center, Settings): a
+        // drag that wandered up or down was taken by the Flickable for a
+        // scroll. The slider keeps it once pressed.
+        preventStealing: true
 
         property bool _startedOnIcon: false
 
@@ -171,6 +175,12 @@ Item {
         }
 
         onPositionChanged: mouse => {
+            // hoverEnabled delivers moves with no button down too. A drag
+            // that ended without a release (taken away, below) left
+            // _dragging set, and from then on merely moving the pointer
+            // over the slider changed the volume.
+            if (!pressed)
+                return;
             if (_startedOnIcon && Math.abs(mouse.x - height / 2) > 10) {
                 _startedOnIcon = false;
                 settle.stop();
@@ -182,12 +192,14 @@ Item {
             }
         }
 
-        onReleased: {
-            if (_startedOnIcon) {
-                root.iconClicked();
-                _startedOnIcon = false;
-                return;
-            }
+        // Grabbed away mid-drag (a popup closing, the window losing the
+        // pointer): the drag ends where it was, as on a release.
+        onCanceled: {
+            _startedOnIcon = false;
+            finishDrag();
+        }
+
+        function finishDrag() {
             root._dragging = false;
             throttle.stop();
             if (throttle.pending >= 0) {
@@ -196,6 +208,31 @@ Item {
             }
             settle.restart();
         }
-    }
-}
 
+        onReleased: {
+            if (_startedOnIcon) {
+                root.iconClicked();
+                _startedOnIcon = false;
+                return;
+            }
+            finishDrag();
+        }
+    }
+
+    // The arrows move it in steps of five, as a drag would, with the same
+    // settle so the poller's next reading does not snap it back.
+    activeFocusOnTab: root.enabled
+    Accessible.role: Accessible.Slider
+    Accessible.name: root.label
+    function _keyStep(d) {
+        const v = Math.max(root.minimum, Math.min(root.maximum, root.shown + d));
+        root._local = v;
+        root.moved(v);
+        settle.restart();
+    }
+    Keys.onLeftPressed: event => { root._keyStep(-5); event.accepted = true; }
+    Keys.onDownPressed: event => { root._keyStep(-5); event.accepted = true; }
+    Keys.onRightPressed: event => { root._keyStep(5); event.accepted = true; }
+    Keys.onUpPressed: event => { root._keyStep(5); event.accepted = true; }
+    FocusRing { target: root }
+}

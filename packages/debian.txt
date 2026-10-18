@@ -17,6 +17,7 @@ qt6-base-dev qt6-base-dev-tools qt6-declarative-dev qt6-wayland-dev qt6-multimed
 qt6-svg-dev liblayershellqtinterface-dev ?qmake6
 # b1air-bg talks Wayland itself: the client library, the scanner, the protocols
 libwayland-dev libwayland-bin wayland-protocols libcairo2-dev libxkbcommon-dev libpam0g-dev
+libsqlite3-dev nlohmann-json3-dev libvterm-dev libjpeg-dev libpng-dev
 
 # Qt 6 runtime: platform plugins and the QML modules the shell and greeter import
 qt6-wayland libqt6svg6 ?qt6-svg-plugins layer-shell-qt

@@ -33,167 +33,85 @@ ColumnLayout {
     readonly property var available: allDevices.filter(d => !d.paired)
 
     // ── 1. Bluetooth Adapter Card ────────────────────────────────────────────
-    Card {
-        title: I18n.tr("Bluetooth")
-        subtitle: Network.bluetooth.power === "on"
-            ? (Network.bluetooth.connected ? I18n.tr("Connected to %1", Network.bluetooth.connected.name) : I18n.tr("Bluetooth is on, ready to connect"))
-            : I18n.tr("Bluetooth adapter is disabled")
+    SettingsGroup {
         icon: "\u{f00af}"
-        accentColor: Design.mauve
 
-        // Master Switch
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            Toggle {
-                label: I18n.tr("Bluetooth")
-                subtitle: I18n.tr("Turn the adapter on to find, pair and connect devices")
-                checked: Network.bluetooth.power === "on"
-                onToggled: Network.toggleBluetooth()
-            }
+        // Master Switch; its state is its note (see Network's Wi-Fi).
+        SwitchRow {
+            title: I18n.tr("Bluetooth")
+            note: Network.bluetooth.power === "on"
+                ? (Network.bluetooth.connected ? I18n.tr("Connected to %1", Network.bluetooth.connected.name) : I18n.tr("Bluetooth is on, ready to connect"))
+                : I18n.tr("Bluetooth adapter is disabled")
+            checked: Network.bluetooth.power === "on"
+            onToggled: Network.toggleBluetooth()
         }
 
-        // Adapter Info & Discoverability
-        Rectangle {
+        // The adapter, and the scan that finds new devices.
+        SettingsRow {
             visible: Network.bluetooth.power === "on"
-            Layout.fillWidth: true
-
-            // Its contents are anchored, and anchored children give a parent no
-            // implicit height, so this box measured zero and the "Paired
-            // devices" card below it was drawn straight over the adapter name
-            // and the Scan button. The height has to be stated.
-            Layout.preferredHeight: adapterBody.implicitHeight + Design.s(Design.space.md) * 2
-
-            radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
-            border.color: Design.tint(Design.mauve, 0.3)
-            border.width: 1
-
-            ColumnLayout {
-                id: adapterBody
-                anchors.fill: parent
-                anchors.margins: Design.s(Design.space.md)
-                spacing: Design.s(Design.space.sm)
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.sm)
-
-                    Icon {
-                        text: "\u{f00af}"
-                        role: "body"
-                        color: Design.mauve
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        // fillWidth on the label, not only on the column
-                        // around it — that is what actually pushes the Scan
-                        // button to the end of the row, and it is what the
-                        // network list two files over already does.
-                        Label {
-                            text: Network.adapter ? (Network.adapter.name || I18n.tr("Bluetooth Controller")) : I18n.tr("Bluetooth Controller")
-                            weight: Design.weight.semibold
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-
-                        Label {
-                            // `Network.adapter` can exist without an address,
-                            // and the concatenation printed the literal text
-                            // "Address: undefined" on screen.
-                            text: (Network.adapter && Network.adapter.address)
-                                ? "Address: " + Network.adapter.address : ""
-                            visible: text !== ""
-                            role: "caption"
-                            dim: true
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    Pill {
-                        label: Network.scanning ? I18n.tr("Scanning...") : I18n.tr("Scan for devices")
-                        icon: Network.scanning ? "\u{f0110}" : "\u{f002f}"
-                        active: Network.scanning
-                        onClicked: {
-                            if (Network.scanning) Network.stopScan();
-                            else Network.startScan();
-                        }
-                    }
+            label: (Network.adapter && Network.adapter.name) || I18n.tr("Bluetooth Controller")
+            // `Network.adapter` can exist without an address; the
+            // concatenation once printed "Address: undefined".
+            note: (Network.adapter && Network.adapter.address) ? Network.adapter.address : ""
+            Button {
+                checked: Network.scanning
+                icon: Network.scanning ? "\u{f0110}" : "\u{f002f}"
+                text: Network.scanning ? I18n.tr("Scanning...") : I18n.tr("Scan for devices")
+                onClicked: {
+                    if (Network.scanning) Network.stopScan();
+                    else Network.startScan();
                 }
             }
         }
     }
 
+    // A device's state in words: connected or only paired, its battery, and
+    // its address when it has one (a missing one printed "undefined").
+    function _deviceNote(d, withState) {
+        const parts = [];
+        if (withState) parts.push(d.connected ? I18n.tr("Connected") : I18n.tr("Paired"));
+        if (d.battery >= 0) parts.push(I18n.tr("battery %1%", d.battery));
+        if (d.mac && d.name) parts.push(d.mac);
+        return parts.join(" • ");
+    }
+
     // ── 2. Paired Devices Card ───────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: Network.bluetooth.power === "on"
         title: I18n.tr("Paired devices")
-        subtitle: I18n.tr("Devices trusted by this machine")
         icon: "\u{f00af}"
-        accentColor: Design.mauve
 
         Repeater {
             model: section.paired
 
-            RowLayout {
+            // Connect is a command among several devices, not the page's
+            // one primary action: secondary, as Disconnect is.
+            SettingsRow {
+                id: pairedRow
                 required property var modelData
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
+                icon: pairedRow.modelData.icon || "\u{f00af}"
+                label: pairedRow.modelData.name || pairedRow.modelData.mac || ""
+                note: section._deviceNote(pairedRow.modelData, true)
 
-                Icon {
-                    text: modelData.icon || "\u{f00af}"
-                    role: "body"
-                    color: modelData.connected ? Design.mauve : Design.textFaint
+                Button {
+                    text: pairedRow.modelData.connected ? I18n.tr("Disconnect") : I18n.tr("Connect")
+                    onClicked: pairedRow.modelData.connected ? Network.disconnectDevice(pairedRow.modelData.mac)
+                                                   : Network.connectDevice(pairedRow.modelData.mac)
                 }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Label {
-                        text: modelData.name || modelData.mac
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        text: (modelData.connected ? I18n.tr("Connected") : I18n.tr("Paired"))
-                            + (modelData.battery >= 0 ? " • " + I18n.tr("battery %1%", modelData.battery) : "")
-                            + " • " + modelData.mac
-                        role: "caption"
-                        dim: true
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-                }
-
-                Pill {
-                    visible: !modelData.connected
-                    label: I18n.tr("Connect")
-                    onClicked: Network.connectDevice(modelData.mac)
-                }
-
-                Pill {
-                    visible: modelData.connected
-                    label: I18n.tr("Disconnect")
-                    onClicked: Network.disconnectDevice(modelData.mac)
-                }
-
-                Pill {
-                    label: I18n.tr("Forget")
-                    icon: "\u{f01b4}"
-                    onClicked: Network.forgetDevice(modelData.mac)
+                Button {
+                    variant: "ghost"
+                    iconOnly: true
+                    icon: "\u{f0a7a}"
+                    text: I18n.tr("Forget")
+                    tip: I18n.tr("Forget")
+                    onClicked: Network.forgetDevice(pairedRow.modelData.mac)
                 }
             }
         }
 
         EmptyState {
             Layout.fillWidth: true
+            Layout.bottomMargin: Design.s(Design.space.sm)
             visible: section.paired.length === 0
             icon: "\u{f00b0}"
             title: I18n.tr("Nothing paired")
@@ -202,55 +120,31 @@ ColumnLayout {
     }
 
     // ── 3. Available Devices Card ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: Network.bluetooth.power === "on" && (Network.scanning || section.available.length > 0)
         title: I18n.tr("Available devices")
-        subtitle: I18n.tr("Discovered Bluetooth accessories in range")
         icon: "\u{f002f}"
-        accentColor: Design.sapphire
 
         Repeater {
             model: section.available
 
-            RowLayout {
+            SettingsRow {
+                id: foundRow
                 required property var modelData
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.sm)
+                icon: foundRow.modelData.icon || "\u{f00af}"
+                label: foundRow.modelData.name || foundRow.modelData.mac || ""
+                note: section._deviceNote(foundRow.modelData, false)
 
-                Icon {
-                    text: modelData.icon || "\u{f00af}"
-                    role: "body"
-                    color: Design.sapphire
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Label {
-                        text: modelData.name || modelData.mac
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        text: modelData.mac
-                        role: "caption"
-                        dim: true
-                        Layout.fillWidth: true
-                    }
-                }
-
-                Pill {
-                    label: I18n.tr("Pair")
-                    icon: "\u{f00af}"
-                    onClicked: Network.pairDevice(modelData.mac)
+                Button {
+                    text: I18n.tr("Pair")
+                    onClicked: Network.pairDevice(foundRow.modelData.mac)
                 }
             }
         }
 
         EmptyState {
             Layout.fillWidth: true
+            Layout.bottomMargin: Design.s(Design.space.sm)
             visible: section.available.length === 0
             icon: "\u{f002f}"
             title: I18n.tr("Scanning for accessories...")

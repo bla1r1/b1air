@@ -39,6 +39,112 @@ distro_pretty_name() {
     (. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-${NAME:-Linux}}") || echo Linux
 }
 
+# ── Editions ─────────────────────────────────────────────────────────────────
+#
+# An edition is a set of packages on top of another edition. minimal is the
+# desktop itself: packages/<family>.txt and packages/arch-aur.txt. Every
+# other one is a directory packages/editions/<name>/ holding
+#
+#   parent            the edition it adds to (one word: minimal, default, ...)
+#   <family>.txt      what it adds, in the same format as packages/<family>.txt
+#   arch-aur.txt      what it adds from the AUR
+#   description       one line for the installer's menu
+#
+# so a new edition is a new directory: name its parent and list what it adds.
+# The one installed is kept in /etc/b1air/edition, for update-dotfiles.sh.
+
+B1AIR_EDITION_FILE=/etc/b1air/edition
+B1AIR_DEFAULT_EDITION=default
+
+# The editions there are, minimal first, one per line.
+editions_available() {
+    local repo="$1" dir
+    echo minimal
+    for dir in "$repo"/packages/editions/*/; do
+        [[ -f "$dir/parent" ]] && basename "$dir"
+    done
+}
+
+# edition_chain <repo> <edition> — minimal, then each edition down to the
+# one asked for, one per line. Fails for an unknown edition or a loop.
+edition_chain() {
+    local repo="$1" ed="$2" chain=() parent seen=" "
+    while [[ "$ed" != minimal ]]; do
+        [[ -f "$repo/packages/editions/$ed/parent" ]] || return 1
+        [[ "$seen" == *" $ed "* ]] && return 1
+        seen+="$ed "
+        chain=("$ed" "${chain[@]}")
+        read -r parent < "$repo/packages/editions/$ed/parent" || return 1
+        ed="${parent:-minimal}"
+    done
+    echo minimal
+    printf '%s\n' "${chain[@]}"
+}
+
+# edition_lists <repo> <family|arch-aur> <edition> — the package list files
+# that make up the edition, in order; only the ones that exist.
+edition_lists() {
+    local repo="$1" name="$2" ed="$3" layer file
+    while IFS= read -r layer; do
+        if [[ "$layer" == minimal ]]; then file="$repo/packages/$name.txt"
+        else file="$repo/packages/editions/$layer/$name.txt"; fi
+        [[ -f "$file" ]] && echo "$file"
+    done < <(edition_chain "$repo" "$ed")
+}
+
+# The edition this machine was installed as; the default for one installed
+# before there were editions, which had what default has now.
+installed_edition() {
+    local ed=""
+    [[ -r "$B1AIR_EDITION_FILE" ]] && read -r ed < "$B1AIR_EDITION_FILE"
+    echo "${ed:-$B1AIR_DEFAULT_EDITION}"
+}
+
+# edition_description <repo> <edition> — its line for a menu.
+edition_description() {
+    local repo="$1" ed="$2"
+    if [[ "$ed" == minimal ]]; then echo "The desktop and its apps, nothing more"
+    else head -n1 "$repo/packages/editions/$ed/description" 2>/dev/null || echo "$ed"; fi
+}
+
+# record_edition <edition> <dry-run 0|1> — into /etc/b1air/edition (sudo).
+record_edition() {
+    local ed="$1" dry="${2:-0}"
+    if [[ "$dry" -eq 1 ]]; then echo "Would record edition '$ed' in $B1AIR_EDITION_FILE" >&2; return 0; fi
+    sudo install -d -m 755 "$(dirname "$B1AIR_EDITION_FILE")" \
+        && printf '%s\n' "$ed" | sudo tee "$B1AIR_EDITION_FILE" >/dev/null
+}
+
+# install_edition_flatpaks <repo> <edition> <dry-run 0|1> — the Flathub apps
+# of every layer (packages/editions/*/flatpak.txt), for this account. A line
+# is `<app id> [command]`: where the command is already there, the
+# distribution's packages brought the app and the Flatpak is skipped.
+install_edition_flatpaks() {
+    local repo="$1" ed="$2" dry="${3:-0}" layer file id cmd todo=()
+    while IFS= read -r layer; do
+        file="$repo/packages/editions/$layer/flatpak.txt"
+        [[ -f "$file" ]] || continue
+        while read -r id cmd _; do
+            [[ -z "$id" || "$id" == \#* ]] && continue
+            [[ -n "${cmd:-}" ]] && command -v "$cmd" >/dev/null 2>&1 && continue
+            flatpak info "$id" >/dev/null 2>&1 && continue
+            todo+=("$id")
+        done < "$file"
+    done < <(edition_chain "$repo" "$ed")
+    [[ ${#todo[@]} -gt 0 ]] || return 0
+    if ! command -v flatpak >/dev/null 2>&1; then
+        echo "flatpak is not installed; skipped from Flathub: ${todo[*]}" >&2
+        return 0
+    fi
+    if [[ "$dry" -eq 1 ]]; then echo "Would install from Flathub (--user): ${todo[*]}" >&2; return 0; fi
+    flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo >&2 \
+        || { echo "Could not add Flathub; skipped: ${todo[*]}" >&2; return 0; }
+    for id in "${todo[@]}"; do
+        flatpak install --user --noninteractive flathub "$id" >&2 \
+            || echo "Could not install $id from Flathub. Later: flatpak install --user flathub $id" >&2
+    done
+}
+
 # ── Package queries ──────────────────────────────────────────────────────────
 
 # pkg_installed <family> <pkg>
@@ -92,6 +198,18 @@ pm_refresh() {
         fedora)   sudo dnf -y makecache ;;
         opensuse) sudo zypper -n refresh ;;
     esac
+}
+
+# arch_enable_multilib — switch on Arch's [multilib] repository, where Wine
+# and its 32-bit libraries are. x86_64 only: there is no multilib, and no
+# Wine, on aarch64. Prints nothing; returns non-zero when it could not.
+arch_enable_multilib() {
+    [[ "$(uname -m)" == x86_64 ]] || return 1
+    grep -qE '^[[:space:]]*\[multilib\]' /etc/pacman.conf && return 0
+    grep -qE '^#[[:space:]]*\[multilib\]' /etc/pacman.conf || return 1
+    # The stock pacman.conf has the section commented out as two lines:
+    # "#[multilib]" and the "#Include = …" right under it.
+    sudo sed -i '/^#[[:space:]]*\[multilib\]/{s/^#[[:space:]]*//;n;s/^#[[:space:]]*//}' /etc/pacman.conf
 }
 
 # pm_install <family> <pkg...> — one transaction, fails as a whole.
@@ -273,18 +391,97 @@ strip_swayfx_directives() {
     done
 }
 
+# ── Arch: b1air as pacman packages ───────────────────────────────────────────
+#
+# On Arch the suite and our swayfx are built into packages
+# (packaging/arch/b1air, packaging/arch/b1air-swayfx) and installed with
+# pacman, so every file they put in the system is owned and removable. The
+# other distributions still get `make install` and tools/build-swayfx.sh.
+# B1AIR_NO_PACKAGE=1 keeps the old way on Arch too.
+
+arch_packaging() {
+    [[ "${DISTRO:-}" == arch && "${B1AIR_NO_PACKAGE:-0}" != 1 ]] && command -v makepkg >/dev/null 2>&1
+}
+
+# arch_package_current <name> — true when the installed package is the
+# version its PKGBUILD in this checkout would build now.
+arch_package_current() {
+    local dir="$REPO_DIR/packaging/arch/$1" have want
+    have="$(pacman -Q "$1" 2>/dev/null | cut -d' ' -f2)" || return 1
+    want="$(cd "$dir" && makepkg --printsrcinfo 2>/dev/null \
+        | awk '$1=="pkgver"{v=$3} $1=="pkgrel"{r=$3} END{print v"-"r}')"
+    [[ -n "$have" && "$have" == "$want" ]]
+}
+
+# What `sudo make install` and install.sh's own copies put in /usr before
+# there was a package. pacman will not install over a file it does not own,
+# so the first package install takes these over (--overwrite); after that
+# they are the package's.
+B1AIR_PACKAGE_OVERWRITE=(
+    '/usr/bin/b1air-*' '/usr/share/b1air/*' '/usr/share/b1air-shell/*'
+    '/usr/share/applications/b1air-*' '/usr/share/icons/hicolor/scalable/apps/b1air-*'
+    '/usr/share/icons/b1air-cursors/*' '/usr/share/fonts/b1air/*'
+    '/usr/share/wayland-sessions/b1air.desktop' '/usr/share/xdg-desktop-portal/b1air-portals.conf'
+    '/usr/share/sddm/themes/b1air/*' '/usr/lib/qt6/qml/B1air/*' '/usr/lib64/qt6/qml/B1air/*'
+)
+
+# arch_build_package <name> — build packaging/arch/<name> as this user
+# (makepkg refuses root; -s asks sudo for the build dependencies only) and
+# install the result with pacman. --ask 4 answers yes to "remove the
+# conflicting package" (sway for b1air-swayfx), which --noconfirm answers no.
+arch_build_package() {
+    local dir="$REPO_DIR/packaging/arch/$1" files=() glob overwrite=()
+    for glob in "${B1AIR_PACKAGE_OVERWRITE[@]}"; do overwrite+=(--overwrite "$glob"); done
+    (cd "$dir" && makepkg -sf --noconfirm --needed) || return 1
+    mapfile -t files < <(cd "$dir" && makepkg --packagelist)
+    sudo pacman -U --noconfirm --ask 4 "${overwrite[@]}" "${files[@]}" || return 1
+    # pacman does not flush: on btrfs a hard reset soon after leaves the
+    # package's files at 0 bytes, the session and login theme with them.
+    sync
+    rm -f "${files[@]}"
+}
+
+# retire_unpackaged_b1air — what earlier installs put outside the package and
+# would now shadow it: the suite and swayfx in /usr/local (ahead of /usr/bin
+# on PATH), per-user copies in ~/.local/bin (ahead of both), and copies in
+# /etc of a unit and udev rules the package ships in /usr/lib (/etc wins).
+retire_unpackaged_b1air() {
+    local sys=() f
+    for f in /usr/local/bin/b1air-* /usr/local/lib/b1air-swayfx /usr/local/share/b1air \
+             /etc/systemd/system/b1air-fido-uhid.service /etc/udev/rules.d/99-b1air-*.rules \
+             /etc/udev/rules.d/99-uinput.rules; do
+        [[ -e "$f" ]] && sys+=("$f")
+    done
+    # sway* in /usr/local only when it is ours (the stamp build-swayfx.sh left).
+    if [[ -f /usr/local/share/b1air/swayfx.stamp ]]; then
+        for f in /usr/local/bin/{sway,swayfx,swaybar,swaymsg,swaynag}; do
+            [[ -e "$f" || -L "$f" ]] && sys+=("$f")
+        done
+    fi
+    if (( ${#sys[@]} > 0 )); then
+        sudo rm -rf "${sys[@]}"
+        sudo systemctl daemon-reload 2>/dev/null || true
+        sudo udevadm control --reload-rules 2>/dev/null || true
+    fi
+    rm -f "$HOME"/.local/bin/b1air-*
+    hash -r
+}
+
 # ── Where the suite is installed, and configs that point there ───────────────
 #
-# install.sh puts the b1air binaries in /usr/local/bin when it has root and in
-# ~/.local/bin when it does not. The sway config and the systemd user units
-# name that directory in one place each ($b1airBin, ExecStart/ExecReload), and
-# the copies in this repository say ~/.local/bin. So every deployment of
+# install.sh puts the b1air binaries in /usr/bin as the b1air package (Arch),
+# else in /usr/local/bin when it has root and in ~/.local/bin when it does not.
+# The sway config and the systemd user units name that directory in one
+# place each ($b1airBin, ExecStart/ExecReload), and the copies in this
+# repository say ~/.local/bin. So every deployment of
 # .config has to be "rendered" for this machine — or an update that copies the
 # repository's variables.conf over the installed one leaves autostart and every
 # key binding pointing at an empty directory: no daemon, no shell.
 
 b1air_install_prefix() {
-    if [[ -x /usr/local/bin/b1air-daemon ]]; then
+    if pacman -Qq b1air >/dev/null 2>&1; then
+        echo /usr/bin
+    elif [[ -x /usr/local/bin/b1air-daemon ]]; then
         echo /usr/local/bin
     else
         echo "$HOME/.local/bin"

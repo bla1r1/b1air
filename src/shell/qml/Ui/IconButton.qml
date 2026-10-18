@@ -16,7 +16,7 @@ Item {
 
     property string icon: ""
     property string role: "body"
-    property real diameter: Design.size.iconBtn
+    property real diameter: Design.size.sm
 
     property color tone: Design.textDim
     property color hoverTone: Design.accent
@@ -31,15 +31,12 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: ma.containsMouse ? root.fill : "transparent"
+        color: ma.pressed ? Design.veilBold : ma.containsMouse ? root.fill : "transparent"
         border.color: (root.bordered && ma.containsMouse) ? Design.glassBorder : "transparent"
         border.width: Design.border
 
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
         Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-        scale: ma.pressed ? 0.92 : 1.0
-        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
 
         Icon {
             anchors.centerIn: parent
@@ -50,5 +47,13 @@ Item {
         }
     }
 
-    Clickable { id: ma; onClicked: root.clicked() }
+    Clickable { id: ma; keyboard: false; onClicked: root.clicked() }
+
+    // Tab reaches it; Enter and Space do what a click does.
+    activeFocusOnTab: root.enabled
+    Keys.onReturnPressed: event => { root.clicked(); event.accepted = true; }
+    Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
+    Accessible.role: Accessible.Button
+    Accessible.name: root.icon
+    FocusRing { target: root; cornerRadius: root.width / 2 + Design.s(Design.space.xxs) }
 }

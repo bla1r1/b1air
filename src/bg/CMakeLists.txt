@@ -47,10 +47,10 @@ add_executable(b1air-bg
 target_include_directories(b1air-bg PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${BG_PROTOCOL_DIR})
-target_include_directories(b1air-bg SYSTEM PRIVATE
-    ${PROJECT_SOURCE_DIR}/third_party)
-target_link_libraries(b1air-bg PRIVATE PkgConfig::WAYLAND_CLIENT m)
-# WebP where the library is there; JPEG, PNG and the rest come from stb_image.
+# JPEG and PNG through the distribution's libjpeg and libpng.
+pkg_check_modules(IMAGE_DEPS REQUIRED IMPORTED_TARGET libjpeg libpng)
+target_link_libraries(b1air-bg PRIVATE PkgConfig::WAYLAND_CLIENT PkgConfig::IMAGE_DEPS nlohmann_json::nlohmann_json m)
+# WebP where the library is there.
 pkg_check_modules(WEBP IMPORTED_TARGET libwebp)
 if(WEBP_FOUND)
     target_link_libraries(b1air-bg PRIVATE PkgConfig::WEBP)
@@ -64,7 +64,4 @@ if(TURBOJPEG_FOUND)
     target_compile_definitions(b1air-bg PRIVATE B1AIR_HAVE_TURBOJPEG)
 endif()
 b1air_warnings(b1air-bg)
-# stb_image is not warning-clean under -Wextra; its one translation unit is
-# held to less.
-set_source_files_properties(image.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unused-function;-Wno-missing-field-initializers")
 install(TARGETS b1air-bg RUNTIME DESTINATION bin)

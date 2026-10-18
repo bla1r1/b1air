@@ -1,2 +1,4 @@
 [General]
-theme=Tokyo-Night
+# b1air-daemon (appearance apply) writes the b1air theme from the desktop's
+# palette and names it here; until then, Kvantum's own dark one.
+theme=KvGnomeDark

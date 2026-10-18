@@ -10,7 +10,7 @@ import "Services"
 // =============================================================================
 // Native Polkit Authentication Dialog
 //
-// Modal Tokyo Night privilege escalation dialog for root / administrative tasks.
+// Modal privilege escalation dialog for root / administrative tasks.
 // =============================================================================
 
 PanelWindow {
@@ -56,8 +56,9 @@ PanelWindow {
         anchors.fill: parent
         color: Qt.alpha(Design.ground, 0.70)
 
-        MouseArea {
+        Clickable {
             anchors.fill: parent
+            keyboard: false
             onClicked: polkitWin.cancelAuth()
         }
     }
@@ -77,8 +78,8 @@ PanelWindow {
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: polkitWin.shakeOffset
 
-        implicitWidth: Design.s(420)
-        implicitHeight: dialogContent.implicitHeight + Design.s(32)
+        implicitWidth: Design.s(Design.width.menuMax)
+        implicitHeight: dialogContent.implicitHeight + Design.s(Design.space.xxl)
 
         radius: Design.s(Design.radius.card)
         color: Design.surface
@@ -88,35 +89,35 @@ PanelWindow {
         ColumnLayout {
             id: dialogContent
             anchors.fill: parent
-            anchors.margins: Design.s(20)
-            spacing: Design.s(16)
+            anchors.margins: Design.s(Design.space.lg)
+            spacing: Design.s(Design.space.lg)
 
             // ── Top Header: Security Shield Icon & Title ─────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(12)
+                spacing: Design.s(Design.space.md)
 
                 Rectangle {
-                    Layout.preferredWidth: Design.s(44)
-                    Layout.preferredHeight: Design.s(44)
-                    radius: Design.s(22)
+                    Layout.preferredWidth: Design.s(Design.size.row)
+                    Layout.preferredHeight: Design.s(Design.size.row)
+                    radius: Design.s(Design.radius.panel)
                     color: Design.well
 
                     Icon {
                         anchors.centerIn: parent
                         text: "\u{f099d}" // a shield with a lock
-                        color: Design.sapphire
+                        color: Design.accent
                         role: "title"
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
 
                     Label {
                         text: I18n.tr("Authentication Required")
-                        weight: Design.weight.bold
+                        weight: Design.weight.semibold
                         role: "subhead"
                     }
 
@@ -141,20 +142,20 @@ PanelWindow {
             // ── User Identity Pill ───────────────────────────────────────────
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: Design.s(44)
-                radius: Design.s(10)
+                implicitHeight: Design.s(Design.size.row)
+                radius: Design.s(Design.radius.ctl)
                 color: Design.ground
                 border.color: Design.glassBorder
                 border.width: 1
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: Design.s(8)
-                    spacing: Design.s(10)
+                    anchors.margins: Design.s(Design.space.sm)
+                    spacing: Design.s(Design.space.sm)
 
                     Image {
-                        Layout.preferredWidth: Design.s(28)
-                        Layout.preferredHeight: Design.s(28)
+                        Layout.preferredWidth: Design.s(Design.size.sm)
+                        Layout.preferredHeight: Design.s(Design.size.sm)
                         // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                         sourceSize: Qt.size(128, 128)
                         source: "file://" + Quickshell.env("HOME") + "/.face.icon"
@@ -167,7 +168,7 @@ PanelWindow {
                             color: "transparent"
                             border.color: Design.glassBorder
                             border.width: 1
-                            radius: Design.s(14)
+                            radius: Design.s(Design.radius.card)
                         }
                     }
 
@@ -187,7 +188,6 @@ PanelWindow {
 
                     Badge {
                         text: I18n.tr("Admin")
-                        tone: Design.sapphire
                     }
                 }
             }
@@ -195,22 +195,22 @@ PanelWindow {
             // ── Password Input Field ─────────────────────────────────────────
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(6)
+                spacing: Design.s(Design.space.xs)
 
                 Rectangle {
                     id: inputFrame
                     Layout.fillWidth: true
-                    implicitHeight: Design.s(44)
-                    radius: Design.s(10)
+                    implicitHeight: Design.s(Design.size.row)
+                    radius: Design.s(Design.radius.ctl)
                     color: Design.ground
-                    border.color: pwdInput.activeFocus ? Design.sapphire : (polkitWin.errorMessage !== "" ? Design.red : Design.glassBorder)
+                    border.color: pwdInput.activeFocus ? Design.accent : (polkitWin.errorMessage !== "" ? Design.danger : Design.glassBorder)
                     border.width: pwdInput.activeFocus ? 2 : 1
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Design.s(12)
-                        anchors.rightMargin: Design.s(12)
-                        spacing: Design.s(8)
+                        anchors.leftMargin: Design.s(Design.space.md)
+                        anchors.rightMargin: Design.s(Design.space.md)
+                        spacing: Design.s(Design.space.sm)
 
                         Icon {
                             text: "\u{f023}"
@@ -223,7 +223,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             echoMode: showPwdToggle.checked ? TextInput.Normal : TextInput.Password
                             font.family: Design.font.mono
-                            font.pixelSize: Design.s(14)
+                            font.pixelSize: Design.s(Design.font.glyphSm)
                             color: Design.text
                             focus: true
                             clip: true
@@ -245,7 +245,7 @@ PanelWindow {
                 Label {
                     visible: polkitWin.errorMessage !== ""
                     text: polkitWin.errorMessage
-                    color: Design.red
+                    color: Design.danger
                     role: "caption"
                 }
             }
@@ -253,17 +253,16 @@ PanelWindow {
             // ── Dialog Actions ───────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(10)
+                spacing: Design.s(Design.space.sm)
 
-                ActionButton {
+                Button {
                     label: I18n.tr("Cancel")
                     Layout.fillWidth: true
                     onActivated: polkitWin.cancelAuth()
                 }
 
-                ActionButton {
+                Button {
                     label: polkitWin.isSubmitting ? I18n.tr("Authenticating...") : I18n.tr("Authenticate")
-                    tone: Design.sapphire
                     Layout.fillWidth: true
                     enabled: pwdInput.text.length > 0 && !polkitWin.isSubmitting
                     onActivated: polkitWin.submitAuth()

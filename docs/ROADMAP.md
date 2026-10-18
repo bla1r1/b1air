@@ -264,8 +264,22 @@ large-text preset in M13 are kept.
       **Cut:** MangoHud exists and is one line in a launch command.
 - [~] Add connected gamepad controller battery level indicator in Waybar (DualSense, Xbox, 8BitDo).
       **Cut:** The bar is not where a controller battery is looked at.
-- [~] Add Wine and Proton bottle prefix manager in App Launcher for running Windows executables.
-      **Cut:** Steam and Lutris do this, and better.
+- [x] Windows programs as programs (`b1air-windows`): an installer opened from Files asks which bottle
+      (a Wine prefix with its Proton and components) and which Proton, recommending the shared bottle and
+      the newest GE-Proton (umu-launcher fetches it; the umu database's fixes applied); its Start menu
+      shortcuts become Launchpad entries with their own icons. A program with no installer is added as it
+      is, or run once. Settings → Windows Programs has the bottles (Proton version, Windows components
+      through winetricks, Wine's settings, removing one) and each program's options (DXVK, Wayland, HDR,
+      FSR, MangoHud, Game Mode, gamescope), its log and removing it (its uninstaller, in a shared bottle).
+      Wine's colours and DPI follow the desktop's; a crash right after starting offers the log and a second
+      try with safe settings. ntsync and more memory maps for games, split locks unpenalised in the gaming
+      edition. Once cut as a prefix manager ("Steam and Lutris do this"); it asks two questions with the
+      answers filled in, and the rest stays out of sight.
+- [x] Run Windows programs and downloaded packages from Files, through the tools that already do it:
+      `.exe`/`.msi` go to Bottles or Wine (`b1air-run-windows`), `.deb`/`.rpm`/Flatpak/AppImage to the
+      package manager in a terminal (`b1air-install-package`); programs Wine and Flatpak install appear in
+      the Launchpad with their icons. Wine, Bottles and (on Arch) debtap come with the desktop; a .deb on
+      Arch is converted by debtap and installed with pacman.
 
 ## M11: File Management, Storage Analytics, and Archive Suite
 

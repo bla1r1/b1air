@@ -91,6 +91,21 @@ SKIP_DOTFILES=0
 SKIP_SERVICES=0
 NO_AUR=0
 
+# ── Edition ───────────────────────────────────────────────────────────────────
+# packages/editions/: each one is the one before plus what it adds.
+current_edition="$(installed_edition)"
+EDITION_ARGS=()
+while IFS= read -r ed; do
+    desc="$(edition_description "$REPO_DIR" "$ed")"
+    EDITION_ARGS+=("$ed" "$desc" "$([[ "$ed" == "$current_edition" ]] && echo ON || echo OFF)")
+done < <(editions_available "$REPO_DIR")
+EDITION=$(whiptail --title "Edition" --radiolist \
+    "Which edition?\n\nEach one is the one above it plus what it adds.\n[SPACE] Select  |  [TAB] Switch buttons" \
+    20 100 "$(( ${#EDITION_ARGS[@]} / 3 ))" "${EDITION_ARGS[@]}" 3>&1 1>&2 2>&3) || {
+        echo -e "\n${YELLOW}Installation cancelled by user.${RESET}" | tee -a "$LOG"
+        exit 0
+    }
+
 while true; do
     CHECKLIST_ARGS=(
         "packages"  "$PACKAGES_LABEL" ON
@@ -124,6 +139,7 @@ while true; do
 
     # Build confirmation message
     confirm_msg="Your selected components:\n\n"
+    confirm_msg+="  Edition: ${EDITION}\n\n"
     [[ "$SKIP_PACKAGES" -eq 0 ]] && confirm_msg+="  ✔ Distribution Packages & Fonts\n" || confirm_msg+="  ✘ Skip Distribution Packages\n"
     [[ "$NO_AUR"        -eq 0 ]] && confirm_msg+="  ✔ ${EXTRAS_SHORT}\n"  || confirm_msg+="  ✘ Skip ${EXTRAS_SHORT}\n"
     [[ "$SKIP_DOTFILES" -eq 0 ]] && confirm_msg+="  ✔ Dotfiles & Tokyo Night SDDM Theme\n" || confirm_msg+="  ✘ Skip Dotfiles\n"
@@ -144,7 +160,7 @@ if ! groups "$USER" | grep -q '\binput\b'; then
 fi
 
 # ── Build args and launch install.sh ──────────────────────────────────────────
-ARGS=(--distro "$DISTRO")
+ARGS=(--distro "$DISTRO" --edition "$EDITION")
 [[ "$SKIP_PACKAGES" -eq 1 ]] && ARGS+=(--skip-packages)
 [[ "$NO_AUR"        -eq 1 ]] && ARGS+=(--no-aur)
 [[ "$SKIP_DOTFILES" -eq 1 ]] && ARGS+=(--skip-dotfiles)

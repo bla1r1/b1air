@@ -1,0 +1,210 @@
+From 588e212462e78a731e311d33f4c7c805bcfa2d3e Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 06:52:21 +0000
+Subject: [PATCH] Add layer_effects blur_ignore_alpha; refuse effects that do
+ not parse
+
+`layer_effects <namespace> blur_ignore_alpha <0..1>`: blur_ignore_transparent
+with a threshold (scenefx 0003). What is at most that opaque gets no blur
+behind it, so a shell's full-screen layer can draw a panel's soft shadow
+itself and keep the blur to the panel. Reported in get_outputs' layer
+effects.
+
+And `layer_effects` with a list that did not parse said success, and had
+already deleted the rule the namespace had: a typo left the layer with no
+effects and nothing saying why. It is refused now, and the rule there
+stays.
+---
+ include/sway/layer_criteria.h |  1 +
+ include/sway/layers.h         |  3 +++
+ sway/commands/layer_effects.c |  6 ++++-
+ sway/desktop/layer_shell.c    |  2 ++
+ sway/desktop/output.c         |  2 ++
+ sway/ipc-json.c               |  2 ++
+ sway/layer_criteria.c         | 43 ++++++++++++++++++++++++++---------
+ 7 files changed, 47 insertions(+), 12 deletions(-)
+
+diff --git a/include/sway/layer_criteria.h b/include/sway/layer_criteria.h
+index 554a482..4bbc3d7 100644
+--- a/include/sway/layer_criteria.h
++++ b/include/sway/layer_criteria.h
+@@ -8,6 +8,7 @@ struct layer_criteria {
+ 	bool blur_enabled;
+ 	bool blur_xray;
+ 	bool blur_ignore_transparent;
++	float blur_ignore_alpha;
+ 	int corner_radius;
+ };
+ 
+diff --git a/include/sway/layers.h b/include/sway/layers.h
+index b845749..35b2a4e 100644
+--- a/include/sway/layers.h
++++ b/include/sway/layers.h
+@@ -27,6 +27,9 @@ struct sway_layer_surface {
+ 	bool blur_enabled;
+ 	bool blur_xray;
+ 	bool blur_ignore_transparent;
++	// With blur_ignore_transparent: the alpha at or below which a pixel
++	// counts as transparent (layer_effects blur_ignore_alpha).
++	float blur_ignore_alpha;
+ 	int corner_radius;
+ 
+ 	struct wl_list link; // sway_output.layer_surfaces
+diff --git a/sway/commands/layer_effects.c b/sway/commands/layer_effects.c
+index aea815d..d247edb 100644
+--- a/sway/commands/layer_effects.c
++++ b/sway/commands/layer_effects.c
+@@ -14,7 +14,11 @@ struct cmd_results *cmd_layer_effects(int argc, char **argv) {
+ 	}
+ 
+ 	struct layer_criteria *criteria = layer_criteria_add(argv[0], join_args(argv + 1, argc - 1));
+-	if (criteria) {
++	if (!criteria) {
++		// It said success whatever the effects list held.
++		return cmd_results_new(CMD_INVALID, "Invalid layer_effects for '%s' (see the log)", argv[0]);
++	}
++	{
+ 		sway_log(SWAY_DEBUG, "layer_effect: '%s' '%s' added",
+ 				criteria->namespace, criteria->cmdlist);
+ 
+diff --git a/sway/desktop/layer_shell.c b/sway/desktop/layer_shell.c
+index 3cd6ddd..8aa30b3 100644
+--- a/sway/desktop/layer_shell.c
++++ b/sway/desktop/layer_shell.c
+@@ -59,6 +59,7 @@ void layer_apply_criteria(struct sway_layer_surface *surface, struct layer_crite
+ 		surface->blur_enabled = criteria->blur_enabled;
+ 		surface->blur_xray = criteria->blur_xray;
+ 		surface->blur_ignore_transparent = criteria->blur_ignore_transparent;
++		surface->blur_ignore_alpha = criteria->blur_ignore_alpha;
+ 		surface->shadow_enabled = criteria->shadow_enabled;
+ 	} else {
+ 		// Reset
+@@ -66,6 +67,7 @@ void layer_apply_criteria(struct sway_layer_surface *surface, struct layer_crite
+ 		surface->blur_enabled = false;
+ 		surface->blur_xray = false;
+ 		surface->blur_ignore_transparent = false;
++		surface->blur_ignore_alpha = 0.0f;
+ 		surface->shadow_enabled = false;
+ 	}
+ }
+diff --git a/sway/desktop/output.c b/sway/desktop/output.c
+index 08aedaf..0e4c51b 100644
+--- a/sway/desktop/output.c
++++ b/sway/desktop/output.c
+@@ -223,6 +223,8 @@ static void configure_layer_shell_surface(struct wlr_scene_buffer *buffer,
+ 	wlr_scene_node_set_enabled(&layer_surface->blur_node->node, layer_surface->blur_enabled);
+ 	if (layer_surface->blur_ignore_transparent) {
+ 		wlr_scene_blur_set_transparency_mask_source(layer_surface->blur_node, buffer);
++		wlr_scene_blur_set_transparency_threshold(layer_surface->blur_node,
++			layer_surface->blur_ignore_alpha);
+ 	} else {
+ 		wlr_scene_blur_set_transparency_mask_source(layer_surface->blur_node, NULL);
+ 	}
+diff --git a/sway/ipc-json.c b/sway/ipc-json.c
+index 37a642a..d740c29 100644
+--- a/sway/ipc-json.c
++++ b/sway/ipc-json.c
+@@ -435,6 +435,8 @@ static void ipc_json_describe_enabled_output(struct sway_output *output,
+ 			json_object_object_add(effects, "blur_xray", json_object_new_boolean(surface->blur_xray));
+ 			json_object_object_add(effects, "blur_ignore_transparent",
+ 					json_object_new_boolean(surface->blur_ignore_transparent));
++			json_object_object_add(effects, "blur_ignore_alpha",
++					json_object_new_double(surface->blur_ignore_alpha));
+ 			json_object_object_add(effects, "shadows", json_object_new_boolean(surface->shadow_enabled));
+ 			json_object_object_add(effects, "corner_radius", json_object_new_int(surface->corner_radius));
+ 			json_object_object_add(layer, "effects", effects);
+diff --git a/sway/layer_criteria.c b/sway/layer_criteria.c
+index 5652169..70f361c 100644
+--- a/sway/layer_criteria.c
++++ b/sway/layer_criteria.c
+@@ -1,4 +1,5 @@
+ #include <ctype.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include "list.h"
+ #include "log.h"
+@@ -12,6 +13,7 @@ static void init_criteria_effects(struct layer_criteria *criteria) {
+ 	criteria->blur_enabled = false;
+ 	criteria->blur_xray = false;
+ 	criteria->blur_ignore_transparent = false;
++	criteria->blur_ignore_alpha = 0.0f;
+ 	criteria->shadow_enabled = false;
+ }
+ 
+@@ -20,6 +22,7 @@ static void copy_criteria_effects(struct layer_criteria *dst, struct layer_crite
+ 	dst->blur_enabled = src->blur_enabled;
+ 	dst->blur_xray = src->blur_xray;
+ 	dst->blur_ignore_transparent = src->blur_ignore_transparent;
++	dst->blur_ignore_alpha = src->blur_ignore_alpha;
+ 	dst->shadow_enabled = src->shadow_enabled;
+ }
+ 
+@@ -78,6 +81,20 @@ static bool layer_criteria_parse(struct layer_criteria *criteria) {
+ 		} if (strcmp(argv[0], "blur_ignore_transparent") == 0) {
+ 			criteria->blur_ignore_transparent = parse_boolean(argv[1], true);
+ 			continue;
++		} if (strcmp(argv[0], "blur_ignore_alpha") == 0) {
++			// No blur behind what is at most this opaque: a surface that
++			// draws its own soft shadow, as a shell's full-screen layer does,
++			// keeps the blur to the panel it casts it from.
++			char *end;
++			float value = argc > 1 ? strtof(argv[1], &end) : -1.0f;
++			if (argc < 2 || *end != '\0' || value < 0.0f || value > 1.0f) {
++				sway_log(SWAY_ERROR, "Invalid layer_effects blur_ignore_alpha: "
++						"expected 0 to 1, got \"%s\"", argc > 1 ? argv[1] : "");
++				return false;
++			}
++			criteria->blur_ignore_alpha = value;
++			criteria->blur_ignore_transparent = true;
++			continue;
+ 		} else if (strcmp(argv[0], "shadows") == 0) {
+ 			criteria->shadow_enabled = parse_boolean(argv[1], true);
+ 			continue;
+@@ -104,22 +121,22 @@ struct layer_criteria *layer_criteria_add(char *namespace, char *cmdlist) {
+ 	struct layer_criteria *criteria = calloc(1, sizeof(*criteria));
+ 	init_criteria_effects(criteria);
+ 
+-	// Check if the rule already exists
++	// Create a new criteria
++	if (!criteria) {
++		sway_log(SWAY_ERROR, "Could not allocate new layer_criteria");
++		return NULL;
++	}
++
++	// Check if the rule already exists: its effects are the starting point.
++	// It is replaced only once the new list parses — a typo used to delete
++	// the rule that was there and leave the layer with no effects at all.
+ 	int existing_index;
+ 	struct layer_criteria *existing = NULL;
+-	if (layer_criteria_find(namespace, &existing, &existing_index)) {
++	bool replacing = layer_criteria_find(namespace, &existing, &existing_index);
++	if (replacing) {
+ 		sway_log(SWAY_DEBUG, "layer_effect '%s' already exists: '%s'. Replacing with: '%s'",
+ 				namespace, existing->cmdlist, cmdlist);
+-		// Clone the effects into the new criteria
+ 		copy_criteria_effects(criteria, existing);
+-		layer_criteria_destroy(existing);
+-		list_del(config->layer_criteria, existing_index);
+-	}
+-
+-	// Create a new criteria
+-	if (!criteria) {
+-		sway_log(SWAY_ERROR, "Could not allocate new layer_criteria");
+-		return NULL;
+ 	}
+ 	criteria->namespace = malloc(strlen(namespace) + 1);
+ 	strcpy(criteria->namespace, namespace);
+@@ -131,6 +148,10 @@ struct layer_criteria *layer_criteria_add(char *namespace, char *cmdlist) {
+ 		layer_criteria_destroy(criteria);
+ 		return NULL;
+ 	}
++	if (replacing) {
++		layer_criteria_destroy(existing);
++		list_del(config->layer_criteria, existing_index);
++	}
+ 
+ 	list_add(config->layer_criteria, criteria);
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,9 @@
+# The default edition's AUR packages.
+# Windows programs (src/scripts/b1air-run-windows).
+bottles
+# Proton outside Steam (b1air-windows), where [extra] did not have it.
+umu-launcher
+# Wine's tray icons in the bar: it shows XEmbed icons as StatusNotifierItems.
+snixembed
+# .deb packages, converted for pacman (src/scripts/b1air-install-package).
+debtap

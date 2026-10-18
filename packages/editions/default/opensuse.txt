@@ -1,0 +1,7 @@
+# The default edition on openSUSE: what it adds to minimal.
+# Format: see lib/distro.sh. `?name` = optional.
+
+?wine ?winetricks ?bottles
+flatpak
+distrobox podman
+NetworkManager-openvpn wireguard-tools ?tailscale firewalld

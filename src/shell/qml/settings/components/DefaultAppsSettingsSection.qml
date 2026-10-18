@@ -47,34 +47,53 @@ ColumnLayout {
     // in a row; matching the whole Exec line offered qrencode as a code editor.
     readonly property var rows: [
         { kind: "browser", title: I18n.tr("Web Browser"), subtitle: I18n.tr("Links, web pages and Mod+F"),
-          icon: "\u{f0ac}", tone: Design.sapphire,
+          icon: "\u{f0ac}",
           mimes: ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"],
           names: ["firefox", "chrome", "google-chrome", "google-chrome-stable", "chromium", "brave",
                   "brave-browser", "zen", "zen-browser", "vivaldi", "librewolf", "floorp",
                   "qutebrowser", "epiphany"],
           missing: I18n.tr("No web browser found. Install one (e.g. Firefox) with your package manager.") },
         { kind: "terminal", title: I18n.tr("Terminal"), subtitle: I18n.tr("What Mod+T opens"),
-          icon: "\u{f120}", tone: Design.green,
+          icon: "\u{f120}",
           mimes: ["x-scheme-handler/terminal"],
           names: ["b1air-term", "foot", "alacritty", "ghostty", "wezterm", "konsole", "xterm",
                   "kitty", "gnome-terminal"],
           missing: I18n.tr("No terminal found. b1air-term is built with the rest of the desktop.") },
         { kind: "files", title: I18n.tr("File Manager"), subtitle: I18n.tr("Folders, and what Mod+E opens"),
-          icon: "\u{f07c}", tone: Design.peach,
+          icon: "\u{f07c}",
           mimes: ["inode/directory"],
           names: ["b1air-files", "thunar", "nautilus", "dolphin", "nemo", "pcmanfm", "pcmanfm-qt"],
           missing: I18n.tr("No file manager found. b1air-files is built with the rest of the desktop.") },
         { kind: "editor", title: I18n.tr("Text Editor"), subtitle: I18n.tr("Plain text, Markdown and JSON files"),
-          icon: "\u{f121}", tone: Design.mauve,
+          icon: "\u{f121}",
           mimes: ["text/plain", "text/markdown", "application/json"],
           names: ["b1air-text", "code", "codium", "vscodium", "cursor", "gvim", "zed", "kate",
                   "gedit", "gnome-text-editor", "subl", "sublime_text"],
           missing: I18n.tr("No graphical text editor found.") },
         { kind: "player", title: I18n.tr("Media Player"), subtitle: I18n.tr("Video and audio files"),
-          icon: "\u{f008}", tone: Design.teal,
+          icon: "\u{f008}",
           mimes: ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac"],
           names: ["mpv", "vlc", "celluloid", "audacious", "totem", "haruna"],
-          missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") }
+          missing: I18n.tr("No media player found. Install one (e.g. mpv) with your package manager.") },
+        // b1air's own handler is offered first (`builtin`): it hands the file
+        // to Bottles, or else to Wine, whichever is there. A Flatpak app's
+        // Exec is `flatpak run …`, so those are matched by desktop id (`ids`).
+        { kind: "windows", title: I18n.tr("Windows Programs"), subtitle: I18n.tr(".exe and .msi files opened from Files"),
+          icon: "\u{f05b3}",
+          mimes: ["application/x-ms-dos-executable", "application/x-msi", "application/x-msdownload",
+                  "application/vnd.microsoft.portable-executable"],
+          names: ["bottles", "wine", "lutris", "heroic"],
+          ids: ["com.usebottles.bottles", "net.lutris.lutris", "com.heroicgameslauncher.hgl", "wine"],
+          builtin: { desktopFile: "b1air-run-windows.desktop", name: I18n.tr("b1air, with Proton") },
+          missing: I18n.tr("Neither Bottles nor Wine is installed. They come with b1air: run the installer again, or install Bottles with your package manager.") },
+        { kind: "packages", title: I18n.tr("Downloaded Packages"), subtitle: I18n.tr(".deb, .rpm, Flatpak and AppImage files"),
+          icon: "\u{f03d3}",
+          mimes: ["application/vnd.debian.binary-package", "application/x-rpm", "application/vnd.appimage",
+                  "application/vnd.flatpak.ref"],
+          names: ["gdebi-gtk", "gnome-software", "plasma-discover"],
+          ids: ["org.gnome.Software", "org.kde.discover"],
+          builtin: { desktopFile: "b1air-install-package.desktop", name: I18n.tr("Install in a terminal") },
+          missing: "" }
     ]
 
     /** The command's binary name: "/usr/bin/foo --bar %U" -> "foo". */
@@ -85,8 +104,12 @@ ColumnLayout {
 
     function candidates(row) {
         const out = [];
+        if (row.builtin)
+            out.push({ desktopFile: row.builtin.desktopFile, name: row.builtin.name, builtin: true });
+        const ids = row.ids || [];
         for (const app of Services.Apps.list) {
-            if (row.names.indexOf(section.execBinary(app.exec)) >= 0)
+            const id = String(app.desktopFile || "").replace(/\.desktop$/, "");
+            if (row.names.indexOf(section.execBinary(app.exec)) >= 0 || ids.indexOf(id) >= 0)
                 out.push(app);
         }
         // Whatever is set right now is offered even when it is not in the
@@ -153,7 +176,7 @@ ColumnLayout {
     Repeater {
         model: section.rows
 
-        Card {
+        SettingsGroup {
             id: rowCard
             required property var modelData
             readonly property var apps: {
@@ -167,10 +190,11 @@ ColumnLayout {
             title: rowCard.modelData.title
             subtitle: rowCard.modelData.subtitle
             icon: rowCard.modelData.icon
-            accentColor: rowCard.modelData.tone
 
+            // Said even beside b1air's own handler: it only passes the file
+            // on, and with nothing to pass it to that is worth knowing here.
             Label {
-                visible: rowCard.apps.length === 0
+                visible: text !== "" && !rowCard.apps.some(a => !a.builtin)
                 Layout.fillWidth: true
                 text: rowCard.modelData.missing
                 role: "caption"
@@ -187,7 +211,7 @@ ColumnLayout {
 
                 Repeater {
                     model: rowCard.apps
-                    delegate: Pill {
+                    delegate: Chip {
                         required property var modelData
                         label: modelData.name
                         active: modelData.desktopFile === (section.current[rowCard.modelData.kind] || "")
@@ -207,11 +231,10 @@ ColumnLayout {
                     onAccepted: v => { if (section.chooseTyped(rowCard.modelData, v)) customField.text = ""; }
                 }
 
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f012c}"
                     label: I18n.tr("Set")
-                    tone: rowCard.modelData.tone
                     onActivated: if (section.chooseTyped(rowCard.modelData, customField.text)) customField.text = ""
                 }
             }

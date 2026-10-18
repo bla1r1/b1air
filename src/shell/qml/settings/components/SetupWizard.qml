@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import "../../Ui"
 import "../../Services"
+import "."
 
 // =============================================================================
 // First-run setup: the settings page called "setup".
@@ -170,8 +171,8 @@ Item {
             spacing: Design.s(Design.space.md)
 
             Rectangle {
-                Layout.preferredWidth: Design.s(48)
-                Layout.preferredHeight: Design.s(48)
+                Layout.preferredWidth: Design.s(Design.size.art)
+                Layout.preferredHeight: Design.s(Design.size.art)
                 radius: Design.s(Design.radius.ctl)
                 color: Design.tint(Design.accent, 0.18)
                 Icon {
@@ -184,12 +185,12 @@ Item {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(2)
+                spacing: Design.s(Design.space.xxs)
                 Label {
                     Layout.fillWidth: true
                     text: wizard.index === 0 && wizard.step.id === "keyboard" ? I18n.tr("Welcome to b1air") + " — " + wizard.step.title : wizard.step.title
                     role: "display"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     elide: Text.ElideRight
                 }
                 Label {
@@ -202,13 +203,13 @@ Item {
 
             // Step dots, the current one long.
             Row {
-                spacing: Design.s(6)
+                spacing: Design.s(Design.space.xs)
                 Repeater {
                     model: wizard.steps.length
                     Rectangle {
                         required property int index
-                        width: index === wizard.index ? Design.s(22) : Design.s(8)
-                        height: Design.s(8)
+                        width: index === wizard.index ? Design.s(Design.size.mini) : Design.s(Design.space.sm)
+                        height: Design.s(Design.space.sm)
                         radius: height / 2
                         color: index <= wizard.index ? Design.accent : Design.line
                         Behavior on width { NumberAnimation { duration: Design.duration.fast } }
@@ -281,11 +282,10 @@ Item {
                     active: wizard.step.id === "news"
                     visible: active
                     sourceComponent: Component {
-                        Card {
+                        SettingsGroup {
                             width: parent ? parent.width : 0
                             title: I18n.tr("In Settings")
                             icon: "\u{f0394}"
-                            accentColor: Design.accent
                             Repeater {
                                 model: wizard.news
                                 delegate: RowLayout {
@@ -297,7 +297,7 @@ Item {
                                         text: I18n.tr(modelData.text)
                                         wrapMode: Text.WordWrap
                                     }
-                                    Pill {
+                                    Button {
                                         visible: !!modelData.page
                                         label: I18n.tr("Open")
                                         icon: "\u{f0054}"
@@ -316,19 +316,19 @@ Item {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Pill {
+            Button {
                 label: I18n.tr("Skip setup")
                 onClicked: wizard.finish()
             }
             Item { Layout.fillWidth: true }
-            Pill {
+            Button {
                 visible: wizard.index > 0
                 label: I18n.tr("Back")
                 icon: "\u{f004d}"
                 onClicked: wizard.index--
             }
-            Pill {
-                active: true
+            Button {
+                variant: "primary"
                 label: wizard.last ? I18n.tr("Finish") : I18n.tr("Next")
                 icon: wizard.last ? "\u{f012c}" : "\u{f0054}"
                 onClicked: {

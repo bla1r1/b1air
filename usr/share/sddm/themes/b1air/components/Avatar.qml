@@ -1,193 +1,81 @@
 import QtQuick
-import QtQuick.Effects
-import QtQuick.Controls
 
-Rectangle {
+// The account's picture, round, in a fine white ring — or its initial on
+// glass when it has none.
+Item {
     id: avatar
-    property string shape: Config.avatarShape
     property string source: ""
-    property bool active: false
-    property int squareRadius: (shape == "circle") ? this.width : (Config.avatarBorderRadius === 0 ? 1 : Config.avatarBorderRadius * Config.generalScale) // min: 1
-    property bool drawStroke: (active && Config.avatarActiveBorderSize > 0) || (!active && Config.avatarInactiveBorderSize > 0)
-    property color strokeColor: active ? Config.avatarActiveBorderColor : Config.avatarInactiveBorderColor
-    property int strokeSize: active ? (Config.avatarActiveBorderSize * Config.generalScale) : (Config.avatarInactiveBorderSize * Config.generalScale)
-    property string tooltipText: ""
-    property bool showTooltip: false
-    // Whose it is, for the initial when there is no picture.
     property string name: ""
-    // No picture of their own (none set, or SDDM's stand-in face): the
-    // initial on a disc, as the lock screen shows it, not a grey silhouette.
-    readonly property bool standIn: {
-        const s = String(source);
-        return s === "" || s.indexOf("qrc:") === 0 || s.indexOf("/sddm/faces/") >= 0 || s.indexOf("default") >= 0
-            || faceImage.status === Image.Error;
-    }
-
+    property real size: 84
     signal clicked
-    signal clickedOutside
 
-    radius: squareRadius
-    color: "transparent"
-    antialiasing: true
+    width: size
+    height: size
 
-    // Background
-    Rectangle {
-        anchors.fill: parent
-        radius: avatar.squareRadius
-        color: Config.passwordInputBackgroundColor
-        opacity: Config.passwordInputBackgroundOpacity
-        visible: true
-    }
-
-    Image {
-        id: faceImage
-        source: parent.source
-        anchors.fill: parent
-        mipmap: true
-        antialiasing: true
-        visible: false
-        smooth: true
-
-        fillMode: Image.PreserveAspectCrop
-        horizontalAlignment: Image.AlignHCenter
-        verticalAlignment: Image.AlignVCenter
-
-        onStatusChanged: {
-            if (status === Image.Error) {
-                source = Config.getIcon("user-default");
-                faceEffects.colorization = 1;
-            }
-        }
-
-        // Border
-        Rectangle {
-            anchors.fill: parent
-            radius: avatar.squareRadius
-            color: "transparent"
-            border.width: avatar.strokeSize
-            border.color: avatar.strokeColor
-            antialiasing: true
-        }
+    Rectangle {   // a soft shadow under it
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: 3
+        width: parent.width + 12
+        height: width
+        radius: width / 2
+        color: "#1f000000"
     }
     Rectangle {
-        visible: avatar.standIn
         anchors.fill: parent
-        radius: avatar.squareRadius
-        color: ThemeColors.mid
-        border.width: avatar.strokeSize
-        border.color: avatar.strokeColor
+        anchors.margins: -2
+        radius: width / 2
+        color: "#99ffffff"
+    }
+    Rectangle {
+        anchors.fill: parent
+        radius: width / 2
+        color: Qt.tint(ThemeColors.ground, "#33ffffff")
         Text {
             anchors.centerIn: parent
             text: avatar.name.length ? avatar.name.charAt(0).toUpperCase() : ""
-            font.family: Config.usernameFontFamily
-            font.pixelSize: avatar.width * 0.43
-            font.bold: true
-            color: ThemeColors.primary
+            color: "white"
+            font.family: ThemeColors.sans
+            font.weight: Font.Bold
+            font.pixelSize: avatar.size * 0.42
         }
     }
-    MultiEffect {
-        id: faceEffects
-        visible: !avatar.standIn
-        anchors.fill: faceImage
-        source: faceImage
-        antialiasing: true
-        maskEnabled: true
-        maskSource: faceImageMask
-        maskSpreadAtMin: 1.0
-        maskThresholdMax: 1.0
-        maskThresholdMin: 0.5
-        colorization: 0
-        colorizationColor: avatar.strokeColor === Config.passwordInputBackgroundColor && (1.0 - Config.passwordInputBackgroundOpacity < 0.3) ? Config.passwordInputContentColor : avatar.strokeColor
-    }
 
-    Item {
-        id: faceImageMask
-
-        height: this.width
-        layer.enabled: true
-        layer.smooth: true
+    // The photo, cut round and cropped to fill it. Drawn on a canvas rather
+    // than masked by a shader: a mask comes out empty on some renderers
+    // (Mesa's software one among them), and a login screen must not lose
+    // the face on a machine whose GPU driver is not there yet.
+    Image {
+        id: probe   // only to learn the picture's size
+        source: avatar.url
         visible: false
-        width: faceImage.width
-
-        Rectangle {
-            height: this.width
-            radius: avatar.squareRadius
-            width: faceImage.width
+    }
+    Canvas {
+        id: photo
+        anchors.fill: parent
+        visible: probe.status === Image.Ready
+        onVisibleChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        Component.onCompleted: if (avatar.url) loadImage(avatar.url)
+        onImageLoaded: requestPaint()
+        onPaint: {
+            const c = getContext("2d");
+            c.reset();
+            if (!visible || !isImageLoaded(avatar.url)) return;
+            const iw = probe.implicitWidth, ih = probe.implicitHeight;
+            const side = Math.min(iw, ih);
+            c.beginPath();
+            c.arc(width / 2, height / 2, width / 2, 0, 2 * Math.PI);
+            c.closePath();
+            c.clip();
+            c.drawImage(avatar.url, (iw - side) / 2, (ih - side) / 2, side, side, 0, 0, width, height);
         }
     }
+    readonly property string url: source.startsWith("/") ? "file://" + source : source
+    onUrlChanged: if (url) photo.loadImage(url); else photo.requestPaint()
 
     MouseArea {
-        id: mouseArea
         anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.ArrowCursor
-
-        function isCursorInsideAvatar() {
-            if (!mouseArea.containsMouse)
-                return false;
-            if (avatar.shape === "square")
-                return true;
-
-            // Ellipse center and radius
-            var centerX = width / 2;
-            var centerY = height / 2;
-            var radiusX = centerX;
-            var radiusY = centerY;
-
-            // Distance from center
-            var dx = (mouseArea.mouseX - centerX) / radiusX;
-            var dy = (mouseArea.mouseY - centerY) / radiusY;
-
-            // Check if pointer is inside the ellipse
-            return (dx * dx + dy * dy) <= 1.0;
-        }
-
-        onReleased: function (mouse) {
-            var isInside = isCursorInsideAvatar();
-            if (isInside) {
-                avatar.clicked();
-            } else {
-                avatar.clickedOutside();
-            }
-            mouse.accepted = isInside;
-        }
-
-        function updateHover() {
-            if (isCursorInsideAvatar()) {
-                cursorShape = Qt.PointingHandCursor;
-            } else {
-                cursorShape = Qt.ArrowCursor;
-            }
-        }
-
-        onMouseXChanged: updateHover()
-        onMouseYChanged: updateHover()
-
-        ToolTip {
-            id: toolTipControl
-            parent: mouseArea
-            enabled: Config.tooltipsEnable && !Config.tooltipsDisableUser
-            property bool shouldShow: enabled && avatar.showTooltip || (enabled && mouseArea.isCursorInsideAvatar() && avatar.tooltipText !== "")
-            visible: shouldShow
-            delay: 300
-            y: -height - 10
-            x: (parent.width - width) / 2
-            
-            contentItem: Text {
-                id: tooltipTextElement
-                font.family: Config.tooltipsFontFamily
-                font.pixelSize: Config.tooltipsFontSize * Config.generalScale
-                text: avatar.tooltipText
-                color: Config.tooltipsContentColor
-            }
-            background: Rectangle {
-                implicitWidth: tooltipTextElement.implicitWidth + (toolTipControl.leftPadding + toolTipControl.rightPadding)
-                implicitHeight: tooltipTextElement.implicitHeight + (toolTipControl.topPadding + toolTipControl.bottomPadding)
-                color: Config.tooltipsBackgroundColor
-                opacity: Config.tooltipsBackgroundOpacity
-                border.width: 0
-                radius: Config.tooltipsBorderRadius * Config.generalScale
-            }
-        }
+        cursorShape: Qt.PointingHandCursor
+        onClicked: avatar.clicked()
     }
 }

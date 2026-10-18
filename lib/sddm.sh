@@ -23,7 +23,11 @@ deploy_sddm_theme() {
         return 0
     fi
 
-    if [[ -d "$src" ]]; then
+    # The b1air package has the theme and its sddm.conf.d drop-in.
+    local packaged=0
+    declare -F arch_packaging >/dev/null && arch_packaging && packaged=1
+
+    if [[ "$packaged" -eq 0 && -d "$src" ]]; then
         sudo install -d -m 755 "$dst"
         sudo rsync -a --delete --chown=root:root "$src/" "$dst/"
         if sudo diff -rq "$src" "$dst" >/dev/null; then
@@ -32,7 +36,7 @@ deploy_sddm_theme() {
             warn "The login screen theme in $dst differs from the repo after copying it."
         fi
     fi
-    if [[ -f "$repo/etc/sddm.conf" ]]; then
+    if [[ "$packaged" -eq 0 && -f "$repo/etc/sddm.conf" ]]; then
         sudo install -Dm644 "$repo/etc/sddm.conf" /etc/sddm.conf
     fi
 

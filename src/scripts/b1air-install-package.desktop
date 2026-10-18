@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Install Package
+Name[uk]=Встановити пакет
+Name[ru]=Установить пакет
+Comment=Install a .deb, .rpm or Flatpak, or run an AppImage
+Comment[uk]=Встановити .deb, .rpm чи Flatpak або запустити AppImage
+Comment[ru]=Установить .deb, .rpm или Flatpak либо запустить AppImage
+Exec=b1air-install-package %f
+TryExec=b1air-install-package
+Icon=package-x-generic
+Terminal=false
+NoDisplay=true
+MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-rpm;application/x-redhat-package-manager;application/vnd.appimage;application/x-iso9660-appimage;application/vnd.flatpak.ref;application/vnd.flatpak;

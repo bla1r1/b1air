@@ -15,7 +15,8 @@ C.Dialog {
     // Body text for a plain confirmation. Ignored when contentItem is set.
     property string message: ""
     // Tone of the accepting button: Design.danger for "Delete", "Clear".
-    property color acceptTone: Design.accent
+    // The confirming button in red: deleting, discarding, ending something.
+    property bool destructive: false
 
     // The buttons, drawn here from standardButtons rather than by Qt's
     // DialogButtonBox. Two things went wrong with Qt's: it named them itself,
@@ -85,7 +86,7 @@ C.Dialog {
 
     // Lighter than it was: a sheet is about the window, not the screen.
     C.Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.25)
+        color: Design.scrim
         Behavior on opacity { NumberAnimation { duration: Design.duration.fast } }
     }
 
@@ -97,12 +98,12 @@ C.Dialog {
             Rectangle {
                 required property int index
                 anchors.fill: parent
-                anchors.margins: -Design.s(2) * (index + 1)
+                anchors.margins: -Design.s(Design.space.xxs) * (index + 1)
                 anchors.topMargin: 0
-                anchors.bottomMargin: -Design.s(3) * (index + 1)
-                radius: Design.s(Design.radius.card) + Design.s(2) * (index + 1)
+                anchors.bottomMargin: -Design.s(Design.space.xxs) * 1.5 * (index + 1)
+                radius: Design.s(Design.radius.card) + Design.s(Design.space.xxs) * (index + 1)
                 color: "transparent"
-                border.width: Design.s(2)
+                border.width: Design.s(Design.space.xxs)
                 border.color: Qt.rgba(0, 0, 0, 0.07 - index * 0.011)
             }
         }
@@ -138,7 +139,7 @@ C.Dialog {
     // a wrapping label as contentItem sizes from the dialog while the dialog
     // sizes from it, which Qt reports as a binding loop on every open.
     contentItem: Item {
-        implicitWidth: Design.s(340)
+        implicitWidth: Design.s(Design.width.dialog)
         implicitHeight: msg.implicitHeight
         Label {
             id: msg
@@ -163,33 +164,15 @@ C.Dialog {
 
             Repeater {
                 model: root._shown
-                delegate: C.Button {
-                    id: btn
+                // The suite's Button, as everywhere else: the dialog drew its
+                // own, a pixel shorter, with a focus outline of its own.
+                delegate: Button {
                     required property var modelData
                     readonly property bool accepting: modelData[2] === "accept"
-                    implicitHeight: Design.s(30)
-                    implicitWidth: Math.max(Design.s(76), label.implicitWidth + Design.s(28))
-                    hoverEnabled: true
+                    variant: accepting ? (root.destructive ? "danger" : "primary") : "secondary"
+                    text: root.buttonText[modelData[0]] !== undefined
+                          ? root.buttonText[modelData[0]] : I18n.tr(modelData[1])
                     onClicked: root._press(modelData[2])
-                    contentItem: Text {
-                        id: label
-                        text: root.buttonText[btn.modelData[0]] !== undefined
-                              ? root.buttonText[btn.modelData[0]] : I18n.tr(btn.modelData[1])
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        font.family: Design.font.sans
-                        font.pixelSize: Design.s(Design.font.body)
-                        font.weight: Design.weight.medium
-                        color: btn.accepting ? Design.accentText : Design.text
-                    }
-                    background: Rectangle {
-                        radius: Design.s(Design.radius.ctl)
-                        color: btn.accepting
-                               ? (btn.hovered ? Qt.lighter(root.acceptTone, 1.12) : root.acceptTone)
-                               : (btn.hovered ? Design.hover : Design.raised)
-                        border.width: btn.visualFocus ? 2 : 0
-                        border.color: Design.accent
-                    }
                 }
             }
         }

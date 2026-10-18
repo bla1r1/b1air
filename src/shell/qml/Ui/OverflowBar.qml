@@ -30,10 +30,23 @@ ScrollBar {
     // The ScrollView this bar belongs to, for it to stand at its right edge.
     property Item view: null
     Binding { when: root.view !== null; target: root; property: "parent"; value: root.view }
+    // Clear of the edges: a ScrollView often runs to a window's rounded
+    // corner (Settings' page pane does), and a bar from top to bottom at the
+    // very edge ran into both corners and sat on the window's own border.
+    readonly property real inset: Design.s(Design.space.sm)
+    // Extra room above the bar, for a view whose top is a heading rather
+    // than the content that scrolls (Settings' page name).
+    property real startOffset: 0
+    // Whatever it scrolls is moving (a Flickable, ListView or ScrollView's).
+    readonly property bool flicking: {
+        const v = root.view || root.parent;
+        return !!(v && (v.moving || (v.flickableItem && v.flickableItem.moving)));
+    }
     Binding { when: root.view !== null; target: root; property: "x"
-              value: root.view ? (root.view.mirrored ? 0 : root.view.width - root.width) : 0 }
-    Binding { when: root.view !== null; target: root; property: "y"; value: root.view ? root.view.topPadding : 0 }
-    Binding { when: root.view !== null; target: root; property: "height"; value: root.view ? root.view.availableHeight : 0 }
+              value: root.view ? (root.view.mirrored ? Design.s(Design.space.xs)
+                                                     : root.view.width - root.width - Design.s(Design.space.xs)) : 0 }
+    Binding { when: root.view !== null; target: root; property: "y"; value: root.view ? root.view.topPadding + root.inset + root.startOffset : 0 }
+    Binding { when: root.view !== null; target: root; property: "height"; value: root.view ? root.view.availableHeight - root.inset * 2 - root.startOffset : 0 }
 
     // `size` is the fraction of the content currently on screen, so anything
     // below 1 means there is more of it. Works the same for a ListView, a
@@ -48,15 +61,18 @@ ScrollBar {
     // across its padding as well, and grows while the pointer is on it. At
     // 4px and nothing around it, dragging it meant finding a 4px target.
     hoverEnabled: true
-    padding: Design.s(3)
+    padding: Design.s(Design.space.xxs)
     minimumSize: 0.08
 
     contentItem: Rectangle {
-        implicitWidth: root.hovered || root.pressed ? Design.s(8) : Design.s(4)
+        implicitWidth: root.hovered || root.pressed ? Design.s(Design.space.sm) : Design.s(Design.space.xs)
         implicitHeight: implicitWidth
         radius: width / 2
         color: root.pressed ? Design.textDim : Design.textFaint
-        opacity: root.hovered || root.pressed ? 1.0 : 0.8
+        // Quiet while nothing moves — there, but not a line drawn down the
+        // panel — and plain while scrolling or under the pointer.
+        opacity: root.hovered || root.pressed ? 1.0 : root.flicking ? 0.85 : 0.45
+        Behavior on opacity { NumberAnimation { duration: Design.duration.base } }
         Behavior on implicitWidth { NumberAnimation { duration: Design.duration.fast } }
     }
 }

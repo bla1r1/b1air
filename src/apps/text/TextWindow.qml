@@ -29,10 +29,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: (TextBackend.isModified ? "● " : "") + I18n.tr("Text Editor — %1", TextBackend.fileName)
-    width: Design.s(900)
-    height: Design.s(620)
-    minimumWidth: Design.s(680)
-    minimumHeight: Design.s(420)
+    width: Design.s(Design.window.compactWidth)
+    height: Design.s(Design.window.compactHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 
@@ -119,7 +119,7 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.base
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -129,44 +129,27 @@ Window {
             // ═════════════════════════════════════════════════════════════════
             // TOP HEADER BAR (COMPACT TILED TOOLBAR)
             // ═════════════════════════════════════════════════════════════════
+            // What is open on the left, as in every app; the commands on the right,
+            // Save the one primary while there is something to save.
             AppToolbar {
                 Layout.fillWidth: true
 
-                BarGroup {
-                    BarButton { glyph: "\u{f0415}"; label: I18n.tr("New"); tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
-                    BarButton { glyph: "\u{f0193}"; label: I18n.tr("Save"); primary: TextBackend.isModified; tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
-                    // Changes kept from before (the session) or made now,
-                    // let go: the file as it is on disk.
-                    BarButton {
-                        visible: TextBackend.isModified && TextBackend.filePath !== ""
-                        glyph: "\u{f054c}"
-                        tip: I18n.tr("Back to the saved file")
-                        onClicked: revertDialog.open()
-                    }
+                AppTitle {
+                    title: TextBackend.fileName || I18n.tr("Untitled")
+                    subtitle: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
+                    modified: TextBackend.isModified
                 }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 0
-                    Label {
-                        Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignHCenter
-                        text: TextBackend.fileName + (TextBackend.isModified ? "  •" : "")
-                        weight: Design.weight.semibold
-                        elide: Text.ElideMiddle
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: text !== ""
-                        horizontalAlignment: Text.AlignHCenter
-                        text: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
-                        role: "caption"
-                        color: Design.textFaint
-                        elide: Text.ElideMiddle
-                    }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+                // Changes kept from before (the session) or made now,
+                // let go: the file as it is on disk.
+                Button {
+                    visible: TextBackend.isModified && TextBackend.filePath !== ""
+                    variant: "ghost"; iconOnly: true; icon: "\u{f054c}"
+                    tip: I18n.tr("Back to the saved file")
+                    onClicked: revertDialog.open()
                 }
-                BarGroup {
-                    BarButton { glyph: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
-                }
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
+                Button { variant: TextBackend.isModified ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save"); tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
             }
 
             // ═════════════════════════════════════════════════════════════════
@@ -174,15 +157,15 @@ Window {
             // ═════════════════════════════════════════════════════════════════
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(34)
-                color: Design.crust
+                Layout.preferredHeight: Design.s(Design.size.md)
+                color: Design.veil
                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.glassBorder }
 
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Design.s(Design.space.xs)
                     anchors.rightMargin: Design.s(Design.space.xs)
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
 
                     ListView {
                         id: tabStrip
@@ -191,7 +174,7 @@ Window {
                         Layout.maximumWidth: contentWidth
                         orientation: ListView.Horizontal
                         clip: true
-                        spacing: Design.s(2)
+                        spacing: Design.s(Design.space.xxs)
                         boundsBehavior: Flickable.StopAtBounds
                         model: TextBackend.tabs
                         currentIndex: TextBackend.currentIndex
@@ -206,13 +189,13 @@ Window {
                             required property bool modified
                             readonly property bool current: index === TextBackend.currentIndex
                             height: tabStrip.height
-                            width: Math.min(Design.s(220), tabRow.implicitWidth + Design.s(20))
-                            color: current ? Design.base : (tabMa.containsMouse ? Design.hover : "transparent")
+                            width: Math.min(Design.s(Design.width.tab), tabRow.implicitWidth + Design.s(Design.space.lg))
+                            color: current ? Design.veilStrong : (tabMa.containsMouse ? Design.stateHover : "transparent")
 
                             Rectangle {
                                 visible: tab.current
                                 anchors.top: parent.top
-                                width: parent.width; height: Design.s(2)
+                                width: parent.width; height: Design.s(Design.space.xxs)
                                 color: Design.accent
                             }
 
@@ -230,12 +213,12 @@ Window {
                             RowLayout {
                                 id: tabRow
                                 anchors.fill: parent
-                                anchors.leftMargin: Design.s(10)
-                                anchors.rightMargin: Design.s(6)
-                                spacing: Design.s(6)
+                                anchors.leftMargin: Design.s(Design.space.md)
+                                anchors.rightMargin: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.xs)
                                 Label {
                                     Layout.fillWidth: true
-                                    Layout.maximumWidth: Design.s(170)
+                                    Layout.maximumWidth: Design.s(Design.width.label)
                                     text: tab.name
                                     elide: Text.ElideMiddle
                                     role: "caption"
@@ -244,12 +227,12 @@ Window {
                                 }
                                 // The dot for changes; the cross under the pointer.
                                 Item {
-                                    Layout.preferredWidth: Design.s(16)
-                                    Layout.preferredHeight: Design.s(16)
+                                    Layout.preferredWidth: Design.s(Design.size.micro)
+                                    Layout.preferredHeight: Design.s(Design.size.micro)
                                     Rectangle {
                                         anchors.centerIn: parent
                                         visible: tab.modified && !tabMa.containsMouse && !closeMa.containsMouse
-                                        width: Design.s(7); height: width; radius: width / 2
+                                        width: Design.s(Design.size.dot); height: width; radius: width / 2
                                         color: Design.accent
                                     }
                                     Icon {
@@ -273,8 +256,10 @@ Window {
                             ToolTip.text: tab.path
                         }
                     }
-                    BarButton {
-                        glyph: "\u{f0415}"
+                    Button {
+                        Layout.alignment: Qt.AlignVCenter
+                        variant: "ghost"; iconOnly: true; size: "sm"
+                        icon: "\u{f0415}"
                         tip: I18n.tr("New tab (Ctrl+T)")
                         onClicked: TextBackend.newFile()
                     }
@@ -375,7 +360,7 @@ Window {
         onRejected: window.closeAfterSave = ""
 
         contentItem: ColumnLayout {
-            implicitWidth: Design.s(420)
+            implicitWidth: Design.s(Design.width.menuMax)
             spacing: Design.s(Design.space.sm)
 
             Label {
@@ -399,7 +384,7 @@ Window {
         required property int index
         required property string docId
         required property string path
-        color: Design.base
+        color: "transparent"
 
         property int currentLine: 1
         property int currentCol: 1
@@ -435,8 +420,8 @@ Window {
             // ── Line Numbers Gutter ──────────────────────────────────────────
             Rectangle {
                 Layout.fillHeight: true
-                Layout.preferredWidth: Design.s(52)
-                color: Design.crust
+                Layout.preferredWidth: Design.s(Design.size.rowTall)
+                color: Design.veil
 
                 ListView {
                     id: lineNumbersView
@@ -463,7 +448,7 @@ Window {
                         readonly property real _next: index + 1 < pane.lineStarts.length
                             ? (_layout, editorArea.positionToRectangle(pane.lineStarts[index + 1]).y)
                             : _here.y + _here.height
-                        width: lineNumbersView.width - Design.s(14)
+                        width: lineNumbersView.width - Design.s(Design.space.md)
                         height: Math.max(1, _next - _here.y)
 
                         Text {
@@ -501,14 +486,17 @@ Window {
 
                 TextArea.flickable: TextArea {
                     id: editorArea
+                    // The style's own frame drew an accent outline round the
+                    // whole page whenever it had the caret, i.e. always.
+                    background: null
                     font.family: Design.font.mono
-                    font.pixelSize: Design.s(13)
+                    font.pixelSize: Design.s(Design.font.body)
                     color: Design.text
                     selectionColor: Design.tint(Design.accent, 0.35)
                     selectedTextColor: Design.text
                     tabStopDistance: 32
                     wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
-                    padding: Design.s(12)
+                    padding: Design.s(Design.space.md)
                     selectByMouse: true
                     // The tab's text is put in when it opens and when the
                     // backend replaces it (contentReset), not bound: bound,
@@ -569,40 +557,21 @@ Window {
                 }
 
                 // Something to read on an empty document.
-                ColumnLayout {
+                EmptyState {
                     // Positioned against the Flickable's viewport rather
                     // than anchored to `parent`: assigning TextArea.flickable
                     // makes this a child of the content item, whose origin
                     // is the top-left of the *document*, so centring on it
                     // put the message in the gutter.
-                    x: (editorFlickable.width - implicitWidth) / 2
+                    width: Math.min(editorFlickable.width, Design.s(Design.width.dialog))
+                    x: (editorFlickable.width - width) / 2
                     y: (editorFlickable.height - implicitHeight) / 2
-                    spacing: Design.s(Design.space.sm)
                     visible: editorArea.text.length === 0
                              && !pane.path
                              && !editorArea.activeFocus
-
-                    Icon {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "\u{f0219}"
-                        role: "display"
-                        color: Design.textFaint
-                    }
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: I18n.tr("Empty document")
-                        weight: Design.weight.semibold
-                        dim: true
-                    }
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        horizontalAlignment: Text.AlignHCenter
-                        text: I18n.tr("Start typing, or open a file: b1air-text notes.md")
-                        role: "caption"
-                        color: Design.textFaint
-                    }
+                    icon: "\u{f0219}"
+                    title: I18n.tr("Empty document")
+                    hint: I18n.tr("Start typing, or open a file.")
                 }
             }
         }

@@ -86,34 +86,35 @@ Item {
         onStopRequested: Devices.cancelTask(pane.id)
 
         actions: [
-            Pill {
+            Chip {
                 visible: pane.state === "trust"
                 active: true
                 icon: "\u{f0565}"
                 label: I18n.tr("Trust")
                 onClicked: Devices.pair(pane.id)
             },
-            BarButton {
-                glyph: "\u{f01ea}"
+            Button {
+                variant: "secondary"
+                icon: "\u{f01ea}"
                 label: I18n.tr("Eject")
                 enabled: !pane.task
                 onClicked: Devices.eject(pane.id)
             }
         ]
         footer: [
-            BarButton {
+            Button {
+                variant: (!pane.iphone) ? "primary" : "secondary"
                 visible: pane.ready
-                glyph: "\u{f01da}"
+                icon: "\u{f01da}"
                 label: I18n.tr("Import Photos")
-                primary: !pane.iphone
                 enabled: !pane.task
                 onClicked: Devices.importPhotos(pane.id)
             },
-            BarButton {
+            Button {
+                variant: "primary"
                 visible: pane.ready && pane.iphone
-                glyph: "\u{f006f}"
+                icon: "\u{f006f}"
                 label: I18n.tr("Back Up Now")
-                primary: true
                 enabled: !pane.task
                 onClicked: Devices.backup(pane.id)
             }
@@ -123,13 +124,13 @@ Item {
         ColumnLayout {
             visible: !pane.ready
             anchors.centerIn: parent
-            width: Math.min(parent.width - Design.s(48), Design.s(440))
+            width: Math.min(parent.width - Design.s(Design.size.art), Design.s(Design.width.menuMax))
             spacing: Design.s(Design.space.md)
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: pane.state === "locked" ? "\u{f033e}" : pane.state === "connecting" ? "\u{f0450}" : "\u{f0565}"
                 font.family: Design.font.icon
-                font.pixelSize: Design.s(56)
+                font.pixelSize: Design.s(Design.font.hero)
                 color: Design.textFaint
             }
             Label {
@@ -183,13 +184,18 @@ Item {
                         ? I18n.tr("Last backup to this computer: %1", I18n.date(new Date(pane.device.lastBackup), "d MMMM yyyy, HH:mm"))
                         : I18n.tr("Never backed up to this computer")
                 }
-                ButtonRow {
-                    BarButton {
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        variant: "secondary"
                         visible: !!pane.device.lastBackup
                         label: I18n.tr("Show Backups")
                         onClicked: pane.openFolder(pane.device.backupDir)
                     }
-                    BarButton {
+                    Button {
+                        variant: "secondary"
                         label: I18n.tr("Back Up Now")
                         enabled: !pane.task
                         onClicked: Devices.backup(pane.id)
@@ -232,9 +238,12 @@ Item {
                     dim: true
                     text: I18n.tr("An iPhone takes photos as HEIC; they open here like any other picture.")
                 }
-                ButtonRow {
-                    BarButton { label: I18n.tr("Show Imported"); onClicked: pane.openFolder(FilesBackend.homePath + "/Pictures/" + (pane.device.name || "")) }
-                    BarButton { label: I18n.tr("Import Photos"); enabled: !pane.task; onClicked: Devices.importPhotos(pane.id) }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button { variant: "secondary"; label: I18n.tr("Show Imported"); onClicked: pane.openFolder(FilesBackend.homePath + "/Pictures/" + (pane.device.name || "")) }
+                    Button { variant: "secondary"; label: I18n.tr("Import Photos"); enabled: !pane.task; onClicked: Devices.importPhotos(pane.id) }
                 }
             }
             Divider {}
@@ -246,8 +255,11 @@ Item {
                     dim: true
                     text: I18n.tr("Its camera folder, as it is: to pick a few by hand, or copy some back.")
                 }
-                ButtonRow {
-                    BarButton { label: I18n.tr("Browse"); onClicked: Devices.browse(pane.id, "media") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Design.s(Design.space.sm)
+                    Item { Layout.fillWidth: true }
+                    Button { variant: "secondary"; label: I18n.tr("Browse"); onClicked: Devices.browse(pane.id, "media") }
                 }
             }
         }
@@ -262,20 +274,23 @@ Item {
                 text: pane.iphone ? I18n.tr("Apps on the iPhone that share files. Open one to copy files to it or from it.")
                                   : I18n.tr("The phone's storage, as folders.")
             }
-            Label { visible: pane.iphone && pane.appsLoading; text: I18n.tr("Looking…"); dim: true }
-            Label {
-                visible: pane.iphone && !pane.appsLoading && pane.apps.length === 0
-                text: I18n.tr("No app on this iPhone shares files.")
-                dim: true
+            AppState {
+                Layout.fillWidth: true
+                // A column that sizes to its content has no height to fill;
+                // this keeps the message clear of the paragraph above it.
+                Layout.preferredHeight: Design.s(Design.size.canvas)
+                mode: !pane.iphone ? "" : pane.appsLoading ? "loading" : pane.apps.length === 0 ? "empty" : ""
+                icon: "\u{f003b}"
+                title: pane.appsLoading ? I18n.tr("Looking…") : I18n.tr("No app on this iPhone shares files.")
             }
             Rectangle {
                 Layout.fillWidth: true
                 visible: list.count > 0
                 implicitHeight: listColumn.implicitHeight
                 radius: Design.s(Design.radius.card)
-                color: Design.sunken
+                color: Design.glassCard
                 border.color: Design.line
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     id: listColumn
                     width: parent.width
@@ -293,13 +308,13 @@ Item {
                             required property var modelData
                             required property int index
                             Layout.fillWidth: true
-                            implicitHeight: Design.s(44)
+                            implicitHeight: Design.s(Design.size.row)
                             color: appMa.containsMouse ? Design.hover : "transparent"
                             radius: Design.s(Design.radius.card)
                             Rectangle {
                                 visible: appRow.index > 0
                                 anchors.top: parent.top
-                                x: Design.s(52); width: parent.width - x; height: 1
+                                x: Design.s(Design.size.rowTall); width: parent.width - x; height: 1
                                 color: Design.line
                             }
                             RowLayout {
@@ -308,16 +323,16 @@ Item {
                                 anchors.rightMargin: Design.s(Design.space.md)
                                 spacing: Design.s(Design.space.md)
                                 Rectangle {
-                                    Layout.preferredWidth: Design.s(28); Layout.preferredHeight: Design.s(28)
-                                    radius: Design.s(7)
-                                    color: Design.tint(Design.blue, 0.2)
-                                    Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.blue }
+                                    Layout.preferredWidth: Design.s(Design.size.sm); Layout.preferredHeight: Design.s(Design.size.sm)
+                                    radius: Design.s(Design.radius.ctl)
+                                    color: Design.well
+                                    Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.textDim }
                                 }
                                 Label { Layout.fillWidth: true; text: appRow.modelData.name; elide: Text.ElideRight }
                                 Label { visible: !!appRow.modelData.version; text: appRow.modelData.version || ""; dim: true; role: "caption" }
                                 Icon { text: "\u{f0142}"; color: Design.textFaint }
                             }
-                            MouseArea {
+                            Clickable {
                                 id: appMa
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -344,7 +359,7 @@ Item {
             id: column
             x: Math.max(Design.s(Design.space.xl), (page.width - width) / 2)
             y: Design.s(Design.space.xl)
-            width: Math.min(page.width - Design.s(Design.space.xl) * 2, Design.s(720))
+            width: Math.min(page.width - Design.s(Design.space.xl) * 2, Design.s(Design.width.menuMax))
             spacing: Design.s(Design.space.xl)
         }
     }

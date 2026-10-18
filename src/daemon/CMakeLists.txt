@@ -4,11 +4,12 @@
 # common, compiled once. It used to be compiled three times: by the Makefile
 # for b1air-daemon, by the Makefile again for its own b1air-polkit-agent, and
 # by the shell's CMakeLists for b1air-shell and a second polkit agent.
-# The idle thread (idle.cpp) talks to the compositor over ext-idle-notify-v1;
-# protocol/ holds its description, from wayland-protocols (MIT).
+# The idle thread (idle.cpp) talks to the compositor over ext-idle-notify-v1,
+# described in the wayland-protocols package.
 pkg_check_modules(CORE_WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 find_program(CORE_WAYLAND_SCANNER wayland-scanner REQUIRED)
-set(IDLE_XML ${CMAKE_CURRENT_SOURCE_DIR}/protocol/ext-idle-notify-v1.xml)
+pkg_get_variable(CORE_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+set(IDLE_XML ${CORE_PROTOCOLS_DIR}/staging/ext-idle-notify/ext-idle-notify-v1.xml)
 set(IDLE_GEN ${CMAKE_CURRENT_BINARY_DIR}/protocol)
 file(MAKE_DIRECTORY ${IDLE_GEN})
 add_custom_command(
@@ -41,10 +42,9 @@ add_library(b1air-core STATIC
 target_include_directories(b1air-core PRIVATE ${IDLE_GEN})
 target_include_directories(b1air-core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/common
-    ${PROJECT_SOURCE_DIR}/third_party)
+    ${PROJECT_SOURCE_DIR}/common)
 target_link_libraries(b1air-core PUBLIC
-    b1air-sqlite Threads::Threads systemd PkgConfig::LIBCRYPTO PkgConfig::CORE_WAYLAND)
+    b1air-sqlite nlohmann_json::nlohmann_json Threads::Threads systemd PkgConfig::LIBCRYPTO PkgConfig::CORE_WAYLAND)
 b1air_warnings(b1air-core)
 
 add_executable(b1air-daemon main.cpp)
@@ -60,8 +60,8 @@ b1air_warnings(b1air-polkit-agent)
 # org.freedesktop.secrets. Needs only the store, not the rest of the core.
 add_executable(b1air-secret-service secret_service_main.cpp secret_store.cpp)
 target_include_directories(b1air-secret-service PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/third_party)
-target_link_libraries(b1air-secret-service PRIVATE PkgConfig::LIBCRYPTO)
+    ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(b1air-secret-service PRIVATE PkgConfig::LIBCRYPTO nlohmann_json::nlohmann_json)
 b1air_warnings(b1air-secret-service)
 
 install(TARGETS b1air-daemon b1air-polkit-agent b1air-secret-service RUNTIME DESTINATION bin)

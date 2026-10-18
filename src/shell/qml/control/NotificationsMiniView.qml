@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import "../Ui"
 import "../Services"
+import "../notifications"
 
 // =============================================================================
 // Notifications Mini View (Control Center Subpage)
@@ -12,6 +13,10 @@ import "../Services"
 // same header, with a different back-arrow glyph and a bordered button where
 // the other four use a hover tone, and it was the only mini view with no way
 // through to its own full settings page. Same frame as its siblings now.
+//
+// The list is a timeline (Now, Today, Yesterday, Earlier), one card for an
+// app and sender with its lines in it, quiet fills and no frames; Do Not
+// Disturb and Clear are chips in the header.
 // =============================================================================
 
 MiniView {
@@ -19,7 +24,7 @@ MiniView {
 
     title: I18n.tr("Notifications")
     icon: "\u{f009a}"
-    tone: Design.lavender
+    tone: Design.accent
     footerLabel: I18n.tr("Notification Settings…")
 
     // While this list is on screen, a toast repeating one of its lines is
@@ -28,11 +33,22 @@ MiniView {
     Component.onCompleted: Notifications.acquireList()
     Component.onDestruction: Notifications.releaseList()
 
-    trailing: ActionButton {
-        visible: Notifications.history.count > 0
-        icon: "\u{f0156}"
-        label: I18n.tr("Clear")
-        onActivated: Notifications.clearAllHistory()
+    // Do Not Disturb and Clear, as chips in the header rather than a settings
+    // row over the list.
+    trailing: RowLayout {
+        spacing: Design.s(Design.space.xs)
+        Chip {
+            icon: "\u{f009b}"
+            label: Notifications.dnd && Notifications.modeInfo ? Notifications.modeInfo.name : I18n.tr("Do Not Disturb")
+            active: Notifications.dnd
+            onClicked: Notifications.toggleDnd()
+        }
+        Chip {
+            visible: Notifications.history.count > 0
+            icon: "\u{f0156}"
+            label: I18n.tr("Clear")
+            onClicked: Notifications.clearAllHistory()
+        }
     }
 
     ColumnLayout {
@@ -40,242 +56,280 @@ MiniView {
         anchors.fill: parent
         spacing: Design.s(Design.space.md)
 
-        // ── DND toggle ───────────────────────────────────────────────────────
-        Card {
-            Layout.fillWidth: true
-
-            Toggle {
-                label: I18n.tr("Do Not Disturb")
-                subtitle: I18n.tr("Silence popups and store them in history")
-                checked: Notifications.dnd
-                onToggled: Notifications.toggleDnd()
-            }
-        }
-
-        // ── History ──────────────────────────────────────────────────────────
-        // ── Grouped by app ──────────────────────────────────────────────────
+        // ── The timeline ─────────────────────────────────────────────────────
         //
-        // As a desktop's notification centre: an app's notifications in one
-        // stack, newest on top and the rest peeking out under it; a click
-        // spreads them. Each shows the actions its app offers while it is
-        // still alive (Reply, Open, …).
-        property var expanded: ({})
+        // Now (the last hour), Today, Yesterday, Earlier. In each, one card
+        // for an app and sender — a chat reads as a chat, its lines in order —
+        // with the newest one's picture, actions and reply. Yesterday and
+        // earlier are one line each until opened: what is old is there, and
+        // not in the way.
+        property var opened: ({})
         property int stamp: 0
         Connections {
             target: Notifications.history
             function onCountChanged() { page.stamp++; }
         }
-        readonly property var groups: {
-            const _ = page.stamp;
-            const order = [], byApp = {};
+        readonly property var sections: {
+            const _ = page.stamp, __ = Notifications.now;
+            const order = ["now", "today", "yesterday", "earlier"];
+            const out = order.map(id => ({ id: id, cards: [], items: 0, apps: [] }));
             for (let i = 0; i < Notifications.history.count; i++) {
                 const it = Notifications.history.get(i);
-                const app = it.appName || "";
-                if (!byApp[app]) { byApp[app] = { app: app, icon: it.icon, items: [] }; order.push(byApp[app]); }
-                byApp[app].items.push({ index: i, summary: it.summary, body: it.body, time: it.time, icon: it.icon, obj: it.obj });
+                const sec = out[order.indexOf(Notifications.sectionOf(it.ts))];
+                const key = (it.appName || "") + "\n" + (it.summary || "");
+                let card = sec.cards.find(c => c.key === key);
+                if (!card) {
+                    card = { key: key, newest: i, indices: [], lines: [] };
+                    sec.cards.push(card);
+                }
+                card.indices.push(i);
+                if (it.body) card.lines.unshift(it.body);   // oldest first, as read
+                sec.items++;
+                if (sec.apps.indexOf(it.appIcon || it.icon || "") < 0) sec.apps.push(it.appIcon || it.icon || "");
             }
-            return order;
+            return out.filter(s => s.cards.length > 0);
         }
-        function toggleGroup(app) {
-            const e = Object.assign({}, page.expanded);
-            e[app] = !e[app];
-            page.expanded = e;
+        function sectionTitle(id) {
+            return id === "now" ? I18n.tr("Now") : id === "today" ? I18n.tr("Today")
+                 : id === "yesterday" ? I18n.tr("Yesterday") : I18n.tr("Earlier");
         }
-        function clearGroup(group) {
-            for (let k = group.items.length - 1; k >= 0; k--)
-                Notifications.dismissHistoryItem(group.items[k].index);
+        function toggleSection(id) {
+            const o = Object.assign({}, page.opened);
+            o[id] = !o[id];
+            page.opened = o;
+        }
+        function dismissCard(card) {
+            const idx = card.indices.slice().sort((a, b) => b - a);
+            for (const i of idx) Notifications.dismissHistoryItem(i);
         }
 
-        ListView {
-            id: list
+        ScrollArea {
+            id: scroll
+            framed: false
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            spacing: Design.s(Design.space.sm)
-            model: parent.groups
-            boundsBehavior: Flickable.StopAtBounds
+            visible: Notifications.history.count > 0
 
-            delegate: ColumnLayout {
-                id: group
-                required property var modelData
-                readonly property bool open: !!page.expanded[group.modelData.app] || group.modelData.items.length === 1
-                width: ListView.view ? ListView.view.width : 0
-                spacing: Design.s(Design.space.xs)
-
-                // The app's line: its name, and for a spread stack, fold and clear.
-                RowLayout {
-                    Layout.fillWidth: true
-                    visible: group.modelData.items.length > 1
-                    Label {
-                        Layout.fillWidth: true
-                        text: group.modelData.app
-                        role: "caption"
-                        weight: Design.weight.semibold
-                        dim: true
-                        elide: Text.ElideRight
-                    }
-                    Pill {
-                        visible: group.open
-                        label: I18n.tr("Show less")
-                        onClicked: page.toggleGroup(group.modelData.app)
-                    }
-                    IconButton {
-                        icon: "\u{f0156}"
-                        role: "caption"
-                        onClicked: page.clearGroup(group.modelData)
-                    }
-                }
+            ColumnLayout {
+                width: scroll.availableWidth
+                spacing: Design.s(Design.space.sm)
 
                 Repeater {
-                    model: group.open ? group.modelData.items : group.modelData.items.slice(0, 1)
-                    delegate: Item {
-                        id: cell
+                    model: page.sections
+                    delegate: ColumnLayout {
+                        id: section
                         required property var modelData
-                        required property int index
-                        // A folded stack: the cards under the top one peek out below it.
-                        readonly property int under: group.open ? 0 : Math.min(2, group.modelData.items.length - 1)
+                        // Now and today open; yesterday and earlier one line until opened.
+                        readonly property bool open: modelData.id === "now" || modelData.id === "today"
+                                                     || !!page.opened[modelData.id]
                         Layout.fillWidth: true
-                        implicitHeight: card.implicitHeight + cell.under * Design.s(6)
+                        spacing: Design.s(Design.space.sm)
 
-                        // Only what shows below the top card: drawn whole under
-                        // it, the glass would let them show through.
-                        Item {
-                            y: card.implicitHeight
-                            width: parent.width
-                            height: cell.under * Design.s(6)
-                            clip: true
-                            Repeater {
-                                model: cell.under
+                        Label {
+                            Layout.topMargin: Design.s(Design.space.xs)
+                            text: page.sectionTitle(section.modelData.id)
+                            role: "caption"
+                            weight: Design.weight.semibold
+                            dim: true
+                        }
+
+                        // Folded: the apps' icons and how many.
+                        Rectangle {
+                            Layout.fillWidth: true
+                            visible: !section.open
+                            implicitHeight: Design.s(Design.size.row)
+                            radius: Design.s(Design.radius.card)
+                            color: foldArea.containsMouse ? Design.glassHover : Design.glassCard
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(Design.space.md)
+                                anchors.rightMargin: Design.s(Design.space.md)
+                                spacing: Design.s(Design.space.xs)
+                                Repeater {
+                                    model: section.modelData.apps.slice(0, 3)
+                                    delegate: Image {
+                                        required property string modelData
+                                        Layout.preferredWidth: Design.s(Design.size.xs)
+                                        Layout.preferredHeight: Design.s(Design.size.xs)
+                                        source: modelData
+                                        sourceSize: Qt.size(64, 64)
+                                        fillMode: Image.PreserveAspectFit
+                                        mipmap: true
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: Design.s(Design.space.xs)
+                                    text: I18n.trn("%1 notification", "%1 notifications", section.modelData.items)
+                                    role: "caption"
+                                    dim: true
+                                    elide: Text.ElideRight
+                                }
+                                Icon { text: "\u{f0140}"; color: Design.textDim }
+                            }
+                            Clickable {
+                                id: foldArea
+                                anchors.fill: parent
+                                onClicked: page.toggleSection(section.modelData.id)
+                            }
+                        }
+
+                        Repeater {
+                            model: section.open ? section.modelData.cards : []
+                            delegate: Rectangle {
+                                id: card
+                                required property var modelData
+                                readonly property var item: Notifications.history.get(card.modelData.newest)
+                                readonly property var actions: (card.item && card.item.obj && card.item.obj.actions
+                                    ? card.item.obj.actions : []).filter(a => a.identifier !== "default")
+                                readonly property int count: card.modelData.indices.length
+                                Layout.fillWidth: true
+                                implicitHeight: body.implicitHeight + Design.s(Design.space.md) * 2
+                                radius: Design.s(Design.radius.card)
+                                color: cardHover.hovered ? Design.glassHover : Design.glassCard
                                 Rectangle {
-                                    required property int index
-                                    x: Design.s(8) * (index + 1)
-                                    width: card.width - 2 * x
-                                    y: -Design.s(24) + Design.s(6) * (index + 1)
-                                    height: Design.s(24)
-                                    radius: Design.s(Design.radius.card)
-                                    color: Design.glassCard
-                                    border.color: Design.glassBorder
-                                    border.width: 1
-                                    opacity: 0.8 - index * 0.25
-                                    z: -index
+                                    anchors.fill: parent
+                                    visible: !!(card.item && card.item.critical)
+                                    radius: parent.radius
+                                    color: Design.tint(Design.warn, 0.16)
+                                }
+
+                                HoverHandler { id: cardHover }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: mouse => {
+                                        if (mouse.button === Qt.RightButton) page.dismissCard(card.modelData);
+                                        else Notifications.activate(card.item);
+                                    }
+                                }
+
+                                RowLayout {
+                                    id: body
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: Design.s(Design.space.md)
+                                    spacing: Design.s(Design.space.md)
+
+                                    NotificationIcon {
+                                        id: icon
+                                        Layout.alignment: Qt.AlignTop
+                                        size: Design.s(Design.size.md)
+                                        image: card.item ? (card.item.image || "") : ""
+                                        appIcon: card.item ? (card.item.appIcon || card.item.icon || "") : ""
+                                        critical: !!(card.item && card.item.critical)
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Design.s(Design.space.xxs)
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Design.s(Design.space.sm)
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: card.item ? card.item.summary + (card.count > 1 ? " · " + card.count : "") : ""
+                                                weight: Design.weight.semibold
+                                                elide: Text.ElideRight
+                                            }
+                                            Label {
+                                                text: card.item ? (card.item.ts ? Notifications.relTime(card.item.ts) : card.item.time) : ""
+                                                role: "caption"
+                                                dim: true
+                                                tabular: true
+                                            }
+                                            IconButton {
+                                                visible: cardHover.hovered
+                                                icon: "\u{f0156}"
+                                                role: "caption"
+                                                onClicked: page.dismissCard(card.modelData)
+                                            }
+                                        }
+                                        // Its lines, oldest first; a long run shows its last four.
+                                        Label {
+                                            visible: card.modelData.lines.length > 4
+                                            text: I18n.trn("%1 earlier", "%1 earlier", card.modelData.lines.length - 4)
+                                            role: "caption"
+                                            color: Design.textFaint
+                                        }
+                                        Repeater {
+                                            model: card.modelData.lines.slice(-4)
+                                            delegate: Label {
+                                                required property string modelData
+                                                Layout.fillWidth: true
+                                                text: modelData
+                                                role: "caption"
+                                                color: Design.textDim
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 3
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        Label {
+                                            visible: !!card.item && card.item.appName !== "" && !icon.hasAvatar
+                                                     && card.item.appName !== card.item.summary
+                                            text: card.item ? card.item.appName : ""
+                                            role: "caption"
+                                            color: Design.textFaint
+                                        }
+                                        Image {
+                                            visible: icon.isPicture
+                                            Layout.topMargin: Design.s(Design.space.xxs)
+                                            Layout.preferredWidth: Math.min(parent.width, Design.s(Design.size.thumb) * 1.5)
+                                            Layout.preferredHeight: Layout.preferredWidth * 9 / 16
+                                            source: icon.isPicture && card.item ? card.item.image : ""
+                                            sourceSize: Qt.size(360, 202)
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                        }
+                                        // What the app offers, while it still can.
+                                        Flow {
+                                            Layout.fillWidth: true
+                                            Layout.topMargin: Design.s(Design.space.xs)
+                                            visible: card.actions.length > 0
+                                            spacing: Design.s(Design.space.xs)
+                                            Repeater {
+                                                model: card.actions
+                                                delegate: Chip {
+                                                    required property var modelData
+                                                    label: modelData.text || I18n.tr("Open")
+                                                    onClicked: if (typeof modelData.invoke === "function") modelData.invoke()
+                                                }
+                                            }
+                                        }
+                                        ReplyField {
+                                            Layout.fillWidth: true
+                                            Layout.topMargin: Design.s(Design.space.xs)
+                                            visible: !!(card.item && card.item.obj && card.item.obj.hasInlineReply)
+                                            item: card.item
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        Rectangle {
-                            id: card
-                            width: parent.width
-                            implicitHeight: body.implicitHeight + Design.s(Design.space.sm) * 2
-                            radius: Design.s(Design.radius.card)
-                            color: cardMa.containsMouse ? Design.glassHover : Design.glassCard
-                            border.color: Design.glassBorder
-                            border.width: 1
-
-                            MouseArea {
-                                id: cardMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                enabled: !group.open
-                                onClicked: page.toggleGroup(group.modelData.app)
-                            }
-
-                            RowLayout {
-                                id: body
-                                anchors.fill: parent
-                                anchors.margins: Design.s(Design.space.sm)
-                                spacing: Design.s(Design.space.sm)
-
-                                Rectangle {
-                                    Layout.preferredWidth: Design.s(32)
-                                    Layout.preferredHeight: Design.s(32)
-                                    Layout.alignment: Qt.AlignTop
-                                    radius: Design.s(Design.radius.ctl)
-                                    color: Design.well
-                                    Image {
-                                        id: appIcon
-                                        anchors.centerIn: parent
-                                        width: Design.s(20); height: width
-                                        sourceSize: Qt.size(64, 64)
-                                        source: String(cell.modelData.icon || "").indexOf("://") >= 0 ? cell.modelData.icon : ""
-                                        visible: status === Image.Ready
-                                        fillMode: Image.PreserveAspectFit
-                                    }
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        visible: !appIcon.visible
-                                        text: "\u{f009a}"
-                                        role: "caption"
-                                        color: Design.textDim
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Design.s(2)
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: cell.modelData.summary
-                                            weight: Design.weight.semibold
-                                            elide: Text.ElideRight
-                                        }
-                                        Label { text: cell.modelData.time; role: "caption"; dim: true; tabular: true }
-                                    }
-                                    Label {
-                                        visible: cell.modelData.body !== ""
-                                        Layout.fillWidth: true
-                                        text: cell.modelData.body
-                                        role: "caption"
-                                        dim: true
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: group.open ? 4 : 2
-                                        elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        visible: !group.open && group.modelData.items.length > 1
-                                        text: I18n.trn("%1 more notification", "%1 more notifications", group.modelData.items.length - 1)
-                                        role: "caption"
-                                        color: Design.textFaint
-                                    }
-                                    // What the app offers: Reply, Open, Mark as read…
-                                    Flow {
-                                        Layout.fillWidth: true
-                                        Layout.topMargin: Design.s(Design.space.xs)
-                                        spacing: Design.s(Design.space.xs)
-                                        visible: group.open && !!cell.modelData.obj && !!cell.modelData.obj.actions
-                                                 && cell.modelData.obj.actions.length > 0
-                                        Repeater {
-                                            model: cell.modelData.obj && cell.modelData.obj.actions ? cell.modelData.obj.actions : []
-                                            delegate: Pill {
-                                                required property var modelData
-                                                label: modelData.text || I18n.tr("Open")
-                                                onClicked: if (typeof modelData.invoke === "function") modelData.invoke()
-                                            }
-                                        }
-                                    }
-                                }
-
-                                IconButton {
-                                    visible: group.open
-                                    icon: "\u{f0156}"
-                                    role: "caption"
-                                    Layout.alignment: Qt.AlignTop
-                                    onClicked: Notifications.dismissHistoryItem(cell.modelData.index)
-                                }
-                            }
+                        // An opened old section folds again.
+                        Button {
+                            Layout.alignment: Qt.AlignRight
+                            visible: section.open && !!page.opened[section.modelData.id]
+                            size: "sm"
+                            variant: "ghost"
+                            label: I18n.tr("Show less")
+                            onClicked: page.toggleSection(section.modelData.id)
                         }
                     }
                 }
             }
+        }
 
-            Label {
-                anchors.centerIn: parent
-                visible: Notifications.history.count === 0
-                text: I18n.tr("No notifications")
-                role: "body"
-                dim: true
-            }
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: Notifications.history.count === 0 ? "empty" : ""
+            icon: "\u{f009b}"
+            title: I18n.tr("No notifications")
+            hint: I18n.tr("You're all caught up.")
         }
 
         // ── Widgets under the list, as a notification centre has them ────────
@@ -286,20 +340,20 @@ MiniView {
             Rectangle {
                 visible: Weather.loaded
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(92)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: Design.s(Design.radius.card)
                 color: Design.glassCard
                 border.color: Design.glassBorder
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
                     spacing: 0
                     Label { text: Weather.location; role: "caption"; weight: Design.weight.semibold; elide: Text.ElideRight; Layout.fillWidth: true }
                     RowLayout {
-                        Label { text: Weather.temp; font.pixelSize: Design.s(28); weight: Design.weight.medium; tabular: true }
+                        Label { text: Weather.temp; role: "display"; weight: Design.weight.medium; tabular: true }
                         Item { Layout.fillWidth: true }
-                        Icon { text: Weather.icon; role: "title"; color: Design.yellow }
+                        Icon { text: Weather.icon; role: "title"; color: Design.textDim }
                     }
                     Label { text: Weather.condition; role: "caption"; dim: true; elide: Text.ElideRight; Layout.fillWidth: true }
                 }
@@ -307,11 +361,11 @@ MiniView {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(92)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: Design.s(Design.radius.card)
                 color: Design.glassCard
                 border.color: Design.glassBorder
-                border.width: 1
+                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
@@ -319,7 +373,7 @@ MiniView {
                     Label { text: I18n.tr("Focus"); role: "caption"; weight: Design.weight.semibold }
                     Label {
                         text: Focus.active ? Focus.remainingText : I18n.tr("%1 min", Focus.workMinutes)
-                        font.pixelSize: Design.s(28)
+                        role: "display"
                         weight: Design.weight.medium
                         tabular: true
                     }
@@ -331,7 +385,7 @@ MiniView {
                         Layout.fillWidth: true
                     }
                 }
-                MouseArea {
+                Clickable {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: Quickshell.execDetached(["b1air-shell", "toggle", "focustime"])

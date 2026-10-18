@@ -125,159 +125,154 @@ ColumnLayout {
         onTriggered: Quickshell.execDetached(["b1air-shell", "forceReload"])
     }
 
-    // ── Interface language ───────────────────────────────────────────────────
-    Card {
-        title: I18n.tr("Interface language")
-        subtitle: I18n.tr("Menus, settings and apps of this desktop; the shell restarts to switch")
-        icon: "\u{f05ca}"
-        accentColor: Design.blue
+    function setUiLanguage(id) {
+        if ((Settings.uiLanguage || "auto") === id) return;
+        Settings.set("uiLanguage", id);
+        restartSoon.restart();
+    }
+    function setSystemLanguage(id) {
+        if (id === "__system") section.write({ LANG: "", LANGUAGE: "" });
+        else section.write({ LANG: id + ".UTF-8", LANGUAGE: id.split("_")[0] });
+    }
+    function setFormats(id) {
+        const code = id === "__interface" ? "" : id;
+        Settings.set("formatsLocale", code);
+        const w = {};
+        for (const k of section.formatKeys) w[k] = code === "" ? "" : code + ".UTF-8";
+        section.write(w);
+        restartSoon.restart();
+    }
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
+    // One entry per installed locale, named in its own language.
+    readonly property var installedChoices: section.installed.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
+
+    // ── Language ─────────────────────────────────────────────────────────────
+    SettingsGroup {
+        title: I18n.tr("Language")
+
+        SettingsRow {
+            label: I18n.tr("Interface language")
+            note: I18n.tr("The shell restarts to switch")
+
+            SegmentedControl {
+                size: "sm"
                 model: [
-                    { id: "auto", label: I18n.tr("Like the system") },
-                    { id: "en",   label: "English" },
-                    { id: "uk",   label: "Українська" },
-                    { id: "ru",   label: "Русский" }
+                    { id: "auto", label: I18n.tr("Auto") },
+                    { id: "en",   label: "EN" },
+                    { id: "uk",   label: "UK" },
+                    { id: "ru",   label: "RU" }
                 ]
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: (Settings.uiLanguage || "auto") === modelData.id
-                    onClicked: {
-                        if ((Settings.uiLanguage || "auto") === modelData.id) return;
-                        Settings.set("uiLanguage", modelData.id);
-                        restartSoon.restart();
-                    }
-                }
+                current: Settings.uiLanguage || "auto"
+                onPicked: function(id) { section.setUiLanguage(id); }
             }
         }
+
         Label {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
             readonly property string sys: I18n.systemLanguage
             visible: (Settings.uiLanguage || "auto") === "auto" && I18n.translated.indexOf(sys) < 0 && sys !== "en"
             text: I18n.tr("The system is in %1, which has no translation here: English is used, dates included.", Qt.locale(sys).nativeLanguageName || sys)
-            role: "caption"; dim: true; wrapMode: Text.WordWrap
+            role: "footnote"
+            dim: true
+            wrapMode: Text.WordWrap
         }
-    }
 
-    // ── System language ──────────────────────────────────────────────────────
-    Card {
-        title: I18n.tr("System language")
-        subtitle: I18n.tr("What other programs speak: the browser, GTK and Qt apps. From the next login")
-        icon: "\u{f0ac}"
-        accentColor: Design.teal
+        SettingsRow {
+            label: I18n.tr("System language")
+            note: I18n.tr("What other programs speak. From the next login")
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                label: section.defaultLang
-                    ? I18n.tr("As the system: %1", section.nameOf(section.defaultLang))
-                    : I18n.tr("As the system")
-                active: section.systemLang === ""
-                onClicked: section.write({ LANG: "", LANGUAGE: "" })
-            }
-            Repeater {
-                model: section.installed
-                delegate: Pill {
-                    required property string modelData
-                    label: section.nameOf(modelData)
-                    active: section.systemLang === modelData
-                    onClicked: section.write({ LANG: modelData + ".UTF-8", LANGUAGE: modelData.split("_")[0] })
-                }
-            }
-        }
-    }
-
-    // ── Formats ──────────────────────────────────────────────────────────────
-    Card {
-        id: formatsCard
-        title: I18n.tr("Formats")
-        subtitle: I18n.tr("Dates, times, numbers, money and units, here and in other programs")
-        icon: "\u{f00f0}"
-        accentColor: Design.peach
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Pill {
-                label: I18n.tr("Like the interface language")
-                active: (Settings.formatsLocale || "") === ""
-                onClicked: {
-                    Settings.set("formatsLocale", "");
-                    const w = {};
-                    for (const k of section.formatKeys) w[k] = "";
-                    section.write(w);
-                    restartSoon.restart();
-                }
-            }
-            Repeater {
-                model: section.installed
-                delegate: Pill {
-                    required property string modelData
-                    label: section.nameOf(modelData)
-                    active: Settings.formatsLocale === modelData
-                    onClicked: {
-                        Settings.set("formatsLocale", modelData);
-                        const w = {};
-                        for (const k of section.formatKeys) w[k] = modelData + ".UTF-8";
-                        section.write(w);
-                        restartSoon.restart();
-                    }
-                }
+            Select {
+                model: [{
+                    id: "__system",
+                    label: section.defaultLang
+                        ? I18n.tr("As the system: %1", section.nameOf(section.defaultLang))
+                        : I18n.tr("As the system")
+                }].concat(section.installedChoices)
+                current: section.systemLang === "" ? "__system" : section.systemLang
+                onPicked: function(id) { section.setSystemLanguage(id); }
             }
         }
 
-        // What it looks like, in the formats picked (before the restart too).
-        readonly property var preview: Qt.locale(Settings.formatsLocale || I18n.locale.name)
-        readonly property var now: new Date()
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: Design.s(Design.space.lg)
-            rowSpacing: Design.s(2)
-            Label { text: I18n.tr("Date"); role: "caption"; dim: true }
-            Label { text: formatsCard.preview.toString(formatsCard.now, formatsCard.preview.dateFormat(Locale.LongFormat)); role: "caption" }
-            Label { text: I18n.tr("Short date and time"); role: "caption"; dim: true }
-            Label { text: formatsCard.preview.toString(formatsCard.now, formatsCard.preview.dateTimeFormat(Locale.ShortFormat)); role: "caption" }
-            Label { text: I18n.tr("Number"); role: "caption"; dim: true }
-            Label { text: Number(1234567.89).toLocaleString(formatsCard.preview, "f", 2); role: "caption" }
-            Label { text: I18n.tr("Money"); role: "caption"; dim: true }
-            Label { text: Number(1234.5).toLocaleCurrencyString(formatsCard.preview); role: "caption" }
-        }
-    }
+        SettingsRow {
+            visible: section.missing.length > 0 || section.adding !== ""
+            label: I18n.tr("Add a language")
+            note: I18n.tr("Needs administrator password")
 
-    // ── More languages ───────────────────────────────────────────────────────
-    Card {
-        visible: section.missing.length > 0
-        title: I18n.tr("More languages")
-        subtitle: I18n.tr("A language has to be added to the system before it can be picked above. Needs the administrator password")
-        icon: "\u{f0415}"
-        accentColor: Design.green
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-            Repeater {
-                model: section.missing
-                delegate: Pill {
-                    required property string modelData
-                    icon: section.adding === modelData ? "\u{f0450}" : "\u{f0415}"
-                    label: section.nameOf(modelData)
-                    active: section.adding === modelData
-                    onClicked: if (section.adding === "") section.add(modelData)
-                }
+            Select {
+                model: section.missing.map(c => ({ id: c, label: section.nameOf(c), detail: c }))
+                current: ""
+                placeholder: section.adding !== ""
+                    ? I18n.tr("Adding %1…", section.nameOf(section.adding))
+                    : I18n.tr("Choose a language…")
+                enabled: section.adding === ""
+                onPicked: function(id) { section.add(id); }
             }
         }
+
         Label {
-            visible: section.addError !== "" || section.adding !== ""
+            visible: section.addError !== "" && section.adding === ""
             Layout.fillWidth: true
-            text: section.adding !== "" ? I18n.tr("Adding %1…", section.nameOf(section.adding)) : section.addError
-            color: section.addError !== "" && section.adding === "" ? Design.danger : Design.text
-            role: "caption"; wrapMode: Text.WordWrap
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
+            text: section.addError
+            color: Design.danger
+            role: "footnote"
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    // ── Region ───────────────────────────────────────────────────────────────
+    SettingsGroup {
+        id: formatsGroup
+        title: I18n.tr("Region")
+
+        SettingsRow {
+            label: I18n.tr("Formats")
+            note: I18n.tr("Independent of interface language")
+
+            Select {
+                model: [{ id: "__interface", label: I18n.tr("Like the interface language") }].concat(section.installedChoices)
+                current: (Settings.formatsLocale || "") === "" ? "__interface" : Settings.formatsLocale
+                onPicked: function(id) { section.setFormats(id); }
+            }
+        }
+
+        // Live preview of formats
+        Item {
+            id: previewBox
+            Layout.fillWidth: true
+            implicitHeight: previewGrid.implicitHeight + Design.s(Design.space.sm) * 2
+
+            readonly property var preview: Qt.locale(Settings.formatsLocale || I18n.locale.name)
+            readonly property var now: new Date()
+
+            GridLayout {
+                id: previewGrid
+                // The group pads it at the sides already, as it does every
+                // free item; padded here too, it stood in from the rows.
+                anchors.fill: parent
+                anchors.topMargin: Design.s(Design.space.sm)
+                anchors.bottomMargin: Design.s(Design.space.sm)
+                columns: 2
+                columnSpacing: Design.s(Design.space.lg)
+                rowSpacing: Design.s(Design.space.xs)
+
+                Label { text: I18n.tr("Date"); role: "footnote"; dim: true }
+                Label { text: previewBox.preview.toString(previewBox.now, previewBox.preview.dateFormat(Locale.LongFormat)); role: "footnote" }
+
+                Label { text: I18n.tr("Short date and time"); role: "footnote"; dim: true }
+                Label { text: previewBox.preview.toString(previewBox.now, previewBox.preview.dateTimeFormat(Locale.ShortFormat)); role: "footnote" }
+
+                Label { text: I18n.tr("Number"); role: "footnote"; dim: true }
+                Label { text: Number(1234567.89).toLocaleString(previewBox.preview, "f", 2); role: "footnote"; tabular: true }
+
+                Label { text: I18n.tr("Money"); role: "footnote"; dim: true }
+                Label { text: Number(1234.5).toLocaleCurrencyString(previewBox.preview); role: "footnote"; tabular: true }
+            }
         }
     }
 }

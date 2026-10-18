@@ -55,13 +55,13 @@ PopupShell {
             Icon {
                 text: "\u{f07c}" // folder-open / stash
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {
                 text: I18n.tr("File Staging Shelf")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Badge {
@@ -71,14 +71,14 @@ PopupShell {
 
             Item { Layout.fillWidth: true }
 
-            ActionButton {
+            Button {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0c5}"
                 label: I18n.tr("Copy Paths")
                 onActivated: root.copyAllPaths()
             }
 
-            ActionButton {
+            Button {
                 visible: stagedFiles.count > 0
                 icon: "\u{f0156}"
                 label: I18n.tr("Clear All")
@@ -129,9 +129,9 @@ PopupShell {
                     required property int index
 
                     width: ListView.view ? ListView.view.width : 0
-                    height: Design.s(44)
+                    height: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.ctl)
-                    color: fileHover.containsMouse ? Design.raised : Design.glassCard
+                    color: fileHover.containsMouse ? Design.glassHover : Design.glassCard
                     border.color: fileHover.containsMouse ? Design.accent : Design.glassBorder
                     border.width: 1
 
@@ -154,7 +154,7 @@ PopupShell {
                             Label {
                                 text: fileCard.name
                                 role: "body"
-                                weight: Design.weight.bold
+                                weight: Design.weight.semibold
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -195,33 +195,12 @@ PopupShell {
                 }
             }
 
-            // Empty Placeholder
-            ColumnLayout {
-                anchors.centerIn: parent
-                visible: stagedFiles.count === 0
-                spacing: Design.s(Design.space.sm)
-
-                Icon {
-                    text: "\u{f0ee}" // cloud-upload
-                    role: "title"
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: I18n.tr("Drag files here to stage")
-                    role: "body"
-                    weight: Design.weight.bold
-                    dim: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: I18n.tr("Stage documents, images, or code before sending or batch moving")
-                    role: "caption"
-                    dim: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
+            AppState {
+                anchors.fill: parent
+                mode: stagedFiles.count === 0 ? "empty" : ""
+                icon: "\u{f0ee}" // cloud-upload
+                title: I18n.tr("Drag files here to stage")
+                hint: I18n.tr("Stage documents, images, or code before sending or batch moving")
             }
         }
     }

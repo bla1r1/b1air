@@ -96,132 +96,76 @@ ColumnLayout {
     // (The page title is in the Settings header bar now.)
 
     // ── 2. System Specifications Card ────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("System Specifications")
         subtitle: I18n.tr("%1 on %2", section.osName, section.hostName)
         icon: "\u{f035b}"
-        accentColor: Design.sapphire
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Operating System"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: section.osName; weight: Design.weight.semibold; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Linux Kernel"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: section.kernelVer; isMono: true; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Wayland Compositor"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: section.swayVer; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Shell Environment"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: I18n.tr("Quickshell (Wayland Native)"); weight: Design.weight.semibold; color: Design.accent; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("b1air Suite Version"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: section.suiteVersionText; isMono: true; weight: Design.weight.semibold; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Memory Usage"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label { text: section.memInfo; isMono: true; Layout.fillWidth: true }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("System Uptime"); role: "caption"; dim: true; Layout.preferredWidth: Design.s(160) }
-                Label {
-                    text: (Power.upHours > 0 ? I18n.trn("%1 hour", "%1 hours", Power.upHours) + ", " : "") + I18n.trn("%1 minute", "%1 minutes", Power.upMins)
-                    Layout.fillWidth: true
-                }
-            }
+        // Name and value, as every other row: the value on the right in the
+        // text colour (it is not a choice, so not the accent).
+        SettingsRow {
+            label: I18n.tr("Operating System")
+            Label { text: section.osName; dim: true }
+        }
+        SettingsRow {
+            label: I18n.tr("Linux Kernel")
+            Label { text: section.kernelVer; dim: true; isMono: true }
+        }
+        SettingsRow {
+            label: I18n.tr("Wayland Compositor")
+            Label { text: section.swayVer; dim: true }
+        }
+        SettingsRow {
+            label: I18n.tr("Shell Environment")
+            Label { text: I18n.tr("Quickshell (Wayland Native)"); dim: true }
+        }
+        SettingsRow {
+            label: I18n.tr("b1air Suite Version")
+            Label { text: section.suiteVersionText; dim: true; isMono: true }
+        }
+        SettingsRow {
+            label: I18n.tr("Memory Usage")
+            Label { text: section.memInfo; dim: true; isMono: true }
+        }
+        SettingsRow {
+            label: I18n.tr("System Uptime")
+            Label { text: (Power.upHours > 0 ? I18n.trn("%1 hour", "%1 hours", Power.upHours) + ", " : "") + I18n.trn("%1 minute", "%1 minutes", Power.upMins); dim: true }
         }
     }
 
     // ── 3. Component Health & Diagnostics ────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Service Health & Subsystems")
-        subtitle: I18n.tr("Live status of background communication daemons")
         icon: "\u{f02ce}"
-        accentColor: Design.teal
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            // PipeWire
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Rectangle {
-                    width: Design.s(10); height: width; radius: width/2
-                    color: Audio.defaultSink !== null ? Design.green : Design.danger
-                }
-                Label { text: I18n.tr("PipeWire Audio Server"); weight: Design.weight.semibold; Layout.fillWidth: true }
-                Badge {
-                    text: Audio.defaultSink !== null ? I18n.tr("Connected") : I18n.tr("Inactive")
-                    tone: Audio.defaultSink !== null ? Design.green : Design.danger
-                }
+        // One row per service, its state a badge coloured by meaning: a dot
+        // beside each said the same thing a second time.
+        SettingsRow {
+            label: I18n.tr("PipeWire Audio Server")
+            Badge {
+                text: Audio.defaultSink !== null ? I18n.tr("Connected") : I18n.tr("Inactive")
+                tone: Audio.defaultSink !== null ? Design.ok : Design.danger
             }
-
-            // NetworkManager
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Rectangle {
-                    width: Design.s(10); height: width; radius: width/2
-                    color: Design.green
-                }
-                Label { text: I18n.tr("NetworkManager & Connectivity"); weight: Design.weight.semibold; Layout.fillWidth: true }
-                Badge {
-                    text: Network.hasWifi || Network.hasBluetooth ? I18n.tr("Active") : I18n.tr("Ready")
-                    tone: Design.green
-                }
+        }
+        SettingsRow {
+            label: I18n.tr("NetworkManager & Connectivity")
+            Badge {
+                text: Network.hasWifi || Network.hasBluetooth ? I18n.tr("Active") : I18n.tr("Ready")
+                tone: Design.ok
             }
-
-            // UPower
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Rectangle {
-                    width: Design.s(10); height: width; radius: width/2
-                    color: Power.hasBattery ? Design.green : Design.sapphire
-                }
-                Label { text: I18n.tr("UPower Power Management"); weight: Design.weight.semibold; Layout.fillWidth: true }
-                Badge {
-                    text: Power.hasBattery ? I18n.tr("Battery Active") : I18n.tr("AC Connected")
-                    tone: Power.hasBattery ? Design.green : Design.sapphire
-                }
+        }
+        SettingsRow {
+            label: I18n.tr("UPower Power Management")
+            Badge {
+                text: Power.hasBattery ? I18n.tr("Battery Active") : I18n.tr("AC Connected")
+                tone: Design.ok
             }
-
-            // Notification Server
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Rectangle {
-                    width: Design.s(10); height: width; radius: width/2
-                    color: Design.green
-                }
-                Label { text: I18n.tr("Freedesktop Notification Daemon"); weight: Design.weight.semibold; Layout.fillWidth: true }
-                Badge {
-                    text: Notifications.dnd ? I18n.tr("DND Active") : I18n.tr("Running (Native)")
-                    tone: Notifications.dnd ? Design.peach : Design.green
-                }
+        }
+        SettingsRow {
+            label: I18n.tr("Freedesktop Notification Daemon")
+            Badge {
+                text: Notifications.dnd ? I18n.tr("DND Active") : I18n.tr("Running (Native)")
+                tone: Notifications.dnd ? Design.warn : Design.ok
             }
         }
     }

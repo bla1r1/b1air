@@ -1,20 +1,19 @@
 #include "image.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_NO_STDIO_FILE_LOCKS
-#define STBI_NO_HDR
-#define STBI_NO_LINEAR
-#define STBI_NO_PIC
-#define STBI_NO_PNM
-#define STBI_NO_PSD
-#include <stb/stb_image.h>
+// JPEG through libjpeg(-turbo), PNG through libpng's simplified API, WebP
+// through libwebp: the libraries every distribution already has for its
+// browsers and toolkits, so nothing is carried here.
+#include <csetjmp>
+#include <cstdio>
+#include <jpeglib.h>
+#include <png.h>
 
 #ifdef B1AIR_HAVE_WEBP
 #include <webp/decode.h>
-#include <iterator>
-#ifdef B1AIR_HAVE_TURBOJPEG
-#include <turbojpeg.h>
 #endif
+#ifdef B1AIR_HAVE_TURBOJPEG
+#include <iterator>
+#include <turbojpeg.h>
 #endif
 
 #include <algorithm>
@@ -88,8 +87,8 @@ struct Pixels {
 };
 
 // The EXIF orientation of a JPEG (1–8; 1 when there is none): cameras save
-// the sensor's rows as they were and record how to turn them, and stb_image
-// does not read that. Only the first APP1 segment is looked at, as every
+// the sensor's rows as they were and record how to turn them, and libjpeg
+// does not apply that. Only the first APP1 segment is looked at, as every
 // reader does.
 int exif_orientation(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
@@ -131,6 +130,68 @@ int exif_orientation(const std::string& path) {
     }
 }
 
+// libjpeg reports a broken file by calling error_exit, which must not
+// return: it jumps back to load_jpeg instead of exiting the program.
+struct JpegError {
+    jpeg_error_mgr mgr;
+    std::jmp_buf back;
+};
+
+bool load_jpeg(std::FILE* f, Pixels& px) {
+    jpeg_decompress_struct info{};
+    JpegError err{};
+    info.err = jpeg_std_error(&err.mgr);
+    err.mgr.error_exit = [](j_common_ptr c) { std::longjmp(reinterpret_cast<JpegError*>(c->err)->back, 1); };
+    err.mgr.output_message = [](j_common_ptr) {};
+    unsigned char* volatile data = nullptr;   // volatile: still read after the longjmp
+    if (setjmp(err.back)) {
+        jpeg_destroy_decompress(&info);
+        std::free(data);
+        return false;
+    }
+    jpeg_create_decompress(&info);
+    jpeg_stdio_src(&info, f);
+    jpeg_read_header(&info, TRUE);
+    info.out_color_space = JCS_RGB;   // greyscale and CMYK come out as RGB too
+    jpeg_start_decompress(&info);
+    const size_t row = static_cast<size_t>(info.output_width) * 3;
+    data = static_cast<unsigned char*>(std::malloc(row * info.output_height));
+    if (!data) std::longjmp(err.back, 1);
+    while (info.output_scanline < info.output_height) {
+        JSAMPROW line = data + row * info.output_scanline;
+        jpeg_read_scanlines(&info, &line, 1);
+    }
+    jpeg_finish_decompress(&info);
+    px.width = static_cast<int>(info.output_width);
+    px.height = static_cast<int>(info.output_height);
+    px.channels = 3;
+    px.data = data;
+    px.release = std::free;
+    jpeg_destroy_decompress(&info);
+    return true;
+}
+
+bool load_png(std::FILE* f, Pixels& px) {
+    png_image image{};
+    image.version = PNG_IMAGE_VERSION;
+    if (!png_image_begin_read_from_stdio(&image, f)) return false;
+    // Three channels when there is no alpha to keep: a quarter less to hold.
+    const bool alpha = (image.format & PNG_FORMAT_FLAG_ALPHA) != 0;
+    image.format = alpha ? PNG_FORMAT_RGBA : PNG_FORMAT_RGB;
+    auto* data = static_cast<unsigned char*>(std::malloc(PNG_IMAGE_SIZE(image)));
+    if (!data || !png_image_finish_read(&image, nullptr, data, 0, nullptr)) {
+        png_image_free(&image);
+        std::free(data);
+        return false;
+    }
+    px.width = static_cast<int>(image.width);
+    px.height = static_cast<int>(image.height);
+    px.channels = alpha ? 4 : 3;
+    px.data = data;
+    px.release = std::free;
+    return true;
+}
+
 // need_w × need_h: the least the picture is wanted at (0 for whole), so a
 // JPEG can be decoded straight at a fraction of its size.
 bool load(const std::string& path, Pixels& px, int need_w = 0, int need_h = 0) {
@@ -154,12 +215,12 @@ bool load(const std::string& path, Pixels& px, int need_w = 0, int need_h = 0) {
     }
 #endif
 #ifdef B1AIR_HAVE_TURBOJPEG
-    // JPEG through libjpeg-turbo, three to four times stb's speed, and at
-    // 1/2, 1/4 or 1/8 of the size wherever that is still enough: stb took
+    // JPEG through libjpeg-turbo's own API, at 1/2, 1/4 or 1/8 of the size
+    // wherever that is still enough: decoding it whole (stb, then) took
     // 0.44 s to bring a 6512×4341 wallpaper to a 1920×1080 screen, and the
     // lock screen, which wants a twelfth of the screen, waited 0.41 s for it
     // on every screen. Anything it cannot do (CMYK, a broken file) goes on
-    // to stb below.
+    // to libjpeg below.
     {
         std::ifstream f(path, std::ios::binary);
         unsigned char soi[2] = {};
@@ -195,14 +256,16 @@ bool load(const std::string& path, Pixels& px, int need_w = 0, int need_h = 0) {
         }
     }
 #endif
-    int w = 0, h = 0, comp = 0;
-    if (!stbi_info(path.c_str(), &w, &h, &comp)) return false;
-    // Three channels when there is no alpha to keep: a quarter less to hold.
-    const int want = (comp == 2 || comp == 4) ? 4 : 3;
-    px.data = stbi_load(path.c_str(), &px.width, &px.height, &px.channels, want);
-    px.channels = want;
-    px.release = [](void* p) { stbi_image_free(p); };
-    return px.data != nullptr;
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    unsigned char magic[8] = {};
+    const size_t got = std::fread(magic, 1, sizeof magic, f);
+    std::rewind(f);
+    bool ok = false;
+    if (got >= 3 && magic[0] == 0xFF && magic[1] == 0xD8 && magic[2] == 0xFF) ok = load_jpeg(f, px);
+    else if (got == 8 && png_sig_cmp(magic, 0, 8) == 0) ok = load_png(f, px);
+    std::fclose(f);
+    return ok;
 }
 
 } // namespace

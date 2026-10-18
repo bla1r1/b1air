@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# =============================================================================
+# b1air-run-windows FILE — open a Windows program (.exe, .msi, .bat, .lnk)
+#
+# What Files and the Launchpad hand a Windows file to. b1air-windows does the
+# work: the shell's sheet asks which bottle and which Proton (the shared one
+# and the newest GE-Proton, recommended), then an installer is installed and
+# its shortcuts go to the Launchpad, or a program is added or run once.
+#
+# Without it (python3 missing, or b1air-windows not installed), the old way:
+# Bottles if it is there, then Wine in the default prefix.
+#
+# Settings → Default Apps → Windows Programs picks Bottles or another for good.
+# =============================================================================
+set -u
+
+file="${1:-}"
+
+note() {
+    command -v notify-send >/dev/null 2>&1 \
+        && notify-send -a "Windows programs" -i application-x-ms-dos-executable "$1" "$2"
+    printf '%s: %s\n' "$1" "$2" >&2
+}
+
+[[ -n "$file" && -e "$file" ]] || { note "Nothing to open" "No such file: ${file:-(none)}"; exit 2; }
+
+if command -v b1air-windows >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    exec b1air-windows open "$file"
+fi
+
+# A desktop entry by id, wherever XDG keeps it, so a Flatpak app is started
+# the way its entry says (file forwarding into the sandbox included).
+entry() {
+    local id="$1" dir
+    for dir in "${XDG_DATA_HOME:-$HOME/.local/share}/applications" \
+               "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share/applications" \
+               /var/lib/flatpak/exports/share/applications \
+               /usr/local/share/applications /usr/share/applications; do
+        [[ -f "$dir/$id" ]] && { printf '%s\n' "$dir/$id"; return 0; }
+    done
+    return 1
+}
+
+if desktop="$(entry com.usebottles.bottles.desktop)" && command -v gio >/dev/null 2>&1; then
+    exec gio launch "$desktop" "$file"
+fi
+if command -v bottles >/dev/null 2>&1; then
+    exec bottles "$file"
+fi
+if command -v wine >/dev/null 2>&1; then
+    # `start /unix` opens it as Explorer would: an .msi goes to msiexec, a
+    # .lnk to its target, and the program runs in its own folder.
+    cd "$(dirname -- "$file")" || true
+    exec wine start /unix "$file"
+fi
+
+note "Can't run Windows programs yet" \
+     "Install Bottles (flatpak install flathub com.usebottles.bottles) or Wine, then open the file again."
+exit 1

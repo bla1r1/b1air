@@ -62,7 +62,7 @@ Item {
         onPositionChanged: mouse => {
             if (!pressed || !frame.draggable)
                 return;
-            if (!frame.dragging && Math.hypot(mouse.x - area.pressAt.x, mouse.y - area.pressAt.y) > Design.s(6))
+            if (!frame.dragging && Math.hypot(mouse.x - area.pressAt.x, mouse.y - area.pressAt.y) > Qt.styleHints.startDragDistance)
                 frame.dragging = true;
             if (frame.dragging)
                 frame.dragMoved(area.mapToItem(null, mouse.x, mouse.y));
@@ -95,9 +95,9 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: -height / 2
         anchors.right: parent.right
-        anchors.rightMargin: Design.s(8)
-        height: Design.s(20)
-        width: tools.implicitWidth + Design.s(6)
+        anchors.rightMargin: Design.s(Design.space.sm)
+        height: Design.s(Design.size.mini)
+        width: tools.implicitWidth + Design.s(Design.space.sm)
         radius: height / 2
         color: Design.tint(Design.raised, 0.95)
         border.color: Design.line
@@ -106,11 +106,11 @@ Item {
         Row {
             id: tools
             anchors.centerIn: parent
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             Icon {
                 visible: frame.draggable
-                width: Design.s(16); height: Design.s(16)
+                width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 text: "\u{f01db}"   // drag
@@ -120,17 +120,17 @@ Item {
 
             Rectangle {
                 visible: frame.sizeLabel !== ""
-                width: Design.s(16); height: Design.s(16)
+                width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                 radius: width / 2
                 color: sizeMa.containsMouse ? Design.tint(Design.accent, 0.35) : Design.tint(Design.accent, 0.18)
                 Label {
                     anchors.centerIn: parent
                     text: frame.sizeLabel
                     role: "caption"
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     color: Design.accent
                 }
-                MouseArea {
+                Clickable {
                     id: sizeMa
                     anchors.fill: parent
                     hoverEnabled: true
@@ -141,7 +141,7 @@ Item {
 
             Rectangle {
                 visible: frame.removable
-                width: Design.s(16); height: Design.s(16)
+                width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                 radius: width / 2
                 color: removeMa.containsMouse ? Design.danger : Design.tint(Design.danger, 0.75)
                 Icon {
@@ -150,7 +150,7 @@ Item {
                     role: "caption"
                     color: Design.accentText
                 }
-                MouseArea {
+                Clickable {
                     id: removeMa
                     anchors.fill: parent
                     hoverEnabled: true

@@ -33,8 +33,9 @@ Item {
         Text {
             id: label
             anchors.centerIn: parent
-            font.family: Design.font.mono
-            font.weight: Design.weight.bold
+            // The interface face: a status is words, not code.
+            font.family: Design.font.sans
+            font.weight: Design.weight.medium
             font.pixelSize: Design.s(Design.font.caption)
             color: root.tone
         }

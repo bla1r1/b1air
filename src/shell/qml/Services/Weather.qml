@@ -30,6 +30,9 @@ Singleton {
     property string icon: "\u{f0590}"
     property string location: I18n.tr("Weather")
     property bool loaded: false
+    // The last fetch failed (daemon down, no network, unreadable reply), so
+    // views can say so instead of waiting for weather that is not coming.
+    property bool failed: false
 
     /** The whole forecast, so callers do not each spawn their own fetch. */
     property var forecast: []
@@ -79,8 +82,10 @@ Singleton {
             onStreamFinished: {
                 try {
                     const doc = JSON.parse(this.text);
-                    if (!doc || !Array.isArray(doc.forecast) || doc.forecast.length === 0)
+                    if (!doc || !Array.isArray(doc.forecast) || doc.forecast.length === 0) {
+                        root.failed = true;
                         return;
+                    }
                     root.forecast = doc.forecast;
                     root.unit = doc.unit === "F" ? "F" : "C";
 
@@ -92,11 +97,17 @@ Singleton {
                     if (doc.location)
                         root.location = doc.location;
                     root.loaded = true;
+                    root.failed = false;
                 } catch (e) {
                     // A daemon that is not up yet, or a fetch that failed.
                     // Keep whatever was shown rather than blanking the bar.
+                    root.failed = true;
                 }
             }
+        }
+        onExited: code => {
+            if (code !== 0)
+                root.failed = true;
         }
     }
 

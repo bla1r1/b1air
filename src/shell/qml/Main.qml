@@ -41,7 +41,7 @@ Scope {
     Binding {
         target: Design
         property: "translucent"
-        value: rootScope.compositorBlurs && (!Settings.loaded || Settings.blurEnabled)
+        value: !Settings.loaded || Settings.blurEnabled
     }
 
     // Ui/Design cannot read Services/Settings itself — the standalone apps load
@@ -110,7 +110,17 @@ Scope {
     Timer {
         id: guideDelay
         interval: 2000
-        onTriggered: masterWindow.handleIpcCommand("toggle:guide:", true)
+        onTriggered: firstRunPending.running = true
+    }
+    // Not over the first-run setup: autostart.conf opens that a moment later
+    // in the same panel, and the welcome would be gone before it was read.
+    // It shows at the next login instead.
+    Process {
+        id: firstRunPending
+        command: ["b1air-settings", "--first-run", "--print"]
+        stdout: StdioCollector {
+            onStreamFinished: if (this.text.trim() === "") masterWindow.handleIpcCommand("toggle:guide:", true)
+        }
     }
 
     Connections {
@@ -445,7 +455,7 @@ Scope {
         // right-hand one crawls away from the edge it belongs to.
         if (item.contentWidth !== undefined && item.contentWidth > 0) {
             const wRoom = Screen.width - Design.s(Design.space.md) * 2;
-            const fittedW = Math.max(Design.s(200), Math.min(wRoom, item.contentWidth));
+            const fittedW = Math.max(Design.s(Design.width.control), Math.min(wRoom, item.contentWidth));
             const centred = Math.abs(t.rx - (Screen.width - t.w) / 2) <= 2;
             masterWindow.animX = centred ? Math.floor((Screen.width - fittedW) / 2)
                                          : (t.rx + t.w - fittedW);
@@ -461,7 +471,7 @@ Scope {
         // between the bar and the bottom edge, less a margin so a full-height
         // panel does not sit flush against it.
         const room = Screen.height - t.ry - Design.s(Design.space.md);
-        const fitted = Math.max(Design.s(120), Math.min(room, item.contentHeight));
+        const fitted = Math.max(Design.s(Design.size.thumb), Math.min(room, item.contentHeight));
         // Both, and this is the whole of it: targetH sizes the content and
         // animH sizes the surface it sits in. Setting only the first left the
         // window at its full height with the shrunken panel centred inside,
@@ -490,6 +500,38 @@ Scope {
     // Pre-existing, and only visible once the shell was actually run.
     // Keyboard focus comes from `focusable: isVisible` above; nothing else is
     // needed.
+
+    // The panel's shadow, outside the clipped frame below and moving with it.
+    // A surface says whether it is one panel the size of its frame:
+    // `castsShadow`, else PopupShell's `framed`. Spotlight's glass is shorter
+    // than its frame, and the full-screen overlays have no edge to shade.
+    PanelShadow {
+        readonly property var item: widgetStack.currentItem
+        visible: Design.panelShadows && Design.translucent && masterWindow.isVisible && !!item
+            && (item.castsShadow !== undefined ? item.castsShadow === true : item.framed === true)
+        x: masterWindow.animX
+        y: masterWindow.animY
+        width: masterWindow.animW
+        height: masterWindow.animH
+        radius: Design.s(Design.radius.panel)
+        opacity: masterWindow.isVisible ? 1.0 : 0.0
+        Behavior on x { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on y { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on width { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on height { enabled: !masterWindow.disableMorph; NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.OutExpo } }
+        Behavior on opacity { NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.InOutSine } }
+    }
+
+    // Whether the compositor keeps the blur off a shadow (swayfx 0009): a
+    // `layer_effects` list that does not parse is refused there and taken by
+    // any other swayfx. A namespace nothing uses, so nothing is changed.
+    Process {
+        running: true
+        command: ["swaymsg", "-r", "--", "layer_effects", "b1air-probe", "\"b1air-probe\""]
+        stdout: StdioCollector {
+            onStreamFinished: Design.panelShadows = this.text.replace(/\s/g, "").indexOf("\"success\":false") >= 0
+        }
+    }
 
     Item {
         x: masterWindow.animX
@@ -531,6 +573,19 @@ Scope {
                     masterWindow.refitHeight();
                 }
 
+                // A panel left on screen under the next one, frozen part-way
+                // through its exit fade: seen as a faint copy of Notifications
+                // behind Control Center (an AMD session, not reproduced after a
+                // shell restart). Whatever the stack has let go of is hidden
+                // once it is idle, however its transition ended.
+                onBusyChanged: {
+                    if (busy) return;
+                    for (const child of widgetStack.children) {
+                        if (child !== widgetStack.currentItem && child.StackView.status === StackView.Inactive)
+                            child.visible = false;
+                    }
+                }
+
                 // The height is not settled when the surface first appears —
                 // a card that has not loaded its data yet, or a widget switched
                 // off while the panel is open, changes it afterwards. Follow it.
@@ -562,8 +617,23 @@ Scope {
         }
     }
 
+    // The panel to come back to when this one closes: the welcome sets it
+    // when it opens the Control Center or the updater, so closing those goes
+    // back to it rather than to nothing. Any other panel opened in between
+    // forgets it.
+    property string returnTo: ""
+
     function switchWidget(newWidget, arg) {
         // REMOVED: Quickshell.execDetached file writing. State is strictly in memory now.
+
+        if (newWidget === "hidden" && masterWindow.returnTo !== "" && currentActive !== masterWindow.returnTo) {
+            const back = masterWindow.returnTo;
+            masterWindow.returnTo = "";
+            newWidget = back;
+            arg = "";
+        } else if (newWidget !== "hidden" && newWidget !== "control" && newWidget !== "updater") {
+            masterWindow.returnTo = "";
+        }
 
         prepTimer.stop();
         delayedClear.stop();
@@ -631,11 +701,10 @@ Scope {
         if (w === "network") return (a === "bt" || a === "bluetooth") ? "bluetooth" : "wifi";
         if (w === "control") return a || "main";
         if (w === "notifications") return "notifications";
-        // The guide is the keybinding sheet, not the About page. "Open Guide
-        // on Login" promises "the keybinding and tips modal" and this opened
-        // System Specifications and a memory reading; About is still one page
-        // away, and still reachable directly as `toggle settings about`.
-        if (w === "guide") return "shortcuts";
+        // The welcome (settings/components/Welcome.qml): where things are,
+        // each opening it, and the keys; the full keybinding sheet is one card
+        // away. Not the About page, which it once opened.
+        if (w === "guide") return "welcome";
         if (w === "focus") return "focus";
         // Registry entries that open the Settings window on one page. None of
         // these were listed here, so every one of them opened Settings on
@@ -680,7 +749,7 @@ Scope {
             const target = pageFor(newWidget, arg);
             if (target && widgetStack.currentItem.page !== undefined)
                 widgetStack.currentItem.page = target;
-            if (newWidget === "quicklook" && widgetStack.currentItem.filePath !== undefined)
+            if ((newWidget === "quicklook" || newWidget === "windows") && widgetStack.currentItem.filePath !== undefined)
                 widgetStack.currentItem.filePath = arg;
             if (newWidget === "settings" && arg && !target && widgetStack.currentItem.searchQuery !== undefined)
                 widgetStack.currentItem.searchQuery = arg;
@@ -697,7 +766,7 @@ Scope {
         const page = pageFor(newWidget, arg);
         if (page)
             props["page"] = page;
-        if (newWidget === "quicklook" && arg)
+        if ((newWidget === "quicklook" || newWidget === "windows") && arg)
             props["filePath"] = arg;
         if ((newWidget === "spotlight" || newWidget === "launchpad") && arg)
             props["query"] = arg;
@@ -757,6 +826,10 @@ Scope {
                 if (wantPage !== "" && currentItem && currentItem.page !== undefined
                     && currentItem.page !== wantPage) {
                     currentItem.page = wantPage;
+                }
+                // Another file for the sheet that shows one (a Windows program).
+                else if (targetWidget === "windows" && arg !== "" && currentItem && currentItem.filePath !== undefined) {
+                    currentItem.filePath = arg;
                 }
                 else if (arg !== "" && currentItem && currentItem.activeMode !== undefined && currentItem.activeMode !== arg) {
                     currentItem.activeMode = arg;

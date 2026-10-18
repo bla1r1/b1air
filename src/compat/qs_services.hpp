@@ -270,6 +270,7 @@ class NotificationServer : public QObject {
     Q_PROPERTY(bool bodyMarkupSupported MEMBER m_bodyMarkupSupported)
     Q_PROPERTY(bool bodySupported MEMBER m_bodySupported)
     Q_PROPERTY(bool persistenceSupported MEMBER m_persistenceSupported)
+    Q_PROPERTY(bool inlineReplySupported MEMBER m_inlineReplySupported)
     // Services/Notifications.qml sets it; without the property here the
     // whole Services module failed to load in the standalone window.
     Q_PROPERTY(QVariantList extraHints MEMBER m_extraHints)
@@ -283,6 +284,7 @@ signals:
 private:
     bool m_keepOnReload = false, m_imageSupported = false, m_actionsSupported = false;
     bool m_bodyMarkupSupported = false, m_bodySupported = false, m_persistenceSupported = false;
+    bool m_inlineReplySupported = false;
     QVariantList m_extraHints;
 };
 

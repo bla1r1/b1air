@@ -7,11 +7,12 @@ function fish_prompt --description 'Write out the prompt'
         return
     end
 
-    # Color definitions (Tokyo Night)
-    set -l color_cwd (set_color 7dcfff)
-    set -l color_git (set_color bb9af7)
-    set -l color_arrow (set_color 7aa2f7)
-    set -l color_error (set_color f7768e)
+    # The terminal's own colours, by name, so the prompt follows the theme
+    # (see starship.toml).
+    set -l color_cwd (set_color --bold cyan)
+    set -l color_git (set_color --bold magenta)
+    set -l color_arrow (set_color --bold blue)
+    set -l color_error (set_color --bold red)
 
     # Git branch
     set -l git_info ""
@@ -31,5 +32,5 @@ function fish_prompt --description 'Write out the prompt'
         end
     end
 
-    echo -n -s (set_color 7aa2f7) "󰣇 " $color_cwd (prompt_pwd) $normal $git_info "\n" $arrow_color "❯ " $normal
+    echo -n -s $color_arrow "󰣇 " $color_cwd (prompt_pwd) $normal $git_info "\n" $arrow_color "❯ " $normal
 end

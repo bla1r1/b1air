@@ -1,0 +1,7 @@
+# From Flathub, for each account, after the packages: <app id> [command].
+# With a command, only where nothing by that name came with the packages.
+
+# Bottles where the distribution has none (Debian, Ubuntu; Arch with --no-aur).
+com.usebottles.bottles bottles
+# BoxBuddy: Distrobox's containers in a window.
+io.github.dvlv.boxbuddyrs

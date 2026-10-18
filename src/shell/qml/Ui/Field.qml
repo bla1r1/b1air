@@ -49,8 +49,8 @@ Rectangle {
     }
     function selectRange(from, to) { input.select(from, to); }
 
-    implicitHeight: Design.s(Design.size.field)
-    implicitWidth: Design.s(120)
+    implicitHeight: Design.s(Design.size.md)
+    implicitWidth: Design.s(Design.width.field)
 
     radius: Design.s(Design.radius.ctl)
     // On glass a field is a lighter pane of it, not a black well cut in.
@@ -74,6 +74,7 @@ Rectangle {
     TextInput {
         id: input
         anchors.fill: parent
+        activeFocusOnTab: true
         anchors.leftMargin: Design.s(Design.space.md)
         anchors.rightMargin: root._secret ? eye.width + Design.s(Design.space.sm) : Design.s(Design.space.md)
         verticalAlignment: TextInput.AlignVCenter
@@ -101,9 +102,9 @@ Rectangle {
         id: eye
         visible: root._secret
         anchors.right: parent.right
-        anchors.rightMargin: Design.s(4)
+        anchors.rightMargin: Design.s(Design.space.xs)
         anchors.verticalCenter: parent.verticalCenter
-        width: Design.s(28); height: width
+        width: Design.s(Design.size.sm); height: width
         radius: Design.s(Design.radius.ctl)
         color: eyeArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent"
         Icon {

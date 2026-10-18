@@ -201,18 +201,19 @@ Item {
         progress: Devices.busyOp === "add" && Devices.progressTotal > 0 ? Devices.progressDone / Devices.progressTotal : -1
 
         actions: [
-            BarButton {
-                glyph: "\u{f01ea}"
+            Button {
+                variant: "secondary"
+                icon: "\u{f01ea}"
                 label: I18n.tr("Eject")
                 enabled: !pane.busyHere
                 onClicked: Devices.eject(pane.path)
             }
         ]
         footer: [
-            BarButton {
-                glyph: "\u{f0415}"
+            Button {
+                variant: "primary"
+                icon: "\u{f0415}"
                 label: I18n.tr("Add Music…")
-                primary: true
                 tip: I18n.tr("Opens your Music folder beside this window: drag songs or albums here")
                 onClicked: Devices.openWindow(FilesBackend.homePath + "/Music")
             }
@@ -231,7 +232,7 @@ Item {
                 id: generalBody
                 x: Math.max(Design.s(Design.space.xl), (general.width - width) / 2)
                 y: Design.s(Design.space.xl)
-                width: Math.min(general.width - Design.s(Design.space.xl) * 2, Design.s(720))
+                width: Math.min(general.width - Design.s(Design.space.xl) * 2, Design.s(Design.width.menuMax))
                 spacing: Design.s(Design.space.xl)
 
                 FilesDeviceRow {
@@ -273,7 +274,7 @@ Item {
                         Label { text: I18n.tr("Serial number"); dim: true; visible: !!pane.info.serial }
                         Label { text: pane.info.serial || ""; visible: !!pane.info.serial; font.family: Design.font.mono }
                         Label { text: I18n.tr("Mounted at"); dim: true }
-                        Label { text: pane.path; font.family: Design.font.mono; elide: Text.ElideMiddle; Layout.maximumWidth: Design.s(420) }
+                        Label { text: pane.path; font.family: Design.font.mono; elide: Text.ElideMiddle; Layout.maximumWidth: Design.s(Design.width.menuMax) }
                     }
                 }
             }
@@ -289,19 +290,29 @@ Item {
             Rectangle {
                 visible: pane.tab === "playlists"
                 Layout.fillHeight: true
-                Layout.preferredWidth: Design.s(230)
-                color: Design.sunken
+                Layout.preferredWidth: Design.s(Design.width.control)
+                color: Design.veil
                 Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.sm)
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
                     ListView {
+                        id: playlistList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
                         model: pane.library.playlists
                         C.ScrollBar.vertical: OverflowBar {}
+
+                        EmptyState {
+                            parent: playlistList
+                            anchors.centerIn: parent
+                            width: parent.width
+                            visible: playlistList.count === 0 && !pane.loading && pane.error === ""
+                            icon: "\u{f0cb8}"
+                            title: I18n.tr("No playlists")
+                        }
                         delegate: SidebarItem {
                             required property var modelData
                             width: ListView.view.width
@@ -326,9 +337,10 @@ Item {
                             ]
                         }
                     }
-                    BarButton {
+                    Button {
+                        variant: "secondary"
                         Layout.fillWidth: true
-                        glyph: "\u{f0415}"
+                        icon: "\u{f0415}"
                         label: I18n.tr("New Playlist")
                         enabled: !pane.loading
                         onClicked: nameDialog.ask("playlist", I18n.tr("Playlist"))
@@ -358,18 +370,22 @@ Item {
                         dim: pane.tab !== "playlists"
                         elide: Text.ElideRight
                     }
-                    BarButton {
+                    Button {
+                        variant: "ghost"
+                        iconOnly: true
                         visible: pane.tab === "playlists" && !!pane.playlist && !pane.playlist.smart
-                        glyph: "\u{f03eb}"; small: true; tip: I18n.tr("Rename playlist")
+                        icon: "\u{f03eb}"; size: "sm"; tip: I18n.tr("Rename playlist")
                         onClicked: nameDialog.ask("renamePlaylist", pane.playlist.name)
                     }
-                    BarButton {
+                    Button {
+                        variant: "danger"
+                        iconOnly: true
                         visible: pane.tab === "playlists" && !!pane.playlist && !pane.playlist.smart
-                        glyph: "\u{f0a7a}"; small: true; danger: true; tip: I18n.tr("Delete playlist")
+                        icon: "\u{f0a7a}"; size: "sm";  tip: I18n.tr("Delete playlist")
                         onClicked: confirmPlaylist.open()
                     }
                     Field {
-                        Layout.preferredWidth: Design.s(220)
+                        Layout.preferredWidth: Design.s(Design.width.control)
                         placeholder: I18n.tr("Search songs")
                         onEdited: value => pane.query = value
                     }
@@ -378,16 +394,16 @@ Item {
                 // Column heads.
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(30)
+                    Layout.preferredHeight: Design.s(Design.size.sm)
                     Layout.leftMargin: Design.s(Design.space.lg)
                     Layout.rightMargin: Design.s(Design.space.lg)
                     spacing: Design.s(Design.space.md)
                     visible: pane.shown.length > 0
-                    Item { Layout.preferredWidth: Design.s(28) }
+                    Item { Layout.preferredWidth: Design.s(Design.size.sm) }
                     Label { Layout.fillWidth: true; Layout.preferredWidth: 3; text: I18n.tr("Song title"); role: "caption"; dim: true; weight: Design.weight.semibold }
                     Label { Layout.fillWidth: true; Layout.preferredWidth: 2; text: I18n.tr("Artist"); role: "caption"; dim: true; weight: Design.weight.semibold }
                     Label { Layout.fillWidth: true; Layout.preferredWidth: 2; text: I18n.tr("Album"); role: "caption"; dim: true; weight: Design.weight.semibold }
-                    Label { Layout.preferredWidth: Design.s(56); text: I18n.tr("Time"); role: "caption"; dim: true; weight: Design.weight.semibold; horizontalAlignment: Text.AlignRight }
+                    Label { Layout.preferredWidth: Design.s(Design.size.tile); text: I18n.tr("Time"); role: "caption"; dim: true; weight: Design.weight.semibold; horizontalAlignment: Text.AlignRight }
                 }
 
                 ListView {
@@ -407,7 +423,7 @@ Item {
                         required property int index
                         readonly property bool picked: !!pane.selected[modelData.id]
                         width: songs.width
-                        height: Design.s(40)
+                        height: Design.s(Design.size.row)
 
                         Rectangle {
                             anchors.fill: parent
@@ -423,24 +439,24 @@ Item {
                                 anchors.rightMargin: Design.s(Design.space.sm)
                                 spacing: Design.s(Design.space.md)
                                 Rectangle {
-                                    Layout.preferredWidth: Design.s(28)
-                                    Layout.preferredHeight: Design.s(28)
-                                    radius: Design.s(4)
-                                    color: Design.tint(Design.pink, 0.18)
+                                    Layout.preferredWidth: Design.s(Design.size.sm)
+                                    Layout.preferredHeight: Design.s(Design.size.sm)
+                                    radius: Design.s(Design.radius.sm)
+                                    color: Design.well
                                     clip: true
                                     Text {
                                         anchors.centerIn: parent
                                         visible: art.status !== Image.Ready
                                         text: song.modelData.video ? "\u{f0567}" : "\u{f075a}"
                                         font.family: Design.font.icon
-                                        font.pixelSize: Design.s(15)
-                                        color: Design.pink
+                                        font.pixelSize: Design.s(Design.font.subhead)
+                                        color: Design.textDim
                                     }
                                     Image {
                                         id: art
                                         anchors.fill: parent
                                         source: pane.cover(song.modelData)
-                                        sourceSize: Qt.size(Design.s(56), Design.s(56))
+                                        sourceSize: Qt.size(Design.s(Design.size.tile), Design.s(Design.size.tile))
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
                                         cache: false
@@ -449,7 +465,7 @@ Item {
                                 Label { Layout.fillWidth: true; Layout.preferredWidth: 3; text: song.modelData.title; elide: Text.ElideRight }
                                 Label { Layout.fillWidth: true; Layout.preferredWidth: 2; text: song.modelData.artist; dim: true; elide: Text.ElideRight }
                                 Label { Layout.fillWidth: true; Layout.preferredWidth: 2; text: song.modelData.album; dim: true; elide: Text.ElideRight }
-                                Label { Layout.preferredWidth: Design.s(56); text: pane.time(song.modelData.length_ms); dim: true; horizontalAlignment: Text.AlignRight }
+                                Label { Layout.preferredWidth: Design.s(Design.size.tile); text: pane.time(song.modelData.length_ms); dim: true; horizontalAlignment: Text.AlignRight }
                             }
                         }
 
@@ -468,7 +484,7 @@ Item {
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             drag.target: songProxy
-                            drag.threshold: Design.s(10)
+                            drag.threshold: Design.s(Design.space.sm)
                             onPressed: mouse => { songs.forceActiveFocus(); pane.press(song.index, mouse); }
                             onClicked: mouse => { if (mouse.button === Qt.RightButton) songMenu.popup(); }
                             // Plays it, from the iPod, in whatever plays music here.
@@ -482,42 +498,25 @@ Item {
             }
         }
 
-        // ── Nothing to show ─────────────────────────────────────────────────
-        ColumnLayout {
-            anchors.centerIn: parent
-            width: Math.min(parent.width - Design.s(48), Design.s(380))
-            visible: pane.tab !== "general" && (pane.loading || pane.error !== "" || pane.shown.length === 0)
-            spacing: Design.s(Design.space.sm)
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: pane.error ? "\u{f0b8a}" : pane.loading ? "\u{f0450}" : "\u{f075a}"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(48)
-                color: Design.textFaint
-            }
-            Label {
-                Layout.alignment: Qt.AlignHCenter
-                role: "subhead"
-                weight: Design.weight.semibold
-                text: pane.error ? I18n.tr("Can't read this iPod")
-                    : pane.loading ? I18n.tr("Reading the iPod…")
-                    : pane.query ? I18n.tr("Nothing matches “%1”", pane.query)
-                    : pane.tab === "playlists" && !pane.playlist ? I18n.tr("Pick a playlist")
-                    : pane.tab === "playlists" ? I18n.tr("This playlist is empty")
-                    : I18n.tr("No music yet")
-            }
-            Label {
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                dim: true
-                visible: text !== ""
-                text: pane.error ? pane.error
-                    : pane.loading || pane.query ? ""
-                    : pane.tab === "playlists" && pane.playlist ? I18n.tr("Drag songs from Music onto the playlist on the left.")
-                    : pane.tab === "playlists" ? ""
-                    : I18n.tr("Drag songs or whole albums here. FLAC and Ogg are converted on the way.")
-            }
+        // ── Nothing to show, still reading, or it failed ───────────────────
+        AppState {
+            anchors.fill: parent
+            mode: pane.tab === "general" ? ""
+                : pane.error !== "" ? "error"
+                : pane.loading ? "loading"
+                : pane.shown.length === 0 ? "empty" : ""
+            icon: pane.error ? "\u{f0b8a}" : "\u{f075a}"
+            title: pane.error ? I18n.tr("Can't read this iPod")
+                : pane.loading ? I18n.tr("Reading the iPod…")
+                : pane.query ? I18n.tr("Nothing matches “%1”", pane.query)
+                : pane.tab === "playlists" && !pane.playlist ? I18n.tr("Pick a playlist")
+                : pane.tab === "playlists" ? I18n.tr("This playlist is empty")
+                : I18n.tr("No music yet")
+            hint: pane.error ? pane.error
+                : pane.loading || pane.query ? ""
+                : pane.tab === "playlists" && pane.playlist ? I18n.tr("Drag songs from Music onto the playlist on the left.")
+                : pane.tab === "playlists" ? ""
+                : I18n.tr("Drag songs or whole albums here. FLAC and Ogg are converted on the way.")
         }
     }
 
@@ -551,7 +550,7 @@ Item {
             radius: Design.s(Design.radius.card)
             color: Design.tint(Design.accent, 0.08)
             border.color: Design.accent
-            border.width: Design.s(2)
+            border.width: Design.s(Design.focusWidth)
             Label {
                 anchors.centerIn: parent
                 text: pane.tab === "playlists" && pane.playlist
@@ -619,7 +618,7 @@ Item {
             ? I18n.tr("Delete “%1” from the iPod?", (pane.byId[ids[0]] || {}).title || "")
             : I18n.trn("Delete %1 song from the iPod?", "Delete %1 songs from the iPod?", ids.length)
         message: I18n.tr("The files on this computer stay; only the iPod's copies go.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: { Devices.removeTracks(pane.path, ids); pane.selected = ({}); }
@@ -629,7 +628,7 @@ Item {
         id: confirmPlaylist
         title: I18n.tr("Delete the playlist “%1”?", pane.playlist ? pane.playlist.name : "")
         message: I18n.tr("Its songs stay on the iPod.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: Devices.playlist(pane.path, "delete", [pane.playlistId])
@@ -658,7 +657,7 @@ Item {
             else Devices.playlist(pane.path, "create", [name].concat(mode === "playlistFromSelection" ? ids : []));
         }
         contentItem: Item {
-            implicitWidth: Design.s(380)
+            implicitWidth: Design.s(Design.width.dialog)
             implicitHeight: nameBody.implicitHeight
             ColumnLayout {
                 id: nameBody

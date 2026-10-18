@@ -176,16 +176,19 @@ ColumnLayout {
     // ── Layouts ──────────────────────────────────────────────────────────────
     // The interface language moved to Language & Region, with the system
     // language and the formats.
-    Card {
+    SettingsGroup {
         visible: !section.shortcutsOnly
         title: I18n.tr("Input layouts")
-        subtitle: I18n.tr("The first one is what every login starts in")
-        icon: "\u{f030c}"
-        accentColor: Design.peach
+        description: I18n.tr("The first one is what every login starts in")
 
-        Flow {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
 
             Repeater {
                 model: section.layouts
@@ -197,10 +200,10 @@ ColumnLayout {
                     readonly property bool first: chip.index === 0
 
                     width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
-                    height: Design.s(36)
+                    height: Design.s(Design.size.header)
                     radius: Design.s(Design.radius.ctl)
-                    color: chip.first ? Design.tint(Design.peach, 0.14) : Design.raised
-                    border.color: chip.first ? Design.tint(Design.peach, 0.5) : Design.line
+                    color: chip.first ? Design.tint(Design.accent, 0.14) : Design.well
+                    border.color: chip.first ? Design.tint(Design.accent, 0.5) : Design.line
                     border.width: 1
 
                     RowLayout {
@@ -211,8 +214,8 @@ ColumnLayout {
                         Label {
                             text: chip.modelData.toUpperCase()
                             isMono: true
-                            weight: Design.weight.bold
-                            color: chip.first ? Design.peach : Design.text
+                            weight: Design.weight.semibold
+                            color: chip.first ? Design.accent : Design.text
                         }
 
                         Label {
@@ -224,14 +227,12 @@ ColumnLayout {
                         Badge {
                             visible: chip.first
                             text: I18n.tr("default")
-                            tone: Design.peach
                         }
 
                         IconButton {
                             visible: !chip.first
                             icon: "\u{f005d}" // arrow up: make it the first
                             role: "caption"
-                            hoverTone: Design.peach
                             onClicked: section.makeFirst(chip.modelData)
                         }
 
@@ -278,18 +279,18 @@ ColumnLayout {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: visible
-                ? Math.min(Design.s(220), section.layoutResults.length * Design.s(32) + Design.s(8))
+                ? Math.min(Design.s(Design.width.list), section.layoutResults.length * Design.s(Design.size.md) + Design.s(Design.space.sm))
                 : 0
             visible: (layoutField.focused || section.layoutQuery !== "") && section.layoutResults.length > 0
             radius: Design.s(Design.radius.ctl)
-            color: Design.sunken
+            color: Design.well
             border.color: Design.line
             border.width: 1
             clip: true
 
             ListView {
                 anchors.fill: parent
-                anchors.margins: Design.s(4)
+                anchors.margins: Design.s(Design.space.xs)
                 model: section.layoutResults
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: OverflowBar {}
@@ -297,7 +298,7 @@ ColumnLayout {
                 delegate: Rectangle {
                     required property var modelData
                     width: ListView.view.width
-                    height: Design.s(32)
+                    height: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
                     color: resultArea.containsMouse ? Design.hover : "transparent"
 
@@ -308,7 +309,7 @@ ColumnLayout {
                         spacing: Design.s(Design.space.sm)
 
                         Label {
-                            Layout.preferredWidth: Design.s(48)
+                            Layout.preferredWidth: Design.s(Design.size.art)
                             text: modelData.code.toUpperCase()
                             isMono: true
                             weight: Design.weight.semibold
@@ -322,7 +323,7 @@ ColumnLayout {
                         Icon { text: "\u{f0415}"; role: "caption"; color: Design.textDim } // plus
                     }
 
-                    MouseArea {
+                    Clickable {
                         id: resultArea
                         anchors.fill: parent
                         hoverEnabled: true
@@ -337,35 +338,32 @@ ColumnLayout {
             }
         }
     }
+}
 
-    Card {
+    SettingsGroup {
         visible: !section.shortcutsOnly
         title: I18n.tr("Switching layouts")
-        subtitle: section.layouts.length > 1
+        description: section.layouts.length > 1
             ? I18n.tr("The key that cycles through the layouts above")
             : I18n.tr("Only matters once there is more than one layout")
-        icon: "\u{f04e1}"
-        accentColor: Design.peach
 
-        Flow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.xs)
-
-            Repeater {
-                model: section.switchOptions
-                delegate: Pill {
-                    required property var modelData
-                    label: modelData.label
-                    active: section.switchOption === modelData.val
-                    onClicked: section.setSwitch(modelData.val)
-                }
+        SettingsRow {
+            label: I18n.tr("Switch with")
+            Select {
+                // "" is a real choice here (no shortcut), so it gets a name of its own.
+                model: section.switchOptions.map(o => ({ id: o.val === "" ? "__none" : o.val, label: o.label }))
+                current: section.switchOption === "" ? "__none" : section.switchOption
+                onPicked: function(id) { section.setSwitch(id === "__none" ? "" : id); }
             }
         }
 
         Label {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
+            Layout.bottomMargin: Design.s(Design.space.xs)
             wrapMode: Text.WordWrap
-            role: "caption"
+            role: "footnote"
             dim: true
             text: I18n.tr("The layout indicator in the bar switches too, with a click.")
         }
@@ -386,13 +384,11 @@ ColumnLayout {
     // A change can be put back with Reset, and "Super+Shift+T" is understood
     // as well as sway's own spelling.
 
-    Card {
+    SettingsGroup {
         id: bindCard
         visible: section.shortcutsOnly
         title: I18n.tr("Desktop shortcuts")
-        subtitle: I18n.tr("Change the key for any of these. Every binding is listed below.")
-        icon: "\u{f11c}"
-        accentColor: Design.sapphire
+        description: I18n.tr("Change the key for any of these. Every binding is listed below.")
 
         property string filter: ""
         property string editingId: ""
@@ -535,11 +531,16 @@ ColumnLayout {
             onTriggered: bindCard.status = ""
         }
 
-        Field {
+        ColumnLayout {
             Layout.fillWidth: true
-            placeholder: I18n.tr("Filter — terminal, settings, window…")
-            onEdited: v => bindCard.filter = v.toLowerCase()
-        }
+            Layout.margins: Design.s(Design.space.rowPaddingX)
+            spacing: Design.s(Design.space.sm)
+
+            Field {
+                Layout.fillWidth: true
+                placeholder: I18n.tr("Filter — terminal, settings, window…")
+                onEdited: v => bindCard.filter = v.toLowerCase()
+            }
 
         Label {
             visible: bindCard.status !== ""
@@ -557,25 +558,37 @@ ColumnLayout {
                 || b.cat.toLowerCase().includes(bindCard.filter)
                 || bindCard.pretty(bindCard.keysOf(b)).toLowerCase().includes(bindCard.filter))
 
+            // A row of the list like any other: flat, a hairline above it,
+            // filled only while its key is being changed.
             Rectangle {
                 id: bindRow
                 required property var modelData
+                required property int index
                 readonly property bool editing: bindCard.editingId === bindRow.modelData.id
                 readonly property bool changed: bindCard.overrides[bindRow.modelData.id] !== undefined
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: bindCol.implicitHeight + Design.s(Design.space.sm) * 2
+                Layout.preferredHeight: Math.max(Design.s(Design.size.row), bindCol.implicitHeight + Design.s(Design.space.sm) * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: bindRow.editing ? Design.tint(Design.sapphire, 0.1) : Design.sunken
-                border.color: bindRow.editing ? Design.sapphire : "transparent"
-                border.width: 1
+                color: bindRow.editing ? Design.well : "transparent"
+
+                Rectangle {
+                    visible: bindRow.index > 0 && !bindRow.editing
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: Design.separator
+                    opacity: 0.6
+                }
 
                 ColumnLayout {
                     id: bindCol
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.margins: Design.s(Design.space.sm)
+                    anchors.leftMargin: bindRow.editing ? Design.s(Design.space.sm) : 0
+                    anchors.rightMargin: bindRow.editing ? Design.s(Design.space.sm) : 0
                     spacing: Design.s(Design.space.sm)
 
                     RowLayout {
@@ -590,22 +603,21 @@ ColumnLayout {
 
                         Badge {
                             visible: bindRow.changed
-                            text: "changed"
-                            tone: Design.sapphire
+                            text: I18n.tr("changed")
+                            tone: Design.textDim
                         }
 
+                        // A value, not a choice: the text colour, not the accent.
                         Label {
                             text: bindCard.pretty(bindCard.keysOf(bindRow.modelData))
                             role: "caption"
                             isMono: true
-                            weight: Design.weight.bold
-                            color: Design.sapphire
+                            dim: true
                         }
 
                         IconButton {
                             icon: "\u{f03eb}" // pencil
                             role: "caption"
-                            hoverTone: Design.sapphire
                             onClicked: {
                                 if (bindRow.editing) {
                                     bindCard.editingId = "";
@@ -630,20 +642,22 @@ ColumnLayout {
                             onAccepted: v => bindCard.save(bindRow.modelData, v)
                         }
 
-                        ActionButton {
-                            Layout.fillWidth: false
+                        // The one primary while a key is being changed.
+                        Button {
+                            size: "sm"
+                            variant: "primary"
                             icon: "\u{f012c}"
-                            label: I18n.tr("Save")
-                            tone: Design.sapphire
-                            onActivated: bindCard.save(bindRow.modelData, keyField.text)
+                            text: I18n.tr("Save")
+                            onClicked: bindCard.save(bindRow.modelData, keyField.text)
                         }
 
-                        ActionButton {
-                            Layout.fillWidth: false
+                        Button {
+                            size: "sm"
+                            variant: "ghost"
                             visible: bindRow.changed
                             icon: "\u{f0450}"
-                            label: I18n.tr("Reset")
-                            onActivated: {
+                            text: I18n.tr("Reset")
+                            onClicked: {
                                 bindCard.reset(bindRow.modelData);
                                 bindCard.editingId = "";
                             }
@@ -653,4 +667,5 @@ ColumnLayout {
             }
         }
     }
+}
 }

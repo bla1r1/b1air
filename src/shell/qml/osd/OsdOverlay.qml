@@ -34,8 +34,8 @@ PanelWindow {
     anchors.bottom: true
     anchors.left: false
 
-    implicitWidth: osdCard.implicitWidth + Design.s(32)
-    implicitHeight: osdCard.implicitHeight + Design.s(90)
+    implicitWidth: osdCard.implicitWidth + Design.s(Design.space.xxl)
+    implicitHeight: osdCard.implicitHeight + Design.s(Design.size.avatar)
 
     visible: osdOpacity > 0.0
     onVisibleChanged: if (visible) Screens.refresh()
@@ -47,7 +47,7 @@ PanelWindow {
     property string osdTitle: "Volume"
     property int osdValue: 0
     property bool osdMuted: false
-    property color osdColor: Design.sapphire
+    property color osdColor: Design.accent
     property string osdDetail: ""       // a status line's second line
     property bool osdHasLevel: true     // false: a status line without a bar
 
@@ -77,7 +77,7 @@ PanelWindow {
         osdWindow.osdTitle = title;
         osdWindow.osdValue = Math.max(0, Math.min(100, Math.round(value)));
         osdWindow.osdMuted = muted;
-        osdWindow.osdColor = color || Design.sapphire;
+        osdWindow.osdColor = color || Design.accent;
         osdWindow.osdDetail = "";
         osdWindow.osdHasLevel = true;
         osdWindow.osdOpacity = 1.0;
@@ -114,14 +114,14 @@ PanelWindow {
         if (currentMute || v === 0) ic = "\u{f0581}";
         else if (v < 35) ic = "\u{f057f}";
         else if (v < 70) ic = "\u{f0580}";
-        showOsd(ic, "Volume", v, currentMute, currentMute ? Design.red : Design.sapphire);
+        showOsd(ic, "Volume", v, currentMute, currentMute ? Design.danger : Design.accent);
     }
 
     onCurrentMuteChanged: {
         if (!osdWindow._ready) return;
         let v = Math.round(currentVol * 100);
         let ic = currentMute ? "\u{f0581}" : "\u{f057e}";
-        showOsd(ic, currentMute ? "Muted" : "Volume", v, currentMute, currentMute ? Design.red : Design.sapphire);
+        showOsd(ic, currentMute ? "Muted" : "Volume", v, currentMute, currentMute ? Design.danger : Design.accent);
     }
 
     // ── Track Microphone Changes ─────────────────────────────────────────────
@@ -133,14 +133,14 @@ PanelWindow {
         if (!osdWindow._ready) return;
         let v = Math.round(currentMicVol * 100);
         let ic = currentMicMute ? "\u{f036d}" : "\u{f036c}";
-        showOsd(ic, "Microphone", v, currentMicMute, currentMicMute ? Design.red : Design.peach);
+        showOsd(ic, "Microphone", v, currentMicMute, currentMicMute ? Design.danger : Design.accent);
     }
 
     onCurrentMicMuteChanged: {
         if (!osdWindow._ready) return;
         let v = Math.round(currentMicVol * 100);
         let ic = currentMicMute ? "\u{f036d}" : "\u{f036c}";
-        showOsd(ic, currentMicMute ? "Mic Muted" : "Microphone", v, currentMicMute, currentMicMute ? Design.red : Design.peach);
+        showOsd(ic, currentMicMute ? "Mic Muted" : "Microphone", v, currentMicMute, currentMicMute ? Design.danger : Design.accent);
     }
 
     // ── Track Brightness Changes ─────────────────────────────────────────────
@@ -148,7 +148,7 @@ PanelWindow {
 
     onCurrentBrightnessChanged: {
         if (!osdWindow._ready || !Power.hasBacklight) return;
-        showOsd("\u{f00df}", "Brightness", currentBrightness, false, Design.yellow);
+        showOsd("\u{f00df}", "Brightness", currentBrightness, false, Design.accent);
     }
 
     Timer {
@@ -166,29 +166,29 @@ PanelWindow {
         opacity: osdWindow.osdOpacity
         scale: osdWindow.osdOpacity > 0 ? 1.0 : 0.92
 
-        Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutCubic } }
 
-        implicitWidth: osdWindow.osdHasLevel ? Design.s(260)
-            : Math.min(Design.s(440), Math.max(Design.s(260), statusText.implicitWidth + Design.s(84)))
-        implicitHeight: Design.s(60)
+        implicitWidth: osdWindow.osdHasLevel ? Design.s(Design.size.canvas)
+            : Math.min(Design.s(Design.width.menuMax), Math.max(Design.s(Design.size.canvas), statusText.implicitWidth + Design.s(Design.size.avatar)))
+        implicitHeight: Design.s(Design.size.tile)
 
-        radius: Design.s(30)
+        radius: height / 2
         color: Design.ground
         border.color: Design.glassBorder
         border.width: 1
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: Design.s(16)
-            anchors.rightMargin: Design.s(18)
-            spacing: Design.s(12)
+            anchors.leftMargin: Design.s(Design.space.lg)
+            anchors.rightMargin: Design.s(Design.space.lg)
+            spacing: Design.s(Design.space.md)
 
             // Icon circle
             Rectangle {
-                Layout.preferredWidth: Design.s(36)
-                Layout.preferredHeight: Design.s(36)
-                radius: Design.s(18)
+                Layout.preferredWidth: Design.s(Design.size.knob)
+                Layout.preferredHeight: Design.s(Design.size.knob)
+                radius: Design.s(Design.radius.panel)
                 color: Design.glassCard
 
                 Icon {
@@ -202,7 +202,7 @@ PanelWindow {
             // Label & Bar Column
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(4)
+                spacing: Design.s(Design.space.xs)
 
                 // A status line: title, and the detail under it.
                 ColumnLayout {
@@ -237,9 +237,9 @@ PanelWindow {
                     }
                     Label {
                         text: osdWindow.osdMuted ? I18n.tr("MUTED") : (osdWindow.osdValue + "%")
-                        weight: Design.weight.bold
+                        weight: Design.weight.semibold
                         role: "caption"
-                        color: osdWindow.osdMuted ? Design.red : Design.text
+                        color: osdWindow.osdMuted ? Design.danger : Design.text
                     }
                 }
 
@@ -247,8 +247,8 @@ PanelWindow {
                 Rectangle {
                     visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(6)
-                    radius: Design.s(3)
+                    Layout.preferredHeight: Design.s(Design.space.xs)
+                    radius: Design.s(Design.radius.sm)
                     color: Design.well
 
                     Rectangle {
@@ -256,7 +256,7 @@ PanelWindow {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: osdWindow.osdMuted ? 0 : (parent.width * (osdWindow.osdValue / 100.0))
-                        radius: Design.s(3)
+                        radius: Design.s(Design.radius.sm)
                         color: osdWindow.osdColor
 
                         Behavior on width {

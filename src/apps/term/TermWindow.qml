@@ -30,10 +30,10 @@ Window {
     palette.dark: Design.sunken
     palette.shadow: Design.ground
     title: I18n.tr("Terminal")
-    width: Design.s(840)
-    height: Design.s(540)
-    minimumWidth: Design.s(450)
-    minimumHeight: Design.s(300)
+    width: Design.s(Design.window.compactWidth)
+    height: Design.s(Design.window.compactHeight)
+    minimumWidth: Design.s(Design.window.minWidth)
+    minimumHeight: Design.s(Design.window.minHeight)
     visible: true
     color: "transparent"
 
@@ -80,78 +80,68 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.base
+        color: Design.glassBg
         clip: true
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // ── Ultra-Compact Headerbar (36px) with Multi-Tabs ──────────────
-            Rectangle {
+            // One row, as the old 42px header was, in the toolbar's style:
+            // with one shell its title on the left; with more the tabs take
+            // that place (the title is the active tab's label), and a new tab
+            // and the menu stay on the right. The tabs had a strip of their
+            // own under the toolbar, which also said "Tab 2 of 2" above them.
+            AppToolbar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(42)
-                color: Design.surface
                 z: 10
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(10)
-                    anchors.rightMargin: Design.s(10)
-                    spacing: Design.s(6)
-
-                    // Terminal App Icon
-                    Label {
-                        text: "\u{f120}" // 
-                        font.family: "JetBrainsMono Nerd Font"
-                        font.pixelSize: Design.s(14)
-                        color: Design.sapphire
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    // Tabs Strip
-                    RowLayout {
-                        spacing: Design.s(4)
-                        Layout.alignment: Qt.AlignVCenter
-
-                        Repeater {
-                            model: tabsModel
-                            delegate: AppTab {
-                                required property int index
-                                required property var model
-                                label: (index + 1) + ": " + (model.tabTitle || "fish")
-                                active: window.currentTabIndex === index
-                                closable: tabsModel.count > 1
-                                onClicked: window.currentTabIndex = index
-                                onCloseRequested: window.closeTab(index)
-                            }
-                        }
-
-                        // Add Tab Button (+)
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
-                    }
-
-                    Item { Layout.fillWidth: true } // Spacer
-
-                    // Zoom Controls & Actions
-                    Row {
-                        spacing: Design.s(Design.space.xs)
-                        Layout.alignment: Qt.AlignVCenter
-                        BarButton { small: true; glyph: "\u{f0374}"; tip: I18n.tr("Smaller text (Ctrl+−)"); onClicked: currentTermView().zoomOut() }
-                        BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("Larger text (Ctrl+=)"); onClicked: currentTermView().zoomIn() }
-                        Rectangle { width: 1; height: Design.s(16); color: Design.line; anchors.verticalCenter: parent.verticalCenter }
-                        BarButton { small: true; glyph: "\u{f018f}"; tip: I18n.tr("Copy (Ctrl+Shift+C)"); onClicked: currentTermView().copySelection() }
-                        BarButton { small: true; glyph: "\u{f0192}"; tip: I18n.tr("Paste (Ctrl+Shift+V)"); onClicked: currentTermView().pasteClipboard() }
-                        BarButton { small: true; glyph: "\u{f00e2}"; tip: I18n.tr("Clear"); onClicked: currentTermView().clear() }
+                AppTitle {
+                    visible: tabsModel.count < 2
+                    readonly property var tab: tabsModel.count > window.currentTabIndex ? tabsModel.get(window.currentTabIndex) : null
+                    title: (tab && tab.tabTitle) || "fish"
+                }
+                ListView {
+                    id: tabStrip
+                    visible: tabsModel.count > 1
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: Design.s(Design.size.md)
+                    orientation: ListView.Horizontal
+                    spacing: Design.s(Design.space.xs)
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: tabsModel
+                    currentIndex: window.currentTabIndex
+                    // The active tab stays in view when there are more than fit.
+                    highlightFollowsCurrentItem: false
+                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                    delegate: AppTab {
+                        required property int index
+                        required property var model
+                        label: model.tabTitle || "fish"
+                        active: window.currentTabIndex === index
+                        closable: tabsModel.count > 1
+                        onClicked: window.currentTabIndex = index
+                        onCloseRequested: window.closeTab(index)
                     }
                 }
-            }
-
-            // Divider line
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: Design.line
+                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.createNewTab("", "") }
+                Button {
+                    id: termMoreBtn
+                    variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
+                    tip: I18n.tr("More")
+                    onClicked: termMenu.popup(termMoreBtn, 0, termMoreBtn.height)
+                }
+                AppMenu {
+                    id: termMenu
+                    AppMenuItem { text: I18n.tr("Copy"); keys: "Ctrl+Shift+C"; glyph: "\u{f018f}"; onTriggered: currentTermView().copySelection() }
+                    AppMenuItem { text: I18n.tr("Paste"); keys: "Ctrl+Shift+V"; glyph: "\u{f0192}"; onTriggered: currentTermView().pasteClipboard() }
+                    AppMenuItem { text: I18n.tr("Clear"); glyph: "\u{f00e2}"; onTriggered: currentTermView().clear() }
+                    AppMenuSeparator {}
+                    AppMenuItem { text: I18n.tr("Larger text"); keys: "Ctrl+="; glyph: "\u{f0415}"; onTriggered: currentTermView().zoomIn() }
+                    AppMenuItem { text: I18n.tr("Smaller text"); keys: "Ctrl+−"; glyph: "\u{f0374}"; onTriggered: currentTermView().zoomOut() }
+                }
             }
 
             // ── Terminal Views Stack ─────────────────────────────────────────
@@ -172,16 +162,26 @@ Window {
                         TerminalView {
                             id: singleTermView
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
+                            anchors.margins: Design.s(Design.space.sm)
                             focus: window.currentTabIndex === index
 
-                            // Follow the desktop theme. The terminal painted
-                            // itself Catppuccin from two hardcoded constants,
-                            // so the one window that fills its whole area with
-                            // a single colour was the one that ignored the
-                            // theme picker.
-                            backgroundColor: Design.ground
+                            // The desktop theme's colours.
+                            backgroundColor: Qt.alpha(Design.ground, 0)
                             foregroundColor: Design.text
+                            // The sixteen from the theme's own colours, so a
+                            // program's red is the desktop's red. The bright
+                            // eight are a step away from the background: lighter
+                            // on a dark theme, deeper on a light one; black and
+                            // white are the theme's faint and plain text.
+                            ansiColors: {
+                                const dark = Design.darkTheme;
+                                const step = c => dark ? Qt.lighter(c, 1.25) : Qt.darker(c, 1.2);
+                                const base = [dark ? Design.textFaint : Design.textDim, Design.red, Design.green,
+                                              Design.yellow, Design.blue, Design.mauve, Design.teal,
+                                              dark ? Design.textDim : Design.text];
+                                return base.concat([dark ? Design.textDim : Design.textFaint].concat(
+                                                   base.slice(1, 7).map(step)).concat([Design.text]));
+                            }
 
                             Component.onCompleted: {
                                 var cmd = model.initialCmd || ((typeof InitialCommand !== "undefined" && index === 0) ? InitialCommand : "");

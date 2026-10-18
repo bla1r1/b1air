@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Windows Program
+Name[uk]=Програма Windows
+Name[ru]=Программа Windows
+Comment=Install or run it with Proton
+Comment[uk]=Встановити або запустити через Proton
+Comment[ru]=Установить или запустить через Proton
+Exec=b1air-run-windows %f
+TryExec=b1air-run-windows
+Icon=application-x-ms-dos-executable
+Terminal=false
+NoDisplay=true
+MimeType=application/x-ms-dos-executable;application/x-msdownload;application/vnd.microsoft.portable-executable;application/x-msi;application/x-ms-shortcut;

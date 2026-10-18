@@ -113,17 +113,6 @@ PopupShell {
 
     function iconSource(icon) { return Services.Apps.iconSource(icon); }
 
-    function categoryColor(category) {
-        switch (categoryName(category)) {
-        case "System": return Design.blue;
-        case "Development": return Design.teal;
-        case "Graphics": return Design.peach;
-        case "Multimedia": return Design.mauve;
-        case "Games": return Design.red;
-        case "Office": return Design.yellow;
-        default: return Design.sapphire;
-        }
-    }
 
     readonly property var allApps: {
         let combined = [];
@@ -289,7 +278,7 @@ PopupShell {
         // ── Search ───────────────────────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(44)
+            Layout.preferredHeight: Design.s(Design.size.row)
             radius: Design.s(Design.radius.ctl)
             color: Design.well
             border.color: launchSearchInput.activeFocus ? Design.accent : Design.glassBorder
@@ -385,7 +374,7 @@ PopupShell {
 
                 Repeater {
                     model: window.categories
-                    delegate: Pill {
+                    delegate: Chip {
                         required property var modelData
                         label: I18n.tr(modelData.key) + "  " + modelData.count
                         active: window.activeCategory === modelData.key
@@ -420,7 +409,7 @@ PopupShell {
                 // screen, which is narrower than most application names. The
                 // count follows the room available, with a floor so a narrow
                 // screen gets fewer, larger cells rather than a row of slivers.
-                readonly property int columns: Math.max(3, Math.floor(width / Design.s(124)))
+                readonly property int columns: Math.max(3, Math.floor(width / Design.s(Design.size.thumb)))
                 cellWidth: Math.floor(width / appGrid.columns)
 
                 // Rows divide the viewport exactly instead of being a fixed
@@ -431,7 +420,7 @@ PopupShell {
                 // row height flexes by a few pixels instead — the delegate is
                 // a centred icon over the name, so it absorbs that without
                 // moving anything visible.
-                readonly property int rowCount: Math.max(1, Math.round(height / Design.s(112)))
+                readonly property int rowCount: Math.max(1, Math.round(height / Design.s(Design.size.thumb)))
                 cellHeight: Math.floor(height / appGrid.rowCount)
 
                 ScrollBar.vertical: OverflowBar {}
@@ -458,8 +447,6 @@ PopupShell {
                         border.color: gridCell.selected ? Design.accent : "transparent"
                         border.width: Design.border
 
-                        scale: itemHover.containsMouse ? 1.04 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
                         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                         ColumnLayout {
@@ -471,8 +458,8 @@ PopupShell {
 
                             Item {
                                 Layout.alignment: Qt.AlignHCenter
-                                implicitWidth: Design.s(44)
-                                implicitHeight: Design.s(44)
+                                implicitWidth: Design.s(Design.size.row)
+                                implicitHeight: Design.s(Design.size.row)
 
                                 IconImage {
                                     anchors.fill: parent
@@ -489,14 +476,14 @@ PopupShell {
                                 Rectangle {
                                     anchors.right: parent.right
                                     anchors.bottom: parent.bottom
-                                    anchors.margins: -Design.s(2)
-                                    width: Design.s(12)
-                                    height: Design.s(12)
+                                    anchors.margins: -Design.s(Design.space.xxs)
+                                    width: Design.s(Design.space.md)
+                                    height: Design.s(Design.space.md)
                                     radius: width / 2
                                     visible: PinnedApps.isPinned(modelData.name)
-                                    color: Design.sapphire
+                                    color: Design.accent
                                     border.color: window.background
-                                    border.width: Design.s(2)
+                                    border.width: Design.s(Design.focusWidth)
                                 }
                             }
 
@@ -507,7 +494,7 @@ PopupShell {
                                 horizontalAlignment: Text.AlignHCenter
                                 weight: gridCell.lit ? Design.weight.semibold : Design.weight.regular
                                 color: gridCell.lit ? Design.accent : Design.text
-                                font.pixelSize: Design.s(12)
+                                font.pixelSize: Design.s(Design.font.footnote)
                                 // Two lines, because one was not enough for
                                 // most of them: at six fixed columns half the
                                 // grid ended in an ellipsis.
@@ -525,8 +512,8 @@ PopupShell {
                             anchors.top: parent.top
                             anchors.right: parent.right
                             anchors.margins: Design.s(Design.space.xs)
-                            width: Design.s(20)
-                            height: Design.s(20)
+                            width: Design.s(Design.size.mini)
+                            height: Design.s(Design.size.mini)
                             radius: Design.s(Design.radius.sm)
                             visible: itemHover.containsMouse
                             color: pinArea.containsMouse ? Design.tint(Design.accent, 0.30) : Design.tint(Design.text, 0.10)
@@ -536,10 +523,10 @@ PopupShell {
                                 anchors.centerIn: parent
                                 text: PinnedApps.isPinned(modelData.name) ? "\u{f0932}" : "\u{f0931}"
                                 role: "caption"
-                                color: PinnedApps.isPinned(modelData.name) ? Design.sapphire : Design.textDim
+                                color: PinnedApps.isPinned(modelData.name) ? Design.accent : Design.textDim
                             }
 
-                            MouseArea {
+                            Clickable {
                                 id: pinArea
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -578,15 +565,18 @@ PopupShell {
                 }
             }
 
-            EmptyState {
-                anchors.centerIn: parent
-                width: parent.width
-                visible: window.filteredApps.length === 0
+            // Until the scan is in, an empty category only means "not yet".
+            AppState {
+                anchors.fill: parent
+                mode: window.filteredApps.length > 0 ? ""
+                    : !Services.Apps.loaded ? "loading" : "empty"
                 icon: "\u{f002}"
-                title: window.query.trim() ? I18n.tr("Nothing matches “%1”", window.query.trim())
-                                           : I18n.tr("No applications in %1", I18n.tr(window.activeCategory))
-                hint: window.query.trim() ? I18n.tr("Try fewer letters, or clear the category filter.")
-                                          : I18n.tr("Install something, or pick another category above.")
+                title: mode === "loading" ? I18n.tr("Loading apps…")
+                     : window.query.trim() ? I18n.tr("Nothing matches “%1”", window.query.trim())
+                     : I18n.tr("No applications in %1", I18n.tr(window.activeCategory))
+                hint: mode === "loading" ? ""
+                    : window.query.trim() ? I18n.tr("Try fewer letters, or clear the category filter.")
+                    : I18n.tr("Install something, or pick another category above.")
             }
         }
 
@@ -598,7 +588,7 @@ PopupShell {
         // also what tells you the keyboard is doing something.
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(18)
+            Layout.preferredHeight: Design.s(Design.size.micro)
             spacing: Design.s(Design.space.md)
 
             Label {
@@ -607,6 +597,21 @@ PopupShell {
                 role: "caption"
                 color: Design.textDim
                 elide: Text.ElideRight
+            }
+
+            // A Windows program (b1air-windows): its settings, components
+            // and removing it are on a Settings page of their own.
+            Button {
+                readonly property bool windowsApp: !!(window.selectedApp
+                    && String(window.selectedApp.cmd || "").indexOf("b1air-windows run ") === 0)
+                visible: windowsApp
+                size: "sm"
+                variant: "ghost"
+                icon: "\u{f05b3}"
+                label: I18n.tr("Windows program settings")
+                onClicked: {
+                    Quickshell.execDetached(["b1air-shell", "open", "settings", "winapps"]);
+                }
             }
 
             Label {

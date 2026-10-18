@@ -1,0 +1,1262 @@
+#!/usr/bin/env python3
+# =============================================================================
+# b1air-windows — Windows programs as programs: each in a prefix of its own,
+# run with Proton through umu-launcher, in the Launchpad with its own icon.
+#
+#   inspect FILE              what a .exe/.msi is: its name, icon, installer or not,
+#                             and where it is recommended to go, with which Proton (JSON)
+#   open FILE                 what Files opens a Windows file with: the shell's sheet,
+#                             or the recommended way when the shell is not up
+#   install FILE [OPTIONS]    run an installer; its Start menu shortcuts become
+#                             Launchpad entries. OPTIONS: --name NAME, and where:
+#                             --bottle ID, or --new-bottle NAME [--runner PROTON];
+#                             the shared bottle when neither is given
+#   add FILE [OPTIONS]        a program that needs no installing, as an entry
+#   once FILE [--bottle ID]   run it once, with no entry
+#   run SLUG [LAUNCHER] [ARG…]  start an entry (what its desktop file runs)
+#   pick SLUG PATH            after an install with no shortcuts: what to start
+#   list                      every program, its launchers and options (JSON)
+#   bottles                   every bottle: its Proton, components, programs (JSON)
+#   set SLUG KEY on|off       a program's option: dxvk wayland hdr fsr mangohud
+#                             gamemode gamescope game; or set SLUG name NAME
+#   bottle-set ID KEY VALUE   a bottle's runner (GE-Proton, UMU-Proton, a folder) or name
+#   deps ID VERB…             Windows components into a bottle (winetricks verbs)
+#   config ID                 Wine's own settings for a bottle (winecfg)
+#   log SLUG                  where a program's last run's output is
+#   remove SLUG               a program: its own bottle with it, or its uninstaller
+#                             and its entries when it shares one
+#   bottle-remove ID          a bottle and every program in it
+#   runtime [update]          umu and Proton: what there is (JSON); update fetches the latest
+#
+# A bottle is a Wine prefix with its Proton and its components. Programs go
+# into the shared one unless asked: one place, one set of components. A game
+# that wants another Proton, or that breaks the others, gets one of its own.
+#
+# Proton is the Wine Valve builds for Steam, with DXVK and VKD3D-Proton
+# (Direct3D over Vulkan); umu-launcher runs it outside Steam, in Valve's
+# runtime container, and applies the fixes of the umu database to the games
+# it knows. GE-Proton, the community build with more fixes, is fetched by umu
+# the first time and kept up to date. All of it is open source.
+#
+# Kept under $XDG_DATA_HOME/b1air/windows/: <slug>/ for each program (app.json,
+# its icons, last.log) and _bottles/<id>/ for each bottle (bottle.json, prefix/).
+# Python's standard library only.
+# =============================================================================
+
+import csv
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import time
+import urllib.request
+import zlib
+from pathlib import Path
+
+socket.setdefaulttimeout(30)  # downloads give up rather than hang
+
+HOME = Path.home()
+DATA = Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or HOME / ".cache")
+ROOT = DATA / "b1air" / "windows"
+APPS_DIR = DATA / "applications"
+COMPAT_TOOLS = DATA / "Steam" / "compatibilitytools.d"
+
+# The options each program has, and what they are when not set.
+DEFAULT_OPTIONS = {
+    "dxvk": True,            # Direct3D over Vulkan; off: Wine's own, over OpenGL
+    "wayland": False,        # Wine's Wayland driver: sharp on HiDPI, still new
+    "hdr": False,
+    "fsr": False,            # AMD FSR upscaling for fullscreen games
+    "mangohud": False,
+    "gamemode": False,
+    "gamescope": False,      # its own compositor, for games that misbehave
+    "game": False,           # a game: in the Launchpad's Games
+}
+BOOL_OPTIONS = [k for k, v in DEFAULT_OPTIONS.items() if isinstance(v, bool)]
+
+# ── Words ────────────────────────────────────────────────────────────────────
+
+_RU = {
+    "Windows programs": "Windows-программы",
+    "Getting Proton ready": "Готовлю Proton",
+    "The first time only: a few hundred megabytes to download.": "Только в первый раз: скачается несколько сотен мегабайт.",
+    "%s is installed": "%s установлена",
+    "It is in the Launchpad.": "Она в Launchpad.",
+    "Nothing to start was found": "Не нашлось, что запускать",
+    "Pick the program in Settings → Windows programs.": "Выберите программу в Настройках → Windows-программы.",
+    "%s stopped": "%s завершилась",
+    "It closed with an error a moment after starting.": "Она закрылась с ошибкой сразу после запуска.",
+    "Log": "Журнал",
+    "Try safe settings": "Безопасные настройки",
+    "Can't run Windows programs": "Не получается запускать Windows-программы",
+    "umu-launcher could not be found or fetched. Check the network, then try again.": "umu-launcher не найден и не скачался. Проверьте сеть и попробуйте ещё раз.",
+    "Nothing to open": "Нечего открывать",
+    "Installing %s": "Устанавливаю %s",
+    "Components installed": "Компоненты установлены",
+    "Shared bottle": "Общая бутылка",
+}
+_UK = {
+    "Windows programs": "Windows-програми",
+    "Getting Proton ready": "Готую Proton",
+    "The first time only: a few hundred megabytes to download.": "Лише вперше: завантажиться кілька сотень мегабайт.",
+    "%s is installed": "%s встановлено",
+    "It is in the Launchpad.": "Вона в Launchpad.",
+    "Nothing to start was found": "Не знайшлося, що запускати",
+    "Pick the program in Settings → Windows programs.": "Виберіть програму в Налаштуваннях → Windows-програми.",
+    "%s stopped": "%s завершилася",
+    "It closed with an error a moment after starting.": "Вона закрилася з помилкою одразу після запуску.",
+    "Log": "Журнал",
+    "Try safe settings": "Безпечні налаштування",
+    "Can't run Windows programs": "Не вдається запускати Windows-програми",
+    "umu-launcher could not be found or fetched. Check the network, then try again.": "umu-launcher не знайдено й не завантажено. Перевірте мережу й спробуйте ще раз.",
+    "Nothing to open": "Нічого відкривати",
+    "Installing %s": "Встановлюю %s",
+    "Components installed": "Компоненти встановлено",
+    "Shared bottle": "Спільна пляшка",
+}
+
+
+def _language():
+    try:
+        lang = json.loads((CONFIG / "b1air" / "settings.json").read_text()).get("uiLanguage", "auto")
+    except (OSError, ValueError):
+        lang = "auto"
+    if not lang or lang == "auto":
+        lang = os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    return lang[:2].lower()
+
+
+def tr(text):
+    table = {"ru": _RU, "uk": _UK}.get(_language(), {})
+    return table.get(text, text)
+
+
+def notify(title, body="", icon="application-x-ms-dos-executable", actions=None):
+    """A notification; with actions, waits and returns the one picked (or "")."""
+    if not shutil.which("notify-send"):
+        print(f"{title}: {body}", file=sys.stderr)
+        return ""
+    cmd = ["notify-send", "-a", tr("Windows programs"), "-i", icon, title, body]
+    if actions:
+        cmd[1:1] = [f"--action={k}={v}" for k, v in actions]
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+        except OSError:
+            return ""
+    subprocess.run(cmd, check=False)
+    return ""
+
+
+def emit(**event):
+    """A line of progress for the shell's sheet, which reads stdout."""
+    print(json.dumps(event, ensure_ascii=False), flush=True)
+
+
+# ── Reading .exe files: the name and the icon ───────────────────────────────
+
+class PE:
+    """Just enough of the PE format to reach the resources."""
+
+    RT_ICON, RT_GROUP_ICON, RT_VERSION = 3, 14, 16
+
+    def __init__(self, data):
+        self.data = data
+        if data[:2] != b"MZ":
+            raise ValueError("not a PE file")
+        pe = struct.unpack_from("<I", data, 0x3C)[0]
+        if data[pe:pe + 4] != b"PE\0\0":
+            raise ValueError("not a PE file")
+        nsections, opt_size = struct.unpack_from("<H", data, pe + 6)[0], struct.unpack_from("<H", data, pe + 20)[0]
+        opt = pe + 24
+        magic = struct.unpack_from("<H", data, opt)[0]
+        dirs = opt + (96 if magic == 0x10B else 112)
+        self.rsrc_rva, self.rsrc_size = struct.unpack_from("<II", data, dirs + 2 * 8)
+        self.sections = []
+        sec = opt + opt_size
+        for i in range(nsections):
+            vsize, va, rawsize, rawptr = struct.unpack_from("<IIII", data, sec + i * 40 + 8)
+            self.sections.append((va, max(vsize, rawsize), rawptr))
+        self.rsrc = self.offset(self.rsrc_rva) if self.rsrc_rva else None
+
+    def offset(self, rva):
+        for va, size, raw in self.sections:
+            if va <= rva < va + size:
+                return rva - va + raw
+        return None
+
+    def _entries(self, off):
+        named, ids = struct.unpack_from("<HH", self.data, off + 12)
+        for i in range(named + ids):
+            name, target = struct.unpack_from("<II", self.data, off + 16 + i * 8)
+            yield name, target
+
+    def resources(self, rtype):
+        """{id: bytes} of one resource type, the first language of each."""
+        out = {}
+        if self.rsrc is None:
+            return out
+        for name, target in self._entries(self.rsrc):
+            if name != rtype or not target & 0x80000000:
+                continue
+            for rid, sub in self._entries(self.rsrc + (target & 0x7FFFFFFF)):
+                if not sub & 0x80000000:
+                    continue
+                for _lang, leaf in self._entries(self.rsrc + (sub & 0x7FFFFFFF)):
+                    if leaf & 0x80000000:
+                        continue
+                    rva, size = struct.unpack_from("<II", self.data, self.rsrc + leaf)
+                    at = self.offset(rva)
+                    if at is not None:
+                        out[rid] = self.data[at:at + size]
+                    break
+        return out
+
+
+def version_strings(blob):
+    """The StringFileInfo of a VS_VERSIONINFO: {"ProductName": …, …}."""
+    out = {}
+
+    def walk(at, end):
+        while at + 6 <= end:
+            length, vlen, vtype = struct.unpack_from("<HHH", blob, at)
+            if length == 0:
+                break
+            stop = min(at + length, end)
+            key_end = at + 6
+            while key_end + 1 < stop and blob[key_end:key_end + 2] != b"\0\0":
+                key_end += 2
+            key = blob[at + 6:key_end].decode("utf-16-le", "replace")
+            value_at = (key_end + 2 + 3) & ~3
+            if vtype == 1 and vlen and key not in ("VS_VERSION_INFO",):
+                raw = blob[value_at:value_at + vlen * 2]
+                out.setdefault(key, raw.decode("utf-16-le", "replace").split("\0")[0].strip())
+            children = value_at + (vlen * (2 if vtype == 1 else 1))
+            children = (children + 3) & ~3
+            if key in ("VS_VERSION_INFO", "StringFileInfo") or re.fullmatch(r"[0-9A-Fa-f]{8}", key):
+                walk(children, stop)
+            at = (stop + 3) & ~3
+
+    walk(0, len(blob))
+    return out
+
+
+def _png(width, height, rgba):
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    rows = b"".join(b"\0" + rgba[y * width * 4:(y + 1) * width * 4] for y in range(height))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+
+
+def dib_to_png(dib):
+    """An icon's bitmap (a DIB with its AND mask under it) as a PNG."""
+    size, width, height2, _planes, bpp = struct.unpack_from("<IiiHH", dib, 0)
+    height = abs(height2) // 2
+    colors = struct.unpack_from("<I", dib, 32)[0] if size >= 36 else 0
+    palette_at = size
+    if bpp <= 8:
+        colors = colors or (1 << bpp)
+    else:
+        colors = 0
+    palette = [dib[palette_at + i * 4:palette_at + i * 4 + 4] for i in range(colors)]
+    pixels = palette_at + colors * 4
+    stride = ((width * bpp + 31) // 32) * 4
+    mask_at = pixels + stride * height
+    mask_stride = ((width + 31) // 32) * 4
+    out = bytearray(width * height * 4)
+    any_alpha = False
+    for y in range(height):
+        row = pixels + (height - 1 - y) * stride
+        mrow = mask_at + (height - 1 - y) * mask_stride
+        for x in range(width):
+            if bpp == 32:
+                b, g, r, a = dib[row + x * 4:row + x * 4 + 4]
+                any_alpha = any_alpha or a != 0
+            elif bpp == 24:
+                b, g, r = dib[row + x * 3:row + x * 3 + 3]
+                a = 255
+            else:
+                bit = x * bpp
+                byte = dib[row + bit // 8]
+                index = (byte >> (8 - bpp - bit % 8)) & ((1 << bpp) - 1)
+                b, g, r, _ = palette[index] if index < len(palette) else (0, 0, 0, 0)
+                a = 255
+            if bpp != 32 and mrow + x // 8 < len(dib) and dib[mrow + x // 8] >> (7 - x % 8) & 1:
+                a = 0
+            out[(y * width + x) * 4:(y * width + x) * 4 + 4] = bytes((r, g, b, a))
+    if bpp == 32 and not any_alpha:
+        # An old 32-bit icon with no alpha at all: the mask says what shows.
+        for y in range(height):
+            mrow = mask_at + (height - 1 - y) * mask_stride
+            for x in range(width):
+                masked = mrow + x // 8 < len(dib) and dib[mrow + x // 8] >> (7 - x % 8) & 1
+                out[(y * width + x) * 4 + 3] = 0 if masked else 255
+    return _png(width, height, bytes(out))
+
+
+def best_icon(pe):
+    """The largest, deepest image of the first icon group, as PNG bytes."""
+    groups = pe.resources(PE.RT_GROUP_ICON)
+    if not groups:
+        return None
+    icons = pe.resources(PE.RT_ICON)
+    group = groups[sorted(groups)[0]]
+    count = struct.unpack_from("<H", group, 4)[0]
+    best = None
+    for i in range(count):
+        w, h, _c, _r, _planes, bpp, _size, rid = struct.unpack_from("<BBBBHHIH", group, 6 + i * 14)
+        rank = ((w or 256) * (h or 256), bpp)
+        if rid in icons and (best is None or rank > best[0]):
+            best = (rank, icons[rid])
+    if best is None:
+        return None
+    image = best[1]
+    if image[:8] == b"\x89PNG\r\n\x1a\n":
+        return image
+    try:
+        return dib_to_png(image)
+    except (struct.error, IndexError, ValueError):
+        return None
+
+
+INSTALLER_WORDS = re.compile(r"(setup|install|installer|инсталл|установ)", re.I)
+
+
+def clean_name(stem):
+    """"SteamSetup" → "Steam", "foo_installer_x64" → "Foo"."""
+    name = re.sub(r"[_\-.]+", " ", stem)
+    name = re.sub(r"(?i)\b(x64|x86|win(32|64)?|amd64|64bit|32bit|portable|v?\d+(\.\d+)+)\b", " ", name)
+    name = re.sub(r"(?i)(web)?(setup|installer|install)", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name[:1].upper() + name[1:] if name else stem
+
+
+def inspect_file(path):
+    path = Path(path)
+    info = {"path": str(path), "file": path.name, "size": path.stat().st_size,
+            "ext": path.suffix.lower(), "name": clean_name(path.stem), "installer": False,
+            "icon": "", "company": "", "version": ""}
+    if info["ext"] == ".msi":
+        info["installer"] = True
+        return info
+    if info["ext"] not in (".exe", ".scr"):
+        return info
+    try:
+        data = path.read_bytes()
+        pe = PE(data)
+    except (OSError, ValueError, struct.error):
+        return info
+    strings = {}
+    for blob in pe.resources(PE.RT_VERSION).values():
+        try:
+            strings = version_strings(blob)
+        except (struct.error, IndexError):
+            strings = {}
+        break
+    product = strings.get("ProductName", "")
+    described = strings.get("FileDescription", "")
+    info["company"] = strings.get("CompanyName", "")
+    info["version"] = strings.get("ProductVersion", "") or strings.get("FileVersion", "")
+    head = data[:2 << 20]
+    info["installer"] = bool(
+        INSTALLER_WORDS.search(path.stem) or INSTALLER_WORDS.search(described)
+        or b"Inno Setup" in head or b"Nullsoft" in head or b"NSIS" in head[:200000]
+        or b"InstallShield" in head)
+    name = product or described
+    if name and info["installer"]:
+        name = re.sub(r"(?i)\s*(setup|installer|install)$", "", name).strip()
+    if name and len(name) <= 60:
+        info["name"] = name
+    png = best_icon(pe)
+    if png:
+        icon = CACHE / "b1air" / "windows-icons" / (hashlib.sha1(str(path).encode()).hexdigest()[:16] + ".png")
+        icon.parent.mkdir(parents=True, exist_ok=True)
+        icon.write_bytes(png)
+        info["icon"] = str(icon)
+    return info
+
+
+# ── Shortcuts (.lnk) ─────────────────────────────────────────────────────────
+
+def read_lnk(path):
+    """{"target": "C:\\…\\x.exe", "args": "", "workdir": ""} of a shell link."""
+    data = Path(path).read_bytes()
+    if len(data) < 0x4C or struct.unpack_from("<I", data, 0)[0] != 0x4C:
+        raise ValueError("not a shell link")
+    flags = struct.unpack_from("<I", data, 0x14)[0]
+    at = 0x4C
+    if flags & 0x01:  # HasLinkTargetIDList
+        at += 2 + struct.unpack_from("<H", data, at)[0]
+    target = ""
+    if flags & 0x02:  # HasLinkInfo
+        size, header, info_flags, _vol, base_off, _net, suffix_off = struct.unpack_from("<IIIIIII", data, at)
+
+        def cstr(off, wide):
+            if wide:
+                end = off
+                while data[end:end + 2] != b"\0\0":
+                    end += 2
+                return data[off:end].decode("utf-16-le", "replace")
+            end = data.index(b"\0", off)
+            return data[off:end].decode("cp1252", "replace")
+
+        if info_flags & 1:
+            if header >= 0x24:
+                base_u, suffix_u = struct.unpack_from("<II", data, at + 28)
+                target = cstr(at + base_u, True) + cstr(at + suffix_u, True)
+            else:
+                target = cstr(at + base_off, False) + cstr(at + suffix_off, False)
+        at += size
+    unicode = bool(flags & 0x80)
+    fields = {}
+    for bit, key in ((0x04, "name"), (0x08, "relative"), (0x10, "workdir"), (0x20, "args"), (0x40, "icon")):
+        if flags & bit:
+            count = struct.unpack_from("<H", data, at)[0]
+            width = 2 if unicode else 1
+            raw = data[at + 2:at + 2 + count * width]
+            fields[key] = raw.decode("utf-16-le" if unicode else "cp1252", "replace")
+            at += 2 + count * width
+    if not target and fields.get("relative"):
+        target = str(Path(path).parent / fields["relative"].replace("\\", "/"))
+    return {"target": target, "args": fields.get("args", ""), "workdir": fields.get("workdir", "")}
+
+
+def drive_c(prefix):
+    for c in (prefix / "drive_c", prefix / "pfx" / "drive_c"):
+        if c.is_dir():
+            return c
+    return prefix / "drive_c"
+
+
+def resolve_ci(base, parts):
+    """A path under base whose components match parts, ignoring case."""
+    here = base
+    for part in parts:
+        if not part:
+            continue
+        exact = here / part
+        if exact.exists():
+            here = exact
+            continue
+        try:
+            found = next((c for c in here.iterdir() if c.name.lower() == part.lower()), None)
+        except OSError:
+            found = None
+        if found is None:
+            return None
+        here = found
+    return here
+
+
+def windows_to_unix(prefix, winpath):
+    winpath = winpath.strip().strip('"')
+    m = re.match(r"^([A-Za-z]):[\\/](.*)$", winpath)
+    if not m:
+        return Path(winpath) if winpath.startswith("/") and Path(winpath).exists() else None
+    drive, rest = m.group(1).lower(), m.group(2).replace("\\", "/").split("/")
+    if drive == "z":
+        return resolve_ci(Path("/"), rest)
+    return resolve_ci(drive_c(prefix) if drive == "c" else prefix / "dosdevices" / f"{drive}:", rest)
+
+
+# Shortcuts that are not the program: its uninstaller, its manual, its site.
+NOT_THE_PROGRAM = re.compile(r"(uninst|unins\d|remove|readme|manual|help|license|licence|website|"
+                             r"support|changelog|release notes|update|репорт|удал)", re.I)
+
+
+UNINSTALLER = re.compile(r"(uninst|unins\d|удал)", re.I)
+
+
+def _links(prefix):
+    """(shortcut, its target .exe, its arguments) for every Start menu and
+    desktop shortcut in the prefix."""
+    c = drive_c(prefix)
+    places = [c / "ProgramData/Microsoft/Windows/Start Menu/Programs", c / "users/Public/Desktop"]
+    users = c / "users"
+    if users.is_dir():
+        for user in users.iterdir():
+            places += [user / "AppData/Roaming/Microsoft/Windows/Start Menu/Programs", user / "Desktop",
+                       user / "Start Menu/Programs"]
+    for place in places:
+        if not place.is_dir():
+            continue
+        for lnk in sorted(place.rglob("*")):
+            if lnk.suffix.lower() != ".lnk":
+                continue
+            try:
+                link = read_lnk(lnk)
+            except (OSError, ValueError, struct.error, IndexError):
+                continue
+            exe = windows_to_unix(prefix, link["target"])
+            if exe and exe.suffix.lower() == ".exe":
+                yield lnk, exe, link["args"]
+
+
+def find_shortcuts(prefix):
+    found, seen = [], set()
+    for lnk, exe, args in _links(prefix):
+        if NOT_THE_PROGRAM.search(lnk.stem) or NOT_THE_PROGRAM.search(exe.stem) or exe in seen:
+            continue
+        seen.add(exe)
+        found.append({"name": lnk.stem, "exe": str(exe), "args": args})
+    return found
+
+
+def find_uninstallers(prefix):
+    return [{"exe": str(exe), "args": args} for lnk, exe, args in _links(prefix)
+            if UNINSTALLER.search(lnk.stem) or UNINSTALLER.search(exe.stem)]
+
+
+def candidate_exes(prefix, limit=12):
+    """With no shortcut: the .exe files the install left, biggest first."""
+    c = drive_c(prefix)
+    out = []
+    for top in ("Program Files", "Program Files (x86)", "users", "ProgramData", "Games"):
+        base = c / top
+        if not base.is_dir():
+            continue
+        for exe in base.rglob("*"):
+            if exe.suffix.lower() == ".exe" and not NOT_THE_PROGRAM.search(exe.stem) \
+                    and "Windows NT" not in exe.parts and "Internet Explorer" not in exe.parts:
+                try:
+                    out.append((exe.stat().st_size, exe))
+                except OSError:
+                    pass
+    out.sort(reverse=True)
+    return [str(e) for _s, e in out[:limit]]
+
+
+# ── Bottles and programs ─────────────────────────────────────────────────────
+#
+# A bottle is a Wine prefix with its Proton version and the Windows components
+# put into it. Programs go into the shared one unless asked otherwise — what
+# most of them want, and one set of components for all — or into one of
+# their own, for a game that needs a different Proton or that breaks others.
+
+BOTTLES = ROOT / "_bottles"
+DEFAULT_BOTTLE = "default"
+ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def slugify(name, taken):
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "program"
+    candidate, n = slug, 2
+    while taken(candidate):
+        candidate, n = f"{slug}-{n}", n + 1
+    return candidate
+
+
+def bottle_dir(bid):
+    if not ID_RE.fullmatch(bid):
+        raise SystemExit(f"b1air-windows: no bottle {bid!r}")
+    return BOTTLES / bid
+
+
+def save_bottle(b):
+    d = bottle_dir(b["id"])
+    (d / "prefix").mkdir(parents=True, exist_ok=True)
+    tmp = d / "bottle.json.tmp"
+    tmp.write_text(json.dumps(b, indent=2, ensure_ascii=False))
+    tmp.replace(d / "bottle.json")
+
+
+def load_bottle(bid):
+    try:
+        b = json.loads((bottle_dir(bid) / "bottle.json").read_text())
+    except (OSError, ValueError):
+        if bid != DEFAULT_BOTTLE:
+            raise SystemExit(f"b1air-windows: no bottle {bid!r}")
+        # The shared bottle is made the first time it is wanted.
+        b = {"id": DEFAULT_BOTTLE, "name": "", "runner": RECOMMENDED_RUNNER, "deps": [], "created": int(time.time())}
+        save_bottle(b)
+    b.setdefault("deps", [])
+    b.setdefault("runner", RECOMMENDED_RUNNER)
+    return b
+
+
+def new_bottle(name, runner):
+    bid = slugify(name, lambda c: c == DEFAULT_BOTTLE or bottle_dir(c).exists())
+    b = {"id": bid, "name": name, "runner": runner or RECOMMENDED_RUNNER, "deps": [], "created": int(time.time())}
+    save_bottle(b)
+    return b
+
+
+def bottle_prefix(b):
+    return bottle_dir(b["id"]) / "prefix"
+
+
+def bottle_label(b):
+    return b.get("name") or (tr("Shared bottle") if b["id"] == DEFAULT_BOTTLE else b["id"])
+
+
+def all_bottles():
+    ids = {DEFAULT_BOTTLE} if (BOTTLES / DEFAULT_BOTTLE).exists() else set()
+    if BOTTLES.is_dir():
+        ids |= {d.name for d in BOTTLES.iterdir() if (d / "bottle.json").exists()}
+    return [load_bottle(i) for i in sorted(ids, key=lambda i: (i != DEFAULT_BOTTLE, i))]
+
+
+def app_dir(slug):
+    if not ID_RE.fullmatch(slug):
+        raise SystemExit(f"b1air-windows: no program {slug!r}")
+    return ROOT / slug
+
+
+def all_apps():
+    if not ROOT.is_dir():
+        return []
+    out = []
+    for d in sorted(ROOT.iterdir()):
+        if d.name.startswith("_") or not (d / "app.json").exists():
+            continue
+        try:
+            out.append(load(d.name))
+        except SystemExit:
+            pass
+    return out
+
+
+def migrate(app):
+    """A program from before bottles had a prefix of its own in its folder:
+    that becomes a bottle of its own, and its launchers point into it."""
+    old = app_dir(app["slug"]) / "prefix"
+    b = {"id": slugify(app["slug"], lambda c: c == DEFAULT_BOTTLE or bottle_dir(c).exists()),
+         "name": app["name"], "runner": app.get("options", {}).pop("runner", RECOMMENDED_RUNNER),
+         "deps": app.pop("deps", []), "created": app.get("created", int(time.time()))}
+    if "theme_applied" in app:
+        b["theme_applied"] = app.pop("theme_applied")
+    save_bottle(b)
+    new = bottle_prefix(b)
+    if old.is_dir():
+        new.rmdir()
+        shutil.move(str(old), str(new))
+        for l in app["launchers"]:
+            if l["exe"].startswith(str(old) + "/"):
+                l["exe"] = str(new) + l["exe"][len(str(old)):]
+    app["bottle"] = b["id"]
+    save(app)
+
+
+def load(slug):
+    try:
+        app = json.loads((app_dir(slug) / "app.json").read_text())
+    except (OSError, ValueError):
+        raise SystemExit(f"b1air-windows: no program {slug!r}")
+    app.setdefault("options", {})
+    app.setdefault("launchers", [])
+    if "bottle" not in app:
+        migrate(app)
+        write_desktop_entries(app)
+    return app
+
+
+def save(app):
+    d = app_dir(app["slug"])
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / "app.json.tmp"
+    tmp.write_text(json.dumps(app, indent=2, ensure_ascii=False))
+    tmp.replace(d / "app.json")
+
+
+def options(app):
+    return {**DEFAULT_OPTIONS, **(app.get("options", {}) if app else {})}
+
+
+def new_app(name, kind, source, bottle):
+    slug = slugify(name, lambda c: (ROOT / c).exists())
+    app = {"slug": slug, "name": name, "kind": kind, "source": str(source), "bottle": bottle["id"],
+           "created": int(time.time()), "options": {}, "launchers": [], "gameid": "0", "store": "none"}
+    match = umu_database_match(name)
+    if match:
+        app["gameid"], app["store"] = match
+    save(app)
+    return app
+
+
+def desktop_path(slug, lid):
+    return APPS_DIR / f"b1air-win-{slug}-{lid}.desktop"
+
+
+def esc(value):
+    return value.replace("\\", "\\\\").replace("\n", " ")
+
+
+def write_desktop_entries(app):
+    APPS_DIR.mkdir(parents=True, exist_ok=True)
+    for old in APPS_DIR.glob(f"b1air-win-{app['slug']}-*.desktop"):
+        old.unlink()
+    game = options(app)["game"]
+    for l in app["launchers"]:
+        exe = Path(l["exe"])
+        lines = [
+            "[Desktop Entry]", "Type=Application",
+            f"Name={esc(l['name'])}",
+            f"Comment={esc(app['name'])} (Windows)",
+            f"Exec=b1air-windows run {app['slug']} {l['id']}",
+            f"Icon={l.get('icon') or 'application-x-ms-dos-executable'}",
+            f"Categories={'Game;' if game else 'Utility;'}",
+            # What Wine's windows are called: the .exe's name, under XWayland
+            # and the Wayland driver alike; the Dock finds the entry by it.
+            f"StartupWMClass={exe.name.lower()}",
+            f"X-B1air-Windows={app['slug']}",
+            "StartupNotify=true",
+        ]
+        desktop_path(app["slug"], l["id"]).write_text("\n".join(lines) + "\n")
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", "-q", str(APPS_DIR)], check=False)
+
+
+def add_launcher(app, name, exe, args=""):
+    lid = str(1 + max([int(l["id"]) for l in app["launchers"]] or [0]))
+    icon = ""
+    try:
+        png = best_icon(PE(Path(exe).read_bytes()))
+        if png:
+            icon = app_dir(app["slug"]) / f"icon-{lid}.png"
+            icon.write_bytes(png)
+    except (OSError, ValueError, struct.error):
+        pass
+    app["launchers"].append({"id": lid, "name": name, "exe": str(exe), "args": args, "icon": str(icon) if icon else ""})
+    return lid
+
+
+# ── What to recommend ────────────────────────────────────────────────────────
+
+# The newest GE-Proton, fetched and kept current by umu: Valve's Proton with
+# the fixes for the most games and programs, and protonfixes, which applies
+# the umu database's per-title fixes.
+RECOMMENDED_RUNNER = "GE-Proton"
+
+
+def recommendation(info):
+    """Where a program should go and with which Proton, and why: the shared
+    bottle and the newest GE-Proton, unless the umu database says otherwise."""
+    match = umu_database_match(info.get("name", ""))
+    return {"bottle": DEFAULT_BOTTLE, "runner": RECOMMENDED_RUNNER,
+            "reason": "known" if match else "general", "gameid": match[0] if match else ""}
+
+
+# ── umu and Proton ───────────────────────────────────────────────────────────
+
+UMU_LOCAL = ROOT / "_runtime" / "umu" / "umu-run"
+
+
+def umu_path(fetch=True):
+    for c in (shutil.which("umu-run"), str(UMU_LOCAL) if UMU_LOCAL.exists() else None):
+        if c:
+            return c
+    return fetch_umu() if fetch else None
+
+
+def fetch_umu():
+    """No package of umu here (Debian, openSUSE): its own release, a zipapp."""
+    try:
+        req = urllib.request.Request("https://api.github.com/repos/Open-Wine-Components/umu-launcher/releases/latest",
+                                     headers={"Accept": "application/vnd.github+json"})
+        release = json.load(urllib.request.urlopen(req, timeout=30))
+        asset = next(a for a in release["assets"] if a["name"].endswith("zipapp.tar"))
+        dest = UMU_LOCAL.parent.parent
+        dest.mkdir(parents=True, exist_ok=True)
+        tar = dest / asset["name"]
+        urllib.request.urlretrieve(asset["browser_download_url"], tar)
+        subprocess.run(["tar", "-xf", str(tar), "-C", str(dest)], check=True)
+        tar.unlink()
+        return str(UMU_LOCAL) if UMU_LOCAL.exists() else None
+    except Exception as e:  # network, a release without the asset, tar
+        print(f"b1air-windows: could not fetch umu-launcher: {e}", file=sys.stderr)
+        return None
+
+
+def proton_versions():
+    if not COMPAT_TOOLS.is_dir():
+        return []
+    return sorted((p.name for p in COMPAT_TOOLS.iterdir() if (p / "proton").exists()), reverse=True)
+
+
+def runner_path(runner):
+    """PROTONPATH: "GE-Proton" for the latest (umu fetches and updates it),
+    or a folder of compatibilitytools.d."""
+    if runner in ("GE-Proton", "GE-Latest", "UMU-Proton", ""):
+        return runner or "GE-Proton"
+    folder = COMPAT_TOOLS / runner
+    return str(folder) if folder.exists() else "GE-Proton"
+
+
+def output_scale():
+    try:
+        outs = json.loads(subprocess.run(["swaymsg", "-t", "get_outputs", "-r"], capture_output=True,
+                                         text=True, timeout=3).stdout)
+        return max([o.get("scale", 1.0) for o in outs if o.get("focused")] or [1.0])
+    except Exception:
+        return 1.0
+
+
+def environment(bottle, app=None, safe=False):
+    opt = options(app)
+    env = dict(os.environ)
+    env.update({
+        "WINEPREFIX": str(bottle_prefix(bottle)),
+        "GAMEID": str((app or {}).get("gameid") or "0"),
+        "STORE": str((app or {}).get("store") or "none"),
+        "PROTONPATH": runner_path(bottle.get("runner", RECOMMENDED_RUNNER)),
+        # Wine's own Start menu entries are ours to make.
+        "WINEDLLOVERRIDES": ";".join(x for x in ("winemenubuilder.exe=d", env.get("WINEDLLOVERRIDES", "")) if x),
+    })
+    if Path("/dev/ntsync").exists():
+        env["PROTON_USE_NTSYNC"] = "1"
+    if safe:
+        env["PROTON_USE_WINED3D"] = "1"
+        return env
+    if not opt["dxvk"]:
+        env["PROTON_USE_WINED3D"] = "1"
+    if opt["wayland"]:
+        env["PROTON_ENABLE_WAYLAND"] = "1"
+    if opt["hdr"]:
+        env["PROTON_ENABLE_HDR"] = "1"
+        env["DXVK_HDR"] = "1"
+    if opt["fsr"]:
+        env["WINE_FULLSCREEN_FSR"] = "1"
+    if opt["mangohud"]:
+        env["MANGOHUD"] = "1"
+    return env
+
+
+def wrappers(app, safe=False):
+    opt = options(app)
+    out = []
+    if safe or not app:
+        return out
+    if opt["gamescope"] and shutil.which("gamescope"):
+        out += ["gamescope", "-f", "--"]
+    if opt["gamemode"] and shutil.which("gamemoderun"):
+        out += ["gamemoderun"]
+    return out
+
+
+def ensure_proton(bottle):
+    if bottle.get("runner", RECOMMENDED_RUNNER) in ("GE-Proton", "GE-Latest") \
+            and not any(v.startswith("GE-Proton") for v in proton_versions()):
+        notify(tr("Getting Proton ready"), tr("The first time only: a few hundred megabytes to download."))
+
+
+def umu(bottle, argv, app=None, log=None, safe=False, cwd=None):
+    """Run argv (an .exe or a Wine program) in the bottle; its exit code."""
+    runner = umu_path()
+    if not runner:
+        notify(tr("Can't run Windows programs"),
+               tr("umu-launcher could not be found or fetched. Check the network, then try again."), icon="dialog-error")
+        return 127
+    ensure_proton(bottle)
+    cmd = wrappers(app, safe) + [runner] + [str(a) for a in argv]
+    out = open(log, "w") if log else subprocess.DEVNULL
+    try:
+        return subprocess.run(cmd, env=environment(bottle, app, safe), cwd=cwd, stdout=out,
+                              stderr=subprocess.STDOUT).returncode
+    finally:
+        if log:
+            out.close()
+
+
+def unix_to_windows(path):
+    return "Z:" + str(Path(path).resolve()).replace("/", "\\")
+
+
+# ── Looking like the rest of the desktop ────────────────────────────────────
+
+def _rgb(hexcolor, fallback):
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})([0-9a-fA-F]{2})?", str(hexcolor or ""))
+    v = m.group(1) if m else fallback
+    return f"{int(v[0:2], 16)} {int(v[2:4], 16)} {int(v[4:6], 16)}"
+
+
+def theme_reg():
+    """Wine's colours from the desktop's (theme.json), its DPI from the
+    screen's scale, and dark mode for programs that follow Windows'."""
+    try:
+        p = json.loads((CONFIG / "b1air" / "theme.json").read_text())
+    except (OSError, ValueError):
+        p = {}
+    g = lambda k, d: _rgb(p.get(k), d)
+    ground, low, mid, high = g("ground", "202326"), g("low", "1b1e20"), g("mid", "292c30"), g("high", "31363b")
+    highest, lowest = g("highest", "3e434a"), g("lowest", "141618")
+    text, dim, primary, ptext = g("text", "fcfcfc"), g("textDim", "b4bbc2"), g("primary", "3daee9"), g("primaryText", "0d1b24")
+    frame = g("outlineVariant", "3a3f44")
+    dark = sum(int(x) for x in ground.split()) < 3 * 128
+    colors = {
+        "ActiveBorder": mid, "ActiveTitle": mid, "AppWorkSpace": ground, "Background": ground,
+        "ButtonAlternateFace": mid, "ButtonDkShadow": lowest, "ButtonFace": mid, "ButtonHilight": highest,
+        "ButtonLight": high, "ButtonShadow": lowest, "ButtonText": text, "GradientActiveTitle": mid,
+        "GradientInactiveTitle": low, "GrayText": dim, "Hilight": primary, "HilightText": ptext,
+        "HotTrackingColor": primary, "InactiveBorder": low, "InactiveTitle": low, "InactiveTitleText": dim,
+        "InfoText": text, "InfoWindow": high, "Menu": mid, "MenuBar": mid, "MenuHilight": primary,
+        "MenuText": text, "Scrollbar": low, "TitleText": text, "Window": low, "WindowFrame": frame,
+        "WindowText": text,
+    }
+    dpi = max(96, min(288, int(round(96 * output_scale()))))
+    lines = ["Windows Registry Editor Version 5.00", "", r"[HKEY_CURRENT_USER\Control Panel\Colors]"]
+    lines += [f'"{k}"="{v}"' for k, v in colors.items()]
+    lines += ["", r"[HKEY_CURRENT_USER\Control Panel\Desktop]", f'"LogPixels"=dword:{dpi:08x}',
+              "", r"[HKEY_CURRENT_USER\Software\Wine\Fonts]", f'"LogPixels"=dword:{dpi:08x}',
+              "", r"[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize]",
+              f'"AppsUseLightTheme"=dword:{0 if dark else 1:08x}',
+              f'"SystemUsesLightTheme"=dword:{0 if dark else 1:08x}', ""]
+    return "\r\n".join(lines)
+
+
+def sync_theme(bottle):
+    """Applied when it changed since this bottle last had it: one regedit."""
+    reg = theme_reg()
+    digest = hashlib.sha1(reg.encode()).hexdigest()
+    if bottle.get("theme_applied") == digest:
+        return
+    path = bottle_dir(bottle["id"]) / "theme.reg"
+    path.write_text(reg, encoding="utf-16")
+    if umu(bottle, ["regedit", "/S", unix_to_windows(path)]) == 0:
+        bottle["theme_applied"] = digest
+        save_bottle(bottle)
+
+
+# ── The umu database: fixes for the games it knows ──────────────────────────
+
+def _norm(s):
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def umu_database_match(name):
+    """(UMU_ID, store) for a title the umu database has, so protonfixes
+    applies its fixes; None otherwise. Fetched once a week."""
+    db = CACHE / "b1air" / "umu-database.csv"
+    try:
+        if not db.exists() or time.time() - db.stat().st_mtime > 7 * 86400:
+            db.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(
+                "https://raw.githubusercontent.com/Open-Wine-Components/umu-database/main/umu-database.csv", db)
+    except Exception:
+        pass
+    if not db.exists() or not _norm(name):
+        return None
+    try:
+        with db.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if _norm(row.get("TITLE", "")) == _norm(name) and row.get("UMU_ID"):
+                    return row["UMU_ID"], (row.get("STORE") or "none").lower()
+    except (OSError, csv.Error):
+        pass
+    return None
+
+
+# ── Commands ─────────────────────────────────────────────────────────────────
+
+def flags(args, known):
+    """Positional arguments and --flag VALUE pairs."""
+    pos, opts, i = [], {}, 0
+    while i < len(args):
+        if args[i].startswith("--") and args[i][2:] in known and i + 1 < len(args):
+            opts[args[i][2:]] = args[i + 1]
+            i += 2
+        else:
+            pos.append(args[i])
+            i += 1
+    return pos, opts
+
+
+def target_bottle(opts, info):
+    """--new-bottle NAME [--runner R], --bottle ID, or the recommended one."""
+    if opts.get("new-bottle"):
+        return new_bottle(opts["new-bottle"], opts.get("runner") or recommendation(info)["runner"])
+    bid = opts.get("bottle") or DEFAULT_BOTTLE
+    fresh = not (bottle_dir(bid) / "bottle.json").exists()
+    b = load_bottle(bid)
+    # The shared bottle, made now, takes the Proton asked for; an existing
+    # bottle keeps its own (a prefix moves forward with Proton, not back).
+    if fresh and opts.get("runner"):
+        b["runner"] = opts["runner"]
+        save_bottle(b)
+    return b
+
+
+def cmd_inspect(args):
+    info = inspect_file(args[0])
+    info["recommended"] = recommendation(info)
+    print(json.dumps(info, ensure_ascii=False))
+
+
+def shortcut_snapshot(prefix):
+    return {s["exe"] for s in find_shortcuts(prefix)}, set(candidate_exes(prefix, limit=100000)), \
+        {u["exe"] for u in find_uninstallers(prefix)}
+
+
+def cmd_install(args):
+    pos, opts = flags(args, ("name", "bottle", "new-bottle", "runner"))
+    src = Path(pos[0]).resolve()
+    info = inspect_file(src)
+    name = opts.get("name") or (pos[1] if len(pos) > 1 else "") or info["name"]
+    bottle = target_bottle(opts, info)
+    app = new_app(name, "installed", src, bottle)
+    emit(event="created", slug=app["slug"], name=name, bottle=bottle["id"])
+    notify(tr("Installing %s") % name, bottle_label(bottle), icon=info["icon"] or "application-x-ms-dos-executable")
+    emit(event="preparing")
+    sync_theme(bottle)
+    prefix = bottle_prefix(bottle)
+    # What was there before: in a shared bottle, the other programs' own.
+    before_links, before_exes, before_unins = shortcut_snapshot(prefix)
+    emit(event="installing")
+    argv = ["msiexec", "/i", unix_to_windows(src)] if src.suffix.lower() == ".msi" else [src]
+    code = umu(bottle, argv, app=app, log=app_dir(app["slug"]) / "install.log", cwd=src.parent)
+    for s in find_shortcuts(prefix):
+        if s["exe"] not in before_links:
+            add_launcher(app, s["name"], s["exe"], s["args"])
+    # Its uninstaller, for removing it from a bottle it shares.
+    app["uninstaller"] = next((u for u in find_uninstallers(prefix) if u["exe"] not in before_unins), None)
+    app["candidates"] = [e for e in candidate_exes(prefix, limit=100000) if e not in before_exes][:12]
+    save(app)
+    if app["launchers"]:
+        write_desktop_entries(app)
+        emit(event="done", slug=app["slug"], launchers=app["launchers"], code=code)
+        notify(tr("%s is installed") % name, tr("It is in the Launchpad."),
+               icon=app["launchers"][0].get("icon") or "application-x-ms-dos-executable")
+    else:
+        emit(event="choose", slug=app["slug"], candidates=app["candidates"], code=code)
+        notify(tr("Nothing to start was found"), tr("Pick the program in Settings → Windows programs."))
+    return 0
+
+
+def cmd_add(args):
+    pos, opts = flags(args, ("name", "bottle", "new-bottle", "runner"))
+    src = Path(pos[0]).resolve()
+    info = inspect_file(src)
+    name = opts.get("name") or (pos[1] if len(pos) > 1 else "") or info["name"]
+    app = new_app(name, "added", src, target_bottle(opts, info))
+    add_launcher(app, name, src)
+    save(app)
+    write_desktop_entries(app)
+    emit(event="done", slug=app["slug"], launchers=app["launchers"])
+    return 0
+
+
+def cmd_pick(args):
+    app = load(args[0])
+    exe = Path(args[1])
+    name = app["name"] if not app["launchers"] else exe.stem
+    add_launcher(app, name, exe)
+    save(app)
+    write_desktop_entries(app)
+    emit(event="done", slug=app["slug"], launchers=app["launchers"])
+    return 0
+
+
+def start(bottle, app, exe, extra, title):
+    """Run, and if it fell over at once, say so and offer the log and a
+    second try with the safe settings."""
+    sync_theme(bottle)
+    exe = Path(exe)
+    log = (app_dir(app["slug"]) if app else bottle_dir(bottle["id"])) / "last.log"
+    argv = [exe] if exe.suffix.lower() in (".exe", ".scr") else ["start", "/unix", exe]
+    cwd = exe.parent if exe.parent.is_dir() else None
+    began = time.time()
+    code = umu(bottle, argv + list(extra), app=app, log=log, cwd=cwd)
+    if code not in (0, 1) and time.time() - began < 20:
+        picked = notify(tr("%s stopped") % title, tr("It closed with an error a moment after starting."),
+                        icon="dialog-warning", actions=[("log", tr("Log")), ("safe", tr("Try safe settings"))])
+        if picked == "log":
+            opener = shutil.which("b1air-text") or shutil.which("xdg-open")
+            if opener:
+                subprocess.Popen([opener, str(log)])
+        elif picked == "safe":
+            code = umu(bottle, argv + list(extra), app=app, log=log, safe=True, cwd=cwd)
+    return code
+
+
+def cmd_run(args):
+    app = load(args[0])
+    lid = args[1] if len(args) > 1 else None
+    launcher = next((l for l in app["launchers"] if l["id"] == lid), app["launchers"][0] if app["launchers"] else None)
+    if not launcher:
+        notify(tr("Nothing to start was found"), tr("Pick the program in Settings → Windows programs."))
+        return 1
+    extra = (launcher.get("args") or "").split() + list(args[2:])
+    return start(load_bottle(app["bottle"]), app, launcher["exe"], extra, launcher["name"])
+
+
+def cmd_once(args):
+    pos, opts = flags(args, ("bottle",))
+    src = Path(pos[0]).resolve()
+    return start(load_bottle(opts.get("bottle") or DEFAULT_BOTTLE), None, src, pos[1:], src.stem)
+
+
+def cmd_open(args):
+    if not args or not Path(args[0]).exists():
+        notify(tr("Nothing to open"), args[0] if args else "")
+        return 2
+    src = str(Path(args[0]).resolve())
+    # The shell's sheet: where to, with which Proton, and install, add or
+    # run once. Without the shell, the recommended way.
+    if shutil.which("b1air-shell"):
+        r = subprocess.run(["b1air-shell", "open", "windows", src], capture_output=True, timeout=5)
+        if r.returncode == 0:
+            return 0
+    return cmd_install([src]) if inspect_file(src)["installer"] else cmd_once([src])
+
+
+def dir_size(d):
+    return sum(f.stat().st_size for f in d.rglob("*") if f.is_file() and not f.is_symlink()) if d.exists() else 0
+
+
+def describe(app):
+    d = app_dir(app["slug"])
+    return {"slug": app["slug"], "name": app["name"], "kind": app["kind"], "options": options(app),
+            "bottle": app["bottle"], "launchers": app["launchers"], "gameid": app.get("gameid", "0"),
+            "uninstaller": bool(app.get("uninstaller")),
+            "log": str(d / "last.log") if (d / "last.log").exists() else "",
+            # Installed with no shortcut: what there is to pick from.
+            "candidates": app.get("candidates", []) if not app["launchers"] else []}
+
+
+def cmd_list(args):
+    print(json.dumps([describe(a) for a in all_apps()], ensure_ascii=False))
+
+
+def cmd_bottles(args):
+    apps = all_apps()
+    out = []
+    for b in all_bottles():
+        out.append({"id": b["id"], "name": bottle_label(b), "runner": b["runner"], "deps": b["deps"],
+                    "shared": b["id"] == DEFAULT_BOTTLE, "made": True, "size": dir_size(bottle_dir(b["id"])),
+                    "apps": [{"slug": a["slug"], "name": a["name"]} for a in apps if a["bottle"] == b["id"]]})
+    if not any(b["shared"] for b in out):
+        # Not made yet: offered all the same, first, as the recommended place.
+        out.insert(0, {"id": DEFAULT_BOTTLE, "name": tr("Shared bottle"), "runner": RECOMMENDED_RUNNER,
+                       "deps": [], "shared": True, "made": False, "size": 0, "apps": []})
+    print(json.dumps(out, ensure_ascii=False))
+
+
+def cmd_set(args):
+    app = load(args[0])
+    key, value = args[1], args[2]
+    if key in BOOL_OPTIONS:
+        app["options"][key] = value.lower() in ("on", "true", "1", "yes")
+    elif key == "name":
+        app["name"] = value
+        if len(app["launchers"]) == 1:
+            app["launchers"][0]["name"] = value
+    else:
+        raise SystemExit(f"b1air-windows: no option {key!r}")
+    save(app)
+    if key in ("game", "name"):
+        write_desktop_entries(app)
+    return 0
+
+
+def cmd_bottle_set(args):
+    b = load_bottle(args[0])
+    key, value = args[1], args[2]
+    if key == "runner":
+        b["runner"] = value
+    elif key == "name":
+        b["name"] = value
+    else:
+        raise SystemExit(f"b1air-windows: no bottle setting {key!r}")
+    save_bottle(b)
+    return 0
+
+
+def cmd_deps(args):
+    b = load_bottle(args[0])
+    verbs = [v for v in args[1:] if re.fullmatch(r"[a-z0-9_=.-]+", v)]
+    if not verbs:
+        return 2
+    code = umu(b, ["winetricks", "-q"] + verbs, log=bottle_dir(b["id"]) / "deps.log")
+    if code == 0:
+        b["deps"] = sorted(set(b["deps"]) | set(verbs))
+        save_bottle(b)
+        notify(tr("Components installed"), ", ".join(verbs))
+    return code
+
+
+def cmd_config(args):
+    return umu(load_bottle(args[0]), ["winecfg"])
+
+
+def cmd_log(args):
+    print(app_dir(load(args[0])["slug"]) / "last.log")
+
+
+def remove_entries(app):
+    for f in APPS_DIR.glob(f"b1air-win-{app['slug']}-*.desktop"):
+        f.unlink()
+    shutil.rmtree(app_dir(app["slug"]), ignore_errors=True)
+
+
+def refresh_desktop_database():
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", "-q", str(APPS_DIR)], check=False)
+
+
+def cmd_remove(args):
+    """A program: alone in its bottle, the bottle goes with it; sharing one,
+    its own uninstaller runs (it knows what is its), then its entries go."""
+    app = load(args[0])
+    b = load_bottle(app["bottle"])
+    others = [a for a in all_apps() if a["bottle"] == b["id"] and a["slug"] != app["slug"]]
+    if not others and b["id"] != DEFAULT_BOTTLE:
+        shutil.rmtree(bottle_dir(b["id"]), ignore_errors=True)
+    elif app.get("uninstaller"):
+        u = app["uninstaller"]
+        umu(b, [u["exe"]] + (u.get("args") or "").split(), app=app)
+    remove_entries(app)
+    refresh_desktop_database()
+    return 0
+
+
+def cmd_bottle_remove(args):
+    """A bottle, and every program in it."""
+    b = load_bottle(args[0])
+    for a in all_apps():
+        if a["bottle"] == b["id"]:
+            remove_entries(a)
+    shutil.rmtree(bottle_dir(b["id"]), ignore_errors=True)
+    refresh_desktop_database()
+    return 0
+
+
+def cmd_runtime(args):
+    if args and args[0] == "update":
+        # umu fetches the newest GE-Proton (and its runtime) for "GE-Proton".
+        b = load_bottle(DEFAULT_BOTTLE)
+        b = dict(b, runner=RECOMMENDED_RUNNER)
+        code = umu(b, ["wineboot", "-u"])
+        print(json.dumps({"updated": code == 0, "proton": proton_versions()}))
+        return code
+    print(json.dumps({"umu": umu_path(fetch=False) or "", "proton": proton_versions(),
+                      "recommended": RECOMMENDED_RUNNER, "ntsync": Path("/dev/ntsync").exists()}))
+    return 0
+
+
+COMMANDS = {
+    "inspect": (cmd_inspect, 1), "open": (cmd_open, 1), "install": (cmd_install, 1), "add": (cmd_add, 1),
+    "once": (cmd_once, 1), "run": (cmd_run, 1), "pick": (cmd_pick, 2), "list": (cmd_list, 0),
+    "bottles": (cmd_bottles, 0), "set": (cmd_set, 3), "bottle-set": (cmd_bottle_set, 3),
+    "deps": (cmd_deps, 2), "config": (cmd_config, 1), "log": (cmd_log, 1), "remove": (cmd_remove, 1),
+    "bottle-remove": (cmd_bottle_remove, 1), "runtime": (cmd_runtime, 0),
+}
+
+
+def main(argv):
+    if not argv or argv[0] not in COMMANDS or len(argv) - 1 < COMMANDS[argv[0]][1]:
+        # The usage is the list at the top of this file.
+        lines = Path(__file__).read_text().splitlines()
+        print("\n".join(l[2:] for l in lines[2:50] if l.startswith("#   ")), file=sys.stderr)
+        return 2
+    func, _n = COMMANDS[argv[0]]
+    return func(argv[1:]) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

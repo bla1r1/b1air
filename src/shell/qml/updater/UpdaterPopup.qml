@@ -35,6 +35,9 @@ PopupShell {
 
     // ── System packages state ────────────────────────────────────────────────
     property bool sysChecking: true
+    // The check ran but its answer could not be read: a count of 0 then would
+    // claim "up to date" about packages nobody looked at.
+    property bool sysFailed: false
     property int sysCount: 0
     property int aurCount: 0
     property string manager: ""
@@ -43,6 +46,7 @@ PopupShell {
         window.checking = true;
         Daemon.requestDotfilesStatus();
         window.sysChecking = true;
+        window.sysFailed = false;
         sysCheck.running = true;
     }
 
@@ -80,6 +84,7 @@ PopupShell {
                 } catch (e) {
                     window.sysCount = 0;
                     window.aurCount = 0;
+                    window.sysFailed = true;
                 }
             }
         }
@@ -125,8 +130,8 @@ PopupShell {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Icon { text: "\u{f06b0}"; role: "subhead"; color: Design.accent }
-            Label { text: I18n.tr("Updates"); role: "subhead"; weight: Design.weight.bold }
+            Icon { text: "\u{f06b0}"; role: "subhead"; color: Design.textDim }
+            Label { text: I18n.tr("Updates"); role: "subhead"; weight: Design.weight.semibold }
             Item { Layout.fillWidth: true }
             IconButton {
                 icon: "\u{f0450}" // refresh
@@ -140,18 +145,17 @@ PopupShell {
             Layout.alignment: Qt.AlignHCenter
             spacing: Design.s(Design.space.sm)
 
-            Pill {
-                label: window.behind > 0 ? I18n.tr("Desktop · %1", window.behind) : I18n.tr("Desktop")
-                icon: "󰚰"
-                active: window.currentTab === "dotfiles"
-                onClicked: window.currentTab = "dotfiles"
-            }
-            Pill {
-                label: (window.sysCount + window.aurCount) > 0
-                       ? I18n.tr("System") + " · " + (window.sysCount + window.aurCount) : I18n.tr("System")
-                icon: "󰏗"
-                active: window.currentTab === "system"
-                onClicked: window.currentTab = "system"
+            SegmentedControl {
+                size: "sm"
+                model: [
+                    { id: "dotfiles", icon: "󰚰",
+                      label: window.behind > 0 ? I18n.tr("Desktop · %1", window.behind) : I18n.tr("Desktop") },
+                    { id: "system", icon: "󰏗",
+                      label: (window.sysCount + window.aurCount) > 0
+                             ? I18n.tr("System") + " · " + (window.sysCount + window.aurCount) : I18n.tr("System") }
+                ]
+                current: window.currentTab
+                onPicked: id => window.currentTab = id
             }
         }
 
@@ -162,8 +166,10 @@ PopupShell {
             Layout.fillHeight: true
             spacing: Design.s(Design.space.sm)
 
+            // While checking, or with no repository, the state below says it.
             Label {
                 Layout.fillWidth: true
+                visible: !window.checking && window.repoFound
                 text: window.desktopTitle
                 role: "title"
                 weight: Design.weight.semibold
@@ -172,6 +178,7 @@ PopupShell {
             }
             Label {
                 Layout.fillWidth: true
+                visible: !window.checking && window.repoFound
                 text: window.desktopDetail
                 role: "caption"
                 dim: true
@@ -213,15 +220,27 @@ PopupShell {
                 }
             }
 
-            EmptyState {
+            // Holds the space even before the loading state shows (it waits
+            // 300 ms), so the button below does not jump.
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: !window.checking && window.incoming.length === 0
-                icon: window.fetchOk ? "\u{f012c}" : "\u{f0b9b}"
-                title: window.fetchOk ? I18n.tr("Nothing new") : I18n.tr("Offline")
-                hint: window.fetchOk ? I18n.tr("You have the latest desktop.") : I18n.tr("Try again when the network is back.")
+                visible: window.incoming.length === 0 || window.checking
+
+                AppState {
+                    anchors.fill: parent
+                    mode: window.checking ? "loading"
+                        : !window.repoFound || !window.fetchOk ? "error"
+                        : "empty"
+                    icon: window.checking || !window.repoFound ? ""
+                        : window.fetchOk ? "\u{f012c}" : "\u{f0b9b}"
+                    title: window.checking ? I18n.tr("Checking for updates…")
+                        : !window.repoFound ? I18n.tr("Dotfiles repository not found")
+                        : window.fetchOk ? I18n.tr("Nothing new") : I18n.tr("Offline")
+                    hint: !window.repoFound ? I18n.tr("Run install.sh from your clone once.")
+                        : window.fetchOk ? I18n.tr("You have the latest desktop.") : I18n.tr("Try again when the network is back.")
+                }
             }
-            Item { Layout.fillHeight: true; visible: window.checking }
 
             // Why the button is off, when it is.
             Label {
@@ -235,11 +254,10 @@ PopupShell {
                 wrapMode: Text.WordWrap
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 icon: "\u{f06b0}"
                 label: window.canUpdate ? I18n.tr("Update now") : I18n.tr("Up to date")
-                tone: window.canUpdate ? Design.ok : Design.textDim
                 enabled: window.canUpdate
                 onActivated: {
                     // Opens a terminal that shows each step and asks for sudo
@@ -260,6 +278,7 @@ PopupShell {
             Label {
                 Layout.fillWidth: true
                 text: window.sysChecking ? I18n.tr("Checking packages…")
+                      : window.sysFailed ? I18n.tr("Couldn't check packages")
                       : (window.sysCount + window.aurCount) === 0 ? I18n.tr("All packages up to date")
                       : I18n.trn("%1 package update", "%1 package updates", window.sysCount + window.aurCount)
                 role: "title"
@@ -268,7 +287,8 @@ PopupShell {
             }
             Label {
                 Layout.fillWidth: true
-                text: window.aurCount > 0
+                text: window.sysFailed && !window.sysChecking ? I18n.tr("Try again later.")
+                      : window.aurCount > 0
                       ? I18n.tr("%1 from the repositories, %2 from the AUR", window.sysCount, window.aurCount)
                       : I18n.tr("Managed by %1", window.managerName)
                 role: "caption"
@@ -285,11 +305,10 @@ PopupShell {
                 wrapMode: Text.WordWrap
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 icon: "\u{f04e6}"
                 label: I18n.tr("Upgrade with %1", window.managerName)
-                tone: Design.accent
                 onActivated: {
                     Daemon.dotfilesSys();
                     window.close();

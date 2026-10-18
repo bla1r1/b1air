@@ -5,11 +5,14 @@ import Quickshell
 import "../Ui"
 import "../Services"
 import "components" as Sections
+import "."
 
 Item {
     id: app
 
     property bool framed: false
+    // In the shell the whole frame is one glass panel (Main.qml's PanelShadow).
+    readonly property bool castsShadow: !app.standalone
     property string page: "monitors"
     // Where "Back" goes from a page the setup's news opened ("setup.news").
     property string returnPage: ""
@@ -21,6 +24,9 @@ Item {
     // "setup" (or "setup.<step>.<step>…") is the first-run wizard, in place
     // of the rail and the page.
     readonly property bool setupMode: app.page === "setup" || app.page.indexOf("setup.") === 0
+    // "welcome" (Mod+H, and at login while "Show at login" is ticked): the
+    // welcome, in place of the rail and the page too.
+    readonly property bool welcomeMode: app.page === "welcome"
     function close() {
         if (app.standalone) app.closeRequested();
         else Quickshell.execDetached(["b1air-shell", "close"]);
@@ -75,7 +81,7 @@ Item {
     // space below a two-line page.
     onPageChanged: {
         if (app.moved[app.page]) { app.page = app.moved[app.page]; return; }
-        if (app.page === "setup" || app.page.indexOf("setup.") === 0) app.returnPage = "";
+        if (app.page === "setup" || app.page.indexOf("setup.") === 0 || app.page === "welcome") app.returnPage = "";
         if (pageScroll.contentItem) pageScroll.contentItem.contentY = 0;
     }
 
@@ -87,7 +93,7 @@ Item {
     // in the other apps; in the shell the whole panel is glass.
     Rectangle {
         anchors.fill: parent
-        anchors.leftMargin: app.standalone && Design.translucent ? Design.s(224) + Design.border : 0
+        anchors.leftMargin: app.standalone && Design.translucent ? Design.s(Design.width.sidebar) + Design.border : 0
         radius: app.standalone ? 0 : Design.s(Design.radius.panel)
         color: app.standalone ? Design.surface : Design.glassBg
         border.color: app.standalone ? "transparent" : Design.glassBorder
@@ -125,8 +131,20 @@ Item {
         }
     }
 
+    Loader {
+        anchors.fill: parent
+        active: app.welcomeMode
+        sourceComponent: Component {
+            Sections.Welcome {
+                onFinished: app.close()
+                // A page opened from here has a way back to it.
+                onOpenPage: id => { app.returnPage = id === "setup" ? "" : "welcome"; app.open(id); }
+            }
+        }
+    }
+
     RowLayout {
-        visible: !app.setupMode
+        visible: !app.setupMode && !app.welcomeMode
         anchors.fill: parent
         anchors.margins: Design.border
         spacing: 0
@@ -134,13 +152,27 @@ Item {
         // ── Sidebar ──────────────────────────────────────────────────────────
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(224)
-            color: Design.glassSidebar
-            radius: app.standalone ? 0 : Design.s(Design.radius.panel)
+            Layout.preferredWidth: Design.s(Design.width.sidebar)
+            // In the shell the whole panel is already glass, and a second,
+            // darker glass on it read as a black slab beside the page: the
+            // rail is the panel itself there, set apart by the hairline. In
+            // its own window the page is opaque and the rail is the window's
+            // one pane of glass, as in Files, Git and Monitor.
+            // In its own window, the apps' sidebar (Ui/AppSidebar): a rounded
+            // pane set in from the edges — glass, or without blur a solid
+            // card one step up.
+            Layout.leftMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            Layout.topMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            Layout.bottomMargin: app.standalone ? Design.s(Design.space.sm) : 0
+            color: app.standalone ? (Design.translucent ? Design.glassSidebar : Design.raised) : "transparent"
+            radius: app.standalone ? Design.s(Design.radius.card) : Design.s(Design.radius.panel)
+            border.width: app.standalone ? Design.border : 0
+            border.color: Design.glassBorder
 
-            // Square the right-hand corners: only the window's outer corners
-            // are round.
+            // In the shell, square the right-hand corners — only the panel's
+            // outer corners are round — and set the rail apart by a hairline.
             Rectangle {
+                visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
@@ -148,6 +180,7 @@ Item {
                 color: parent.color
             }
             Rectangle {
+                visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
@@ -168,9 +201,9 @@ Item {
                 Field {
                     id: searchBox
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(36)
+                    Layout.preferredHeight: Design.s(Design.size.header)
                     radius: height / 2
-                    color: Design.raised
+                    color: Design.well
                     placeholder: I18n.tr("Search settings (Ctrl+F)")
                     text: app.searchQuery
                     onEdited: value => app.searchQuery = value
@@ -182,7 +215,7 @@ Item {
                     Layout.fillHeight: true
                     model: app.filteredPages
                     clip: true
-                    spacing: Design.s(2)
+                    spacing: Design.s(Design.space.xxs)
                     ScrollBar.vertical: OverflowBar { id: railBar }
 
                     delegate: Loader {
@@ -191,7 +224,7 @@ Item {
                         required property int index
                         // Clear of the scroll bar, which is drawn over the list:
                         // a long name ("Віддалений робочий стіл") ran under it.
-                        width: railList.width - (railBar.visible && railList.contentHeight > railList.height ? Design.s(10) : 0)
+                        width: railList.width - (railBar.visible && railList.contentHeight > railList.height ? Design.s(Design.space.sm) : 0)
                         sourceComponent: modelData.isHeader ? headingRow : pageRow
 
                         Component {
@@ -238,7 +271,13 @@ Item {
                 // The rail beside it shows an always-on bar and this pane did not,
                 // so the longer half of the window was the one with no sign that
                 // it scrolled — every page here is taller than the window.
-                ScrollBar.vertical: OverflowBar { view: pageScroll }
+                // From the first card down, not from the window's top: the
+                // page's name above the cards is not part of what scrolls by.
+                ScrollBar.vertical: OverflowBar {
+                    view: pageScroll
+                    startOffset: pageHead.height + pageHead.Layout.topMargin
+                              + pageHead.Layout.bottomMargin + pageCol.spacing - inset
+                }
 
             // A column of readable width, centred. Cards used to span the
             // whole pane: on a 1280 px window a row of three switches ran
@@ -246,8 +285,8 @@ Item {
             // other, and full-width buttons read as empty bars.
             ColumnLayout {
                 id: pageCol
-                readonly property real sidePad: Design.s(24)
-                width: Math.min(pageScroll.availableWidth - sidePad * 2, Design.s(1040))
+                readonly property real sidePad: Design.s(Design.space.pagePadding)
+                width: Math.min(pageScroll.availableWidth - sidePad * 2, Design.s(Design.width.page))
                 x: Math.max(sidePad, (pageScroll.availableWidth - width) / 2)
                 spacing: Design.s(Design.space.lg)
 
@@ -257,22 +296,25 @@ Item {
                 // dropped: it took a band of every page to say what the rail,
                 // with the same icon highlighted, already said.
                 ColumnLayout {
+                    id: pageHead
                     Layout.fillWidth: true
                     Layout.topMargin: Design.s(Design.space.xl)
                     Layout.bottomMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.xs)
-                    // Back to the news this page was opened from.
-                    Pill {
+                    // Back to the news or the welcome this page was opened from.
+                    Button {
                         visible: app.returnPage !== ""
                         icon: "\u{f0141}"
-                        label: I18n.tr("What's new")
+                        label: app.returnPage === "welcome" ? I18n.tr("Welcome") : I18n.tr("What's new")
                         onClicked: { app.page = app.returnPage; app.returnPage = ""; }
                     }
                     Label {
                         Layout.fillWidth: true
                         text: app.current.label || ""
-                        role: "display"
-                        weight: Design.weight.bold
+                        // Title size and semibold: the page name was set as
+                        // a 24 px bold headline, louder than anything on it.
+                        role: "title"
+                        weight: Design.weight.semibold
                         elide: Text.ElideRight
                     }
 
@@ -388,6 +430,17 @@ Item {
                     visible: active
                     sourceComponent: Component {
                         Sections.DefaultAppsSettingsSection {
+                            width: parent ? parent.width : 0
+                        }
+                    }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: app.page === "winapps"
+                    visible: active
+                    sourceComponent: Component {
+                        Sections.WinAppsSettingsSection {
                             width: parent ? parent.width : 0
                         }
                     }
@@ -631,7 +684,7 @@ Item {
                     }
                 }
 
-                Item { Layout.preferredHeight: Design.s(Design.space.xl) }
+                Item { Layout.preferredHeight: Design.s(Design.space.xxl) }
             }
             }
 

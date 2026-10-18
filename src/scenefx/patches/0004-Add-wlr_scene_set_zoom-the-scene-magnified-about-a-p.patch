@@ -1,0 +1,148 @@
+From c43ae33efd11773b57a6d3f225a7021e604b5cc3 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 11:10:08 +0000
+Subject: [PATCH] Add wlr_scene_set_zoom: the scene magnified about a point on
+ one output
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A screen magnifier: everything is drawn `scale` times larger about a
+point in layout coordinates, which stays where it is, on one output —
+the box given — while the others are drawn as usual. Drawing and
+wlr_scene_node_at() see it — it is applied where the nodes in a box
+inside that output are looked for — and wlr_scene_node_coords() and node
+positions do not, so a compositor goes on placing things as if it were
+not there, and with the point at the cursor, what is under the cursor is
+what is pointed at.
+
+While on, damage is not tracked by region and nothing is scanned out
+directly, as with a scaled tree (wlr_scene_tree_set_scale).
+---
+ include/scenefx/types/wlr_scene.h | 13 +++++++
+ types/scene/wlr_scene.c           | 57 ++++++++++++++++++++++++++++---
+ 2 files changed, 65 insertions(+), 5 deletions(-)
+
+diff --git a/include/scenefx/types/wlr_scene.h b/include/scenefx/types/wlr_scene.h
+index 0d91691..f614c62 100644
+--- a/include/scenefx/types/wlr_scene.h
++++ b/include/scenefx/types/wlr_scene.h
+@@ -480,6 +480,19 @@ struct wlr_scene_tree *wlr_scene_tree_create(struct wlr_scene_tree *parent);
+  */
+ void wlr_scene_tree_set_scale(struct wlr_scene_tree *tree, float scale);
+ 
++/**
++ * Draw the scene magnified about a point (layout coordinates), as a screen
++ * magnifier: what is at the point stays there, and the rest is drawn `scale`
++ * times larger round it. Only within `area`, the box of the output it is on:
++ * other outputs are drawn as usual. 1 turns it off.
++ *
++ * Drawing and wlr_scene_node_at() see it; wlr_scene_node_coords() and node
++ * positions do not, so placing things goes on as if it were not there.
++ * While on, damage is not tracked per region, as for a scaled tree.
++ */
++void wlr_scene_set_zoom(struct wlr_scene *scene, float scale, double x, double y,
++	const struct wlr_box *area);
++
+ /**
+  * Add a node displaying a single surface to the scene-graph.
+  *
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index 74debed..e974fef 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -90,6 +90,20 @@ static struct {
+ } scaled_trees[SCENE_SCALED_TREES_MAX];
+ static int scaled_tree_count = 0;
+ 
++// The whole scene drawn magnified about a point (wlr_scene_set_zoom): kept
++// beside the scene as the tree scales are. 1 when it is not.
++static float scene_zoom = 1.0f;
++static double scene_zoom_x = 0.0, scene_zoom_y = 0.0;
++// Where it applies: one output's box. Only what is looked for inside it —
++// that output drawn, the pointer on it — is magnified.
++static struct wlr_box scene_zoom_area = {0};
++
++// Whether anything is drawn at a scale: then damage is not tracked by
++// region, and nothing is scanned out directly.
++static bool scene_any_scale(void) {
++	return scaled_tree_count > 0 || scene_zoom != 1.0f;
++}
++
+ static float scene_tree_scale(const struct wlr_scene_tree *tree) {
+ 	for (int i = 0; i < scaled_tree_count; i++) {
+ 		if (scaled_trees[i].tree == tree) {
+@@ -370,8 +384,41 @@ static bool scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box,
+ 	int x, y;
+ 	wlr_scene_node_coords(node, &x, &y);
+ 
+-	return _scene_nodes_in_box(node, box, iterator, user_data, x, y,
+-		scene_node_parent_scale(node));
++	float scale = scene_node_parent_scale(node);
++	// Magnified (wlr_scene_set_zoom): where it is drawn, about the zoom's
++	// point; what is looked for in `box` is where things are drawn.
++	// Inside the area: an output's own box (a pixel either way, for
++	// fractional scales), or a point on it; not a box reaching past it.
++	struct wlr_box in_area;
++	if (scene_zoom != 1.0f && wlr_box_intersection(&in_area, box, &scene_zoom_area)
++			&& in_area.width >= box->width - 1 && in_area.height >= box->height - 1) {
++		x = (int)lround(scene_zoom_x + (x - scene_zoom_x) * scene_zoom);
++		y = (int)lround(scene_zoom_y + (y - scene_zoom_y) * scene_zoom);
++		scale *= scene_zoom;
++	}
++	return _scene_nodes_in_box(node, box, iterator, user_data, x, y, scale);
++}
++
++void wlr_scene_set_zoom(struct wlr_scene *scene, float scale, double x, double y,
++		const struct wlr_box *area) {
++	if (scale < 1.0f) {
++		scale = 1.0f;
++	}
++	struct wlr_box new_area = area ? *area : (struct wlr_box){0};
++	if (scene_zoom == scale && scene_zoom_x == x && scene_zoom_y == y
++			&& wlr_box_equal(&scene_zoom_area, &new_area)) {
++		return;
++	}
++	// What was drawn magnified is redrawn, then what is now; while either
++	// is magnified, whole outputs are.
++	if (scene_zoom != 1.0f) {
++		scene_node_update(&scene->tree.node, NULL);
++	}
++	scene_zoom = scale;
++	scene_zoom_x = x;
++	scene_zoom_y = y;
++	scene_zoom_area = new_area;
++	scene_node_update(&scene->tree.node, NULL);
+ }
+ 
+ static pixman_region32_t create_corner_location_region(struct fx_corner_radii corners, int x, int y, int width, int height) {
+@@ -557,7 +604,7 @@ static void scene_output_damage(struct wlr_scene_output *scene_output,
+ 	// With a scaled tree, damage is not tracked by region: positions and
+ 	// sizes below it are not where the damage was computed, so any change
+ 	// redraws the output (wlr_scene_tree_set_scale).
+-	if (scaled_tree_count > 0 && !pixman_region32_empty(damage)) {
++	if (scene_any_scale() && !pixman_region32_empty(damage)) {
+ 		pixman_region32_init_rect(&clipped, 0, 0, output->width, output->height);
+ 	} else {
+ 		pixman_region32_intersect_rect(&clipped, damage, 0, 0, output->width, output->height);
+@@ -944,7 +991,7 @@ static void scene_node_update(struct wlr_scene_node *node,
+ 	pixman_region32_init(&update_region);
+ 	pixman_region32_copy(&update_region, damage);
+ 	scene_node_bounds(node, x, y, &update_region);
+-	if (scaled_tree_count > 0) {
++	if (scene_any_scale()) {
+ 		// Bounds are unscaled; with a scaled tree anywhere, look at everything.
+ 		pixman_region32_union_rect(&update_region, &update_region,
+ 			INT32_MIN / 2, INT32_MIN / 2, INT32_MAX, INT32_MAX);
+@@ -2880,7 +2927,7 @@ static enum scene_direct_scanout_result scene_entry_try_direct_scanout(
+ 	struct wlr_scene_node *node = entry->node;
+ 
+ 	// A scaled tree (wlr_scene_tree_set_scale) is drawn by the renderer.
+-	if (!scene_output->scene->direct_scanout || scaled_tree_count > 0) {
++	if (!scene_output->scene->direct_scanout || scene_any_scale()) {
+ 		return SCANOUT_INELIGIBLE;
+ 	}
+ 
+-- 
+2.43.0
+

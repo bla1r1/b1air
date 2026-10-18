@@ -41,7 +41,8 @@ ColumnLayout {
     function categoryLabel(c) {
         if (c === "") return I18n.tr("Other");
         const known = { Mountains: I18n.tr("Mountains"), Water: I18n.tr("Water"), Nature: I18n.tr("Nature"),
-                        Forest: I18n.tr("Forest"), Art: I18n.tr("Art"), City: I18n.tr("City"), Sky: I18n.tr("Sky") };
+                        Forest: I18n.tr("Forest"), Art: I18n.tr("Art"), City: I18n.tr("City"), Sky: I18n.tr("Sky"),
+                        Abstract: I18n.tr("Abstract") };
         return known[c] || c;
     }
     property string activeWallpaper: ""
@@ -154,27 +155,32 @@ ColumnLayout {
     }
 
     // ── 1. Wallpaper Gallery Card ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Wallpapers")
         subtitle: section.wallpaperList.length > 0
             ? I18n.trn("%1 wallpaper found. Click any thumbnail to apply.", "%1 wallpapers found. Click any thumbnail to apply.", section.wallpaperList.length)
             : I18n.tr("Choose and preview wallpapers from your collection")
         icon: "\u{f02ca}"
-        accentColor: Design.pink
 
         // Actions & Source bar
         RowLayout {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             spacing: Design.s(Design.space.sm)
 
-            Pill {
-                label: I18n.tr("Random Wallpaper")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: I18n.tr("Random Wallpaper")
                 icon: "\u{f049d}"
                 onClicked: section.setRandom()
             }
 
-            Pill {
-                label: I18n.tr("Refresh Gallery")
+            Button {
+                size: "sm"
+                variant: "secondary"
+                text: I18n.tr("Refresh Gallery")
                 icon: "\u{f0450}"
                 onClicked: section.scan()
             }
@@ -188,8 +194,10 @@ ColumnLayout {
         Flow {
             visible: section.screens.length > 1 || section.workspace !== ""
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             spacing: Design.s(Design.space.xs)
-            Pill {
+            Chip {
                 label: section.screens.length > 1 ? I18n.tr("All screens") : I18n.tr("Everywhere")
                 icon: "\u{f0379}"
                 active: section.target === ""
@@ -197,14 +205,14 @@ ColumnLayout {
             }
             Repeater {
                 model: section.screens.length > 1 ? section.screens : []
-                delegate: Pill {
+                delegate: Chip {
                     required property var modelData
                     label: modelData.name + (modelData.wallpaper !== "" ? " · " + I18n.tr("own picture") : "")
                     active: section.target === modelData.name
                     onClicked: section.target = modelData.name
                 }
             }
-            Pill {
+            Chip {
                 visible: section.workspace !== ""
                 label: I18n.tr("Workspace %1", section.workspace)
                        + ((section.workspaceWallpapers[section.workspace] || "") !== "" ? " · " + I18n.tr("own picture") : "")
@@ -212,7 +220,7 @@ ColumnLayout {
                 active: section.target === "ws:" + section.workspace
                 onClicked: section.target = "ws:" + section.workspace
             }
-            Pill {
+            Chip {
                 visible: section.targetHasOwn
                 label: I18n.tr("Use shared picture")
                 icon: "\u{f0450}"
@@ -224,15 +232,17 @@ ColumnLayout {
         Flow {
             visible: section.categories.length > 1
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             spacing: Design.s(Design.space.xs)
-            Pill {
+            Chip {
                 label: I18n.tr("All")
                 active: section.category === "*"
                 onClicked: section.category = "*"
             }
             Repeater {
                 model: section.categories
-                delegate: Pill {
+                delegate: Chip {
                     required property string modelData
                     label: section.categoryLabel(modelData)
                     active: section.category === modelData
@@ -245,6 +255,8 @@ ColumnLayout {
         GridLayout {
             visible: section.wallpaperList.length > 0
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             columns: 3
             columnSpacing: Design.s(Design.space.md)
             rowSpacing: Design.s(Design.space.md)
@@ -258,19 +270,16 @@ ColumnLayout {
                     required property int index
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(120)
+                    Layout.preferredHeight: Design.s(Design.size.thumb)
                     radius: Design.s(Design.radius.card)
-                    color: Design.sunken
+                    color: Design.well
                     clip: true
 
                     readonly property bool isSelected: section.activeWallpaper === wallCard.modelData.path
-                    border.color: wallCard.isSelected ? Design.pink : (wallMa.containsMouse ? Design.hover : Design.line)
+                    border.color: wallCard.isSelected ? Design.accent : (wallMa.containsMouse ? Design.hover : Design.line)
                     border.width: wallCard.isSelected ? 2 : 1
 
                     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
-
-                    scale: wallMa.pressed ? 0.97 : (wallMa.containsMouse ? 1.02 : 1.0)
-                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutSine } }
 
                     Image {
                         anchors.fill: parent
@@ -290,7 +299,7 @@ ColumnLayout {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        height: Design.s(32)
+                        height: Design.s(Design.size.md)
                         gradient: Gradient {
                             GradientStop { position: 0.0; color: "transparent" }
                             GradientStop { position: 1.0; color: "#dd000000" }
@@ -314,10 +323,10 @@ ColumnLayout {
                         anchors.top: parent.top
                         anchors.right: parent.right
                         anchors.margins: Design.s(Design.space.xs)
-                        width: Design.s(22)
+                        width: Design.s(Design.size.mini)
                         height: width
                         radius: width / 2
-                        color: Design.pink
+                        color: Design.accent
 
                         Icon {
                             anchors.centerIn: parent
@@ -337,6 +346,8 @@ ColumnLayout {
 
         EmptyState {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             visible: section.wallpaperList.length === 0
             icon: "\u{f02ca}"
             title: I18n.tr("No wallpapers found")
@@ -345,17 +356,15 @@ ColumnLayout {
     }
 
     // ── 2. Source Folder Configuration ───────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Source folder")
-        subtitle: I18n.tr("The directory where wallpapers are scanned and saved")
         icon: "\u{f024b}"
-        accentColor: Design.pink
 
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.leftMargin: Design.s(Design.space.rowPaddingX)
+            Layout.rightMargin: Design.s(Design.space.rowPaddingX)
             spacing: Design.s(Design.space.xs)
-
-            Label { text: I18n.tr("Folder Path"); role: "caption"; dim: true }
 
             Field {
                 mono: true

@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# =============================================================================
+# b1air-install-package FILE — install or run a downloaded package
+#
+# What Files opens a .deb, .rpm, .AppImage or .flatpakref with. It never
+# installs anything on its own: it opens a terminal that says what it is about
+# to run, and the package manager asks for the password and for a yes, as it
+# would typed by hand. A package for another family of distributions is not
+# forced on: it says which one it is for and what to look for instead.
+#
+# On Arch a .deb goes through debtap, which rewrites it as an Arch package.
+#
+#   b1air-install-package FILE        open the terminal and ask there
+#   b1air-install-package --here FILE do it in this terminal (what the first
+#                                     runs inside the one it opens)
+# =============================================================================
+set -u
+
+here=0
+[[ "${1:-}" == "--here" ]] && { here=1; shift; }
+file="${1:-}"
+
+note() {
+    command -v notify-send >/dev/null 2>&1 \
+        && notify-send -a "Packages" -i package-x-generic "$1" "$2"
+    printf '%s: %s\n' "$1" "$2" >&2
+}
+
+[[ -n "$file" && -f "$file" ]] || { note "Nothing to install" "No such file: ${file:-(none)}"; exit 2; }
+file="$(realpath -- "$file")"
+name="$(basename -- "$file")"
+
+# The family, as lib/distro.sh decides it (keep the two in step).
+family() {
+    local word
+    [[ -r /etc/os-release ]] || { [[ -f /etc/arch-release ]] && echo arch; return; }
+    for word in $(. /etc/os-release && echo "${ID:-} ${ID_LIKE:-}"); do
+        case "$word" in
+            arch|archarm|endeavouros|manjaro|cachyos|garuda)      echo arch;     return ;;
+            debian|ubuntu|linuxmint|pop|elementary|zorin|neon)    echo debian;   return ;;
+            fedora|nobara|ultramarine)                            echo fedora;   return ;;
+            opensuse|opensuse-tumbleweed|opensuse-slowroll|suse)  echo opensuse; return ;;
+        esac
+    done
+}
+
+lower="${name,,}"
+case "$lower" in
+    *.deb)                      kind=deb ;;
+    *.rpm)                      kind=rpm ;;
+    *.appimage)                 kind=appimage ;;
+    *.flatpakref|*.flatpak)     kind=flatpak ;;
+    *) note "Not a package" "$name is not a .deb, .rpm, AppImage or Flatpak bundle."; exit 2 ;;
+esac
+fam="$(family)"
+
+# What it would run, or why not; decided before any terminal opens, so a
+# package for the wrong system is a notification rather than a window.
+cmd=()
+case "$kind:$fam" in
+    deb:debian)       cmd=(sudo apt install "$file") ;;
+    rpm:fedora)       cmd=(sudo dnf install "$file") ;;
+    rpm:opensuse)     cmd=(sudo zypper install --allow-unsigned-rpm "$file") ;;
+    flatpak:*)        command -v flatpak >/dev/null 2>&1 && cmd=(flatpak install --user "$file") ;;
+    appimage:*)       cmd=(run-appimage) ;;
+    # debtap rewrites a .deb as an Arch package (its dependencies mapped to
+    # Arch's names), which pacman then installs and can remove again.
+    deb:arch)
+        if command -v debtap >/dev/null 2>&1; then
+            cmd=(deb-via-debtap)
+        else
+            note "debtap is not installed" "It turns $name into an Arch package. It comes with b1air from the AUR: yay -S debtap"
+            exit 1
+        fi ;;
+    rpm:arch)
+        note "Not a package for Arch" "$name is for Fedora and openSUSE. Look for the program in the AUR (yay -Ss), or as a Flatpak."
+        exit 1 ;;
+    deb:*)
+        note "Not a package for this system" "$name is for Debian and Ubuntu. Look for an .rpm or a Flatpak of the program."
+        exit 1 ;;
+    rpm:*)
+        note "Not a package for this system" "$name is for Fedora and openSUSE. Look for a .deb or a Flatpak of the program."
+        exit 1 ;;
+esac
+if [[ ${#cmd[@]} -eq 0 ]]; then
+    note "Flatpak is not installed" "Install flatpak with your package manager to open $name."
+    exit 1
+fi
+
+if [[ $here -eq 0 ]]; then
+    for term in b1air-term foot alacritty kitty; do
+        command -v "$term" >/dev/null 2>&1 && exec "$term" -e "$0" --here "$file"
+    done
+    note "No terminal" "A terminal is needed to install $name."
+    exit 1
+fi
+
+# ── Inside the terminal ──────────────────────────────────────────────────────
+finish() {
+    printf '\n%s' "Press Enter to close."
+    read -r _
+    exit "${1:-0}"
+}
+
+if [[ "${cmd[0]}" == run-appimage ]]; then
+    printf 'Run %s?\n\n' "$name"
+    printf 'An AppImage is a program in one file. It runs as you, with your files,\n'
+    printf 'so run it only if you trust where it came from. It will be marked as\n'
+    printf 'executable first.\n\nRun it? [y/N] '
+    read -r answer
+    [[ "${answer,,}" == y || "${answer,,}" == yes ]] || finish 0
+    chmod +x -- "$file" || finish 1
+    # Detached, so closing this window does not close the program.
+    setsid -f "$file" >/dev/null 2>&1 < /dev/null
+    finish 0
+fi
+
+if [[ "${cmd[0]}" == deb-via-debtap ]]; then
+    # Its package database, once: debtap reads it to map the .deb's
+    # dependencies to Arch packages, and has none until `debtap -u`.
+    if ! compgen -G "/var/cache/debtap/*" >/dev/null; then
+        printf 'debtap needs its package list once (a download of a few minutes):\n\n  sudo debtap -u\n\n'
+        sudo debtap -u || finish 1
+    fi
+    work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+    cp -- "$file" "$work/" || finish 1
+    printf '\nConverting %s for pacman\n\n  debtap -Q %s\n\n' "$name" "$name"
+    (cd "$work" && debtap -Q "$work/$name") || { printf '\ndebtap could not convert it.\n'; finish 1; }
+    pkg="$(compgen -G "$work/*.pkg.tar.*" | head -n1)"
+    [[ -n "$pkg" ]] || { printf '\ndebtap made no package.\n'; finish 1; }
+    cmd=(sudo pacman -U "$pkg")
+fi
+
+printf 'Installing %s\n\n  %s\n\n' "$name" "${cmd[*]}"
+"${cmd[@]}"
+status=$?
+if [[ $status -eq 0 ]]; then
+    printf '\nInstalled. It is in the Launchpad.\n'
+else
+    printf '\nNothing was installed (exit code %d).\n' "$status"
+fi
+finish "$status"

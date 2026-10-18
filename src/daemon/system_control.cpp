@@ -528,7 +528,12 @@ bool SystemControl::enable_game_mode() {
         // every game-mode session whatever the toggle said, which on a monitor
         // that reports support and flickers with it is exactly the setting
         // someone would go looking for.
-        std::string cmd = "blur disable; shadows disable; corner_radius 0; default_border pixel 0";
+        // allow_tearing: a fullscreen game that asks for it (Vulkan's
+        // immediate mode, over wp_tearing_control) gets each frame on screen
+        // as soon as it is done instead of at the next refresh — the latency
+        // a competitive game wants. Nothing tears that did not ask.
+        std::string cmd = "blur disable; shadows disable; corner_radius 0; default_border pixel 0; "
+                          "output * allow_tearing yes";
         if (SettingsManager::get_json_bool("gameModeAdaptiveSync", false))
             cmd += "; output * adaptive_sync on";
         ipc.send_command(0, cmd);
@@ -537,6 +542,9 @@ bool SystemControl::enable_game_mode() {
     (void)ppd_set_active("performance");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "256"});
     SettingsManager::set_json_value("notificationsDnd", "true");
+    // The tile and the Settings page show this: when a game turns Game Mode
+    // on (gamemoded's start hook, b1air-gamemode-hook), they say so too.
+    SettingsManager::set_json_value("gameModeEnabled", "true");
 
     if (!write_private_file(runtime_path("game-mode.state"), "1\n")) return false;
 
@@ -559,7 +567,8 @@ bool SystemControl::disable_game_mode() {
             std::string("blur ") + (SettingsManager::get_json_bool("blurEnabled", true) ? "enable" : "disable")
             + "; shadows " + (SettingsManager::get_json_bool("shadowsEnabled", true) ? "enable" : "disable")
             + "; corner_radius " + std::to_string(SettingsManager::get_json_int("cornerRadius", 10))
-            + "; default_border pixel " + std::to_string(s.borderWidth);
+            + "; default_border pixel " + std::to_string(s.borderWidth)
+            + "; output * allow_tearing no";
         if (SettingsManager::get_json_bool("gameModeAdaptiveSync", false))
             cmd += "; output * adaptive_sync off";
         ipc.send_command(0, cmd);
@@ -568,6 +577,7 @@ bool SystemControl::disable_game_mode() {
     (void)ppd_set_active("balanced");
     (void)run_argv_status({"pw-metadata", "-n", "settings", "0", "clock.force-quantum", "0"});
     SettingsManager::set_json_value("notificationsDnd", "false");
+    SettingsManager::set_json_value("gameModeEnabled", "false");
 
     unlink(runtime_path("game-mode.state").c_str());
 
@@ -1073,6 +1083,7 @@ struct DesktopAppEntry {
     std::string try_exec;
     std::string only_show_in;
     std::string not_show_in;
+    std::string wm_class;
 };
 
 // Desktop-entry visibility rules from the XDG spec that the scan used to skip.
@@ -1214,7 +1225,12 @@ static std::string resolve_desktop_icon(const std::string& icon) {
     const std::string h = home ? home : "";
 
     std::vector<std::string> theme_roots;
+    // Flatpak apps (Bottles among them) export their icons beside their
+    // desktop entries, not into /usr/share/icons; without these an app from
+    // Flathub drew the "not found" placeholder.
     for (const std::string& base : { h.empty() ? std::string() : h + "/.local/share/icons",
+                                     h.empty() ? std::string() : h + "/.local/share/flatpak/exports/share/icons",
+                                     std::string("/var/lib/flatpak/exports/share/icons"),
                                      std::string("/usr/share/icons") }) {
         if (base.empty()) continue;
         for (const std::string& theme : { configured_icon_theme(), std::string("hicolor") })
@@ -1274,78 +1290,98 @@ std::string SystemControl::apps_list_json(const std::string& category) {
         return s_apps_cache_json;
     }
 
-    std::vector<std::string> search_dirs = {
-        "/usr/share/applications",
-        "/var/lib/flatpak/exports/share/applications"
-    };
+    // Most important first, as XDG reads them: a user's own entry replaces
+    // the system's of the same id, and a user's Hidden=true hides it. The
+    // system dirs came first here, so neither worked. And the user's own
+    // Flatpak installs — `flatpak install --user`, the way Bottles usually
+    // goes on — were not read at all.
     const char* home = std::getenv("HOME");
-    if (home) {
-        search_dirs.push_back(std::string(home) + "/.local/share/applications");
+    const char* data_home = std::getenv("XDG_DATA_HOME");
+    const std::string user_data = data_home && *data_home ? std::string(data_home)
+                                : home ? std::string(home) + "/.local/share" : std::string();
+    std::vector<std::string> search_dirs;
+    if (!user_data.empty()) {
+        search_dirs.push_back(user_data + "/applications");
+        search_dirs.push_back(user_data + "/flatpak/exports/share/applications");
     }
+    search_dirs.push_back("/var/lib/flatpak/exports/share/applications");
+    search_dirs.push_back("/usr/local/share/applications");
+    search_dirs.push_back("/usr/share/applications");
 
     std::unordered_map<std::string, DesktopAppEntry> apps;
+    // Ids already decided by a more important dir, shown or hidden.
+    std::unordered_set<std::string> seen;
 
     for (const auto& dir_path : search_dirs) {
-        DIR* d = opendir(dir_path.c_str());
-        if (!d) continue;
-        struct dirent* ent;
-        while ((ent = readdir(d)) != nullptr) {
-            std::string fname = ent->d_name;
-            if (fname.size() > 8 && fname.substr(fname.size() - 8) == ".desktop") {
-                if (apps.count(fname)) continue;
+        std::error_code ec;
+        if (!std::filesystem::is_directory(dir_path, ec)) continue;
+        // Into subdirectories too: Wine puts what a Windows installer adds to
+        // the Start menu under wine/Programs/…, and none of it reached the
+        // Launchpad. The desktop id of such an entry is its path with the
+        // slashes as dashes (wine-Programs-Foo.desktop).
+        const auto opts = std::filesystem::directory_options::follow_directory_symlink
+                        | std::filesystem::directory_options::skip_permission_denied;
+        for (std::filesystem::recursive_directory_iterator it(dir_path, opts, ec), end; it != end; it.increment(ec)) {
+            if (ec) break;
+            if (it.depth() > 4) { it.disable_recursion_pending(); continue; }
+            const std::filesystem::path& path = it->path();
+            if (path.extension() != ".desktop") continue;
+            std::string fname = std::filesystem::relative(path, dir_path, ec).string();
+            if (ec) { ec.clear(); continue; }
+            std::replace(fname.begin(), fname.end(), '/', '-');
+            if (!seen.insert(fname).second) continue;
 
-                std::ifstream f(dir_path + "/" + fname);
-                if (!f) continue;
-                std::string line;
-                DesktopAppEntry entry;
-                entry.desktop_file = fname;
-                bool in_desktop_entry = false;
+            std::ifstream f(path);
+            if (!f) continue;
+            std::string line;
+            DesktopAppEntry entry;
+            entry.desktop_file = fname;
+            bool in_desktop_entry = false;
 
-                while (std::getline(f, line)) {
-                    if (line == "[Desktop Entry]") {
-                        in_desktop_entry = true;
-                        continue;
-                    } else if (!line.empty() && line[0] == '[' && in_desktop_entry) {
-                        break;
-                    }
-                    if (!in_desktop_entry) continue;
-
-                    size_t eq = line.find('=');
-                    if (eq != std::string::npos) {
-                        std::string key = line.substr(0, eq);
-                        std::string val = line.substr(eq + 1);
-
-                        if (key == "Name" && entry.name.empty()) entry.name = val;
-                        else if (key == "Exec" && entry.exec.empty()) {
-                            size_t p;
-                            while ((p = val.find("%")) != std::string::npos && p + 1 < val.size()) {
-                                val.erase(p, 2);
-                            }
-                            while (!val.empty() && val.back() == ' ') val.pop_back();
-                            entry.exec = val;
-                        }
-                        else if (key == "Icon" && entry.icon.empty()) entry.icon = val;
-                        else if (key == "Comment" && entry.comment.empty()) entry.comment = val;
-                        else if (key == "Categories") entry.categories = val;
-                        else if (key == "MimeType") entry.mime_type = val;
-                        else if (key == "NoDisplay") entry.no_display = (val == "true" || val == "1");
-                        else if (key == "Terminal") entry.terminal = (val == "true" || val == "1");
-                        else if (key == "Hidden") entry.hidden = (val == "true" || val == "1");
-                        else if (key == "TryExec" && entry.try_exec.empty()) entry.try_exec = val;
-                        else if (key == "OnlyShowIn") entry.only_show_in = val;
-                        else if (key == "NotShowIn") entry.not_show_in = val;
-                    }
+            while (std::getline(f, line)) {
+                if (line == "[Desktop Entry]") {
+                    in_desktop_entry = true;
+                    continue;
+                } else if (!line.empty() && line[0] == '[' && in_desktop_entry) {
+                    break;
                 }
+                if (!in_desktop_entry) continue;
 
-                if (!entry.name.empty() && !entry.exec.empty()
-                        && !entry.no_display && !entry.hidden
-                        && desktop_entry_runs_here(entry.only_show_in, entry.not_show_in)
-                        && try_exec_present(entry.try_exec)) {
-                    apps[fname] = entry;
+                size_t eq = line.find('=');
+                if (eq != std::string::npos) {
+                    std::string key = line.substr(0, eq);
+                    std::string val = line.substr(eq + 1);
+
+                    if (key == "Name" && entry.name.empty()) entry.name = val;
+                    else if (key == "Exec" && entry.exec.empty()) {
+                        size_t p;
+                        while ((p = val.find("%")) != std::string::npos && p + 1 < val.size()) {
+                            val.erase(p, 2);
+                        }
+                        while (!val.empty() && val.back() == ' ') val.pop_back();
+                        entry.exec = val;
+                    }
+                    else if (key == "Icon" && entry.icon.empty()) entry.icon = val;
+                    else if (key == "Comment" && entry.comment.empty()) entry.comment = val;
+                    else if (key == "Categories") entry.categories = val;
+                    else if (key == "MimeType") entry.mime_type = val;
+                    else if (key == "NoDisplay") entry.no_display = (val == "true" || val == "1");
+                    else if (key == "Terminal") entry.terminal = (val == "true" || val == "1");
+                    else if (key == "Hidden") entry.hidden = (val == "true" || val == "1");
+                    else if (key == "TryExec" && entry.try_exec.empty()) entry.try_exec = val;
+                    else if (key == "OnlyShowIn") entry.only_show_in = val;
+                    else if (key == "NotShowIn") entry.not_show_in = val;
+                    else if (key == "StartupWMClass" && entry.wm_class.empty()) entry.wm_class = val;
                 }
             }
+
+            if (!entry.name.empty() && !entry.exec.empty()
+                    && !entry.no_display && !entry.hidden
+                    && desktop_entry_runs_here(entry.only_show_in, entry.not_show_in)
+                    && try_exec_present(entry.try_exec)) {
+                apps[fname] = entry;
+            }
         }
-        closedir(d);
     }
 
     std::vector<DesktopAppEntry> matched;
@@ -1419,6 +1455,7 @@ std::string SystemControl::apps_list_json(const std::string& category) {
                            "\"desktopFile\":\"" + json_escape(a.desktop_file) + "\","
                            "\"icon\":\"" + json_escape(a.icon) + "\","
                            "\"iconPath\":\"" + json_escape(resolve_desktop_icon(a.icon)) + "\","
+                           "\"wmClass\":\"" + json_escape(a.wm_class) + "\","
                            "\"comment\":\"" + json_escape(a.comment) + "\","
                            // Terminal=true was parsed and then dropped on the floor.
                            // Launchers executed such an entry directly, so htop and
@@ -1714,16 +1751,18 @@ std::string SystemControl::window_list_open_json() {
 //
 // The shell and our own apps follow the theme picker; nothing else did. The
 // session set `gtk-theme Tokyonight-Dark`, a theme that is not installed, and
-// the shipped settings.ini names adw-gtk3-dark, also not installed — so GTK
-// apps drew stock Adwaita, dark only because of prefer-dark. Qt apps used
-// Kvantum's Tokyo-Night, fixed. Changing the theme changed none of them.
+// the shipped settings.ini named adw-gtk3-dark, then not installed either —
+// so GTK apps drew stock Adwaita, dark only because of prefer-dark. Qt apps
+// used a Kvantum theme of someone else's, fixed. Changing the theme changed
+// none of them.
 //
-// This makes them follow: GTK through Adwaita (built into GTK, always there)
-// plus @define-color overrides in gtk.css; Qt through a Kvantum theme
-// generated from the palette. `appColorScheme` can pin them dark or light
-// instead; when that disagrees with the palette, they get the stock dark or
-// light look with only the accent carried over, since a dark palette cannot
-// be used as a light one.
+// This makes them follow: GTK 3 through adw-gtk3 (libadwaita's look for
+// GTK 3, a package of the suite) or else Adwaita, built into GTK, plus
+// @define-color overrides in gtk.css; GTK 4 and libadwaita through the same
+// colours; Qt through a Kvantum theme written here from the palette.
+// `appColorScheme` can pin them dark or light instead; when that disagrees
+// with the palette, they get the stock dark or light look with only the
+// accent carried over, since a dark palette cannot be used as a light one.
 namespace {
 
 double channel(int v) {
@@ -1798,9 +1837,10 @@ bool SystemControl::appearance_apply() {
     auto c = [&](const char* key, const char* fallback) {
         return json_str(pal, key, fallback);
     };
-    const std::string ground = c("ground", "#1a1b26");
-    const std::string accent = c("primary", c("blue", "#7aa2f7").c_str());
-    const std::string accentText = c("primaryText", "#16161e");
+    // Fallbacks: Breeze Dark, the built-in palette (Ui/Design.qml).
+    const std::string ground = c("ground", "#202326");
+    const std::string accent = c("primary", c("blue", "#3daee9").c_str());
+    const std::string accentText = c("primaryText", "#0d1b24");
 
     const bool paletteDark = luminance(ground) < 0.4;
     std::string scheme = SettingsManager::get_json_string("appColorScheme");
@@ -1812,15 +1852,19 @@ bool SystemControl::appearance_apply() {
     // which is what browsers, Electron and libadwaita apps read.
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "color-scheme",
                            dark ? "prefer-dark" : "prefer-light"});
-    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme",
-                           dark ? "Adwaita-dark" : "Adwaita"});
+    // adw-gtk3 where it is installed: GTK 3 apps then look like the GTK 4 ones.
+    const bool adw = std::filesystem::exists("/usr/share/themes/adw-gtk3")
+                  || std::filesystem::exists(home + "/.local/share/themes/adw-gtk3")
+                  || std::filesystem::exists(home + "/.themes/adw-gtk3");
+    const std::string gtkTheme = adw ? (dark ? "adw-gtk3-dark" : "adw-gtk3") : (dark ? "Adwaita-dark" : "Adwaita");
+    (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", gtkTheme});
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "icon-theme",
                            dark ? "Papirus-Dark" : "Papirus"});
     // The desktop's own cursor (src/cursors). gsettings is what GTK 4 and
     // libadwaita apps read; sway takes it from input.conf.
     (void)run_argv_status({"gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", "b1air-cursors"});
     for (const char* dir : {"/.config/gtk-3.0/settings.ini", "/.config/gtk-4.0/settings.ini"}) {
-        set_ini_keys(home + dir, {{"gtk-theme-name", dark ? "Adwaita-dark" : "Adwaita"},
+        set_ini_keys(home + dir, {{"gtk-theme-name", gtkTheme},
                                   {"gtk-icon-theme-name", dark ? "Papirus-Dark" : "Papirus"},
                                   {"gtk-application-prefer-dark-theme", dark ? "1" : "0"},
                                   {"gtk-cursor-theme-name", "b1air-cursors"}});
@@ -1841,7 +1885,7 @@ bool SystemControl::appearance_apply() {
     if (usePalette) {
         const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
         const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
-        const std::string text = c("text", "#c0caf5"), dim = c("textDim", text.c_str());
+        const std::string text = c("text", "#fcfcfc"), dim = c("textDim", text.c_str());
         const std::string outline = c("outlineVariant", high.c_str());
         def("window_bg_color", ground);   def("window_fg_color", text);
         def("view_bg_color", lowest);     def("view_fg_color", text);
@@ -1851,7 +1895,7 @@ bool SystemControl::appearance_apply() {
         def("card_bg_color", mid);        def("card_fg_color", text);
         def("popover_bg_color", low);     def("popover_fg_color", text);
         def("dialog_bg_color", ground);   def("dialog_fg_color", text);
-        def("destructive_bg_color", c("red", "#f7768e"));
+        def("destructive_bg_color", c("red", "#ed4b5b"));
         def("theme_bg_color", ground);    def("theme_fg_color", text);
         def("theme_base_color", lowest);  def("theme_text_color", text);
         def("theme_unfocused_bg_color", ground); def("theme_unfocused_fg_color", dim);
@@ -1863,11 +1907,11 @@ bool SystemControl::appearance_apply() {
     // Window borders from the palette: written for the next start, and sent to
     // the running sway so they change now. look-and-feel.conf had them fixed.
     {
-        const std::string text = c("text", "#c0caf5");
-        const std::string dim = c("textDim", "#a9b1d6");
-        const std::string low = c("lowest", "#16161e");
-        const std::string alt = c("tertiary", "#bb9af7");
-        const std::string err = c("error", "#f7768e");
+        const std::string text = c("text", "#fcfcfc");
+        const std::string dim = c("textDim", "#b4bbc2");
+        const std::string low = c("lowest", "#141618");
+        const std::string alt = c("tertiary", "#b07ad9");
+        const std::string err = c("error", "#ed4b5b");
         const std::vector<std::vector<std::string>> rules = {
             {"client.focused", accent, ground, text, alt, accent},
             {"client.focused_inactive", low, low, dim, low, low},
@@ -1885,22 +1929,50 @@ bool SystemControl::appearance_apply() {
         write_file(home + "/.config/sway/conf.d/custom_theme_colors.conf", conf);
     }
 
-    // Qt, through Kvantum (qt6ct is set to style=kvantum).
+    // Qt, through Kvantum (qt6ct is set to style=kvantum): a theme of b1air's
+    // own, its colours from the palette and its widgets Kvantum's built-in
+    // ones (a theme with no SVG of its own is drawn with the default's).
     std::string kvTheme = dark ? "KvGnomeDark" : "KvGnome";
     if (usePalette) {
         kvTheme = "b1air";
         const std::string low = c("low", ground.c_str()), lowest = c("lowest", ground.c_str());
         const std::string mid = c("mid", low.c_str()), high = c("high", mid.c_str());
-        const std::string highest = c("highest", high.c_str()), text = c("text", "#c0caf5");
+        const std::string highest = c("highest", high.c_str()), text = c("text", "#fcfcfc");
         const std::string outline = c("outline", c("textDim", text.c_str()).c_str());
-        // The shipped Tokyo-Night.kvconfig is the template: its widget
-        // settings stay, and only [GeneralColors] is written from the palette.
-        std::string base;
-        {
-            std::ifstream in(home + "/.config/Kvantum/Tokyo-Night/Tokyo-Night.kvconfig");
-            std::stringstream ss; ss << in.rdbuf(); base = ss.str();
-        }
-        const std::string colors =
+        const std::string out =
+            "# Written by b1air-daemon (appearance apply) from the theme; rewritten\n"
+            "# whenever it changes.\n\n"
+            "[%General]\n"
+            "author=b1air\n"
+            "comment=The desktop's palette\n"
+            // Rounded, quiet, the shell's spacing: menus and tooltips with a
+            // shadow, scroll bars that show while scrolling, no frames drawn
+            // round every toolbar.
+            "composite=true\n"
+            "menu_shadow_depth=6\n"
+            "tooltip_shadow_depth=4\n"
+            "spread_menuitems=true\n"
+            "transient_scrollbar=true\n"
+            "scroll_width=8\n"
+            "animate_states=true\n"
+            "slim_toolbars=false\n"
+            "toolbutton_style=0\n"
+            "iconless_pushbutton=true\n"
+            "button_icon_size=16\n"
+            "small_icon_size=16\n"
+            "large_icon_size=32\n"
+            "layout_spacing=6\n"
+            "layout_margin=8\n"
+            "inline_spin_indicators=true\n"
+            "combo_menu=true\n"
+            "respect_DE=true\n"
+            "alt_mnemonic=true\n"
+            "tree_branch_line=false\n"
+            "progressbar_thickness=6\n"
+            "slider_width=4\n"
+            "slider_handle_width=16\n"
+            "slider_handle_length=16\n"
+            "check_size=16\n\n"
             "[GeneralColors]\n"
             "window.color=" + low + "\nbase.color=" + lowest + "\nalt.base.color=" + ground + "\n"
             "button.color=" + mid + "\nlight.color=" + highest + "\nmid.light.color=" + high + "\n"
@@ -1909,15 +1981,7 @@ bool SystemControl::appearance_apply() {
             "text.color=" + text + "\nwindow.text.color=" + text + "\nbutton.text.color=" + text + "\n"
             "disabled.text.color=" + outline + "\ntooltip.text.color=" + text + "\n"
             "highlight.text.color=" + accentText + "\n"
-            "link.color=" + c("sapphire", accent.c_str()) + "\nlink.visited.color=" + c("mauve", accent.c_str()) + "\n\n";
-        std::string out;
-        const size_t gc = base.find("[GeneralColors]");
-        if (gc == std::string::npos) {
-            out = "[%General]\nauthor=b1air\n\n" + colors + base;
-        } else {
-            const size_t next = base.find("\n[", gc + 1);
-            out = base.substr(0, gc) + colors + (next == std::string::npos ? "" : base.substr(next + 1));
-        }
+            "link.color=" + c("sapphire", accent.c_str()) + "\nlink.visited.color=" + c("mauve", accent.c_str()) + "\n";
         write_file(home + "/.config/Kvantum/b1air/b1air.kvconfig", out);
     }
     set_ini_keys(home + "/.config/Kvantum/kvantum.kvconfig", {{"theme", kvTheme}});

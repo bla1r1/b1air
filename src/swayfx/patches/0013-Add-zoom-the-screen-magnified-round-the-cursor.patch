@@ -1,0 +1,334 @@
+From 11970920fb50aa653612925d2b75b94e2a13e0ea Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 11:10:08 +0000
+Subject: [PATCH] Add zoom: the screen magnified round the cursor
+
+`zoom <factor>|in|out|reset|toggle` draws the screen the cursor is on
+from 1 (off) to 10 times larger about the cursor, following it as it
+moves, to another screen too; the other screens are drawn as usual.
+`in` and `out` go by a quarter, `toggle` between off and 2, and a change
+is animated with animation_duration_ms. What is under the cursor is drawn
+where it is, so it is what a click goes to, and nothing about input
+changes.
+
+Placing windows, popups and the rest does not see the zoom (scenefx's
+wlr_scene_set_zoom), so nothing is put in the wrong place while it is
+on. get_tree reports it on the root as "zoom", and the screen magnified
+as "zoom_output"; a screen going away while magnified is let go.
+
+Needs scenefx with wlr_scene_set_zoom (src/scenefx patch 0004).
+---
+ include/sway/commands.h     |  1 +
+ include/sway/desktop/zoom.h | 19 +++++++
+ sway/commands.c             |  1 +
+ sway/commands/zoom.c        | 38 ++++++++++++++
+ sway/desktop/zoom.c         | 99 +++++++++++++++++++++++++++++++++++++
+ sway/input/cursor.c         |  2 +
+ sway/input/seat.c           |  2 +
+ sway/ipc-json.c             |  7 +++
+ sway/meson.build            |  2 +
+ sway/tree/output.c          |  2 +
+ 10 files changed, 173 insertions(+)
+ create mode 100644 include/sway/desktop/zoom.h
+ create mode 100644 sway/commands/zoom.c
+ create mode 100644 sway/desktop/zoom.c
+
+diff --git a/include/sway/commands.h b/include/sway/commands.h
+index 4a442f3..dd2b2f2 100644
+--- a/include/sway/commands.h
++++ b/include/sway/commands.h
+@@ -117,6 +117,7 @@ sway_cmd cmd_inactive_opacity;
+ sway_cmd cmd_floating_snap;
+ sway_cmd cmd_snap;
+ sway_cmd cmd_minimize_target;
++sway_cmd cmd_zoom;
+ sway_cmd cmd_workspace_animation;
+ sway_cmd cmd_window_animation;
+ sway_cmd cmd_workspace_swipe;
+diff --git a/include/sway/desktop/zoom.h b/include/sway/desktop/zoom.h
+new file mode 100644
+index 0000000..40c7f56
+--- /dev/null
++++ b/include/sway/desktop/zoom.h
+@@ -0,0 +1,19 @@
++#ifndef _SWAY_DESKTOP_ZOOM_H
++#define _SWAY_DESKTOP_ZOOM_H
++
++// b1air: the screen magnified round the cursor (zoom <factor>|in|out|reset|
++// toggle). Everything is drawn larger about the point under the cursor,
++// which stays where it is, so what is under the cursor is what is pointed
++// at, and input needs nothing changed. Only the output the cursor is on.
++
++float zoom_factor(void);       // what it is going to, 1 when off
++void zoom_set(float factor);   // animated with animation_duration_ms
++// The output magnified: the one the cursor is on, NULL when off.
++struct sway_output;
++struct sway_output *zoom_output(void);
++// The output is going away: not magnified any more.
++void zoom_output_gone(struct sway_output *output);
++// The cursor moved: the magnified part follows it, to another output too.
++void zoom_follow_cursor(void);
++
++#endif
+diff --git a/sway/commands.c b/sway/commands.c
+index 6a92783..e26e9e1 100644
+--- a/sway/commands.c
++++ b/sway/commands.c
+@@ -177,6 +177,7 @@ static const struct cmd_handler command_handlers[] = {
+ 	{ "title_format", cmd_title_format },
+ 	{ "unmark", cmd_unmark },
+ 	{ "urgent", cmd_urgent },
++	{ "zoom", cmd_zoom },
+ };
+ 
+ static int handler_compare(const void *_a, const void *_b) {
+diff --git a/sway/commands/zoom.c b/sway/commands/zoom.c
+new file mode 100644
+index 0000000..d63ddfa
+--- /dev/null
++++ b/sway/commands/zoom.c
+@@ -0,0 +1,38 @@
++#include <stdlib.h>
++#include <strings.h>
++#include "sway/commands.h"
++#include "sway/desktop/zoom.h"
++
++// How much `zoom in` and `zoom out` change it by.
++#define ZOOM_STEP 1.25f
++
++// zoom <factor>|in|out|reset|toggle
++//
++// Magnifies the screen round the cursor, from 1 (off) to 10; the part shown
++// follows the cursor. `toggle` goes between off and 2, as Mod+Ctrl+scroll
++// and Mod+Ctrl+0 do in b1air.
++struct cmd_results *cmd_zoom(int argc, char **argv) {
++	struct cmd_results *error = NULL;
++	if ((error = checkarg(argc, "zoom", EXPECTED_EQUAL_TO, 1))) {
++		return error;
++	}
++	float now = zoom_factor();
++	if (strcasecmp(argv[0], "in") == 0) {
++		zoom_set(now * ZOOM_STEP);
++	} else if (strcasecmp(argv[0], "out") == 0) {
++		zoom_set(now / ZOOM_STEP < 1.05f ? 1.0f : now / ZOOM_STEP);
++	} else if (strcasecmp(argv[0], "reset") == 0 || strcasecmp(argv[0], "off") == 0) {
++		zoom_set(1.0f);
++	} else if (strcasecmp(argv[0], "toggle") == 0) {
++		zoom_set(now > 1.0f ? 1.0f : 2.0f);
++	} else {
++		char *end;
++		float value = strtof(argv[0], &end);
++		if (*end || end == argv[0] || value < 1.0f || value > 10.0f) {
++			return cmd_results_new(CMD_INVALID,
++				"zoom takes a factor from 1 to 10, or in, out, reset or toggle");
++		}
++		zoom_set(value);
++	}
++	return cmd_results_new(CMD_SUCCESS, NULL);
++}
+diff --git a/sway/desktop/zoom.c b/sway/desktop/zoom.c
+new file mode 100644
+index 0000000..a3339ad
+--- /dev/null
++++ b/sway/desktop/zoom.c
+@@ -0,0 +1,99 @@
++#include <math.h>
++#include <scenefx/types/wlr_scene.h>
++#include <wlr/types/wlr_cursor.h>
++#include <wlr/types/wlr_output_layout.h>
++#include "sway/animation_manager.h"
++#include "sway/config.h"
++#include "sway/desktop/zoom.h"
++#include "sway/input/cursor.h"
++#include "sway/input/input-manager.h"
++#include "sway/input/seat.h"
++#include "sway/output.h"
++#include "sway/tree/root.h"
++
++static struct {
++	float scale;        // drawn at now
++	float from, to;     // what the animation runs between
++	struct animation anim;
++	bool anim_ready;
++	struct sway_output *output;  // the one magnified, NULL when none
++} zoom = { .scale = 1.0f, .from = 1.0f, .to = 1.0f };
++
++float zoom_factor(void) {
++	return zoom.to;
++}
++
++// The scene magnified about the cursor (scenefx's wlr_scene_set_zoom): what
++// is under it stays there. Only drawing and finding what is under the cursor
++// see it; where things are placed does not change.
++static void zoom_place(void) {
++	struct sway_seat *seat = input_manager_current_seat();
++	double cx = 0, cy = 0;
++	if (seat && seat->cursor) {
++		cx = seat->cursor->cursor->x;
++		cy = seat->cursor->cursor->y;
++	}
++	// Only the output the cursor is on; the others are drawn as usual.
++	struct wlr_box area = {0};
++	struct wlr_output *wlr_output =
++		wlr_output_layout_output_at(root->output_layout, cx, cy);
++	struct sway_output *output = wlr_output ? output_from_wlr_output(wlr_output) : NULL;
++	if (output) {
++		output_get_box(output, &area);
++	}
++	zoom.output = zoom.scale != 1.0f ? output : NULL;
++	wlr_scene_set_zoom(root->root_scene, zoom.scale, cx, cy, &area);
++}
++
++struct sway_output *zoom_output(void) {
++	return zoom.output;
++}
++
++void zoom_follow_cursor(void) {
++	if (zoom.scale != 1.0f) {
++		zoom_place();
++	}
++}
++
++static void zoom_update(void *data) {
++	zoom.scale = zoom.from + (zoom.to - zoom.from) * zoom.anim.multiplier;
++	zoom_place();
++}
++
++static void zoom_complete(void *data) {
++	zoom.scale = zoom.to;
++	zoom_place();
++}
++
++void zoom_set(float factor) {
++	if (factor < 1.0f) {
++		factor = 1.0f;
++	} else if (factor > 10.0f) {
++		factor = 10.0f;
++	}
++	if (factor == zoom.to) {
++		return;
++	}
++	if (!zoom.anim_ready) {
++		zoom.anim = init_animation(NULL);
++		zoom.anim_ready = true;
++	}
++	finish_animation(&zoom.anim);
++	zoom.from = zoom.scale;
++	zoom.to = factor;
++	if (!config->animation_duration_ms) {
++		zoom_complete(NULL);
++		return;
++	}
++	add_animation(&zoom.anim, zoom_update, zoom_complete);
++	start_animations();
++}
++
++void zoom_output_gone(struct sway_output *output) {
++	if (zoom.output != output) {
++		return;
++	}
++	// Nothing magnified until the cursor is on an output again.
++	zoom.output = NULL;
++	wlr_scene_set_zoom(root->root_scene, zoom.scale, 0, 0, NULL);
++}
+diff --git a/sway/input/cursor.c b/sway/input/cursor.c
+index fc0f11f..d5009c2 100644
+--- a/sway/input/cursor.c
++++ b/sway/input/cursor.c
+@@ -20,6 +20,7 @@
+ #include "util.h"
+ #include "sway/commands.h"
+ #include "sway/input/cursor.h"
++#include "sway/desktop/zoom.h"
+ #include "sway/input/keyboard.h"
+ #include "sway/input/tablet.h"
+ #include "sway/layers.h"
+@@ -138,6 +139,7 @@ struct sway_node *node_at_coords(
+ }
+ 
+ void cursor_rebase(struct sway_cursor *cursor) {
++	zoom_follow_cursor(); // b1air
+ 	uint32_t time_msec = get_current_time_in_msec();
+ 	seatop_rebase(cursor->seat, time_msec);
+ }
+diff --git a/sway/input/seat.c b/sway/input/seat.c
+index 0434d63..13f2d9d 100644
+--- a/sway/input/seat.c
++++ b/sway/input/seat.c
+@@ -23,6 +23,7 @@
+ #include "sway/input/keyboard.h"
+ #include "sway/input/libinput.h"
+ #include "sway/input/seat.h"
++#include "sway/desktop/zoom.h"
+ #include "sway/input/switch.h"
+ #include "sway/input/tablet.h"
+ #include "sway/ipc-server.h"
+@@ -1562,6 +1563,7 @@ void seatop_button(struct sway_seat *seat, uint32_t time_msec,
+ }
+ 
+ void seatop_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
++	zoom_follow_cursor(); // b1air: the magnified part follows the cursor
+ 	if (seat->seatop_impl->pointer_motion) {
+ 		seat->seatop_impl->pointer_motion(seat, time_msec);
+ 	}
+diff --git a/sway/ipc-json.c b/sway/ipc-json.c
+index 85518c7..d021a8a 100644
+--- a/sway/ipc-json.c
++++ b/sway/ipc-json.c
+@@ -17,6 +17,7 @@
+ #include "sway/server.h"
+ #include "sway/tree/container.h"
+ #include "sway/tree/snap.h"
++#include "sway/desktop/zoom.h"
+ #include "sway/tree/root.h"
+ #include "sway/tree/view.h"
+ #include "sway/tree/workspace.h"
+@@ -929,6 +930,12 @@ json_object *ipc_json_describe_node(struct sway_node *node) {
+ 
+ 	switch (node->type) {
+ 	case N_ROOT:
++		// b1air: how magnified the screen is (zoom), 1 when it is not
++		json_object_object_add(object, "zoom", json_object_new_double(zoom_factor()));
++		if (zoom_output()) {
++			json_object_object_add(object, "zoom_output",
++				json_object_new_string(zoom_output()->wlr_output->name));
++		}
+ 		break;
+ 	case N_OUTPUT:
+ 		ipc_json_describe_enabled_output(node->sway_output, object);
+diff --git a/sway/meson.build b/sway/meson.build
+index c913b66..70384b9 100644
+--- a/sway/meson.build
++++ b/sway/meson.build
+@@ -58,6 +58,8 @@ sway_sources = files(
+ 	'desktop/workspace_swipe.c',
+ 	'desktop/overview.c',
+ 	'desktop/minimize.c',
++	'desktop/zoom.c',
++	'commands/zoom.c',
+ 	'commands/minimize_target.c',
+ 	'commands/allow_tearing.c',
+ 	'commands/assign.c',
+diff --git a/sway/tree/output.c b/sway/tree/output.c
+index 58743c7..abe1583 100644
+--- a/sway/tree/output.c
++++ b/sway/tree/output.c
+@@ -7,6 +7,7 @@
+ #include "sway/ipc-server.h"
+ #include "sway/layers.h"
+ #include "sway/output.h"
++#include "sway/desktop/zoom.h"
+ #include "sway/tree/arrange.h"
+ #include "sway/tree/workspace.h"
+ #include "sway/server.h"
+@@ -319,6 +320,7 @@ void output_disable(struct sway_output *output) {
+ }
+ 
+ void output_begin_destroy(struct sway_output *output) {
++	zoom_output_gone(output); // b1air
+ 	if (!sway_assert(!output->enabled, "Expected a disabled output")) {
+ 		return;
+ 	}
+-- 
+2.43.0
+

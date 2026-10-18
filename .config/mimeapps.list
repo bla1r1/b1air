@@ -79,3 +79,20 @@ application/pdf=zathura.desktop;org.gnome.Evince.desktop;firefox.desktop;
 
 # Terminal
 x-scheme-handler/terminal=b1air-term.desktop;
+
+# Windows programs: b1air-run-windows hands them to Bottles, or else Wine
+application/x-ms-dos-executable=b1air-run-windows.desktop;com.usebottles.bottles.desktop;wine.desktop;
+application/x-msdownload=b1air-run-windows.desktop;com.usebottles.bottles.desktop;wine.desktop;
+application/vnd.microsoft.portable-executable=b1air-run-windows.desktop;com.usebottles.bottles.desktop;wine.desktop;
+application/x-msi=b1air-run-windows.desktop;com.usebottles.bottles.desktop;wine.desktop;
+application/x-ms-shortcut=b1air-run-windows.desktop;wine.desktop;
+
+# Packages: b1air-install-package installs in a terminal, asking first
+application/vnd.debian.binary-package=b1air-install-package.desktop;
+application/x-deb=b1air-install-package.desktop;
+application/x-rpm=b1air-install-package.desktop;
+application/x-redhat-package-manager=b1air-install-package.desktop;
+application/vnd.appimage=b1air-install-package.desktop;
+application/x-iso9660-appimage=b1air-install-package.desktop;
+application/vnd.flatpak.ref=b1air-install-package.desktop;
+application/vnd.flatpak=b1air-install-package.desktop;

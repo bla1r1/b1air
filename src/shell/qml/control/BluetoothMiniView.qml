@@ -18,11 +18,14 @@ MiniView {
 
     title: I18n.tr("Bluetooth")
     icon: "\u{f00af}"
-    tone: Design.mauve
+    tone: Design.accent
     footerLabel: I18n.tr("Bluetooth Settings…")
 
     readonly property bool isOn: Network.bluetooth.power === "on"
-    readonly property var connectedDev: Network.bluetooth.connected || null
+    // Every connected device: a mouse and headphones at once is the usual
+    // case, and only the first of them used to be listed — the rest were in
+    // neither list.
+    readonly property var connectedDevs: (Network.bluetooth.devices || []).filter(d => d.connected)
     readonly property var devices: (Network.bluetooth.devices || [])
         .filter(d => !d.connected)
         .sort((a, b) => (b.paired ? 1 : 0) - (a.paired ? 1 : 0))
@@ -39,7 +42,6 @@ MiniView {
 
     trailing: Switch {
         checked: root.isOn
-        activeColor: Design.mauve
         onToggled: Network.toggleBluetooth()
     }
 
@@ -55,7 +57,7 @@ MiniView {
     EmptyState {
         anchors.centerIn: parent
         width: parent.width
-        visible: root.isOn && !root.connectedDev && root.devices.length === 0
+        visible: root.isOn && root.connectedDevs.length === 0 && root.devices.length === 0
         icon: "\u{f00af}"
         title: I18n.tr("No devices yet")
         hint: I18n.tr("Put a device in pairing mode and it will show up here.")
@@ -64,7 +66,7 @@ MiniView {
     ListView {
         id: devList
         anchors.fill: parent
-        visible: root.isOn && (root.connectedDev || root.devices.length > 0)
+        visible: root.isOn && (root.connectedDevs.length > 0 || root.devices.length > 0)
         clip: true
         spacing: Design.s(Design.space.xs)
         model: root.devices
@@ -75,71 +77,76 @@ MiniView {
 
             SectionLabel {
                 text: I18n.tr("Connected")
-                visible: root.connectedDev !== null
+                visible: root.connectedDevs.length > 0
             }
 
-            Rectangle {
-                visible: root.connectedDev !== null
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.row)
-                radius: Design.s(Design.radius.ctl)
-                color: connMa.containsMouse ? Design.tint(Design.mauve, 0.22) : Design.tint(Design.mauve, 0.15)
-                border.color: Design.tint(Design.mauve, 0.35)
-                border.width: Design.border
+            Repeater {
+                model: root.connectedDevs
+                Rectangle {
+                    id: connRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Design.s(Design.size.row)
+                    radius: Design.s(Design.radius.ctl)
+                    color: connMa.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.accent, 0.15)
+                    border.color: Design.tint(Design.accent, 0.35)
+                    border.width: Design.border
 
-                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.sm)
-                    anchors.rightMargin: Design.s(Design.space.sm)
-                    spacing: Design.s(Design.space.sm)
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(Design.space.sm)
+                        anchors.rightMargin: Design.s(Design.space.sm)
+                        spacing: Design.s(Design.space.sm)
 
-                    Icon {
-                        text: root.glyphFor(root.connectedDev ? root.connectedDev.icon : "")
-                        role: "body"
-                        color: Design.mauve
+                        Icon {
+                            text: root.glyphFor(connRow.modelData.icon)
+                            role: "body"
+                            color: Design.accent
+                        }
+
+                        Label {
+                            text: connRow.modelData.name || connRow.modelData.mac
+                            role: "body"
+                            weight: Design.weight.semibold
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        Label {
+                            visible: connRow.modelData.battery >= 0 && !connMa.containsMouse
+                            text: connRow.modelData.battery + "%"
+                            role: "caption"
+                            isMono: true
+                            dim: true
+                        }
+
+                        Label {
+                            visible: connMa.containsMouse
+                            text: I18n.tr("Disconnect")
+                            role: "caption"
+                            color: Design.accent
+                        }
+
+                        Icon {
+                            visible: !connMa.containsMouse
+                            text: "\u{f012c}"
+                            role: "caption"
+                            color: Design.accent
+                        }
                     }
 
-                    Label {
-                        text: root.connectedDev ? root.connectedDev.name : ""
-                        role: "body"
-                        weight: Design.weight.semibold
-                        Layout.fillWidth: true
-                        elide: Text.ElideRight
+                    Clickable {
+                        id: connMa
+                        onClicked: Network.disconnectDevice(connRow.modelData.mac)
                     }
-
-                    Label {
-                        visible: root.connectedDev && root.connectedDev.battery >= 0
-                        text: (root.connectedDev ? root.connectedDev.battery : 0) + "%"
-                        role: "caption"
-                        isMono: true
-                        dim: true
-                    }
-
-                    Label {
-                        text: connMa.containsMouse ? I18n.tr("Disconnect") : ""
-                        role: "caption"
-                        color: Design.mauve
-                    }
-
-                    Icon {
-                        visible: !connMa.containsMouse
-                        text: "\u{f012c}"
-                        role: "caption"
-                        color: Design.mauve
-                    }
-                }
-
-                Clickable {
-                    id: connMa
-                    onClicked: if (root.connectedDev) Network.disconnectDevice(root.connectedDev.mac)
                 }
             }
 
             Item {
                 Layout.preferredHeight: Design.s(Design.space.xs)
-                visible: root.connectedDev !== null
+                visible: root.connectedDevs.length > 0
             }
 
             SectionLabel {
@@ -191,7 +198,7 @@ MiniView {
                         : (devRow.modelData.paired ? I18n.tr("Paired") : I18n.tr("Pair"))
                     role: "caption"
                     dim: !rowMa.containsMouse
-                    color: rowMa.containsMouse ? Design.mauve : Design.textDim
+                    color: rowMa.containsMouse ? Design.accent : Design.textDim
                 }
             }
 

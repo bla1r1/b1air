@@ -18,7 +18,7 @@ ColumnLayout {
     spacing: Design.s(Design.space.lg)
 
     property var autostartCustom: Settings.autostartCustom || []
-    property bool openGuideAtStartup: Settings.openGuideAtStartup || false
+    property bool openGuideAtStartup: Settings.openGuideAtStartup === true
     property bool showAppPicker: false
     property string appSearchQuery: ""
 
@@ -108,11 +108,9 @@ ColumnLayout {
     // would let you switch the desktop off from inside itself.
 
     // ── 2. Applications Autostart ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Autostart Applications")
-        subtitle: I18n.tr("Launch your favourite applications, background daemons, and scripts on login")
         icon: "\u{f009}"
-        accentColor: Design.mauve
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -123,27 +121,21 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
 
-                Label {
-                    text: I18n.tr("Startup Programs")
-                    weight: Design.weight.bold
-                    role: "subhead"
-                    Layout.fillWidth: true
-                }
-
-                ActionButton {
+                // No heading of its own: the group's title says it.
+                Button {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: section.showAppPicker ? I18n.tr("Close App List") : I18n.tr("Add Installed App…")
-                    tone: Design.sapphire
                     onActivated: section.showAppPicker = !section.showAppPicker
                 }
+                Item { Layout.fillWidth: true }
             }
 
             // ── Installed Apps Search & Picker Grid (Expanded on demand) ──────
             Rectangle {
                 visible: section.showAppPicker
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(220)
+                Layout.preferredHeight: Design.s(Design.width.list)
                 radius: Design.s(Design.radius.card)
                 color: Design.ground
                 border.color: Design.glassBorder
@@ -157,16 +149,16 @@ ColumnLayout {
                     // Search input
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(32)
+                        Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
                         color: Design.surface
-                        border.color: appSearchInput.activeFocus ? Design.sapphire : Design.tint(Design.line, 0.4)
+                        border.color: appSearchInput.activeFocus ? Design.accent : Design.tint(Design.line, 0.4)
                         border.width: 1
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: Design.s(6)
-                            spacing: Design.s(6)
+                            anchors.margins: Design.s(Design.space.xs)
+                            spacing: Design.s(Design.space.xs)
 
                             Icon { text: "󰍉"; role: "caption"; color: Design.textDim }
 
@@ -194,7 +186,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
-                        spacing: Design.s(4)
+                        spacing: Design.s(Design.space.xs)
                         model: section.allInstalledApps
 
                         delegate: Rectangle {
@@ -207,18 +199,18 @@ ColumnLayout {
                                      appPickerItem.model.exec.toLowerCase().includes(section.appSearchQuery)
 
                             width: ListView.view ? ListView.view.width : 0
-                            height: visible ? Design.s(36) : 0
-                            radius: Design.s(6)
+                            height: visible ? Design.s(Design.size.header) : 0
+                            radius: Design.s(Design.radius.ctl)
                             color: pickerMa.containsMouse ? Design.glassHover : "transparent"
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: Design.s(6)
-                                spacing: Design.s(8)
+                                anchors.margins: Design.s(Design.space.xs)
+                                spacing: Design.s(Design.space.sm)
 
                                 Image {
-                                    Layout.preferredWidth: Design.s(20)
-                                    Layout.preferredHeight: Design.s(20)
+                                    Layout.preferredWidth: Design.s(Design.size.mini)
+                                    Layout.preferredHeight: Design.s(Design.size.mini)
                                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                                     sourceSize: Qt.size(64, 64)
                                     source: appPickerItem.model.icon ? (appPickerItem.model.icon.startsWith("/") ? "file://" + appPickerItem.model.icon : "image://icon/" + appPickerItem.model.icon) : ""
@@ -230,7 +222,7 @@ ColumnLayout {
                                     visible: !parent.children[0].visible
                                     text: "󰄛"
                                     role: "caption"
-                                    color: Design.sapphire
+                                    color: Design.accent
                                 }
 
                                 Label {
@@ -238,7 +230,7 @@ ColumnLayout {
                                     weight: Design.weight.semibold
                                     role: "caption"
                                     elide: Text.ElideRight
-                                    Layout.preferredWidth: Design.s(140)
+                                    Layout.preferredWidth: Design.s(Design.width.field)
                                 }
 
                                 Label {
@@ -250,15 +242,14 @@ ColumnLayout {
                                     Layout.fillWidth: true
                                 }
 
-                                ActionButton {
+                                Button {
                                     icon: "󰐕"
                                     label: I18n.tr("Add")
-                                    tone: Design.sapphire
                                     onActivated: section.addCustomApp(appPickerItem.model.name, appPickerItem.model.exec, appPickerItem.model.icon)
                                 }
                             }
 
-                            MouseArea {
+                            Clickable {
                                 id: pickerMa
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -280,7 +271,7 @@ ColumnLayout {
                 // was cut off mid-path.
                 Field {
                     id: customNameInput
-                    Layout.preferredWidth: Design.s(150)
+                    Layout.preferredWidth: Design.s(Design.width.field)
                     placeholder: I18n.tr("Name")
                 }
 
@@ -292,15 +283,12 @@ ColumnLayout {
                     onAccepted: v => section.addCustomApp(customNameInput.text, v, "")
                 }
 
-                // Sized to its own text. ActionButton fills width by default,
-                // which is right when it is the only thing on its row and
-                // wrong here: it shared the row with the command field and
-                // took the space that field needs to be usable.
-                ActionButton {
+                // Sized to its own text: it shares the row with the command
+                // field, which needs the space to be usable.
+                Button {
                     Layout.fillWidth: false
                     icon: "󰐕"
                     label: I18n.tr("Add Binary")
-                    tone: Design.teal
                     onActivated: section.addCustomApp(customNameInput.text, customCmdInput.text, "")
                 }
             }
@@ -313,99 +301,59 @@ ColumnLayout {
                 color: Design.danger
                 text: section.customError
             }
+        }
 
-            // ── Active Startup Apps List ─────────────────────────────────────
-            Repeater {
-                model: section.autostartCustom || []
-                delegate: ColumnLayout {
-                    id: customAppItem
-                    required property var modelData
-                    required property int index
+        // ── Active Startup Apps List ─────────────────────────────────────────
+        Repeater {
+            model: section.autostartCustom || []
 
-                    Layout.fillWidth: true
-                    spacing: 0
+            SettingsRow {
+                id: customAppItem
+                required property var modelData
+                required property int index
 
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.tint(Design.line, 0.4); visible: customAppItem.index > 0 }
+                label: customAppItem.modelData.name || I18n.tr("Custom App")
+                note: customAppItem.modelData.command || ""
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(44)
-                        spacing: Design.s(Design.space.md)
-
-                        Icon { text: "󰄛"; role: "title"; color: Design.teal }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Label { text: customAppItem.modelData.name || I18n.tr("Custom App"); weight: Design.weight.semibold }
-                            Label { text: customAppItem.modelData.command || ""; role: "caption"; isMono: true; dim: true }
-                        }
-
-                        Toggle {
-                            checked: customAppItem.modelData.enabled !== false
-                            onToggled: section.toggleCustomApp(customAppItem.index)
-                        }
-
-                        // Icon-sized: ActionButton fills its row by default,
-                        // and this one took half the width of every entry.
-                        IconButton {
-                            icon: "󰆴"
-                            hoverTone: Design.danger
-                            onClicked: section.removeCustomApp(customAppItem.index)
-                        }
-                    }
+                Switch {
+                    checked: customAppItem.modelData.enabled !== false
+                    onToggled: section.toggleCustomApp(customAppItem.index)
+                }
+                // Icon-sized: a full-width button here took half the width
+                // of every entry.
+                IconButton {
+                    icon: "󰆴"
+                    hoverTone: Design.danger
+                    onClicked: section.removeCustomApp(customAppItem.index)
                 }
             }
         }
     }
 
     // ── 3. Welcome & User Guide ──────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Welcome & first-run setup")
-        subtitle: I18n.tr("The shortcut guide at login, and the setup a new account goes through")
         icon: "\u{f02d}"
-        accentColor: Design.yellow
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Icon { visible: false; text: "󰋖"; role: "title"; color: Design.yellow }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: I18n.tr("Open Guide on Login") }
-                }
-                Toggle {
-                    checked: section.openGuideAtStartup
-                    onToggled: {
-                        const next = !section.openGuideAtStartup;
-                        section.openGuideAtStartup = next;
-                        Settings.set("openGuideAtStartup", next);
-                    }
-                }
+        SwitchRow {
+            label: I18n.tr("Show the welcome at login")
+            note: I18n.tr("Where things are, and the keys for them. Super+H opens it any time.")
+            checked: section.openGuideAtStartup
+            onToggled: {
+                const next = !section.openGuideAtStartup;
+                section.openGuideAtStartup = next;
+                Settings.set("openGuideAtStartup", next);
             }
+        }
 
-            // The first-run setup again, every step: language, Wi-Fi, theme,
-            // wallpaper, account, fingerprint (SetupWizard.qml).
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-                Icon { visible: false; text: "\u{f0493}"; role: "title"; color: Design.yellow }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(2)
-                    Label { text: I18n.tr("First-run setup") }
-                }
-                ActionButton {
-                    Layout.fillWidth: false
-                    icon: "\u{f040a}"
-                    label: I18n.tr("Run it again")
-                    onActivated: Quickshell.execDetached(["b1air-settings", "setup"])
-                }
+        // The first-run setup again, every step: language, Wi-Fi, theme,
+        // wallpaper, account, fingerprint (SetupWizard.qml).
+        SettingsRow {
+            label: I18n.tr("First-run setup")
+            Button {
+                icon: "\u{f040a}"
+                label: I18n.tr("Run it again")
+                onActivated: Quickshell.execDetached(["b1air-settings", "setup"])
             }
         }
     }

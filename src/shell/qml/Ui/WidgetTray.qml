@@ -37,7 +37,7 @@ Rectangle {
         Label {
             text: tray.items.length > 0 ? I18n.tr("Add a widget") : I18n.tr("Every widget is on the panel")
             role: "caption"
-            weight: Design.weight.bold
+            weight: Design.weight.semibold
             color: tray.items.length > 0 ? Design.accent : Design.textDim
         }
 
@@ -51,17 +51,17 @@ Rectangle {
 
                 Rectangle {
                     required property var modelData
-                    height: Design.s(26)
-                    width: chipRow.implicitWidth + Design.s(16)
+                    height: Design.s(Design.size.xs)
+                    width: chipRow.implicitWidth + Design.s(Design.space.lg)
                     radius: height / 2
-                    color: chipMa.containsMouse ? Design.tint(Design.accent, 0.30) : Design.raised
+                    color: chipMa.containsMouse ? Design.tint(Design.accent, 0.30) : Design.well
                     border.color: Design.tint(Design.accent, 0.5)
                     border.width: 1
 
                     Row {
                         id: chipRow
                         anchors.centerIn: parent
-                        spacing: Design.s(6)
+                        spacing: Design.s(Design.space.xs + Design.space.xxs)
                         Icon { text: "\u{f0415}"; role: "caption"; color: Design.accent; anchors.verticalCenter: parent.verticalCenter }
                         Icon {
                             visible: text !== ""
@@ -73,7 +73,7 @@ Rectangle {
                         Label { text: modelData.title; role: "caption"; weight: Design.weight.semibold; anchors.verticalCenter: parent.verticalCenter }
                     }
 
-                    MouseArea {
+                    Clickable {
                         id: chipMa
                         anchors.fill: parent
                         hoverEnabled: true

@@ -14,8 +14,8 @@ TARGET_CONTROLLER = ../tools/controller
 
 # Where the suite is installed.
 #
-# PREFIX is the binary directory and DESTDIR the data root under it — desktop
-# entries, icons, the QML the apps search. Defaults are the per-user paths, so
+# PREFIX is the binary directory and DATADIR the data root — desktop entries,
+# icons, the QML the apps search. Defaults are the per-user paths, so
 # a developer's `make install` never needs root and never touches a system
 # directory. install.sh passes the system ones:
 #
@@ -35,6 +35,13 @@ CONFDIR ?= $(HOME)/.config
 # qs-compat. A system install has to pass the second; DATADIR/b1air-qs-compat
 # under /usr/share is a directory nothing reads.
 COMPATDIR ?= $(DATADIR)/b1air-qs-compat
+# A staging root for packaging (packaging/arch/b1air/PKGBUILD): every file
+# lands under it, while the paths written into the files — Exec= lines, the
+# podsync wrapper — stay the real ones. Empty for a direct install. Set, it
+# also skips what belongs to the live system and not to a package: the
+# caches (pacman's hooks refresh them), the user's environment.d, reloading
+# a running shell.
+DESTDIR ?=
 
 all: suite controller
 
@@ -61,18 +68,22 @@ daemon apps shell daemon-target shell-target: suite
 # root-owned files in build/ for the next ordinary build to trip over.
 install:
 	@test -x $(BUILD)/bin/b1air-daemon || { echo "Nothing built yet: run make first." >&2; exit 1; }
-	mkdir -p $(PREFIX)
+	mkdir -p $(DESTDIR)$(PREFIX)
 	# Whatever CMake built, so a new app needs no edit here.
-	install -m 755 $(BUILD)/bin/b1air-* $(PREFIX)/
-	mkdir -p $(QMLDIR)
+	install -m 755 $(BUILD)/bin/b1air-* $(DESTDIR)$(PREFIX)/
+	# The handlers Files opens Windows programs and downloaded packages with,
+	# and Spotlight's software search (scripts/: shell, so nothing to build).
+	install -m 755 scripts/b1air-run-windows scripts/b1air-windows scripts/b1air-install-package scripts/b1air-software \
+		scripts/b1air-gamemode-hook $(DESTDIR)$(PREFIX)/
+	mkdir -p $(DESTDIR)$(QMLDIR)
 	# -rlpt, not -a: run as root, -a kept the checkout's owner, and the
 	# system QML tree every account loads — the polkit dialog among it —
 	# belonged to whoever had cloned the repository. The polkit agent will
 	# not show a dialog it does not trust (not root's), so it showed none.
-	rsync -rlpt shell/qml/ $(QMLDIR)/
+	rsync -rlpt shell/qml/ $(DESTDIR)$(QMLDIR)/
 	# Gone from the tree, native now: the lock screen (b1air-lock) and the
 	# screenshot overlay (b1air-shot).
-	rm -f $(QMLDIR)/Lock.qml $(QMLDIR)/ScreenshotOverlay.qml
+	rm -f $(DESTDIR)$(QMLDIR)/Lock.qml $(DESTDIR)$(QMLDIR)/ScreenshotOverlay.qml
 	# The app windows (and their parts, named after the app: FilesDevicePane)
 	# live beside their backends under apps/, and the search
 	# path expects every window in one directory — so they are copied in here
@@ -80,69 +91,75 @@ install:
 	# `cp -n`: a stale file in this directory shadows the installed one for
 	# ever, because it is searched before /usr/share/b1air-shell/qml.
 	find apps -mindepth 2 -maxdepth 2 -name '*.qml' \
-		-exec install -m 644 {} $(QMLDIR)/ \;
+		-exec install -m 644 {} $(DESTDIR)$(QMLDIR)/ \;
 	# The plugin-free Quickshell module tree the standalone apps import ahead of
 	# the real one. Deliberately not under .config/b1air-shell: the `quickshell`
 	# process searches there, and it must keep finding the real module.
-	mkdir -p $(COMPATDIR)
-	rsync -rlpt compat/qml/ $(COMPATDIR)/
+	mkdir -p $(DESTDIR)$(COMPATDIR)
+	rsync -rlpt compat/qml/ $(DESTDIR)$(COMPATDIR)/
 	# What an earlier -a install left owned by a user. System trees only: a
 	# `sudo make install` into someone's home must not hand it to root.
-	@if [ "$$(id -u)" = 0 ]; then for d in $(QMLDIR) $(COMPATDIR); do \
+	@if [ "$$(id -u)" = 0 ]; then for d in $(DESTDIR)$(QMLDIR) $(DESTDIR)$(COMPATDIR); do \
 		case "$$d" in /usr/*) chown -R root:root "$$d" ;; esac; done; fi
 	# Desktop entries, with the binary's full path. They said `Exec=b1air-term`
 	# and relied on ~/.local/bin being on PATH, which is true inside the sway
 	# session and false in KDE or GNOME — where the apps did not start from the
 	# menu at all. environment.d fixes PATH for systemd-started sessions; the
 	# full path fixes it for everything else.
-	mkdir -p $(DATADIR)/applications
-	for f in apps/*/b1air-*.desktop; do \
+	mkdir -p $(DESTDIR)$(DATADIR)/applications
+	for f in apps/*/b1air-*.desktop scripts/b1air-*.desktop; do \
 		sed -e 's|^Exec=b1air-|Exec=$(PREFIX)/b1air-|' -e 's|^TryExec=b1air-|TryExec=$(PREFIX)/b1air-|' \
-			"$$f" > $(DATADIR)/applications/$$(basename "$$f"); \
+			"$$f" > $(DESTDIR)$(DATADIR)/applications/$$(basename "$$f"); \
 	done
-	-update-desktop-database $(DATADIR)/applications >/dev/null 2>&1
+	-[ -n "$(DESTDIR)" ] || update-desktop-database $(DATADIR)/applications >/dev/null 2>&1
 	# Each app's icon, from its own directory: into the icon theme for the
 	# entries' Icon=b1air-<app>, and beside the QML for the launcher and the
 	# taskbar, which load them by file.
-	mkdir -p $(DATADIR)/icons/hicolor/scalable/apps $(QMLDIR)/icons/apps
-	install -m 644 apps/*/b1air-*.svg $(DATADIR)/icons/hicolor/scalable/apps/
-	install -m 644 apps/*/b1air-*.svg $(QMLDIR)/icons/apps/
-	-gtk-update-icon-cache -q -t -f $(DATADIR)/icons/hicolor >/dev/null 2>&1
+	mkdir -p $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps $(DESTDIR)$(QMLDIR)/icons/apps
+	install -m 644 apps/*/b1air-*.svg $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/
+	install -m 644 apps/*/b1air-*.svg $(DESTDIR)$(QMLDIR)/icons/apps/
+	-[ -n "$(DESTDIR)" ] || gtk-update-icon-cache -q -t -f $(DATADIR)/icons/hicolor >/dev/null 2>&1
 	# The lock screens' fingerprint PAM file (pam/), read from here rather
 	# than /etc/pam.d.
-	mkdir -p $(DATADIR)/b1air/pam
-	install -m 644 pam/b1air-fingerprint $(DATADIR)/b1air/pam/
-	install -m 755 pam/b1air-empty-password $(DATADIR)/b1air/pam/
+	mkdir -p $(DESTDIR)$(DATADIR)/b1air/pam
+	install -m 644 pam/b1air-fingerprint $(DESTDIR)$(DATADIR)/b1air/pam/
+	install -m 755 pam/b1air-empty-password $(DESTDIR)$(DATADIR)/b1air/pam/
 	# The cursor theme, built from src/cursors by src/cursors/build.py. cp -a so
 	# the seventy-odd alias names stay symlinks to the fifteen drawings.
-	# The icon font (tools/build-symbols.py builds it).
-	mkdir -p $(DATADIR)/fonts/b1air
-	install -m 644 ../.local/share/fonts/b1air-symbols.ttf $(DATADIR)/fonts/b1air/
-	-fc-cache -f $(DATADIR)/fonts/b1air >/dev/null 2>&1
-	rm -rf $(DATADIR)/icons/b1air-cursors
-	cp -a ../.local/share/icons/b1air-cursors $(DATADIR)/icons/
+	# The icon font (tools/build-symbols.py builds it), with the licences of
+	# the fonts its glyphs come from: the OFL asks that its text go with them.
+	mkdir -p $(DESTDIR)$(DATADIR)/fonts/b1air
+	install -m 644 ../.local/share/fonts/b1air-symbols.ttf ../.local/share/fonts/LICENSE-OFL.txt \
+		../.local/share/fonts/LICENSE-nerd-fonts.md ../.local/share/fonts/LICENSE-lucide.txt \
+		$(DESTDIR)$(DATADIR)/fonts/b1air/
+	-[ -n "$(DESTDIR)" ] || fc-cache -f $(DATADIR)/fonts/b1air >/dev/null 2>&1
+	rm -rf $(DESTDIR)$(DATADIR)/icons/b1air-cursors
+	cp -a ../.local/share/icons/b1air-cursors $(DESTDIR)$(DATADIR)/icons/
 	# The B1air.Daemon QML module goes on Qt's import path, which only root can
 	# write. A per-user install leaves it to install.sh, which asks for sudo.
-	# rsync, not cp: cp wrote the new plugin into the old file, the one the
-	# running shell has mapped, and the shell crashed (SIGSEGV) on every
-	# install. rsync writes beside it and renames: the shell keeps the old
-	# copy until it restarts below.
+	# A package stages it like everything else. Otherwise rsync, not cp: cp
+	# wrote the new plugin into the old file, the one the running shell has
+	# mapped, and the shell crashed (SIGSEGV) on every install. rsync writes
+	# beside it and renames: the shell keeps the old copy until it restarts below.
 	@qt_qml="$$(cat $(BUILD)/qt-qml-dir 2>/dev/null)"; \
-	if [ -n "$$qt_qml" ] && [ -w "$$qt_qml" ]; then \
+	if [ -n "$$qt_qml" ] && [ -n "$(DESTDIR)" ]; then \
+		mkdir -p "$(DESTDIR)$$qt_qml" && cp -r $(BUILD)/qml/B1air "$(DESTDIR)$$qt_qml/"; \
+	elif [ -n "$$qt_qml" ] && [ -w "$$qt_qml" ]; then \
 		rsync -rlpt $(BUILD)/qml/B1air "$$qt_qml/" && echo "B1air.Daemon -> $$qt_qml"; \
 	fi
 	# podsync (../third_party/podsync, a submodule): the iPod engine Files
 	# drives through b1air-podsync. Python, so it is copied rather than built;
 	# the wrapper names where, as the desktop entries name the binaries.
 	@if [ -f ../third_party/podsync/podsync/cli.py ]; then \
-		rm -rf $(DATADIR)/b1air/podsync && mkdir -p $(DATADIR)/b1air/podsync && \
-		rsync -rlpt --exclude __pycache__ ../third_party/podsync/podsync $(DATADIR)/b1air/podsync/ && \
+		rm -rf $(DESTDIR)$(DATADIR)/b1air/podsync && mkdir -p $(DESTDIR)$(DATADIR)/b1air/podsync && \
+		rsync -rlpt --exclude __pycache__ ../third_party/podsync/podsync $(DESTDIR)$(DATADIR)/b1air/podsync/ && \
 		printf '#!/bin/sh\n# podsync, installed by b1air (src/Makefile)\nPYTHONPATH=%s/b1air/podsync$${PYTHONPATH:+:$$PYTHONPATH} exec python3 -m podsync "$$@"\n' \
-			'$(DATADIR)' > $(PREFIX)/b1air-podsync && chmod 755 $(PREFIX)/b1air-podsync && \
-		echo "podsync -> $(DATADIR)/b1air/podsync"; \
+			'$(DATADIR)' > $(DESTDIR)$(PREFIX)/b1air-podsync && chmod 755 $(DESTDIR)$(PREFIX)/b1air-podsync && \
+		echo "podsync -> $(DESTDIR)$(DATADIR)/b1air/podsync"; \
 	else echo "third_party/podsync is empty (git submodule update --init): no iPod support." >&2; fi
-	mkdir -p $(CONFDIR)/environment.d
-	install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/
+	# A system package does not need it: its binaries are in /usr/bin.
+	@[ -n "$(DESTDIR)" ] || { mkdir -p $(CONFDIR)/environment.d && \
+		install -m 644 ../.config/environment.d/10-b1air-local-bin.conf $(CONFDIR)/environment.d/; }
 	# What is running goes over to what was installed, as the person whose
 	# session it is: under sudo, `id -u` was root's, and neither the shell nor
 	# the daemon was ever found. The session daemon execs the new binary in
@@ -150,14 +167,15 @@ install:
 	# next login); then the shell, which keeps its old singletons while pages
 	# load the new files, is restarted by it. By name: quickshell rewrites its
 	# command line to its own path, so the `-p …/Main.qml` this looked for
-	# was never there and the reload never happened either.
-	-@u="$${SUDO_USER:-$$(id -un)}"; uid="$$(id -u "$$u")"; \
+	# was never there and the reload never happened either. Not when staging
+	# a package: nothing running is the package's.
+	-@[ -n "$(DESTDIR)" ] || { u="$${SUDO_USER:-$$(id -un)}"; uid="$$(id -u "$$u")"; \
 	as_user() { if [ "$$(id -u)" = 0 ] && [ "$$uid" != 0 ]; then \
 		sudo -u "$$u" env XDG_RUNTIME_DIR=/run/user/$$uid "$$@"; else "$$@"; fi; }; \
 	as_user $(PREFIX)/b1air-daemon session-restart >/dev/null && echo "Session daemon restarted"; \
 	sleep 1; \
 	for p in $$(pgrep -u "$$uid" -x quickshell); do \
-		as_user quickshell ipc --pid $$p call main forceReload >/dev/null 2>&1; done; true
+		as_user quickshell ipc --pid $$p call main forceReload >/dev/null 2>&1; done; true; }
 
 # The static checks run anywhere; shell-boot needs a Wayland session and skips
 # itself without one.
@@ -168,6 +186,6 @@ clean:
 	rm -rf $(BUILD) $(TARGET_CONTROLLER)
 	# What the hand-written daemon build and the old per-shell CMake tree left.
 	rm -rf shell/build b1air-daemon b1air-polkit-agent b1air-secret-service \
-		daemon/*.o daemon/*.d third_party/sqlite/sqlite3.o
+		daemon/*.o daemon/*.d
 
 .PHONY: all suite controller daemon apps shell daemon-target shell-target install smoke clean

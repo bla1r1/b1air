@@ -1,0 +1,3 @@
+# The gaming edition on openSUSE: what it adds to default. Steam is in the
+# non-OSS repository; without it, Steam comes from Flathub (flatpak.txt).
+?steam gamemode mangohud ?gamescope

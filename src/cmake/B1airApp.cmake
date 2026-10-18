@@ -3,7 +3,7 @@
 # One application of the suite: builds b1air-<name> from the sources in the
 # calling directory, the way every app is built — Qt Quick on Wayland, moc on,
 # the shared headers in src/common on the include path. Anything beyond that
-# (Multimedia, libarchive, a vendored library) goes in LIBS.
+# (Multimedia, libarchive, libvterm) goes in LIBS.
 #
 # The window (<Name>Window.qml), desktop entry (b1air-<name>.desktop) and icon
 # (b1air-<name>.svg) sit beside the sources; `make install` picks them up from

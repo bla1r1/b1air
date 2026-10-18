@@ -88,8 +88,8 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        implicitWidth: Design.s(400)
-        implicitHeight: body.implicitHeight + Design.s(40)
+        implicitWidth: Design.s(Design.width.menuMax)
+        implicitHeight: body.implicitHeight + Design.s(Design.size.row)
         radius: Design.s(Design.radius.card)
         color: Design.surface
         border.color: Design.glassBorder
@@ -98,16 +98,16 @@ PanelWindow {
         ColumnLayout {
             id: body
             anchors.fill: parent
-            anchors.margins: Design.s(20)
-            spacing: Design.s(14)
+            anchors.margins: Design.s(Design.space.lg)
+            spacing: Design.s(Design.space.md)
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: Design.s(2)
+                spacing: Design.s(Design.space.xxs)
                 Label {
                     Layout.fillWidth: true
                     text: win.creating ? I18n.tr("Save a passkey on your phone") : I18n.tr("Sign in with your phone")
-                    weight: Design.weight.bold
+                    weight: Design.weight.semibold
                     role: "subhead"
                     wrapMode: Text.WordWrap
                 }
@@ -124,8 +124,8 @@ PanelWindow {
             // reads a light code on dark far less reliably.
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: Design.s(248)
-                Layout.preferredHeight: Design.s(248)
+                Layout.preferredWidth: Design.s(Design.width.menuMin)
+                Layout.preferredHeight: Design.s(Design.width.menuMin)
                 radius: Design.s(Design.radius.ctl)
                 color: "#ffffff"
                 visible: win.problem === ""
@@ -133,7 +133,7 @@ PanelWindow {
                 Canvas {
                     id: qr
                     anchors.fill: parent
-                    anchors.margins: Design.s(14)
+                    anchors.margins: Design.s(Design.space.md)
                     onPaint: {
                         const ctx = getContext("2d");
                         ctx.reset();
@@ -184,7 +184,7 @@ PanelWindow {
                 color: win.problem !== "" ? Design.dangerText : Design.text
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: true
                 label: win.problem !== "" ? I18n.tr("Close") : I18n.tr("Cancel")
                 onActivated: win.cancel()

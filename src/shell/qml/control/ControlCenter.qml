@@ -52,11 +52,11 @@ PopupShell {
     property bool editing: false
 
     readonly property var tileIds: ["wifi", "bluetooth", "dnd", "nightlight", "powermode",
-                                    "gamemode", "caffeine", "screenshot", "dropper", "remote"]
+                                    "gamemode", "caffeine", "screenshot", "dropper", "remote", "vpn"]
     readonly property var tileById: ({
         "wifi": wifiTile, "bluetooth": btTile, "dnd": dndTile, "nightlight": nightTile,
         "powermode": powerTile, "gamemode": gameTile, "caffeine": caffeineTile,
-        "screenshot": screenTile, "dropper": pickerTile, "remote": remoteTile
+        "screenshot": screenTile, "dropper": pickerTile, "remote": remoteTile, "vpn": vpnTile
     })
 
     /**
@@ -84,6 +84,7 @@ PopupShell {
         if (id === "bluetooth") return Network.hasBluetooth;
         if (id === "powermode") return Power.hasBattery || Power.hasProfiles;
         if (id === "remote") return Remote.available || Remote.rustdeskInstalled;
+        if (id === "vpn") return Vpn.available;
         return true;
     }
 
@@ -231,7 +232,8 @@ PopupShell {
         "dnd": ["Do Not Disturb", "\u{f009b}"], "nightlight": ["Night Light", "\u{f0599}"],
         "powermode": ["Power Mode", "\u{f0e4}"], "gamemode": ["Game Mode", "\u{f11b}"],
         "caffeine": ["Caffeine", "\u{f0f4}"], "screenshot": ["Screenshot", "\u{f016d}"],
-        "dropper": ["Color Dropper", "\u{f0592}"], "remote": ["Remote Desktop", "\u{f0379}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
+        "dropper": ["Color Dropper", "\u{f0592}"], "remote": ["Remote Desktop", "\u{f0379}"],
+        "vpn": ["VPN", "\u{f0498}"], "sliders": ["Brightness & Volume", "\u{f00df}"],
         "weather": ["Weather", "\u{f0590}"], "media": ["Now Playing", "\u{f0025}"],
         "session": ["Power Buttons", "\u{f0425}"]
     })
@@ -392,7 +394,8 @@ PopupShell {
                 Icon {
                     anchors.centerIn: parent
                     text: tile.glyph
-                    role: tile.tall ? "title" : "subhead"
+                    // About half the disc, as a control centre's glyphs are.
+                    role: tile.tall ? "display" : "title"
                     color: tile.glyphTone
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 }
@@ -496,13 +499,13 @@ PopupShell {
             Icon {
                 text: "\u{f062e}"   // sliders; the bar's button uses the same
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {
                 text: center.editing ? I18n.tr("Arrange") : I18n.tr("Control Center")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 color: center.editing ? Design.accent : Design.text
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -520,7 +523,9 @@ PopupShell {
             }
 
             BatteryPill {
-                visible: !center.editing
+                // Its own `visible: Power.hasBattery` is replaced by this
+                // binding, not combined with it: a desktop showed "0%".
+                visible: Power.hasBattery && !center.editing
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: center.currentView = "power"
             }
@@ -670,9 +675,6 @@ PopupShell {
                 detail: Power.profile === "performance" ? I18n.tr("Performance")
                       : (Power.profile === "power-saver" ? I18n.tr("Power Saver") : I18n.tr("Balanced"))
 
-                readonly property color profileTone: Power.profile === "performance" ? Design.red
-                    : (Power.profile === "power-saver" ? Design.green : Design.sapphire)
-
                 onToggled: Power.setProfile(Power.profile === "balanced" ? "performance"
                                           : (Power.profile === "performance" ? "power-saver" : "balanced"))
                 onActivated: center.currentView = "power"
@@ -731,6 +733,28 @@ PopupShell {
                     // No password saved yet: the page where one is set.
                     function onNeedsSetup() { center.openFull("settings", "remote"); }
                 }
+            }
+
+            // On for whichever VPN is up; the chevron opens Settings → Network,
+            // where each one is listed. Hidden with nothing set up to connect.
+            QuickTile {
+                id: vpnTile
+                Layout.fillWidth: true
+                widgetId: "vpn"
+                Layout.row: center.placeOf("vpn").row
+                Layout.column: center.placeOf("vpn").col
+                Layout.columnSpan: center.placeOf("vpn").cols
+                Layout.rowSpan: center.placeOf("vpn").rows
+                Layout.preferredHeight: center.tileHeightFor("vpn")
+                visible: center.tileShown("vpn")
+                glyph: "\u{f0498}"
+                title: I18n.tr("VPN")
+                on: Vpn.active
+                detail: Vpn.active ? Vpn.activeNames.join(", ")
+                      : Vpn.tailscaleState === "NeedsLogin" && Vpn.connections.length === 0 ? I18n.tr("Sign in to Tailscale")
+                      : I18n.tr("Off")
+                onToggled: Vpn.toggle()
+                onActivated: center.openFull("settings", "network")
             }
 
             QuickTile {
@@ -861,9 +885,8 @@ PopupShell {
             Slider {
                 visible: Power.hasBacklight
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: Power.brightness
-                tone: Design.yellow
                 icon: "\u{f00df}"
                 label: I18n.tr("Brightness")
                 onMoved: pct => Power.setBrightness(pct)
@@ -878,7 +901,7 @@ PopupShell {
 
                 Slider {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(Design.size.ctl)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     value: Audio.volumePercent
                     muted: Audio.muted
                     icon: Audio.muted ? "\u{f075f}" : "\u{f057f}"
@@ -889,8 +912,8 @@ PopupShell {
                 }
 
                 Rectangle {
-                    Layout.preferredWidth: Design.s(Design.size.ctl)
-                    Layout.preferredHeight: Design.s(Design.size.ctl)
+                    Layout.preferredWidth: Design.s(Design.size.md)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
                     color: soundBtnMa.containsMouse ? Design.glassHover : Design.glassCard
                     border.color: Design.glassBorder
@@ -919,7 +942,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.row: center.cardRow("weather")
             visible: center.cardShown("weather")
-            Layout.preferredHeight: Design.s(52)
+            Layout.preferredHeight: Design.s(Design.size.rowTall)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
             border.color: Design.glassBorder
@@ -927,24 +950,23 @@ PopupShell {
 
             CardFrame { cardId: "weather" }
 
+            // Inset as a tile is, glyph in a disc-wide column: its text starts
+            // where the tiles' text does.
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.md)
+                anchors.leftMargin: Design.s(Design.space.sm)
                 anchors.rightMargin: Design.s(Design.space.md)
-                spacing: Design.s(Design.space.md)
+                spacing: Design.s(Design.space.sm)
 
-                Rectangle {
-                    Layout.preferredWidth: Design.s(34)
-                    Layout.preferredHeight: Design.s(34)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.tint(Design.yellow, 0.15)
-
-                    Icon {
-                        anchors.centerIn: parent
-                        text: Weather.icon
-                        role: "subhead"
-                        color: Design.yellow
-                    }
+                // The weather's own glyph, in the text colour: it was on a
+                // yellow tile, with a green "Live" badge at the end of the
+                // row that told nothing the row did not.
+                Icon {
+                    Layout.preferredWidth: Design.s(Design.size.knob)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Weather.icon
+                    role: "subhead"
+                    color: Design.textDim
                 }
 
                 ColumnLayout {
@@ -966,11 +988,6 @@ PopupShell {
                         elide: Text.ElideRight
                     }
                 }
-
-                Badge {
-                    text: I18n.tr("Live")
-                    tone: Design.ok
-                }
             }
         }
 
@@ -979,7 +996,9 @@ PopupShell {
             id: mediaCard
             Layout.fillWidth: true
             Layout.row: center.cardRow("media")
-            visible: center.cardShown("media")
+            // With no player there is nothing to control: the card was a
+            // 76px box saying so. Hidden then, except while arranging.
+            visible: center.cardShown("media") && (Media.hasPlayer || center.editing)
             Layout.preferredHeight: Design.s(Design.size.media)
             radius: Design.s(Design.radius.card)
             color: Design.glassCard
@@ -1020,11 +1039,14 @@ PopupShell {
 
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(36)
+                    Layout.preferredHeight: Design.s(Design.size.header)
 
+                    // Dimmed like the transport beside it: with no player
+                    // this is a note about the card, not a track.
                     ColumnLayout {
                         anchors.fill: parent
-                        spacing: 2
+                        spacing: Design.s(Design.space.xxs)
+                        opacity: Media.hasPlayer ? Design.opacity.full : Design.opacity.disabled
 
                         Label {
                             text: Media.track.title || (Media.hasPlayer ? I18n.tr("Nothing playing") : I18n.tr("No media player"))
@@ -1043,7 +1065,7 @@ PopupShell {
                         }
                     }
 
-                    MouseArea {
+                    Clickable {
                         anchors.fill: parent
                         enabled: Media.hasPlayer
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -1070,8 +1092,7 @@ PopupShell {
                         radius: width / 2
                         color: Design.accent
 
-                        scale: playMa.pressed ? 0.92 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing } }
+                        opacity: playMa.pressed ? 0.85 : 1.0
 
                         Icon {
                             anchors.centerIn: parent
@@ -1117,8 +1138,9 @@ PopupShell {
             readonly property bool tight: lockBtn.snugWidth + sleepBtn.snugWidth + rebootBtn.snugWidth
                                           + offBtn.snugWidth + spacing * 3 > width
 
-            ActionButton {
+            Button {
                 id: lockBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f033e}"
@@ -1126,8 +1148,9 @@ PopupShell {
                 onActivated: Daemon.lock()
             }
 
-            ActionButton {
+            Button {
                 id: sleepBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f04b2}"
@@ -1135,26 +1158,26 @@ PopupShell {
                 onActivated: Daemon.power("suspend")
             }
 
-            ActionButton {
+            Button {
                 id: rebootBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f0709}"
                 label: I18n.tr("Reboot")
-                iconTone: Design.peach
-                tone: Design.peach
+                // Red only on the "Sure?" step: until then these read as
+                // the actions beside them, as in the session menu.
                 destructive: true
                 onActivated: Daemon.power("reboot")
             }
 
-            ActionButton {
+            Button {
                 id: offBtn
+                Layout.fillWidth: true
                 iconOnly: sessionRow.tight
                 snug: sessionRow.snug
                 icon: "\u{f0425}"
-                label: I18n.tr("Off")
-                iconTone: Design.danger
-                tone: Design.danger
+                label: I18n.tr("Shut Down")
                 destructive: true
                 onActivated: Daemon.power("shutdown")
             }

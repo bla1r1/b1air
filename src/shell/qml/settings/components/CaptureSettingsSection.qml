@@ -26,133 +26,93 @@ ColumnLayout {
     }
 
     // ── 1. Storage & Output ──────────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Screenshot Destination & Format")
-        subtitle: I18n.tr("Configure where captured images are stored and their file formats")
         icon: "\u{f016d}"
-        accentColor: Design.pink
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Save Folder") }
-            }
-
-            Pill {
+        SettingsRow {
+            label: I18n.tr("Save Folder")
+            note: section.screenshotDir
+            Button {
                 label: I18n.tr("Open Folder")
                 icon: "\u{f07b}"
-                onClicked: Quickshell.execDetached(["xdg-open", section.screenshotDir])
+                onActivated: Quickshell.execDetached(["xdg-open", section.screenshotDir])
             }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Image Format") }
-            }
-
-            RowLayout {
-                spacing: Design.s(Design.space.xs)
-                Repeater {
-                    model: ["png", "jpg", "webp"]
-                    delegate: Pill {
-                        label: modelData.toUpperCase()
-                        active: section.screenshotFormat === modelData
-                        onClicked: {
-                            section.screenshotFormat = modelData;
-                            Settings.set("screenshotFormat", modelData);
-                        }
-                    }
+        SettingsRow {
+            label: I18n.tr("Image Format")
+            SegmentedControl {
+                size: "sm"
+                Layout.preferredWidth: Design.s(Design.width.segment)
+                model: [
+                    { id: "png",  label: "PNG" },
+                    { id: "jpg",  label: "JPG" },
+                    { id: "webp", label: "WEBP" }
+                ]
+                current: section.screenshotFormat
+                onPicked: function(id) {
+                    section.screenshotFormat = id;
+                    Settings.set("screenshotFormat", id);
                 }
             }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Save File to Disk") }
-            }
-
-            Toggle {
-                checked: section.screenshotSaveToFile
-                onToggled: {
-                    const next = !section.screenshotSaveToFile;
-                    section.screenshotSaveToFile = next;
-                    Settings.set("screenshotSaveToFile", next);
-                }
+        SwitchRow {
+            label: I18n.tr("Save File to Disk")
+            checked: section.screenshotSaveToFile
+            onToggled: {
+                const next = !section.screenshotSaveToFile;
+                section.screenshotSaveToFile = next;
+                Settings.set("screenshotSaveToFile", next);
             }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Copy to Clipboard") }
-            }
-
-            Toggle {
-                checked: section.screenshotCopyToClipboard
-                onToggled: {
-                    const next = !section.screenshotCopyToClipboard;
-                    section.screenshotCopyToClipboard = next;
-                    Settings.set("screenshotCopyToClipboard", next);
-                }
+        SwitchRow {
+            label: I18n.tr("Copy to Clipboard")
+            checked: section.screenshotCopyToClipboard
+            onToggled: {
+                const next = !section.screenshotCopyToClipboard;
+                section.screenshotCopyToClipboard = next;
+                Settings.set("screenshotCopyToClipboard", next);
             }
         }
     }
 
     // ── 2. Quick Capture & Timing ────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Capture Actions & Delay")
-        subtitle: I18n.tr("Test capture triggers or adjust delay for dropdown menus")
         icon: "\u{f002}"
-        accentColor: Design.teal
 
-        Stepper {
+        SettingsRow {
             label: I18n.tr("Capture Delay")
-            valueText: section.screenshotDelay === 0 ? I18n.tr("Instant") : I18n.tr("%1 sec", section.screenshotDelay)
-            onDecrement: {
-                const next = Math.max(0, section.screenshotDelay - 1);
-                section.screenshotDelay = next;
-                Settings.set("screenshotDelay", next);
-            }
-            onIncrement: {
-                const next = Math.min(10, section.screenshotDelay + 1);
-                section.screenshotDelay = next;
-                Settings.set("screenshotDelay", next);
+            Stepper {
+                valueText: section.screenshotDelay === 0 ? I18n.tr("Instant") : I18n.tr("%1 sec", section.screenshotDelay)
+                onDecrement: {
+                    const next = Math.max(0, section.screenshotDelay - 1);
+                    section.screenshotDelay = next;
+                    Settings.set("screenshotDelay", next);
+                }
+                onIncrement: {
+                    const next = Math.min(10, section.screenshotDelay + 1);
+                    section.screenshotDelay = next;
+                    Settings.set("screenshotDelay", next);
+                }
             }
         }
 
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+        // Commands, not settings: a row of their own, under the delay
+        // they use.
+        SettingsRow {
+            label: I18n.tr("Take a screenshot")
+            Button {
                 icon: "\u{f0b2}"
-                label: I18n.tr("Capture Area")
-                tone: Design.pink
+                label: I18n.tr("Area")
                 onActivated: section.takeScreenshot("area")
             }
-
-            ActionButton {
+            Button {
                 icon: "\u{f065}"
-                label: I18n.tr("Capture Full Screen")
-                tone: Design.teal
+                label: I18n.tr("Full Screen")
                 onActivated: section.takeScreenshot("full")
             }
         }

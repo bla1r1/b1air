@@ -67,27 +67,19 @@ endif()
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(B1airApp)
 
-# ── Vendored C libraries ─────────────────────────────────────────────────────
-# Their own flags on purpose — upstream is not warning-clean under the
-# -Wall -Wextra this project holds its own code to.
+# ── Libraries from the distribution ──────────────────────────────────────────
+# Nothing of anyone else's is carried in this tree: SQLite, JSON, libvterm and
+# the image decoders are the distribution's packages (packages/*.txt), which
+# get their security fixes from it.
 
-# SQLite, compiled in rather than linked against the system libsqlite3. Public
-# domain, and the amalgamation is what upstream publishes for exactly this.
-add_library(b1air-sqlite STATIC third_party/sqlite/sqlite3.c)
-target_include_directories(b1air-sqlite SYSTEM PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite)
-target_compile_options(b1air-sqlite PRIVATE -w)
-target_compile_definitions(b1air-sqlite PRIVATE
-    SQLITE_THREADSAFE=1
-    SQLITE_OMIT_LOAD_EXTENSION=1
-    SQLITE_DQS=0
-    SQLITE_DEFAULT_MEMSTATUS=0
-    SQLITE_LIKE_DOESNT_MATCH_BLOBS
-    SQLITE_MAX_EXPR_DEPTH=0
-    # Full-text search, for the file index's trigram table (daemon/file_index).
-    SQLITE_ENABLE_FTS5
-)
-target_link_libraries(b1air-sqlite PUBLIC Threads::Threads m)
+# SQLite for the FocusTime database and the file index; 3.34 for FTS5's
+# trigram tokenizer, which every distribution builds in.
+pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3>=3.34)
+add_library(b1air-sqlite INTERFACE)
+target_link_libraries(b1air-sqlite INTERFACE PkgConfig::SQLITE)
+
+# nlohmann/json, header-only.
+find_package(nlohmann_json 3.10 REQUIRED)
 
 add_subdirectory(daemon)
 add_subdirectory(qmlplugin)

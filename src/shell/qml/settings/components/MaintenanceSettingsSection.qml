@@ -159,42 +159,36 @@ ColumnLayout {
     // "Sync UI & Packages" ran an update that did not pull. It now says what
     // the check found once it has, lists what an update would bring, and the
     // button pulls (and says why it cannot, when it cannot).
-    Card {
+    SettingsGroup {
         visible: section.part === "updates"
         title: I18n.tr("Desktop Updates")
         subtitle: section.dotRemote ? I18n.tr("This desktop's own code and configuration, from %1", section.dotRemote)
                                      : I18n.tr("This desktop's own code and configuration")
         icon: "\u{f021}"
-        accentColor: section.dotfilesUpdateAvail ? Design.ok : Design.sapphire
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
+        // The state is the row; Update now is offered only when there is
+        // something to update, rather than drawn disabled as "Nothing to update".
+        SettingsRow {
+            label: section.dotChecking ? I18n.tr("Checking…")
+                  : !section.dotFound ? I18n.tr("Repository not found — run install.sh from your clone once")
+                  : section.dotBehind > 0 ? I18n.trn("%1 new change", "%1 new changes", section.dotBehind)
+                  : section.dotFetchOk ? I18n.tr("Up to date") : I18n.tr("Could not reach the remote")
+            note: (!section.dotChecking && section.dotFound)
+                  ? I18n.tr("On %1 at %2", section.dotBranch, section.dotHash)
+                    + (section.dotAhead > 0 ? " · " + I18n.trn("%1 local commit not pushed", "%1 local commits not pushed", section.dotAhead) : "")
+                  : ""
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label {
-                    text: section.dotChecking ? I18n.tr("Checking…")
-                          : !section.dotFound ? I18n.tr("Repository not found — run install.sh from your clone once")
-                          : section.dotBehind > 0 ? I18n.trn("%1 new change", "%1 new changes", section.dotBehind)
-                          : section.dotFetchOk ? I18n.tr("Up to date") : I18n.tr("Could not reach the remote")
-                    weight: Design.weight.semibold
-                    color: section.dotfilesUpdateAvail ? Design.ok : Design.text
-                }
-                Label {
-                    visible: !section.dotChecking && section.dotFound
-                    text: I18n.tr("On %1 at %2", section.dotBranch, section.dotHash)
-                          + (section.dotAhead > 0 ? " · " + I18n.trn("%1 local commit not pushed", "%1 local commits not pushed", section.dotAhead) : "")
-                    role: "caption"
-                    dim: true
-                }
-            }
-
-            Pill {
+            Button {
                 label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
+            }
+            Button {
+                visible: section.dotCanUpdate
+                variant: "primary"
+                icon: "\u{f06b0}"
+                label: I18n.tr("Update now")
+                onActivated: section.runDotfilesUpdate()
             }
         }
 
@@ -227,145 +221,180 @@ ColumnLayout {
             wrapMode: Text.WordWrap
         }
 
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
-                icon: "\u{f06b0}"
-                label: section.dotCanUpdate ? I18n.tr("Update now") : I18n.tr("Nothing to update")
-                tone: section.dotCanUpdate ? Design.ok : Design.textDim
-                enabled: section.dotCanUpdate
-                onActivated: section.runDotfilesUpdate()
-            }
-
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Backups")
+            Button {
                 icon: "\u{f07c}"
                 label: I18n.tr("View Backups")
-                tone: Design.textDim
                 onActivated: section.viewBackups()
             }
         }
     }
 
     // ── Moving this configuration to another machine ─────────────────────────
-    Card {
+    // Each command a row: what it does on the left, its button on the right.
+    // They hung as a bar of buttons under a paragraph.
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Settings Backup & Transfer")
         subtitle: I18n.tr("One file holding this desktop's settings, themes, pinned apps and bookmarks")
         icon: "\u{f0193}"
-        accentColor: Design.teal
 
-        Label {
-            Layout.fillWidth: true
-            text: I18n.tr("Display layout, the main-screen choice and disabled sound devices stay behind: they name hardware, and on another machine they describe screens and cards that are not there. The weather API key is not included either — it lives in the secret store, and a credential does not belong in a file meant to be copied.")
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
-        }
-
-        Label {
-            Layout.fillWidth: true
-            text: section.transferStatus
-            role: "caption"
-            color: Design.accent
-            visible: section.transferStatus !== ""
-            wrapMode: Text.WordWrap
-        }
-
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Export to Home Folder")
+            note: I18n.tr("Display layout, the main-screen choice and disabled sound devices stay behind: they name hardware, and on another machine they describe screens and cards that are not there. The weather API key is not included either — it lives in the secret store, and a credential does not belong in a file meant to be copied.")
+            Button {
                 icon: "\u{f0552}"
-                label: I18n.tr("Export to Home Folder")
-                tone: Design.teal
+                label: I18n.tr("Export")
                 onActivated: section.exportConfig()
             }
+        }
 
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Import from Home Folder")
+            note: section.transferStatus
+            Button {
                 icon: "\u{f0552}"
-                label: I18n.tr("Import from Home Folder")
-                tone: Design.sapphire
+                label: I18n.tr("Import")
                 onActivated: section.importConfig()
             }
         }
     }
 
     // ── 2. System Packages Updates ───────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === "updates"
         title: I18n.tr("System Packages")
         subtitle: I18n.tr("Kernel, drivers and applications, managed by %1", section.managerName)
         icon: "\u{f0187}"
-        accentColor: section.updateCount > 0 ? Design.peach : Design.green
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(2)
-                Label { text: I18n.tr("Update Status") }
-            }
-
-            Pill {
+        // The three actions on this page and the next remove packages, wipe
+        // caches or start a full system upgrade, and each was a single click
+        // in a page people scroll through: each arms first, then confirms.
+        SettingsRow {
+            label: section.statusText
+            Button {
                 label: I18n.tr("Check")
                 icon: "\u{f021}"
                 onClicked: section.checkNow()
             }
-        }
-
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            // The three actions on this page and the next remove packages, wipe
-            // caches or start a full system upgrade, and each was a single
-            // click in a page people scroll through. ActionButton already has
-            // the arm-then-confirm step — "Reset Defaults" in About and the
-            // power row in the Control Center use it — and these deserve it at
-            // least as much.
-            ActionButton {
+            Button {
                 icon: "\u{f0187}"
                 label: section.updateCount > 0 ? I18n.trn("Upgrade %1 Package", "Upgrade %1 Packages", section.updateCount) : I18n.tr("Run Full System Upgrade")
-                tone: section.updateCount > 0 ? Design.peach : Design.green
                 destructive: true
-                confirmLabel: I18n.tr("Start upgrade?")
+                confirmText: I18n.tr("Start upgrade?")
                 onActivated: section.runSystemUpdate()
             }
         }
     }
 
+    // ── Edition ──────────────────────────────────────────────────────────────
+    // packages/editions/ in the repository this desktop was installed from,
+    // and the one installed (/etc/b1air/edition). Switching runs
+    // update-dotfiles.sh --edition in a terminal: the package manager asks,
+    // and what it installs is shown. Nothing is removed going to a smaller one.
+    property string editionRepo: ""
+    property string editionNow: ""
+    property var editions: []      // [{ name, desc, parent }], each after its parent
+
+    Process {
+        id: editionProbe
+        running: section.part === "updates" && section.visible
+        command: ["sh", "-c",
+            "repo=$(cat \"${XDG_STATE_HOME:-$HOME/.local/state}/b1air/dotfiles-repo\" 2>/dev/null); "
+            + "echo \"repo=$repo\"; echo \"now=$(cat /etc/b1air/edition 2>/dev/null)\"; "
+            + "for d in \"$repo\"/packages/editions/*/; do [ -f \"$d/parent\" ] || continue; "
+            + "printf 'ed=%s|%s|%s\\n' \"$(basename \"$d\")\" \"$(head -n1 \"$d/description\" 2>/dev/null)\" \"$(head -n1 \"$d/parent\")\"; done"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const eds = [{ name: "minimal", desc: "The desktop and its apps, nothing more", parent: "" }];
+                for (const line of this.text.split("\n")) {
+                    if (line.indexOf("repo=") === 0) section.editionRepo = line.slice(5);
+                    else if (line.indexOf("now=") === 0) section.editionNow = line.slice(4) || "default";
+                    else if (line.indexOf("ed=") === 0) {
+                        const f = line.slice(3).split("|");
+                        eds.push({ name: f[0], desc: f[1] || "", parent: f[2] || "minimal" });
+                    }
+                }
+                // Each after the one it adds to.
+                const depth = n => { let d = 0, e = eds.find(x => x.name === n); while (e && e.parent) { d++; e = eds.find(x => x.name === e.parent); } return d; };
+                eds.sort((a, b) => depth(a.name) - depth(b.name));
+                section.editions = eds;
+            }
+        }
+    }
+
+    // Is `a` part of `b` (b adds to a, directly or not)?
+    function editionWithin(a, b) {
+        let e = section.editions.find(x => x.name === b);
+        while (e) {
+            if (e.name === a) return true;
+            e = section.editions.find(x => x.name === e.parent);
+        }
+        return false;
+    }
+
+    SettingsGroup {
+        visible: section.part === "updates" && section.editionRepo !== ""
+        title: I18n.tr("Edition")
+        subtitle: I18n.tr("Each one is the one before it plus what it adds")
+        icon: "\u{f03d3}"
+
+        Repeater {
+            model: section.editions
+
+            SettingsRow {
+                id: edRow
+                required property var modelData
+                readonly property bool current: edRow.modelData.name === section.editionNow
+                readonly property bool smaller: !edRow.current && section.editionWithin(edRow.modelData.name, section.editionNow)
+                label: edRow.modelData.name.charAt(0).toUpperCase() + edRow.modelData.name.slice(1)
+                note: I18n.tr(edRow.modelData.desc)
+                    + (edRow.smaller ? " · " + I18n.tr("What the current one installed stays installed") : "")
+
+                Label {
+                    visible: edRow.current
+                    text: I18n.tr("Installed")
+                    role: "caption"
+                    dim: true
+                }
+                Button {
+                    visible: !edRow.current
+                    label: I18n.tr("Switch")
+                    confirmText: I18n.tr("Switch to %1?", edRow.label)
+                    onActivated: Quickshell.execDetached(["b1air-term", "--hold", "-e", "bash",
+                        section.editionRepo + "/update-dotfiles.sh", "--packages-only",
+                        "--edition", edRow.modelData.name, "--repo-dir", section.editionRepo])
+                }
+            }
+        }
+    }
+
     // ── 3. Disk Sweeper & Cache Maintenance (M4) ─────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Disk Sweeper & Storage Maintenance")
-        subtitle: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
         icon: "\u{f014}"
-        accentColor: Design.mauve
 
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Clean All Caches & Logs")
+            note: I18n.tr("Free up storage by clearing the package cache, systemd journals, and thumbnail cache")
+            Button {
                 icon: "\u{f014}"
-                label: I18n.tr("Clean All Caches & Logs")
-                tone: Design.sapphire
+                label: I18n.tr("Delete")
                 destructive: true
-                confirmLabel: I18n.tr("Delete them?")
+                confirmText: I18n.tr("Delete them?")
                 onActivated: Daemon.sweeperClean()
             }
+        }
 
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Remove Orphan Packages")
+            Button {
                 icon: "\u{f128}"
-                label: I18n.tr("Remove Orphan Packages")
-                tone: Design.mauve
+                label: I18n.tr("Remove")
                 destructive: true
-                confirmLabel: I18n.tr("Uninstall them?")
+                confirmText: I18n.tr("Uninstall them?")
                 onActivated: section.cleanOrphanPackages()
             }
         }
@@ -377,23 +406,19 @@ ColumnLayout {
     readonly property string snapshotTool: Sys.commandExists("timeshift") ? "timeshift"
                                          : Sys.commandExists("snapper") ? "snapper" : ""
 
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Restore Points")
-        subtitle: section.snapshotTool !== ""
+        icon: "\u{f0c7}"
+
+        SettingsRow {
+            label: I18n.tr("Create Restore Point")
+            note: section.snapshotTool !== ""
                   ? I18n.tr("Snapshot the system with %1 before a big update", section.snapshotTool)
                   : I18n.tr("Snapshots need timeshift, or snapper on a Btrfs root — neither is installed")
-        icon: "\u{f0c7}"
-        accentColor: Design.teal
-
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+            Button {
                 icon: "\u{f0c7}"
-                label: I18n.tr("Create Restore Point")
-                tone: Design.teal
+                label: I18n.tr("Create")
                 enabled: section.snapshotTool !== ""
                 onActivated: Cmd.run(["b1air-daemon", "snapshot", "create", "Manual user snapshot"], "Create snapshot")
             }
@@ -401,21 +426,17 @@ ColumnLayout {
     }
 
     // ── 5. Encrypted Vaults Manager (M4) ──────────────────────────────────────
-    Card {
+    // One row, so no title over it saying the same.
+    SettingsGroup {
         visible: section.part === ""
-        title: I18n.tr("Encrypted Security Vaults")
-        subtitle: I18n.tr("Mount and secure confidential directories using client-side encryption")
-        icon: "\u{f023}"
-        accentColor: Design.peach
 
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+        SettingsRow {
+            icon: "\u{f023}"
+            label: I18n.tr("Encrypted Security Vaults")
+            note: "~/.vaults"
+            Button {
                 icon: "\u{f07c}"
-                label: I18n.tr("Open Secure Vaults Location")
-                tone: Design.peach
+                label: I18n.tr("Open")
                 onActivated: {
                     Sys.makeDir("~/.vaults");
                     Quickshell.execDetached(["xdg-open", Quickshell.env("HOME") + "/.vaults"]);
@@ -426,26 +447,25 @@ ColumnLayout {
 
     // The desktop itself: reload it, or put every setting back. These were
     // on About, a page otherwise only about what this computer is.
-    Card {
+    SettingsGroup {
         visible: section.part === ""
         title: I18n.tr("Desktop")
-        subtitle: I18n.tr("Reload the desktop, or put every setting back to its default")
         icon: "\u{f0493}"
-        accentColor: Design.mauve
 
-        ButtonRow {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Reload Sway & Quickshell")
+            Button {
                 icon: "\u{f0709}"
-                label: I18n.tr("Reload Sway & Quickshell")
+                label: I18n.tr("Reload")
                 onActivated: { Sway.command("reload"); Quickshell.execDetached(["b1air-shell", "forceReload"]); }
             }
+        }
 
-            ActionButton {
+        SettingsRow {
+            label: I18n.tr("Reset Defaults")
+            Button {
                 icon: "\u{f0450}"
-                label: I18n.tr("Reset Defaults")
+                label: I18n.tr("Reset")
                 destructive: true
                 onActivated: Settings.resetDefaults()
             }

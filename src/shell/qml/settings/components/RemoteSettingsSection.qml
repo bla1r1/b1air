@@ -69,19 +69,18 @@ ColumnLayout {
     }
 
     // ── 1. WayVNC Native Remote Desktop ──────────────────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Remote Desktop (WayVNC)")
         subtitle: section.vncRunning
             ? I18n.tr("Server active on port %1 — local session only", section.vncPort)
             : (section.devMode ? I18n.tr("Development mode: available to the local network") : I18n.tr("Stopped — starts on localhost in production mode"))
         icon: "\u{f0379}"
-        accentColor: Design.blue
 
         // Ui/Toggle rather than a hand-built row around a bare Ui/Switch, for
         // the same reason as Appearance: the shared row is what ten other
         // settings pages use, and rolling it by hand produced a smaller switch
         // pinned to the label instead of one at the end of the row.
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Remote Desktop Server")
             subtitle: section.vncRunning
                 ? I18n.tr("Active (Listening on %1:%2)", (section.devMode ? section.localIp : "127.0.0.1"), section.vncPort)
@@ -102,13 +101,10 @@ ColumnLayout {
             }
         }
 
-        Item { height: Design.s(Design.space.xs) }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("VNC password"); role: "caption"; dim: true }
+        SettingsRow {
+            label: I18n.tr("VNC password")
             Field {
-                Layout.fillWidth: true
+                Layout.preferredWidth: Design.s(Design.width.select)
                 text: section.vncPassword
                 echoMode: TextInput.Password
                 placeholder: I18n.tr("Required for TLS authentication")
@@ -121,25 +117,12 @@ ColumnLayout {
             }
         }
 
-        // Quick Connect Badge & Copy
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
+        // Where to connect: the address is the row, its command copies it.
+        SettingsRow {
             visible: section.vncRunning
-
-            Pill {
-                label: "vnc://" + section.localIp + ":" + section.vncPort
-                active: true
-            }
-
-            Label {
-                visible: section.vncUser !== ""
-                text: I18n.tr("sign in as %1", section.vncUser)
-                role: "caption"
-                dim: true
-            }
-
-            ActionButton {
+            label: "vnc://" + section.localIp + ":" + section.vncPort
+            note: section.vncUser !== "" ? I18n.tr("sign in as %1", section.vncUser) : ""
+            Button {
                 label: I18n.tr("Copy Address")
                 icon: "\u{f00c5}"
                 onActivated: {
@@ -152,12 +135,11 @@ ColumnLayout {
     // ── RustDesk ─────────────────────────────────────────────────────────────
     // Beside our VNC: its service on or off (it starts a RustDesk server in
     // every session after a login), the app, and the session going on.
-    Card {
+    SettingsGroup {
         title: "RustDesk"
         icon: "\u{f0379}"
-        accentColor: Design.teal
 
-        Toggle {
+        SwitchRow {
             visible: !Remote.rustdeskInstalled || Remote.rustdeskServiceAvailable
             label: I18n.tr("Remote access with RustDesk")
             subtitle: !Remote.rustdeskInstalled ? I18n.tr("Not installed")
@@ -171,32 +153,30 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: Remote.rustdeskInstalled
             spacing: Design.s(Design.space.sm)
-            ActionButton {
+            Button {
                 label: I18n.tr("Open RustDesk")
                 icon: "\u{f0379}"
                 onActivated: Remote.openRustdesk()
             }
-            ActionButton {
+            Button {
                 visible: Remote.rustdeskSession
                 label: I18n.tr("End the session")
                 icon: "\u{f0156}"
                 onActivated: Remote.stopRustdesk()
             }
         }
-
     }
 
     // ── 2. Unattended Screen Sharing & Permissions ───────────────────────────
-    Card {
+    SettingsGroup {
         title: I18n.tr("Unattended Remote Access & Permissions")
         subtitle: I18n.tr("Eliminate repetitive security dialogs for RustDesk, AnyDesk, and OBS")
         icon: "\u{f016d}"
-        accentColor: Design.teal
 
         // With the lid closed or no monitor plugged in, a virtual screen
         // for remote sessions (VNC or RustDesk), the windows on it — ready
         // before anyone connects, so their picture never goes away.
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Virtual screen when none is on")
             subtitle: Remote.virtualOutput !== "" ? I18n.tr("In use: %1", Remote.virtualOutput) : ""
             checked: Settings.remoteVirtualDisplay !== false
@@ -204,7 +184,7 @@ ColumnLayout {
         }
 
         // Prompt-Free Screencast Toggle
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Silent Screencast Sharing")
             subtitle: section.devMode
                 ? I18n.tr("Allow trusted remote tools to capture screen without interactive popup confirmation")
@@ -217,29 +197,16 @@ ColumnLayout {
             }
         }
 
-        Item { height: Design.s(Design.space.xs) }
-
-        // Kernel Input Emulation (/dev/uinput) Status
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Kernel Input Emulation (/dev/uinput)"); weight: Design.weight.semibold }
-                Label {
-                    text: section.uinputReady
-                        ? I18n.tr("Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps")
-                        : I18n.tr("Requires input group permissions (/dev/uinput)")
-                    role: "caption"
-                    dim: true
-                }
-            }
-
+        // Kernel Input Emulation (/dev/uinput) status. Not ready is not a
+        // fault — most people never need it — so no red badge for it.
+        SettingsRow {
+            label: I18n.tr("Kernel Input Emulation (/dev/uinput)")
+            note: section.uinputReady
+                ? I18n.tr("Active: Mouse and keyboard can be controlled unattended on lockscreen and root apps")
+                : I18n.tr("Requires input group permissions (/dev/uinput)")
             Badge {
                 text: section.uinputReady ? I18n.tr("Ready") : I18n.tr("Inactive")
-                color: section.uinputReady ? Design.green : Design.red
+                tone: section.uinputReady ? Design.ok : Design.textDim
             }
         }
 

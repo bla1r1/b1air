@@ -66,23 +66,22 @@ PopupShell {
             Icon {
                 text: "\u{f0ea}" // clipboard
                 role: "subhead"
-                color: Design.accent
+                color: Design.textDim
             }
 
             Label {
                 text: I18n.tr("Clipboard History")
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
             }
 
             Badge {
                 text: String(root.filteredItems.length)
-                tone: Design.sapphire
             }
 
             Item { Layout.fillWidth: true }
 
-            ActionButton {
+            Button {
                 visible: Clipboard.items.count > 0
                 icon: "\u{f0156}"
                 label: I18n.tr("Clear All")
@@ -105,6 +104,7 @@ PopupShell {
             id: clipList
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: root.filteredItems.length > 0
             clip: true
             spacing: Design.s(Design.space.xs)
             model: root.filteredItems
@@ -140,10 +140,10 @@ PopupShell {
 
                     // Type Icon
                     Rectangle {
-                        Layout.preferredWidth: Design.s(32)
-                        Layout.preferredHeight: Design.s(32)
+                        Layout.preferredWidth: Design.s(Design.size.md)
+                        Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
-                        color: clipCard.modelData.type === "color" ? clipCard.modelData.text.trim() : Design.sunken
+                        color: clipCard.modelData.type === "color" ? clipCard.modelData.text.trim() : Design.well
                         Layout.alignment: Qt.AlignTop
 
                         Icon {
@@ -152,7 +152,7 @@ PopupShell {
                             text: clipCard.modelData.type === "code" ? "\u{f0169}"
                                 : (clipCard.modelData.type === "link" ? "\u{f0339}" : "\u{f0219}")
                             role: "caption"
-                            color: Design.accent
+                            color: Design.textDim
                         }
                     }
 
@@ -166,8 +166,7 @@ PopupShell {
                             Label {
                                 text: clipCard.modelData.title ? clipCard.modelData.title : clipCard.modelData.type.toUpperCase()
                                 role: "caption"
-                                weight: Design.weight.bold
-                                color: Design.accent
+                                weight: Design.weight.semibold
                             }
                             Label {
                                 text: "• " + (clipCard.modelData.time || I18n.tr("Template"))
@@ -194,7 +193,7 @@ PopupShell {
 
                     // Action buttons
                     RowLayout {
-                        spacing: Design.s(2)
+                        spacing: Design.s(Design.space.xxs)
                         Layout.alignment: Qt.AlignTop
 
                         // A template is not in the history, so there is
@@ -219,7 +218,7 @@ PopupShell {
                     }
                 }
 
-                MouseArea {
+                Clickable {
                     id: cardHoverMa
                     // Below the card's contents: declared last, it lay over the
                     // pin and delete buttons, and pressing either copied the
@@ -234,36 +233,17 @@ PopupShell {
                     }
                 }
             }
+        }
 
-            // Empty state
-            ColumnLayout {
-                anchors.centerIn: parent
-                visible: root.filteredItems.length === 0
-                spacing: Design.s(8)
-
-                Icon {
-                    text: "\u{f0ea}"
-                    font.pixelSize: Design.s(36)
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    text: root.searchFilter ? I18n.tr("No matching clips found") : I18n.tr("Clipboard history is empty")
-                    role: "body"
-                    weight: Design.weight.medium
-                    color: Design.textDim
-                    Layout.alignment: Qt.AlignHCenter
-                }
-
-                Label {
-                    visible: !root.searchFilter
-                    text: I18n.tr("Copied text and snippets will appear here automatically")
-                    role: "caption"
-                    color: Design.textFaint
-                    Layout.alignment: Qt.AlignHCenter
-                }
-            }
+        // Before the store is read, an empty list says nothing about history.
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: root.filteredItems.length > 0 ? "" : !Clipboard._loaded ? "loading" : "empty"
+            icon: "\u{f0ea}"
+            title: mode === "loading" ? ""
+                 : root.searchFilter ? I18n.tr("No matching clips found") : I18n.tr("Clipboard history is empty")
+            hint: root.searchFilter ? "" : I18n.tr("Copied text and snippets will appear here automatically")
         }
     }
 
@@ -271,7 +251,7 @@ PopupShell {
         id: clearConfirm
         title: I18n.tr("Clear clipboard history?")
         message: I18n.tr("All unpinned clipboard entries will be removed.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: Dialog.Cancel | Dialog.Ok
         onAccepted: Clipboard.clearHistory()
         buttonText: ({ [Dialog.Ok]: I18n.tr("Clear") })

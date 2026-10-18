@@ -17,7 +17,7 @@ MiniView {
 
     title: I18n.tr("Wi-Fi")
     icon: "\u{f0928}"
-    tone: Design.blue
+    tone: Design.accent
     footerLabel: I18n.tr("Network Settings…")
 
     // Connecting to a secured network needs a password field. It lived only in
@@ -33,7 +33,6 @@ MiniView {
 
     trailing: Switch {
         checked: root.isOn
-        activeColor: Design.blue
         onToggled: Network.toggleWifi()
     }
 
@@ -69,6 +68,42 @@ MiniView {
             width: netList.width
             spacing: Design.s(Design.space.xs)
 
+            // A join that failed said nothing here: the row just stopped
+            // spinning. Settings words the reason the same way.
+            RowLayout {
+                visible: Network.failedSsid !== ""
+                Layout.fillWidth: true
+                Layout.bottomMargin: Design.s(Design.space.xs)
+                spacing: Design.s(Design.space.sm)
+
+                Icon {
+                    text: "\u{f0028}"
+                    role: "body"
+                    color: Design.danger
+                    Layout.alignment: Qt.AlignTop
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: I18n.tr("Couldn't join %1", Network.failedSsid)
+                        role: "body"
+                        weight: Design.weight.semibold
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: Network.failedReason === "WifiNetworkLost" ? I18n.tr("The network went out of range")
+                            : Network.failedReason === "Unknown" || Network.failedReason === "" ? I18n.tr("Could not connect")
+                            : I18n.tr("Wrong password, or the network refused it")
+                        role: "caption"
+                        dim: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
             SectionLabel {
                 text: I18n.tr("Connected")
                 visible: root.connectedNet !== null
@@ -79,8 +114,8 @@ MiniView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
-                color: connMa.containsMouse ? Design.tint(Design.blue, 0.22) : Design.tint(Design.blue, 0.15)
-                border.color: Design.tint(Design.blue, 0.35)
+                color: connMa.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.accent, 0.15)
+                border.color: Design.tint(Design.accent, 0.35)
                 border.width: Design.border
 
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -94,7 +129,7 @@ MiniView {
                     Icon {
                         text: "\u{f0928}"
                         role: "body"
-                        color: Design.blue
+                        color: Design.accent
                     }
 
                     Label {
@@ -119,14 +154,14 @@ MiniView {
                         visible: connMa.containsMouse
                         text: I18n.tr("Disconnect")
                         role: "caption"
-                        color: Design.blue
+                        color: Design.accent
                     }
 
                     Icon {
                         visible: !connMa.containsMouse
                         text: "\u{f012c}"   // check
                         role: "caption"
-                        color: Design.blue
+                        color: Design.accent
                     }
                 }
 
@@ -227,14 +262,14 @@ MiniView {
                 Layout.alignment: Qt.AlignHCenter
                 text: "\u{f033e}"
                 role: "display"
-                color: Design.blue
+                color: Design.textDim
             }
 
             Label {
                 Layout.fillWidth: true
                 text: root.askingFor
                 role: "subhead"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
             }
@@ -261,17 +296,17 @@ MiniView {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.sm)
 
-                Pill {
+                Button {
                     Layout.fillWidth: true
                     label: I18n.tr("Cancel")
                     onClicked: root.cancelJoin()
                 }
 
-                Pill {
+                Button {
+                    variant: pskField.text.length > 0 ? "primary" : "secondary"
                     Layout.fillWidth: true
                     label: I18n.tr("Join")
                     icon: "\u{f012c}"
-                    active: pskField.text.length > 0
                     onClicked: root.join(pskField.text)
                 }
             }

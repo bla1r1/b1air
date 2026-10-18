@@ -36,7 +36,7 @@ PopupShell {
             id: wifiCol
             visible: menu.page === "wifi"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
             readonly property bool on: Network.wifi.power === "on"
             readonly property var connected: Network.wifi.connected || null
             readonly property var others: (Network.wifi.networks || []).filter(n => !n.connected)
@@ -72,6 +72,14 @@ PopupShell {
                     }
                 }
             }
+            // Said, not left blank: an empty menu under a switch that is on
+            // reads as a menu that failed to open.
+            MenuRow {
+                visible: wifiCol.on && !wifiCol.connected && wifiCol.others.length === 0
+                enabled: false
+                opacity: Design.opacity.disabled
+                text: I18n.tr("No networks found")
+            }
             MenuSeparator {}
             MenuRow { text: I18n.tr("Wi-Fi Settings…"); onClicked: menu.openSettings("network") }
         }
@@ -80,12 +88,12 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "sound"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             MenuHeader { title: I18n.tr("Sound") }
             Slider {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: Audio.volumePercent
                 muted: Audio.muted
                 icon: Audio.muted ? "\u{f075f}" : "\u{f057e}"
@@ -104,6 +112,12 @@ PopupShell {
                     onClicked: Audio.setDefault("sink", model.name)
                 }
             }
+            MenuRow {
+                visible: Audio.outputs.count === 0
+                enabled: false
+                opacity: Design.opacity.disabled
+                text: I18n.tr("No output devices")
+            }
             MenuSeparator {}
             MenuRow { text: I18n.tr("Sound Settings…"); onClicked: menu.openSettings("audio") }
         }
@@ -112,7 +126,7 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "focus"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
             MenuHeader { title: I18n.tr("Focus") }
             Repeater {
                 model: Notifications.modes.filter(m => m.id !== "game")
@@ -133,7 +147,7 @@ PopupShell {
         ColumnLayout {
             visible: menu.page === "battery"
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             MenuHeader {
                 title: I18n.tr("Battery")
@@ -180,66 +194,15 @@ PopupShell {
         Label { Layout.fillWidth: true; text: parent.title; weight: Design.weight.semibold }
         RowLayout { id: tail }
     }
-    component MenuCaption: Label {
+    // The Ui parts, set for this menu's spacing. MenuRow itself is Ui's.
+    component MenuCaption: SectionLabel {
         Layout.fillWidth: true
         Layout.leftMargin: Design.s(Design.space.sm)
-        Layout.topMargin: Design.s(2)
-        role: "caption"
-        weight: Design.weight.semibold
-        color: Design.textFaint
+        Layout.topMargin: Design.s(Design.space.xxs)
         elide: Text.ElideRight
     }
-    component MenuSeparator: Rectangle {
-        Layout.fillWidth: true
-        Layout.leftMargin: Design.s(Design.space.sm)
-        Layout.rightMargin: Design.s(Design.space.sm)
-        Layout.topMargin: Design.s(Design.space.xs)
-        Layout.bottomMargin: Design.s(Design.space.xs)
-        Layout.preferredHeight: 1
-        color: Design.glassBorder
-    }
-    component MenuRow: Rectangle {
-        id: mrow
-        property string glyph: ""
-        property string text: ""
-        property string detail: ""
-        property string trailing: ""
-        property bool lit: false
-        signal clicked()
-        Layout.fillWidth: true
-        implicitHeight: Design.s(30)
-        radius: Design.s(6)
-        color: mrowMa.containsMouse ? Design.accent : "transparent"
-        readonly property color ink: mrowMa.containsMouse ? Design.accentText : Design.text
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: Design.s(Design.space.sm)
-            anchors.rightMargin: Design.s(Design.space.sm)
-            spacing: Design.s(Design.space.sm)
-            // A disc behind the glyph for what is on, as a menu bar draws it.
-            Rectangle {
-                visible: mrow.glyph !== ""
-                Layout.preferredWidth: Design.s(22)
-                Layout.preferredHeight: Design.s(22)
-                radius: width / 2
-                color: mrow.lit ? Design.accent : Design.tint(Design.text, 0.10)
-                Icon {
-                    anchors.centerIn: parent
-                    text: mrow.glyph
-                    role: "body"
-                    color: mrow.lit ? Design.accentText : mrow.ink
-                }
-            }
-            Label { Layout.fillWidth: true; text: mrow.text; color: mrow.ink; elide: Text.ElideRight }
-            Label { visible: mrow.detail !== ""; text: mrow.detail; role: "caption"; color: mrowMa.containsMouse ? mrow.ink : Design.textDim }
-            Icon { visible: mrow.trailing !== ""; text: mrow.trailing; role: "caption"; color: mrowMa.containsMouse ? mrow.ink : Design.textDim }
-        }
-        MouseArea {
-            id: mrowMa
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: mrow.clicked()
-        }
+    component MenuSeparator: Separator {
+        inset: Design.s(Design.space.sm)
+        gap: Design.s(Design.space.xs)
     }
 }

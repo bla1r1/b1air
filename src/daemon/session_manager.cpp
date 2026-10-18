@@ -689,6 +689,13 @@ int SessionManager::run_session() {
         spawn_argv_detached({"b1air-passkey"});
     }
 
+    // 8b. Tray icons drawn the old X11 way (XEmbed) — Wine's, for one — as
+    //     StatusNotifierItems, which the bar shows: snixembed, with the
+    //     default edition. Where it is not installed, nothing.
+    if (!is_process_running("snixembed")) {
+        spawn_argv_detached({"snixembed", "--fork"});
+    }
+
     // 9. Idle: dimming, locking, screens off and sleep, in this process
     //    (idle.cpp) — it was swayidle, restarted for every change of a
     //    timeout and every flip of Caffeine. One left from before goes.

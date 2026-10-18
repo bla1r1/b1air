@@ -79,8 +79,8 @@ Item {
                 DevicePicture {
                     kind: frame.kind
                     tint: frame.tint
-                    Layout.preferredWidth: Design.s(64)
-                    Layout.preferredHeight: Design.s(100)
+                    Layout.preferredWidth: Design.s(Design.size.tile)
+                    Layout.preferredHeight: Design.s(Design.size.avatar)
                 }
 
                 ColumnLayout {
@@ -90,14 +90,16 @@ Item {
                         spacing: Design.s(Design.space.xs)
                         Label {
                             text: frame.name
-                            font.pixelSize: Design.s(26)
-                            weight: Design.weight.bold
+                            font.pixelSize: Design.s(Design.font.display)
+                            weight: Design.weight.semibold
                             elide: Text.ElideRight
-                            Layout.maximumWidth: Design.s(520)
+                            Layout.maximumWidth: Design.s(Design.width.menuMax)
                         }
-                        BarButton {
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
                             visible: frame.renamable
-                            glyph: "\u{f03eb}"; small: true
+                            icon: "\u{f03eb}"; size: "sm"
                             tip: I18n.tr("Rename")
                             onClicked: frame.renameRequested()
                         }
@@ -116,62 +118,14 @@ Item {
                 }
             }
 
-            // Segmented tabs, centred.
-            Rectangle {
+            // The device's tabs: Ui's segmented control, which this was a
+            // hand-built copy of.
+            SegmentedControl {
                 visible: frame.tabs.length > 1
                 Layout.alignment: Qt.AlignHCenter
-                implicitWidth: segRow.implicitWidth + Design.s(4)
-                implicitHeight: Design.s(30)
-                radius: Design.s(8)
-                color: Design.tint(Design.text, 0.06)
-                border.color: Design.line
-                border.width: 1
-
-                Row {
-                    id: segRow
-                    anchors.centerIn: parent
-                    spacing: 0
-                    Repeater {
-                        model: frame.tabs
-                        delegate: Rectangle {
-                            id: seg
-                            required property var modelData
-                            required property int index
-                            readonly property bool on: frame.tab === modelData.id
-                            width: segLabel.implicitWidth + Design.s(28)
-                            height: Design.s(26)
-                            radius: Design.s(6)
-                            color: seg.on ? Design.raised
-                                 : segMa.containsMouse ? Design.tint(Design.text, 0.05) : "transparent"
-                            border.color: seg.on ? Design.line : "transparent"
-                            border.width: 1
-                            // A hairline between two unselected neighbours.
-                            Rectangle {
-                                visible: seg.index > 0 && !seg.on && frame.tabs[seg.index - 1].id !== frame.tab
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 1; height: parent.height * 0.5
-                                color: Design.line
-                            }
-                            Text {
-                                id: segLabel
-                                anchors.centerIn: parent
-                                text: seg.modelData.label
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(Design.font.body)
-                                font.weight: seg.on ? Design.weight.semibold : Design.weight.regular
-                                color: seg.on ? Design.text : Design.textDim
-                            }
-                            MouseArea {
-                                id: segMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: frame.tabClicked(seg.modelData.id)
-                            }
-                        }
-                    }
-                }
+                model: frame.tabs.map(t => ({ id: t.id, label: t.label }))
+                current: frame.tab
+                onPicked: id => frame.tabClicked(id)
             }
         }
 
@@ -187,7 +141,7 @@ Item {
         // ── Something running ───────────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(40)
+            Layout.preferredHeight: Design.s(Design.size.row)
             visible: frame.progressText !== ""
             color: Design.tint(Design.accent, 0.08)
             Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
@@ -204,8 +158,8 @@ Item {
                 Label { Layout.fillWidth: true; text: frame.progressText; elide: Text.ElideMiddle }
                 Rectangle {
                     visible: frame.progress >= 0
-                    Layout.preferredWidth: Design.s(220)
-                    Layout.preferredHeight: Design.s(6)
+                    Layout.preferredWidth: Design.s(Design.width.control)
+                    Layout.preferredHeight: Design.s(Design.space.xs)
                     radius: height / 2
                     color: Design.tint(Design.text, 0.1)
                     Rectangle {
@@ -214,9 +168,11 @@ Item {
                         Behavior on width { NumberAnimation { duration: Design.duration.fast } }
                     }
                 }
-                BarButton {
+                Button {
+                    variant: "ghost"
+                    iconOnly: true
                     visible: frame.stoppable
-                    glyph: "\u{f0156}"; small: true; tip: I18n.tr("Stop")
+                    icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Stop")
                     onClicked: frame.stopRequested()
                 }
             }
@@ -225,8 +181,8 @@ Item {
         // ── Storage and the page's buttons ──────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(68)
-            color: Design.sunken
+            Layout.preferredHeight: Design.s(Design.size.stat)
+            color: Design.veil
             Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
 
             RowLayout {
@@ -244,11 +200,11 @@ Item {
                     // block is wide enough, then what is free.
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(20)
-                        radius: Design.s(5)
+                        Layout.preferredHeight: Design.s(Design.size.mini)
+                        radius: Design.s(Design.radius.sm)
                         color: Design.tint(Design.text, 0.07)
                         border.color: Design.line
-                        border.width: 1
+                        border.width: Design.border
                         clip: true
                         Row {
                             anchors.fill: parent
@@ -259,12 +215,12 @@ Item {
                                 delegate: Rectangle {
                                     id: block
                                     required property var modelData
-                                    width: Math.max(Design.s(3), (parent.width) * modelData.bytes / Math.max(1, frame.totalBytes))
+                                    width: Math.max(Design.s(Design.space.xxs), (parent.width) * modelData.bytes / Math.max(1, frame.totalBytes))
                                     height: parent.height
                                     color: modelData.color
                                     Text {
                                         anchors.centerIn: parent
-                                        visible: implicitWidth + Design.s(12) < block.width
+                                        visible: implicitWidth + Design.s(Design.space.md) < block.width
                                         text: block.modelData.label
                                         font.family: Design.font.sans
                                         font.pixelSize: Design.s(Design.font.caption)
@@ -291,7 +247,7 @@ Item {
                             delegate: RowLayout {
                                 required property var modelData
                                 spacing: Design.s(Design.space.xs)
-                                Rectangle { width: Design.s(8); height: width; radius: width / 2; color: modelData.color }
+                                Rectangle { width: Design.s(Design.space.sm); height: width; radius: width / 2; color: modelData.color }
                                 Label { text: modelData.label + "  " + frame.size(modelData.bytes); role: "caption"; dim: true }
                             }
                         }
@@ -325,8 +281,11 @@ Item {
         property string kind: "ipod"
         property string tint: ""
         readonly property bool light: /silver|white|pink|blue|green|yellow|red|gold/i.test(pic.tint)
+        // A schematic of the device in the theme's colours: a light case is a
+        // lighter shade of the text colour, a dark one a darker. It was drawn
+        // in fixed greys and two gradients, the only ones left in the apps.
         readonly property color body: pic.kind === "ipod"
-            ? (pic.light ? "#e9eaec" : "#2b2d31")
+            ? Design.tint(Design.text, pic.light ? 0.30 : 0.10)
             : Design.tint(Design.text, 0.14)
 
         Rectangle {
@@ -334,36 +293,33 @@ Item {
             anchors.centerIn: parent
             width: pic.kind === "ipod" ? parent.width : parent.width * 0.86
             height: parent.height
-            radius: pic.kind === "ipod" ? Design.s(9) : Design.s(13)
+            radius: pic.kind === "ipod" ? Design.s(Design.radius.ctl) : Design.s(Design.space.md)
             color: pic.body
             border.color: Design.tint(Design.text, 0.22)
-            border.width: 1
+            border.width: Design.border
 
             // iPod: the screen and the wheel.
             Rectangle {
                 visible: pic.kind === "ipod"
-                x: Design.s(6); y: Design.s(7)
-                width: parent.width - Design.s(12); height: parent.height * 0.42
-                radius: Design.s(3)
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Qt.lighter(Design.accent, 1.25) }
-                    GradientStop { position: 1; color: Qt.darker(Design.accent, 1.4) }
-                }
+                x: Design.s(Design.space.xs); y: Design.s(Design.space.sm)
+                width: parent.width - Design.s(Design.space.md); height: parent.height * 0.42
+                radius: Design.s(Design.radius.sm)
+                color: Design.tint(Design.accent, 0.55)
             }
             Rectangle {
                 visible: pic.kind === "ipod"
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height * 0.52
                 width: parent.width * 0.68; height: width; radius: width / 2
-                color: pic.light ? "#ffffff" : "#3a3c41"
+                color: Design.tint(Design.text, pic.light ? 0.45 : 0.20)
                 border.color: Design.tint(Design.text, 0.18)
-                border.width: 1
+                border.width: Design.border
                 Rectangle {
                     anchors.centerIn: parent
                     width: parent.width * 0.36; height: width; radius: width / 2
                     color: pic.body
                     border.color: Design.tint(Design.text, 0.12)
-                    border.width: 1
+                    border.width: Design.border
                 }
             }
 
@@ -371,18 +327,15 @@ Item {
             Rectangle {
                 visible: pic.kind !== "ipod"
                 anchors.fill: parent
-                anchors.margins: Design.s(3)
-                radius: Design.s(10)
-                gradient: Gradient {
-                    GradientStop { position: 0; color: pic.kind === "iphone" ? Qt.lighter(Design.blue, 1.15) : Qt.lighter(Design.green, 1.1) }
-                    GradientStop { position: 1; color: pic.kind === "iphone" ? Qt.darker(Design.mauve, 1.3) : Qt.darker(Design.teal, 1.4) }
-                }
+                anchors.margins: Design.s(Design.space.xxs)
+                radius: Design.s(Design.radius.ctl)
+                color: Design.tint(pic.kind === "iphone" ? Design.blue : Design.green, 0.55)
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    y: Design.s(4)
-                    width: pic.kind === "iphone" ? parent.width * 0.38 : Design.s(5)
-                    height: Design.s(5); radius: height / 2
-                    color: "#101114"
+                    y: Design.s(Design.space.xs)
+                    width: pic.kind === "iphone" ? parent.width * 0.38 : Design.s(Design.space.xs)
+                    height: Design.s(Design.space.xs); radius: height / 2
+                    color: Design.ground
                 }
             }
         }

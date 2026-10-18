@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# =============================================================================
+# b1air-software — find a program to install, and install it
+#
+#   b1air-software search QUERY          what there is, one per line:
+#                                        source<TAB>id<TAB>name<TAB>summary
+#   b1air-software install SOURCE ID     open a terminal that installs it
+#
+# What Spotlight's "install …" searches with. No store of ours: Flathub
+# through flatpak, the distribution's repositories through its package
+# manager, the AUR through yay or paru — each from its local index, so a
+# search is quick and needs no network (flatpak and the package managers
+# refresh those indexes themselves). Installing is the package manager's,
+# in a terminal that shows the command and lets it ask, as typed by hand.
+# =============================================================================
+set -u
+
+# The family, as lib/distro.sh decides it (keep the two in step).
+family() {
+    local word
+    [[ -r /etc/os-release ]] || { [[ -f /etc/arch-release ]] && echo arch; return; }
+    for word in $(. /etc/os-release && echo "${ID:-} ${ID_LIKE:-}"); do
+        case "$word" in
+            arch|archarm|endeavouros|manjaro|cachyos|garuda)      echo arch;     return ;;
+            debian|ubuntu|linuxmint|pop|elementary|zorin|neon)    echo debian;   return ;;
+            fedora|nobara|ultramarine)                            echo fedora;   return ;;
+            opensuse|opensuse-tumbleweed|opensuse-slowroll|suse)  echo opensuse; return ;;
+        esac
+    done
+}
+
+LIMIT=6
+# Read this many from each index, then rank: a search for "vlc" listed
+# gem-plugin-vlc and five libvlc packages and cut off before vlc itself.
+SCAN=80
+
+# rank QUERY — the exact name first, then names starting with the query, then
+# the rest; libraries and their -dev/-dbg/-doc/-data halves only when asked
+# for by exact name. LIMIT of them.
+rank() {
+    awk -F'\t' -v q="${1,,}" -v n="$LIMIT" '
+        { id = tolower($2) }
+        id != q && (id ~ /^lib/ || id ~ /-(dev|devel|dbg|debuginfo|doc|docs|data|common|l10n|lang)$/ || id ~ /-(help|locale|i18n|translations?)(-|$)/) { next }
+        { score = (id == q) ? 0 : (index(id, q) == 1 ? 1 : 2); line[NR] = score "\t" $0 }
+        END { for (i in line) print line[i] }' | sort -t$'\t' -k1,1n -s | cut -f2- | head -n "$LIMIT"
+}
+
+search_flathub() {
+    command -v flatpak >/dev/null 2>&1 || return 0
+    # Ranked by the app's name, not its reverse-DNS id.
+    flatpak search --columns=application,name,description,remotes -- "$1" 2>/dev/null \
+        | awk -F'\t' -v n="$SCAN" '$4 ~ /flathub/ && c < n { printf "flathub\t%s\t%s\t%s\n", $2, $1, $3; c++ }' \
+        | rank "$1" | awk -F'\t' '{ printf "%s\t%s\t%s\t%s\n", $1, $3, $2, $4 }'
+}
+
+search_native() { search_native_all "$1" | rank "$1"; }
+
+search_native_all() {
+    local q="$1"
+    case "$(family)" in
+        arch)
+            # "repo/name version …" then the description, indented, on the next line.
+            pacman -Ss -- "$q" 2>/dev/null | awk -v n="$SCAN" '
+                /^[^ ]/ { split($1, a, "/"); name = a[2]; next }
+                name != "" && c < n { sub(/^ +/, ""); printf "repo\t%s\t%s\t%s\n", name, name, $0; name = ""; c++ }'
+            local helper
+            for helper in yay paru; do
+                command -v "$helper" >/dev/null 2>&1 || continue
+                # The AUR is the one remote search here; a short leash on it.
+                timeout 4 "$helper" -Ssa -- "$q" 2>/dev/null | awk -v n="$SCAN" '
+                    /^[^ ]/ { split($1, a, "/"); name = a[2]; next }
+                    name != "" && c < n { sub(/^ +/, ""); printf "aur\t%s\t%s\t%s\n", name, name, $0; name = ""; c++ }'
+                break
+            done ;;
+        debian)
+            apt-cache search --names-only -- "$q" 2>/dev/null | head -n "$SCAN" \
+                | awk '{ name = $1; sub(/^[^ ]+ - /, ""); printf "repo\t%s\t%s\t%s\n", name, name, $0 }' ;;
+        fedora)
+            # --cacheonly: what dnf already has; a search must not refresh.
+            dnf -q --cacheonly search -- "$q" 2>/dev/null | awk -F' : ' -v n="$SCAN" '
+                NF >= 2 && $1 !~ /^=/ && c < n { split($1, a, "."); printf "repo\t%s\t%s\t%s\n", a[1], a[1], $2; c++ }' ;;
+        opensuse)
+            zypper -q --no-refresh search -t package -- "$q" 2>/dev/null | awk -F'|' -v n="$SCAN" '
+                NR > 2 && c < n { gsub(/^ +| +$/, "", $2); gsub(/^ +| +$/, "", $3); printf "repo\t%s\t%s\t%s\n", $2, $2, $3; c++ }' ;;
+    esac
+}
+
+install_command() {
+    local source="$1" id="$2"
+    case "$source" in
+        flathub) echo "flatpak install --user flathub $id" ;;
+        aur)     local h; for h in yay paru; do command -v "$h" >/dev/null 2>&1 && { echo "$h -S $id"; return; }; done ;;
+        repo)
+            case "$(family)" in
+                arch)     echo "sudo pacman -S $id" ;;
+                debian)   echo "sudo apt install $id" ;;
+                fedora)   echo "sudo dnf install $id" ;;
+                opensuse) echo "sudo zypper install $id" ;;
+            esac ;;
+    esac
+}
+
+case "${1:-}" in
+    search)
+        q="${2:-}"
+        [[ ${#q} -ge 2 ]] || exit 0
+        search_flathub "$q"
+        search_native "$q" ;;
+    install)
+        source="${2:-}"; id="${3:-}"
+        # An id is a package or app id: nothing a shell would read as more.
+        [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || { echo "Not a package id: $id" >&2; exit 2; }
+        cmd="$(install_command "$source" "$id")"
+        [[ -n "$cmd" ]] || { echo "Nothing installs from '$source' here." >&2; exit 2; }
+        script="printf 'Installing %s\\n\\n  %s\\n\\n' '$id' '$cmd'; $cmd; s=\$?; \
+if [ \$s -eq 0 ]; then printf '\\nInstalled. It is in the Launchpad.\\n'; else printf '\\nNothing was installed (exit code %d).\\n' \$s; fi; \
+printf '\\nPress Enter to close.'; read _"
+        for term in b1air-term foot alacritty kitty; do
+            command -v "$term" >/dev/null 2>&1 && exec "$term" -e sh -c "$script"
+        done
+        echo "No terminal to install $id in." >&2
+        exit 1 ;;
+    *)
+        sed -n '4,7p' "$0" | sed 's/^# \{0,1\}//'
+        exit 2 ;;
+esac

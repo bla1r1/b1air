@@ -22,9 +22,9 @@ import QtQuick
 // right colours is a theme that will one day show the wrong ones. A component
 // needs no permission.
 //
-// Every value falls back to the Tokyo Night default it replaces, so a machine
-// where the daemon has never run — or where the wallpaper group was never set
-// up — looks exactly as it did before.
+// Every value falls back to the desktop's default palette (Breeze Dark's), so
+// a machine where the daemon has never run — or where the wallpaper group was
+// never set up — still looks like the desktop it logs into.
 // =============================================================================
 
 QtObject {
@@ -93,6 +93,11 @@ QtObject {
     // The lock screen's language (Settings → language), "" for the system's.
     readonly property string lang: (palette.live && palette.live.lang !== undefined)
                                    ? palette.live.lang : ""
+    // Inter, the desktop's sans, where it is installed; else the system's
+    // sans-serif. Asked for a family that is not there, Qt took what
+    // fontconfig ranked first — on this desktop the terminal's monospace,
+    // all over the login screen.
+    readonly property string sans: Qt.fontFamilies().indexOf("Inter") >= 0 ? "Inter" : "sans-serif"
     readonly property bool dark: (palette.live && palette.live.dark !== undefined)
                                  ? palette.live.dark : true
 }

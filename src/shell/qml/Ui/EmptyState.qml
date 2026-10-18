@@ -51,7 +51,7 @@ ColumnLayout {
 
     Label {
         Layout.alignment: Qt.AlignHCenter
-        Layout.maximumWidth: Design.s(320)
+        Layout.maximumWidth: Design.s(Design.width.text)
         visible: root.hint !== ""
         text: root.hint
         role: "caption"

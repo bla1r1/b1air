@@ -23,7 +23,7 @@ import "../Ui"
 Singleton {
     id: root
 
-    /** Raw entries as the daemon reports them: name, comment, icon, iconPath, exec, category. */
+    /** Raw entries as the daemon reports them: name, comment, icon, iconPath, wmClass, exec, category. */
     property var list: []
 
     readonly property bool loaded: root._loaded
@@ -53,6 +53,14 @@ Singleton {
         for (const a of root.list) {
             const base = String(a.desktopFile || "").replace(/\.desktop$/i, "").toLowerCase();
             if (base === id)
+                return a.iconPath || a.icon || "";
+        }
+
+        // The window class the entry says its windows carry. A Windows
+        // program run by Wine or Bottles is "notepad.exe" to the compositor,
+        // which no desktop id is called; its entry names it in StartupWMClass.
+        for (const a of root.list) {
+            if (String(a.wmClass || "").toLowerCase() === id)
                 return a.iconPath || a.icon || "";
         }
 

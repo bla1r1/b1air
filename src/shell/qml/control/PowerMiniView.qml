@@ -16,7 +16,7 @@ MiniView {
 
     title: I18n.tr("Battery & Power")
     icon: "\u{f0079}"
-    tone: Design.green
+    tone: Design.accent
     footerLabel: I18n.tr("Power Settings…")
 
     trailing: BatteryPill { clickable: false }
@@ -39,21 +39,21 @@ MiniView {
             glyph: "\u{f0e4}",
             title: I18n.tr("Performance"),
             hint: I18n.tr("Maximum speed, shortest battery life"),
-            tone: Design.red
+            tone: Design.accent
         },
         {
             id: "balanced",
             glyph: "\u{f0241}",
             title: I18n.tr("Balanced"),
             hint: I18n.tr("Automatic — speed when you need it, quiet when you do not"),
-            tone: Design.sapphire
+            tone: Design.accent
         },
         {
             id: "power-saver",
             glyph: "\u{f0084}",
             title: I18n.tr("Low Power"),
             hint: I18n.tr("Caps performance to stretch the charge"),
-            tone: Design.green
+            tone: Design.accent
         }
     ]
 
@@ -146,9 +146,8 @@ MiniView {
         Slider {
             visible: Power.hasBacklight
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: Power.brightness
-            tone: Design.yellow
             icon: "\u{f00df}"
             label: I18n.tr("Brightness")
             onMoved: pct => Power.setBrightness(pct)
@@ -160,9 +159,8 @@ MiniView {
             delegate: Slider {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: modelData.brightness
-                tone: Design.yellow
                 icon: "\u{f0379}"
                 label: modelData.name
                 onMoved: pct => Monitors.setBrightness(modelData.id, pct)
@@ -222,7 +220,7 @@ MiniView {
                             Icon {
                                 text: modeRow.modelData.glyph
                                 role: "body"
-                                color: modeRow.modelData.tone
+                                color: modeRow.active ? Design.accent : Design.textDim
                             }
 
                             ColumnLayout {

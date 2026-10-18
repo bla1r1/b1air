@@ -1,0 +1,3 @@
+module osd
+IdentifyOverlay 1.0 IdentifyOverlay.qml
+OsdOverlay 1.0 OsdOverlay.qml

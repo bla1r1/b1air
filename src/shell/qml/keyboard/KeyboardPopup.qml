@@ -70,17 +70,21 @@ PopupShell {
         for (const dev of inputs) {
             if (dev.type !== "keyboard")
                 continue;
+            // sway's index is into its own order (us first), not this list's.
             const idx = Number(dev.xkb_active_layout_index || 0);
-            window.activeIndex = idx;
-            if (window.configuredLanguages.length > idx)
-                window.activeCode = window.configuredLanguages[idx];
+            if (Settings.swayLayouts.length > idx)
+                window.activeCode = Settings.swayLayouts[idx];
+            window.activeIndex = window.configuredLanguages.indexOf(window.activeCode);
             return;
         }
     })
 
     function switchLayout(idx) {
         window.activeIndex = idx;
-        Sway.command("input type:keyboard xkb_switch_layout " + Number(idx));
+        window.activeCode = window.configuredLanguages[idx];
+        const swayIdx = Settings.swayLayouts.indexOf(window.activeCode);
+        if (swayIdx < 0) return;
+        Sway.command("input type:keyboard xkb_switch_layout " + swayIdx);
         window.close();
     }
 
@@ -102,7 +106,7 @@ PopupShell {
             Layout.fillWidth: true
             Layout.leftMargin: Design.s(Design.space.xs)
             Layout.rightMargin: Design.s(Design.space.xs)
-            Layout.topMargin: Design.s(2)
+            Layout.topMargin: Design.s(Design.space.xxs)
             spacing: Design.s(Design.space.xs)
 
             Icon {
@@ -114,7 +118,7 @@ PopupShell {
             Label {
                 text: I18n.tr("Input Sources")
                 role: "caption"
-                weight: Design.weight.bold
+                weight: Design.weight.semibold
                 color: Design.textDim
                 Layout.fillWidth: true
             }
@@ -130,7 +134,7 @@ PopupShell {
         // Layouts List
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: Design.s(2)
+            spacing: Design.s(Design.space.xxs)
 
             Repeater {
                 model: window.configuredLanguages
@@ -141,13 +145,13 @@ PopupShell {
                     required property int index
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(34)
+                    Layout.preferredHeight: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isActive: window.activeIndex === row.index
                     readonly property var info: window.getLangInfo(row.modelData)
 
-                    color: rowMa.containsMouse ? Design.raised : (row.isActive ? Design.tint(Design.accent, 0.12) : "transparent")
+                    color: rowMa.containsMouse ? Design.glassHover : (row.isActive ? Design.tint(Design.accent, 0.12) : "transparent")
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
@@ -159,16 +163,16 @@ PopupShell {
 
                         // macOS-style Layout Badge
                         Rectangle {
-                            width: Design.s(32); height: Design.s(20); radius: Design.s(4)
+                            width: Design.s(Design.size.md); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
                             color: row.isActive ? Design.accent : Design.sunken
-                            border.color: row.isActive ? Design.accent : Design.raised
+                            border.color: row.isActive ? Design.accent : Design.glassBorder
                             border.width: 1
 
                             Label {
                                 anchors.centerIn: parent
                                 text: row.info.badge
                                 role: "caption"
-                                weight: Design.weight.bold
+                                weight: Design.weight.semibold
                                 isMono: true
                                 color: row.isActive ? Design.surface : Design.text
                             }
@@ -179,7 +183,7 @@ PopupShell {
                             text: row.info.name
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            weight: row.isActive ? Design.weight.bold : Design.weight.medium
+                            weight: row.isActive ? Design.weight.semibold : Design.weight.medium
                             color: row.isActive ? Design.text : Design.textDim
                         }
 
@@ -211,9 +215,9 @@ PopupShell {
         // "Keyboard Settings..." Action Row
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(32)
+            Layout.preferredHeight: Design.s(Design.size.md)
             radius: Design.s(Design.radius.ctl)
-            color: settMa.containsMouse ? Design.raised : "transparent"
+            color: settMa.containsMouse ? Design.glassHover : "transparent"
 
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 

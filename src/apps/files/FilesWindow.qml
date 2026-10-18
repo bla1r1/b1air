@@ -38,10 +38,10 @@ C.ApplicationWindow {
 
     title: I18n.tr("%1 — Files", window.device ? (window.device.name || "iPod")
                                : FilesBackend.inTrash ? I18n.tr("Trash") : window.folderName)
-    width: Design.s(1120)
-    height: Design.s(720)
-    minimumWidth: 760
-    minimumHeight: 480
+    width: Design.s(Design.window.largeWidth)
+    height: Design.s(Design.window.largeHeight)
+    minimumWidth: Design.s(Design.window.largeMinWidth)
+    minimumHeight: Design.s(Design.window.largeMinHeight)
     visible: true
     // Transparent, so the sidebar can be glass (the compositor blurs what is
     // behind it); the rest of the window paints its own opaque surface below.
@@ -227,7 +227,9 @@ C.ApplicationWindow {
     }
     function toneFor(category) {
         switch (category) {
-        case "folder":     return Design.accent;
+        // A named hue, as every other kind: in the accent, folders changed
+        // colour with the accent and looked selected.
+        case "folder":     return Design.blue;
         case "image":      return Design.mauve;
         case "video":      return Design.peach;
         case "audio":      return Design.pink;
@@ -539,12 +541,12 @@ C.ApplicationWindow {
         }
     }
 
-    // Everything right of the sidebar, opaque: reading wants a solid page.
+    // The window's glass, the same as the shell's panels: under the content
+    // and round the sidebar, which is a pane of its own set in from the edges
+    // (Ui/AppSidebar).
     Rectangle {
-        x: sidebar.width
-        width: parent.width - x
-        height: parent.height
-        color: Design.surface
+        anchors.fill: parent
+        color: Design.glassBg
         visible: Design.translucent
     }
 
@@ -563,200 +565,184 @@ C.ApplicationWindow {
         spacing: 0
 
         // ── Sidebar ──────────────────────────────────────────────────────────
-        Rectangle {
+        // Ui/AppSidebar: the same glass, hairline, margins and scrolling as
+        // every app's; it was a Rectangle with all of those written out.
+        AppSidebar {
             id: sidebar
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(224)
-            color: Design.glassSidebar
+            spacing: Design.s(Design.space.xxs)
 
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+            SidebarHeading { text: I18n.tr("Places") }
+            SideRow { label: I18n.tr("Home"); glyph: "\u{f02dc}"; path: window.homeDir }
+            Repeater {
+                model: [
+                    { label: I18n.tr("Desktop"),   glyph: "\u{f01c4}", sub: "Desktop" },
+                    { label: I18n.tr("Documents"), glyph: "\u{f0219}", sub: "Documents" },
+                    { label: I18n.tr("Downloads"), glyph: "\u{f01da}", sub: "Downloads" },
+                    { label: I18n.tr("Pictures"),  glyph: "\u{f02e9}", sub: "Pictures" },
+                    { label: I18n.tr("Music"),     glyph: "\u{f075a}", sub: "Music" },
+                    { label: I18n.tr("Videos"),    glyph: "\u{f0567}", sub: "Videos" }
+                ]
+                delegate: SideRow {
+                    required property var modelData
+                    label: modelData.label
+                    glyph: modelData.glyph
+                    path: window.homeDir + "/" + modelData.sub
+                    visible: FilesBackend.pathExists(path)
+                }
+            }
+            SideRow {
+                label: I18n.tr("Trash")
+                glyph: FilesBackend.trashCount > 0 ? "\u{f0a7a}" : "\u{f0a79}"
+                path: FilesBackend.trashPath
+                badge: FilesBackend.trashCount > 0 ? String(FilesBackend.trashCount) : ""
+            }
 
-            // Same margins and parts as Settings' sidebar (Ui/SidebarItem).
-            C.ScrollView {
-                anchors.fill: parent
-                anchors.topMargin: Design.s(Design.space.md)
-                anchors.bottomMargin: Design.s(Design.space.md)
-                anchors.leftMargin: Design.s(Design.space.sm)
-                anchors.rightMargin: Design.s(Design.space.sm) + 1
-                contentWidth: availableWidth
-                C.ScrollBar.horizontal.policy: C.ScrollBar.AlwaysOff
+            SidebarHeading { text: I18n.tr("Devices") }
+            // The system disk's own free space: diskFreeSpace is the
+            // folder's, so this read a phone's or a stick's while in it.
+            SideRow {
+                label: I18n.tr("File System"); glyph: "\u{f02ca}"; path: "/"
+                detail: I18n.tr("%1 free", (FilesBackend.diskFreeSpace, FilesBackend.freeSpaceOf("/")))
+            }
+            Repeater {
+                model: FilesBackend.volumes
+                delegate: SideRow {
+                    required property var modelData
+                    // An iPod is listed below, as itself.
+                    visible: !(modelData.ipod && Devices.ipodSupport)
+                    label: modelData.name
+                    glyph: "\u{f02cb}"
+                    path: modelData.path
+                    detail: I18n.tr("%1 free", modelData.free)
+                    ejectable: true
+                    onEject: FilesBackend.unmount(modelData.path)
+                }
+            }
 
-                ColumnLayout {
-                    width: parent.width
-                    spacing: Design.s(2)
-
-                    SideHeading { text: I18n.tr("Places") }
-                    SideRow { label: I18n.tr("Home"); glyph: "\u{f02dc}"; path: window.homeDir }
-                    Repeater {
-                        model: [
-                            { label: I18n.tr("Desktop"),   glyph: "\u{f01c4}", sub: "Desktop" },
-                            { label: I18n.tr("Documents"), glyph: "\u{f0219}", sub: "Documents" },
-                            { label: I18n.tr("Downloads"), glyph: "\u{f01da}", sub: "Downloads" },
-                            { label: I18n.tr("Pictures"),  glyph: "\u{f02e9}", sub: "Pictures" },
-                            { label: I18n.tr("Music"),     glyph: "\u{f075a}", sub: "Music" },
-                            { label: I18n.tr("Videos"),    glyph: "\u{f0567}", sub: "Videos" }
-                        ]
-                        delegate: SideRow {
-                            required property var modelData
-                            label: modelData.label
-                            glyph: modelData.glyph
-                            path: window.homeDir + "/" + modelData.sub
-                            visible: FilesBackend.pathExists(path)
-                        }
-                    }
-                    SideRow {
-                        label: I18n.tr("Trash")
-                        glyph: FilesBackend.trashCount > 0 ? "\u{f0a7a}" : "\u{f0a79}"
-                        path: FilesBackend.trashPath
-                        badge: FilesBackend.trashCount > 0 ? String(FilesBackend.trashCount) : ""
-                    }
-
-                    SideHeading { text: I18n.tr("Devices") }
-                    // The system disk's own free space: diskFreeSpace is the
-                    // folder's, so this read a phone's or a stick's while in it.
-                    SideRow {
-                        label: I18n.tr("File System"); glyph: "\u{f02ca}"; path: "/"
-                        detail: I18n.tr("%1 free", (FilesBackend.diskFreeSpace, FilesBackend.freeSpaceOf("/")))
-                    }
-                    Repeater {
-                        model: FilesBackend.volumes
-                        delegate: SideRow {
-                            required property var modelData
-                            // An iPod is listed below, as itself.
-                            visible: !(modelData.ipod && Devices.ipodSupport)
-                            label: modelData.name
-                            glyph: "\u{f02cb}"
-                            path: modelData.path
-                            detail: I18n.tr("%1 free", modelData.free)
-                            ejectable: true
-                            onEject: FilesBackend.unmount(modelData.path)
-                        }
-                    }
-
-                    Repeater {
-                        model: Devices.devices
-                        delegate: SidebarItem {
-                            id: devRow
-                            required property var modelData
-                            readonly property bool phone: modelData.kind !== "ipod"
-                            label: modelData.name || "iPod"
-                            glyph: phone ? "\u{f011c}" : "\u{f075a}"
-                            detail: phone && (modelData.battery ?? -1) >= 0 ? I18n.tr("Battery %1%", modelData.battery)
-                                  : phone && modelData.state !== "ready" ? I18n.tr("Not trusted yet")
-                                  : modelData.free_bytes ? I18n.tr("%1 free", window.bytesText(modelData.free_bytes))
-                                  : (modelData.model || "")
-                            active: !!window.device && window.device.id === modelData.id
-                            highlight: devDrop.containsDrag
-                            onClicked: window.openDevice(modelData)
-                            overlay: [
-                                DropArea {
-                                    id: devDrop
-                                    anchors.fill: parent
-                                    keys: ["text/uri-list"]
-                                    enabled: !devRow.phone
-                                    onDropped: drop => {
-                                        const paths = [];
-                                        for (const u of drop.urls) {
-                                            const s = String(u);
-                                            if (s.startsWith("file://")) paths.push(decodeURIComponent(s.substring(7)));
-                                        }
-                                        if (devRow.phone) return;
-                                        Devices.addFiles(devRow.modelData.path, paths);
-                                        window.openDevice(devRow.modelData);
-                                        drop.accept(Qt.CopyAction);
-                                    }
+            Repeater {
+                model: Devices.devices
+                delegate: SidebarItem {
+                    id: devRow
+                    required property var modelData
+                    readonly property bool phone: modelData.kind !== "ipod"
+                    label: modelData.name || "iPod"
+                    glyph: phone ? "\u{f011c}" : "\u{f075a}"
+                    detail: phone && (modelData.battery ?? -1) >= 0 ? I18n.tr("Battery %1%", modelData.battery)
+                          : phone && modelData.state !== "ready" ? I18n.tr("Not trusted yet")
+                          : modelData.free_bytes ? I18n.tr("%1 free", window.bytesText(modelData.free_bytes))
+                          : (modelData.model || "")
+                    active: !!window.device && window.device.id === modelData.id
+                    highlight: devDrop.containsDrag
+                    onClicked: window.openDevice(modelData)
+                    overlay: [
+                        DropArea {
+                            id: devDrop
+                            anchors.fill: parent
+                            keys: ["text/uri-list"]
+                            enabled: !devRow.phone
+                            onDropped: drop => {
+                                const paths = [];
+                                for (const u of drop.urls) {
+                                    const s = String(u);
+                                    if (s.startsWith("file://")) paths.push(decodeURIComponent(s.substring(7)));
                                 }
-                            ]
-                            BarButton {
-                                visible: !devRow.phone || !!devRow.modelData.mountPath
-                                glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Eject")
-                                onClicked: Devices.eject(devRow.modelData.id)
+                                if (devRow.phone) return;
+                                Devices.addFiles(devRow.modelData.path, paths);
+                                window.openDevice(devRow.modelData);
+                                drop.accept(Qt.CopyAction);
                             }
                         }
+                    ]
+                    Button {
+                        variant: "ghost"
+                        iconOnly: true
+                        visible: !devRow.phone || !!devRow.modelData.mountPath
+                        icon: "\u{f01ea}"; size: "sm"; tip: I18n.tr("Eject")
+                        onClicked: Devices.eject(devRow.modelData.id)
                     }
+                }
+            }
 
-                    SideHeading {
-                        text: I18n.tr("Network")
-                        action: "\u{f0415}"
-                        actionTip: I18n.tr("Connect to Server…")
-                        onActionClicked: serverDialog.ask("")
-                    }
-                    Repeater {
-                        model: FilesBackend.shares
-                        delegate: SideRow {
-                            required property var modelData
-                            label: modelData.name
-                            glyph: "\u{f0200}"
-                            path: modelData.path
-                            detail: modelData.server
-                            ejectable: true
-                            onEject: FilesBackend.unmount(modelData.path)
-                        }
-                    }
-                    SidebarItem {
-                        visible: FilesBackend.shares.length === 0
-                        label: I18n.tr("Connect to Server…")
-                        glyph: "\u{f0200}"
-                        onClicked: serverDialog.ask("")
-                    }
+            SidebarHeading {
+                text: I18n.tr("Network")
+                action: "\u{f0415}"
+                actionTip: I18n.tr("Connect to Server…")
+                onActionClicked: serverDialog.ask("")
+            }
+            Repeater {
+                model: FilesBackend.shares
+                delegate: SideRow {
+                    required property var modelData
+                    label: modelData.name
+                    glyph: "\u{f0200}"
+                    path: modelData.path
+                    detail: modelData.server
+                    ejectable: true
+                    onEject: FilesBackend.unmount(modelData.path)
+                }
+            }
+            SidebarItem {
+                visible: FilesBackend.shares.length === 0
+                label: I18n.tr("Connect to Server…")
+                glyph: "\u{f0200}"
+                onClicked: serverDialog.ask("")
+            }
 
-                    SideHeading {
-                        text: I18n.tr("Bookmarks")
-                        action: "\u{f0415}"
-                        actionTip: I18n.tr("Bookmark this folder (Ctrl+D)")
-                        onActionClicked: window.addBookmark(window.currentPath)
+            SidebarHeading {
+                text: I18n.tr("Bookmarks")
+                action: "\u{f0415}"
+                actionTip: I18n.tr("Bookmark this folder (Ctrl+D)")
+                onActionClicked: window.addBookmark(window.currentPath)
+            }
+            Repeater {
+                model: window.bookmarks
+                delegate: SideRow {
+                    required property var modelData
+                    required property int index
+                    label: modelData.name
+                    glyph: "\u{f00c0}"
+                    path: modelData.path
+                    removable: true
+                    onRemove: window.removeBookmark(index)
+                }
+            }
+            Label {
+                visible: window.bookmarks.length === 0
+                Layout.leftMargin: Design.s(Design.space.sm)
+                Layout.rightMargin: Design.s(Design.space.sm)
+                Layout.fillWidth: true
+                text: I18n.tr("Drag a folder here, or press Ctrl+D")
+                role: "caption"
+                color: Design.textFaint
+                wrapMode: Text.WordWrap
+            }
+            // Dropping a folder on the bookmark list bookmarks it.
+            DropArea {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(Design.size.sm)
+                keys: ["text/uri-list"]
+                onDropped: drop => {
+                    for (const u of drop.urls) {
+                        const p = decodeURIComponent(String(u).replace(/^file:\/\//, ""));
+                        if (FilesBackend.isDirectory(p)) window.addBookmark(p);
                     }
-                    Repeater {
-                        model: window.bookmarks
-                        delegate: SideRow {
-                            required property var modelData
-                            required property int index
-                            label: modelData.name
-                            glyph: "\u{f00c0}"
-                            path: modelData.path
-                            removable: true
-                            onRemove: window.removeBookmark(index)
-                        }
-                    }
-                    Label {
-                        visible: window.bookmarks.length === 0
-                        Layout.leftMargin: Design.s(Design.space.sm)
-                        Layout.rightMargin: Design.s(Design.space.sm)
-                        Layout.fillWidth: true
-                        text: I18n.tr("Drag a folder here, or press Ctrl+D")
-                        role: "caption"
-                        color: Design.textFaint
-                        wrapMode: Text.WordWrap
-                    }
-                    // Dropping a folder on the bookmark list bookmarks it.
-                    DropArea {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(28)
-                        keys: ["text/uri-list"]
-                        onDropped: drop => {
-                            for (const u of drop.urls) {
-                                const p = decodeURIComponent(String(u).replace(/^file:\/\//, ""));
-                                if (FilesBackend.isDirectory(p)) window.addBookmark(p);
-                            }
-                            drop.accept(Qt.LinkAction);
-                        }
-                    }
+                    drop.accept(Qt.LinkAction);
+                }
+            }
 
-                    SideHeading { text: I18n.tr("Tags") }
-                    Repeater {
-                        model: window.tagNames
-                        delegate: SideRow {
-                            required property string modelData
-                            readonly property int n: window.tagCounts[modelData] || 0
-                            label: I18n.tr(modelData)
-                            glyph: "\u25CF"
-                            glyphColor: window.tagColor(modelData)
-                            keepGlyphColor: true
-                            path: "tag:" + modelData
-                            badge: n > 0 ? String(n) : ""
-                        }
-                    }
-
+            SidebarHeading { text: I18n.tr("Tags") }
+            Repeater {
+                model: window.tagNames
+                delegate: SideRow {
+                    required property string modelData
+                    readonly property int n: window.tagCounts[modelData] || 0
+                    label: I18n.tr(modelData)
+                    glyph: "\u25CF"
+                    glyphColor: window.tagColor(modelData)
+                    keepGlyphColor: true
+                    path: "tag:" + modelData
+                    badge: n > 0 ? String(n) : ""
                 }
             }
         }
@@ -798,23 +784,23 @@ C.ApplicationWindow {
             // Folder chooser bar, in --pick-folder mode.
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(52)
+                Layout.preferredHeight: Design.s(Design.size.rowTall)
                 visible: FilesBackend.pickMode
-                color: Design.tint(Design.accent, 0.14)
+                color: Design.well
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Design.s(Design.space.lg)
                     anchors.rightMargin: Design.s(Design.space.lg)
                     spacing: Design.s(Design.space.md)
-                    Icon { text: "\u{f024b}"; color: Design.accent }
+                    Icon { text: "\u{f024b}"; color: Design.textDim }
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
                         Label { text: I18n.tr("Choose a folder"); role: "caption"; dim: true }
                         Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
                     }
-                    BarButton { label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
-                    BarButton { label: I18n.tr("Choose this folder"); primary: true; onClicked: FilesBackend.confirmPick() }
+                    Button { variant: "secondary"; label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
+                    Button { variant: "primary"; label: I18n.tr("Choose this folder");  onClicked: FilesBackend.confirmPick() }
                 }
             }
 
@@ -825,8 +811,8 @@ C.ApplicationWindow {
                 // Smart about its width: the search field becomes a button
                 // that opens it, and the four views one button with a menu,
                 // before the path is squeezed.
-                readonly property bool compactSearch: width < Design.s(880)
-                readonly property bool compactViews: width < Design.s(720)
+                readonly property bool compactSearch: width < Design.s(Design.width.menuMax)
+                readonly property bool compactViews: width < Design.s(Design.width.menuMax)
                 property bool searchOpen: false
                 readonly property bool searchShown: !compactSearch || searchOpen || FilesBackend.filterQuery !== ""
                 function openSearch() {
@@ -834,10 +820,11 @@ C.ApplicationWindow {
                     Qt.callLater(searchField.focusInput);
                 }
 
-                    BarGroup {
-                        BarButton { glyph: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                        BarButton { glyph: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                        BarButton { glyph: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
                     }
 
                     // Path: clickable segments; a click on the empty part of the
@@ -857,16 +844,16 @@ C.ApplicationWindow {
                             window.currentView().forceActiveFocus();
                         }
                         Layout.fillWidth: true
-                        Layout.minimumWidth: Design.s(140)
+                        Layout.minimumWidth: Design.s(Design.size.thumb)
                         Layout.horizontalStretchFactor: 3
-                        Layout.preferredHeight: Design.s(36)
+                        Layout.preferredHeight: Design.s(Design.size.knob)
                         radius: height / 2
                         color: Design.raised
                         border.color: editing ? Design.accent : Design.tint(Design.text, 0.06)
-                        border.width: 1
+                        border.width: Design.border
                         clip: true
 
-                        MouseArea {
+                        Clickable {
                             anchors.fill: parent
                             visible: !pathBar.editing
                             cursorShape: Qt.IBeamCursor
@@ -910,13 +897,14 @@ C.ApplicationWindow {
 
                         // The start of a path too long for the bar: one button
                         // in place of the folders cut off, listing them.
-                        BarButton {
+                        Button {
+                            variant: "secondary"
                             id: crumbMore
-                            visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(64) + 1
+                            visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(Design.size.tile) + 1
                             anchors.left: placeIcon.right
                             anchors.leftMargin: Design.s(Design.space.xs)
                             anchors.verticalCenter: parent.verticalCenter
-                            small: true
+                            size: "sm"
                             label: "…"
                             tip: I18n.tr("Whole path")
                             onClicked: crumbMenu.popup()
@@ -970,14 +958,14 @@ C.ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: "\u{f0142}"
                                     font.family: Design.font.icon
-                                    font.pixelSize: Design.s(12)
+                                    font.pixelSize: Design.s(Design.font.footnote)
                                     color: Design.textFaint
                                 }
                                 Rectangle {
                                     readonly property bool last: index === crumbs.count - 1
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: crumbText.width + Design.s(16)
-                                    height: Design.s(26)
+                                    width: crumbText.width + Design.s(Design.space.lg)
+                                    height: Design.s(Design.size.xs)
                                     // No capsule of its own inside the bar's: the
                                     // folder you are in is the bold one, and the
                                     // others light up only under the pointer.
@@ -1002,7 +990,7 @@ C.ApplicationWindow {
                                         font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
                                         color: parent.last ? Design.text : Design.textDim
                                     }
-                                    MouseArea {
+                                    Clickable {
                                         id: crumbMa
                                         anchors.fill: parent
                                         hoverEnabled: true
@@ -1025,9 +1013,9 @@ C.ApplicationWindow {
                         // Narrows before the path does: the path is what
                         // says where you are.
                         Layout.fillWidth: true
-                        Layout.maximumWidth: Design.s(240)
-                        Layout.minimumWidth: Design.s(110)
-                        Layout.preferredHeight: Design.s(36)
+                        Layout.maximumWidth: Design.s(Design.width.menuMin)
+                        Layout.minimumWidth: Design.s(Design.size.thumb)
+                        Layout.preferredHeight: Design.s(Design.size.knob)
                         radius: height / 2
                         color: Design.raised
                         placeholder: I18n.tr("Search (Ctrl+F)")
@@ -1036,39 +1024,51 @@ C.ApplicationWindow {
                         // Opened from the button: shut again once left empty.
                         onFocusedChanged: if (!focused && text === "") toolbar.searchOpen = false
                     }
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         visible: !toolbar.searchShown
-                        BarButton { glyph: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
                     }
 
-                    BarButton {
+                    Button {
+                        variant: "danger"
                         visible: FilesBackend.inTrash
-                        glyph: "\u{f0a7a}"
+                        icon: "\u{f0a7a}"
                         label: I18n.tr("Empty Trash")
-                        danger: true
                         enabled: FilesBackend.trashCount > 0
                         onClicked: confirmEmpty.open()
                     }
                     // New folder lives in the right-click menu and on
                     // Ctrl+Shift+N, not on the bar.
-                    BarGroup {
+                    // The four views: one choice, so one segmented control,
+                    // as every choice of view is; it was four toggle buttons.
+                    SegmentedControl {
                         visible: !toolbar.compactViews
-                        BarButton { glyph: "\u{f0570}"; tip: I18n.tr("Icons (Ctrl+1)"); checked: window.viewMode === "grid"; onClicked: window.viewMode = "grid" }
-                        BarButton { glyph: "\u{f0279}"; tip: I18n.tr("List (Ctrl+2)"); checked: window.viewMode === "list"; onClicked: window.viewMode = "list" }
-                        BarButton { glyph: "\u{f056d}"; tip: I18n.tr("Columns (Ctrl+3)"); checked: window.viewMode === "columns"; onClicked: window.viewMode = "columns" }
-                        BarButton { glyph: "\u{f056c}"; tip: I18n.tr("Gallery (Ctrl+4)"); checked: window.viewMode === "gallery"; onClicked: window.viewMode = "gallery" }
+                        size: "sm"
+                        model: [
+                            { id: "grid",    label: "", icon: "\u{f0570}", tip: I18n.tr("Icons (Ctrl+1)") },
+                            { id: "list",    label: "", icon: "\u{f0279}", tip: I18n.tr("List (Ctrl+2)") },
+                            { id: "columns", label: "", icon: "\u{f056d}", tip: I18n.tr("Columns (Ctrl+3)") },
+                            { id: "gallery", label: "", icon: "\u{f056c}", tip: I18n.tr("Gallery (Ctrl+4)") }
+                        ]
+                        current: window.viewMode
+                        onPicked: id => window.viewMode = id
                     }
-                    BarGroup {
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
                         visible: toolbar.compactViews
-                        BarButton {
-                            glyph: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
+                            icon: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
                             tip: I18n.tr("View (Ctrl+1 … Ctrl+4)")
                             onClicked: viewModeMenu.popup()
                         }
                     }
-                    BarGroup {
-                        BarButton { glyph: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                        BarButton { glyph: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
+                    RowLayout {
+                        spacing: Design.s(Design.space.xxs)
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
                     }
             }
 
@@ -1076,7 +1076,7 @@ C.ApplicationWindow {
             Flickable {
                 visible: window.tabs.length > 1
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(36)
+                Layout.preferredHeight: Design.s(Design.size.knob)
                 Layout.leftMargin: Design.s(Design.space.md)
                 Layout.rightMargin: Design.s(Design.space.md)
                 contentWidth: tabRow.implicitWidth
@@ -1099,7 +1099,7 @@ C.ApplicationWindow {
                             onCloseRequested: window.closeTab(index)
                         }
                     }
-                    BarButton { small: true; glyph: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
+                    Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
                 }
             }
 
@@ -1204,7 +1204,7 @@ C.ApplicationWindow {
                         Rectangle {
                             id: tileBg
                             anchors.fill: parent
-                            anchors.margins: Design.s(3)
+                            anchors.margins: Design.s(Design.space.xxs)
                             radius: Design.s(Design.radius.card)
                             color: tile.selected ? Design.tint(Design.accent, 0.24)
                                  : tileDrop.containsDrag ? Design.tint(Design.accent, 0.16)
@@ -1246,7 +1246,7 @@ C.ApplicationWindow {
                                     anchors.bottom: parent.bottom
                                     text: "\u{f0339}"
                                     font.family: Design.font.icon
-                                    font.pixelSize: Design.s(14)
+                                    font.pixelSize: Design.s(Design.font.glyphSm)
                                     color: Design.text
                                 }
                             }
@@ -1271,15 +1271,15 @@ C.ApplicationWindow {
                                 visible: tile.tags.length > 0
                                 anchors.right: thumbBox.right
                                 anchors.bottom: thumbBox.bottom
-                                spacing: -Design.s(3)
+                                spacing: -Design.s(Design.space.xxs)
                                 Repeater {
                                     model: tile.tags
                                     Rectangle {
                                         required property string modelData
-                                        width: Design.s(11); height: width; radius: width / 2
+                                        width: Design.s(Design.space.md); height: width; radius: width / 2
                                         color: window.tagColor(modelData)
                                         border.color: Design.surface
-                                        border.width: Design.s(1.5)
+                                        border.width: Design.border
                                     }
                                 }
                             }
@@ -1293,7 +1293,7 @@ C.ApplicationWindow {
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                             drag.target: tileProxy
-                            drag.threshold: Design.s(10)
+                            drag.threshold: Design.s(Design.space.sm)
                             onPressed: mouse => window.itemPressed(tile.index, mouse)
                             onReleased: mouse => window.itemReleased(tile.index, mouse, drag.active)
                             onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(tile.index); }
@@ -1316,18 +1316,18 @@ C.ApplicationWindow {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(34)
-                        color: Design.surface
+                        Layout.preferredHeight: Design.s(Design.size.md)
+                        color: "transparent"
                         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: Design.s(Design.space.lg)
                             anchors.rightMargin: Design.s(Design.space.lg)
                             spacing: Design.s(Design.space.md)
-                            ColumnHead { Layout.fillWidth: true; label: I18n.tr("Name"); field: "name" }
-                            ColumnHead { Layout.preferredWidth: Design.s(110); label: I18n.tr("Size"); field: "size"; alignRight: true }
-                            ColumnHead { Layout.preferredWidth: Design.s(170); label: I18n.tr("Kind"); field: "type" }
-                            ColumnHead { Layout.preferredWidth: Design.s(150); label: I18n.tr("Modified"); field: "time" }
+                            SortHead { Layout.fillWidth: true; label: I18n.tr("Name"); field: "name" }
+                            SortHead { Layout.preferredWidth: Design.s(Design.size.thumb); label: I18n.tr("Size"); field: "size"; alignRight: true }
+                            SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Kind"); field: "type" }
+                            SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Modified"); field: "time" }
                         }
                     }
 
@@ -1360,7 +1360,7 @@ C.ApplicationWindow {
                             required property string modifiedText
                             required property var tags
                             width: listView.width
-                            height: Design.s(36)
+                            height: Design.s(Design.size.knob)
 
                             Rectangle {
                                 anchors.fill: parent
@@ -1382,32 +1382,32 @@ C.ApplicationWindow {
                                         Layout.fillWidth: true
                                         spacing: Design.s(Design.space.sm)
                                         Text {
-                                            Layout.preferredWidth: Design.s(20)
+                                            Layout.preferredWidth: Design.s(Design.size.mini)
                                             text: window.glyphFor(row.category)
                                             font.family: Design.font.icon
-                                            font.pixelSize: Design.s(17)
+                                            font.pixelSize: Design.s(Design.font.glyph)
                                             color: window.toneFor(row.category)
                                             horizontalAlignment: Text.AlignHCenter
                                         }
                                         Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
                                         Row {
                                             visible: row.tags.length > 0
-                                            spacing: -Design.s(3)
+                                            spacing: -Design.s(Design.space.xxs)
                                             Repeater {
                                                 model: row.tags
                                                 Rectangle {
                                                     required property string modelData
-                                                    width: Design.s(10); height: width; radius: width / 2
+                                                    width: Design.s(Design.space.sm); height: width; radius: width / 2
                                                     color: window.tagColor(modelData)
                                                     border.color: Design.surface
-                                                    border.width: Design.s(1.5)
+                                                    border.width: Design.border
                                                 }
                                             }
                                         }
                                     }
-                                    Label { Layout.preferredWidth: Design.s(110); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
-                                    Label { Layout.preferredWidth: Design.s(170); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
-                                    Label { Layout.preferredWidth: Design.s(150); text: row.modifiedText; dim: true; elide: Text.ElideRight }
+                                    Label { Layout.preferredWidth: Design.s(Design.size.thumb); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
+                                    Label { Layout.preferredWidth: Design.s(Design.width.label); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
+                                    Label { Layout.preferredWidth: Design.s(Design.width.label); text: row.modifiedText; dim: true; elide: Text.ElideRight }
                                 }
                             }
 
@@ -1419,7 +1419,7 @@ C.ApplicationWindow {
                                 hoverEnabled: true
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                                 drag.target: rowProxy
-                                drag.threshold: Design.s(10)
+                                drag.threshold: Design.s(Design.space.sm)
                                 onPressed: mouse => window.itemPressed(row.index, mouse)
                                 onReleased: mouse => window.itemReleased(row.index, mouse, drag.active)
                                 onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(row.index); }
@@ -1497,7 +1497,7 @@ C.ApplicationWindow {
                         readonly property bool isLast: !col.preview && col.index === columnsView.dirs.length - 1
                         // The next folder on the way, lit in this column.
                         readonly property string onPath: col.index + 1 < columnsView.dirs.length ? columnsView.dirs[col.index + 1] : ""
-                        width: col.isPreview ? Math.max(Design.s(260), columnsView.width - columnsView.dirs.length * Design.s(220)) : Design.s(220)
+                        width: col.isPreview ? Math.max(Design.s(Design.size.canvas), columnsView.width - columnsView.dirs.length * Design.s(Design.width.control)) : Design.s(Design.width.control)
                         height: columnsView.height
                         sourceComponent: col.isPreview ? previewColumn : folderColumn
 
@@ -1523,6 +1523,15 @@ C.ApplicationWindow {
                                     }
                                 }
                                 Connections { target: FilesBackend; function onShowHiddenChanged() { folderCol.reopen(); } }
+                                // A folder further up the way: the window-wide
+                                // state only speaks for the last column.
+                                EmptyState {
+                                    anchors.centerIn: parent
+                                    width: parent.width - Design.s(Design.space.sm) * 2
+                                    visible: !col.isLast && other.count === 0 && !other.loading
+                                    icon: other.error ? "\u{f0b8a}" : "\u{f0256}"
+                                    title: other.error ? I18n.tr("Can't open") : I18n.tr("Empty folder")
+                                }
                                 ListView {
                                     id: colList
                                     anchors.fill: parent
@@ -1560,7 +1569,7 @@ C.ApplicationWindow {
                                         required property var tags
                                         readonly property bool lit: col.isLast ? crow.selected : crow.path === col.onPath
                                         width: colList.width
-                                        height: Design.s(28)
+                                        height: Design.s(Design.size.sm)
                                         radius: Design.s(Design.radius.sm)
                                         color: crow.lit ? (col.isLast || col.index === columnsView.dirs.length - 2
                                                            ? Design.accent : Design.tint(Design.text, 0.12))
@@ -1575,7 +1584,7 @@ C.ApplicationWindow {
                                             Text {
                                                 text: window.glyphFor(crow.category)
                                                 font.family: Design.font.icon
-                                                font.pixelSize: Design.s(15)
+                                                font.pixelSize: Design.s(Design.font.subhead)
                                                 color: crow.lit ? crow.ink : window.toneFor(crow.category)
                                             }
                                             Label { Layout.fillWidth: true; text: crow.name; color: crow.ink; elide: Text.ElideMiddle }
@@ -1583,7 +1592,7 @@ C.ApplicationWindow {
                                                 model: crow.tags
                                                 Rectangle {
                                                     required property string modelData
-                                                    width: Design.s(8); height: width; radius: width / 2
+                                                    width: Design.s(Design.space.sm); height: width; radius: width / 2
                                                     color: window.tagColor(modelData)
                                                 }
                                             }
@@ -1591,7 +1600,7 @@ C.ApplicationWindow {
                                                 visible: crow.isDir
                                                 text: "\u{f0142}"
                                                 font.family: Design.font.icon
-                                                font.pixelSize: Design.s(13)
+                                                font.pixelSize: Design.s(Design.font.body)
                                                 color: crow.lit ? crow.ink : Design.textFaint
                                             }
                                         }
@@ -1665,7 +1674,7 @@ C.ApplicationWindow {
                     ListView {
                         id: strip
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(92)
+                        Layout.preferredHeight: Design.s(Design.size.avatar)
                         orientation: ListView.Horizontal
                         model: window.viewMode === "gallery" ? fm : null
                         clip: true
@@ -1699,20 +1708,20 @@ C.ApplicationWindow {
                             required property bool selected
                             required property string category
                             required property var modified
-                            y: Design.s(10)
-                            width: Design.s(72)
-                            height: Design.s(72)
+                            y: Design.s(Design.space.sm)
+                            width: Design.s(Design.size.stat)
+                            height: Design.s(Design.size.stat)
                             radius: Design.s(Design.radius.sm)
                             color: gthumb.selected ? Design.tint(Design.accent, 0.2) : Design.well
                             border.color: gthumb.selected ? Design.accent : "transparent"
-                            border.width: Design.s(2)
+                            border.width: Design.s(Design.focusWidth)
                             Image {
                                 id: gimg
                                 anchors.fill: parent
-                                anchors.margins: Design.s(4)
+                                anchors.margins: Design.s(Design.space.xs)
                                 visible: (gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio") && status === Image.Ready
                                 source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path, gthumb.modified) : ""
-                                sourceSize: Qt.size(Design.s(144), Design.s(144))
+                                sourceSize: Qt.size(Design.s(Design.width.label), Design.s(Design.width.label))
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                             }
@@ -1721,7 +1730,7 @@ C.ApplicationWindow {
                                 visible: !gimg.visible
                                 text: window.glyphFor(gthumb.category)
                                 font.family: Design.font.icon
-                                font.pixelSize: Design.s(30)
+                                font.pixelSize: Design.s(Design.font.display)
                                 color: window.toneFor(gthumb.category)
                             }
                             MouseArea {
@@ -1735,54 +1744,27 @@ C.ApplicationWindow {
                     }
                 }
 
-                // ── Still being read (a network drive) ───────────────────────
-                Label {
-                    anchors.centerIn: parent
-                    visible: fm.loading && fm.count === 0
-                    text: I18n.tr("Loading…")
-                    dim: true
-                }
-
-                // ── Nothing to show ──────────────────────────────────────────
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    width: Math.min(parent.width - Design.s(48), Design.s(360))
-                    visible: fm.count === 0 && !fm.loading
-                    spacing: Design.s(Design.space.sm)
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: fm.error ? "\u{f0b8a}"
+                // ── Still being read (a network drive), or nothing to show ────
+                AppState {
+                    anchors.fill: parent
+                    mode: fm.count > 0 ? "" : fm.loading ? "loading" : fm.error ? "error" : "empty"
+                    icon: fm.error ? "\u{f0b8a}"
                             : FilesBackend.filterQuery ? "\u{f0349}"
                             : FilesBackend.inTrash ? "\u{f0a79}" : "\u{f0256}"
-                        font.family: Design.font.icon
-                        font.pixelSize: Design.s(56)
-                        color: Design.textFaint
-                    }
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        role: "subhead"
-                        weight: Design.weight.semibold
-                        text: fm.error ? I18n.tr("Can't open this folder")
-                            : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
-                            : FilesBackend.inTrash ? I18n.tr("Trash is empty")
-                            : window.tagView ? I18n.tr("Nothing tagged %1", window.folderName)
-                            : I18n.tr("This folder is empty")
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.WordWrap
-                        dim: true
-                        text: fm.error ? fm.error
-                            : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
-                            : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
-                            : window.tagView ? I18n.tr("Right-click a file and pick a colour, or drop files on the tag in the sidebar.")
-                            // An iPhone's camera folder with nothing in it: the
-                            // photos are in iCloud, the phone keeps only previews.
-                            : /\/b1air-devices\/[^/]+\/media\/DCIM\//.test(FilesBackend.currentPath)
-                              ? I18n.tr("Photos kept only in iCloud are not on the phone itself. Turn off Optimize iPhone Storage in the phone's Photos settings to keep them here.")
-                            : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
-                    }
+                    title: fm.loading ? I18n.tr("Loading…") : fm.error ? I18n.tr("Can't open this folder")
+                                : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
+                                : FilesBackend.inTrash ? I18n.tr("Trash is empty")
+                                : window.tagView ? I18n.tr("Nothing tagged %1", window.folderName)
+                                : I18n.tr("This folder is empty")
+                    hint: fm.error ? fm.error
+                                : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
+                                : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
+                                : window.tagView ? I18n.tr("Right-click a file and pick a colour, or drop files on the tag in the sidebar.")
+                                // An iPhone's camera folder with nothing in it: the
+                                // photos are in iCloud, the phone keeps only previews.
+                                : /\/b1air-devices\/[^/]+\/media\/DCIM\//.test(FilesBackend.currentPath)
+                                  ? I18n.tr("Photos kept only in iCloud are not on the phone itself. Turn off Optimize iPhone Storage in the phone's Photos settings to keep them here.")
+                                : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
                 }
             }
 
@@ -1793,7 +1775,7 @@ C.ApplicationWindow {
                     Layout.fillWidth: true
                     role: "caption"
                     elide: Text.ElideRight
-                    color: window.statusNote ? Design.accent : Design.textDim
+                    color: window.statusNote ? Design.text : Design.textDim
                     text: window.statusNote
                           || (FilesBackend.busy ? I18n.tr("Copying…")
                           : fm.selectionCount > 0 ? window.selectionText() : window.folderSummary())
@@ -1803,8 +1785,8 @@ C.ApplicationWindow {
                 RowLayout {
                     visible: window.viewMode === "grid"
                     spacing: Design.s(Design.space.xs)
-                    BarButton { glyph: "\u{f0374}"; small: true; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
-                    BarButton { glyph: "\u{f0415}"; small: true; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; size: "sm"; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; size: "sm"; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                 }
             }
         }
@@ -1812,12 +1794,12 @@ C.ApplicationWindow {
         // ── Details panel ────────────────────────────────────────────────────
         Rectangle {
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(270)
+            Layout.preferredWidth: Design.s(Design.size.canvas)
             // Not beside the column view or the gallery: they preview it themselves.
             clip: true   // nothing it shows may reach into the folder beside it
             visible: window.showInfo && window.width > 980 && !window.device
                      && window.viewMode !== "columns" && window.viewMode !== "gallery"
-            color: Design.sunken
+            color: Design.veil
             Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
 
             // What it describes: the one selected item, or the folder itself.
@@ -1871,8 +1853,8 @@ C.ApplicationWindow {
                             Layout.alignment: Qt.AlignHCenter
                             text: "\u{f0c51}"
                             font.family: Design.font.icon
-                            font.pixelSize: Design.s(72)
-                            color: Design.accent
+                            font.pixelSize: Design.s(Design.font.hero)
+                            color: Design.textFaint
                         }
                         Label { Layout.alignment: Qt.AlignHCenter; role: "subhead"; weight: Design.weight.semibold; text: I18n.trn("%1 item", "%1 items", fm.selectionCount) }
                         Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; dim: true; text: window.selectionText() }
@@ -1886,7 +1868,7 @@ C.ApplicationWindow {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(150)
+                            Layout.preferredHeight: Design.s(Design.width.label)
                             radius: Design.s(Design.radius.card)
                             color: Design.raised
                             Image {
@@ -1895,7 +1877,7 @@ C.ApplicationWindow {
                                 anchors.margins: Design.s(Design.space.sm)
                                 visible: infoPanel.info.category === "image" && status === Image.Ready
                                 source: infoPanel.info.category === "image" ? Paths.fileUrl(infoPanel.info.path) : ""
-                                sourceSize: Qt.size(Design.s(500), Design.s(300))
+                                sourceSize: Qt.size(Design.s(Design.width.menuMax), Design.s(Design.width.select))
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                             }
@@ -1904,7 +1886,7 @@ C.ApplicationWindow {
                                 visible: !preview.visible
                                 text: window.glyphFor(infoPanel.info.category || "folder")
                                 font.family: Design.font.icon
-                                font.pixelSize: Design.s(84)
+                                font.pixelSize: Design.s(Design.font.hero)
                                 color: window.toneFor(infoPanel.info.category || "folder")
                             }
                         }
@@ -2017,7 +1999,7 @@ C.ApplicationWindow {
             id: tagRow
             visible: !itemMenu.trash
             width: parent ? parent.width : 0
-            height: visible ? Design.s(34) : 0
+            height: visible ? Design.s(Design.size.md) : 0
             readonly property var common: {
                 const s = window.tagStamp;   // re-read after a change
                 if (itemMenu.paths.length === 0) return [];
@@ -2032,28 +2014,26 @@ C.ApplicationWindow {
                 anchors.left: parent.left
                 anchors.leftMargin: Design.s(Design.space.md)
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: Design.s(8)
+                spacing: Design.s(Design.space.sm)
                 Repeater {
                     model: window.tagNames
                     Rectangle {
                         id: dot
                         required property string modelData
                         readonly property bool on: tagRow.common.indexOf(modelData) >= 0
-                        width: Design.s(18); height: width; radius: width / 2
+                        width: Design.s(Design.size.micro); height: width; radius: width / 2
                         color: window.tagColor(modelData)
                         border.color: dot.on ? Design.text : "transparent"
-                        border.width: Design.s(2)
-                        scale: dotMa.containsMouse ? 1.15 : 1.0
-                        Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
+                        border.width: Design.s(Design.focusWidth)
                         Text {
                             anchors.centerIn: parent
                             visible: dot.on
                             text: "\u{f012c}"
                             font.family: Design.font.icon
-                            font.pixelSize: Design.s(11)
+                            font.pixelSize: Design.s(Design.font.caption)
                             color: Design.readableOn(dot.color)
                         }
-                        MouseArea {
+                        Clickable {
                             id: dotMa
                             anchors.fill: parent
                             hoverEnabled: true
@@ -2132,7 +2112,7 @@ C.ApplicationWindow {
         // implicitWidth given to it, so the dialog sized to its widest text
         // and jumped when that text changed.
         contentItem: Item {
-            implicitWidth: Design.s(420)
+            implicitWidth: Design.s(Design.width.menuMax)
             implicitHeight: nameBody.implicitHeight
             ColumnLayout {
                 id: nameBody
@@ -2194,7 +2174,7 @@ C.ApplicationWindow {
             }
         }
         contentItem: Item {
-            implicitWidth: Design.s(440)
+            implicitWidth: Design.s(Design.width.menuMax)
             implicitHeight: serverBody.implicitHeight
             ColumnLayout {
                 id: serverBody
@@ -2225,7 +2205,7 @@ C.ApplicationWindow {
                     }
                     ColumnLayout {
                         visible: serverDialog.smb
-                        Layout.preferredWidth: Design.s(140)
+                        Layout.preferredWidth: Design.s(Design.size.thumb)
                         spacing: Design.s(Design.space.xs)
                         Label { text: I18n.tr("Domain"); role: "caption"; dim: true }
                         Field { id: serverDomain; Layout.fillWidth: true; placeholder: "WORKGROUP"; onAccepted: serverDialog.accept() }
@@ -2263,9 +2243,11 @@ C.ApplicationWindow {
                         glyph: "\u{f0200}"
                         detail: modelData.user || I18n.tr("Guest")
                         onClicked: serverDialog.fill(modelData)
-                        BarButton {
+                        Button {
+                            variant: "ghost"
+                            iconOnly: true
                             visible: recentRow.hovered || hovered
-                            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Forget")
+                            icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Forget")
                             onClicked: FilesBackend.forgetServer(recentRow.modelData.uri)
                         }
                     }
@@ -2304,12 +2286,12 @@ C.ApplicationWindow {
             }
         }
         contentItem: Item {
-            implicitWidth: Design.s(360)
+            implicitWidth: Design.s(Design.width.dialog)
             implicitHeight: shareList.implicitHeight
             ColumnLayout {
                 id: shareList
                 width: parent.width
-                spacing: Design.s(2)
+                spacing: Design.s(Design.space.xxs)
                 Repeater {
                     model: sharePicker.names
                     delegate: SidebarItem {
@@ -2331,7 +2313,7 @@ C.ApplicationWindow {
         title: paths.length === 1 ? I18n.tr("Delete “%1” permanently?", String(paths[0]).split("/").pop())
                                   : I18n.trn("Delete %1 item permanently?", "Delete %1 items permanently?", paths.length)
         message: I18n.tr("This cannot be undone. Nothing goes to the trash.")
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Delete") })
         onAccepted: FilesBackend.deletePermanently(paths)
@@ -2404,16 +2386,18 @@ C.ApplicationWindow {
         }
         onRejected: window.currentView().forceActiveFocus()
         contentItem: Item {
-            implicitWidth: Design.s(460)
+            implicitWidth: Design.s(Design.width.menuMax)
             implicitHeight: batchBody.implicitHeight
             ColumnLayout {
                 id: batchBody
                 width: parent.width
                 spacing: Design.s(Design.space.sm)
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
-                    Pill { label: I18n.tr("Pattern"); active: batchDialog.mode === "pattern"; onClicked: batchDialog.mode = "pattern" }
-                    Pill { label: I18n.tr("Find & replace"); active: batchDialog.mode === "replace"; onClicked: batchDialog.mode = "replace" }
+                SegmentedControl {
+                    size: "sm"
+                    model: [{ id: "pattern", label: I18n.tr("Pattern") },
+                            { id: "replace", label: I18n.tr("Find & replace") }]
+                    current: batchDialog.mode
+                    onPicked: id => batchDialog.mode = id
                 }
                 ColumnLayout {
                     visible: batchDialog.mode === "pattern"
@@ -2439,7 +2423,7 @@ C.ApplicationWindow {
                     Repeater {
                         model: [{ id: "keep", label: I18n.tr("As is") }, { id: "lower", label: "lower" },
                                 { id: "upper", label: I18n.tr("UPPER") }, { id: "title", label: I18n.tr("Title") }]
-                        delegate: Pill {
+                        delegate: Chip {
                             required property var modelData
                             label: modelData.label
                             active: batchDialog.caseMode === modelData.id
@@ -2452,12 +2436,12 @@ C.ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: renamePreview.implicitHeight + Design.s(Design.space.sm) * 2
                     radius: Design.s(Design.radius.ctl)
-                    color: Design.sunken
+                    color: Design.well
                     Column {
                         id: renamePreview
                         anchors.fill: parent
                         anchors.margins: Design.s(Design.space.sm)
-                        spacing: Design.s(2)
+                        spacing: Design.s(Design.space.xxs)
                         Repeater {
                             model: Math.min(6, batchDialog.paths.length)
                             delegate: RowLayout {
@@ -2512,7 +2496,7 @@ C.ApplicationWindow {
         // implicitWidth given to it, so the dialog sized to its widest text
         // and jumped when that text changed.
         contentItem: Item {
-            implicitWidth: Design.s(420)
+            implicitWidth: Design.s(Design.width.menuMax)
             implicitHeight: compressBody.implicitHeight
             ColumnLayout {
                 id: compressBody
@@ -2535,7 +2519,7 @@ C.ApplicationWindow {
                             { id: "tar.zst", label: I18n.tr("TAR.ZST") },
                             { id: "7z", label: "7Z" }
                         ]
-                        delegate: Pill {
+                        delegate: Chip {
                             required property var modelData
                             label: modelData.label
                             active: compressDialog.format === modelData.id
@@ -2561,7 +2545,7 @@ C.ApplicationWindow {
         id: confirmEmpty
         title: I18n.tr("Empty the trash?")
         message: I18n.trn("%1 item is deleted for good.", "%1 items are deleted for good.", FilesBackend.trashCount)
-        acceptTone: Design.danger
+        destructive: true
         standardButtons: C.Dialog.Cancel | C.Dialog.Ok
         buttonText: ({ [C.Dialog.Ok]: I18n.tr("Empty Trash") })
         onAccepted: FilesBackend.emptyTrash()
@@ -2592,7 +2576,6 @@ C.ApplicationWindow {
         }
     }
 
-    component SideHeading: SidebarHeading {}
 
     component SideRow: SidebarItem {
         id: sr
@@ -2612,53 +2595,31 @@ C.ApplicationWindow {
                 onDropped: drop => window.dropInto(drop, sr.path)
             }
         ]
-        BarButton {
+        Button {
+            variant: "ghost"
+            iconOnly: true
             visible: sr.removable && (sr.hovered || hovered)
-            glyph: "\u{f0156}"; small: true; tip: I18n.tr("Remove bookmark")
+            icon: "\u{f0156}"; size: "sm"; tip: I18n.tr("Remove bookmark")
             onClicked: sr.remove()
         }
-        BarButton {
+        Button {
+            variant: "ghost"
+            iconOnly: true
             visible: sr.ejectable
-            glyph: "\u{f01ea}"; small: true; tip: I18n.tr("Unmount")
+            icon: "\u{f01ea}"; size: "sm"; tip: I18n.tr("Unmount")
             onClicked: sr.eject()
         }
     }
 
-    component ColumnHead: Item {
-        id: ch
-        property string label: ""
+    // Ui's sortable heading, bound to the folder's sort.
+    component SortHead: ColumnHead {
         property string field: ""
-        property bool alignRight: false
-        readonly property bool sorted: FilesBackend.sortField === field
-        implicitHeight: Design.s(34)
-        Row {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: ch.alignRight ? parent.right : undefined
-            anchors.left: ch.alignRight ? undefined : parent.left
-            anchors.leftMargin: ch.alignRight ? 0 : Design.s(28)
-            spacing: Design.s(Design.space.xs)
-            Text {
-                text: ch.label
-                font.family: Design.font.sans
-                font.pixelSize: Design.s(Design.font.caption)
-                font.weight: Design.weight.semibold
-                color: ch.sorted ? Design.text : Design.textDim
-            }
-            Text {
-                visible: ch.sorted
-                text: FilesBackend.sortAscending ? "\u{f005d}" : "\u{f0045}"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(Design.font.caption)
-                color: Design.accent
-            }
-        }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (ch.sorted) FilesBackend.sortAscending = !FilesBackend.sortAscending;
-                else { FilesBackend.sortField = ch.field; FilesBackend.sortAscending = ch.field === "name" || ch.field === "type"; }
-            }
+        sorted: FilesBackend.sortField === field
+        ascending: FilesBackend.sortAscending
+        inset: alignRight ? 0 : Design.s(Design.size.sm)
+        onClicked: {
+            if (sorted) FilesBackend.sortAscending = !FilesBackend.sortAscending;
+            else { FilesBackend.sortField = field; FilesBackend.sortAscending = field === "name" || field === "type"; }
         }
     }
 

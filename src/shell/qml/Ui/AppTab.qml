@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 
 // One tab in an app's tab strip: Term's shells, Files' folders. The same
-// capsule as a BarButton, lit with the accent tint when it is the one shown;
+// height as a toolbar Button, lit with the accent tint when it is the one shown;
 // a close × on the right, and a middle click closes it, as in every browser.
 //
 //   AppTab {
@@ -21,8 +21,8 @@ Rectangle {
     signal clicked()
     signal closeRequested()
 
-    implicitHeight: Design.s(30)
-    implicitWidth: Math.min(Design.s(220), row.implicitWidth + Design.s(Design.space.md) * 2)
+    implicitHeight: Design.s(Design.size.md)
+    implicitWidth: Math.min(Design.s(Design.width.tab), row.implicitWidth + Design.s(Design.space.md) * 2)
     radius: height / 2
     color: active ? Design.tint(Design.accent, 0.22)
          : area.containsMouse ? Design.hover : "transparent"
@@ -52,7 +52,7 @@ Rectangle {
             visible: root.glyph !== ""
             text: root.glyph
             font.family: Design.font.icon
-            font.pixelSize: Design.s(14)
+            font.pixelSize: Design.s(Design.font.glyphSm)
             color: root.active ? Design.accent : Design.textDim
         }
         Text {
@@ -66,8 +66,8 @@ Rectangle {
         }
         Rectangle {
             visible: root.closable
-            Layout.preferredWidth: Design.s(20)
-            Layout.preferredHeight: Design.s(20)
+            Layout.preferredWidth: Design.s(Design.size.mini)
+            Layout.preferredHeight: Design.s(Design.size.mini)
             radius: width / 2
             color: closeArea.containsMouse ? Design.tint(Design.danger, 0.22) : "transparent"
             // Faint until the tab is pointed at, so a row of tabs is a row
@@ -77,7 +77,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: "\u{f0156}"
                 font.family: Design.font.icon
-                font.pixelSize: Design.s(12)
+                font.pixelSize: Design.s(Design.font.footnote)
                 color: closeArea.containsMouse ? Design.danger : Design.textDim
             }
             MouseArea {
@@ -89,4 +89,12 @@ Rectangle {
             }
         }
     }
+
+    // Tab reaches it; Enter and Space do what a click does.
+    activeFocusOnTab: true
+    Keys.onReturnPressed: event => { root.clicked(); event.accepted = true; }
+    Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
+    Accessible.role: Accessible.PageTab
+    Accessible.name: root.label
+    FocusRing { target: root }
 }

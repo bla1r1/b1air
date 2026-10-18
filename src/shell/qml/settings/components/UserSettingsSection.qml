@@ -94,15 +94,15 @@ ColumnLayout {
     // The person, not the account record: the picture, the name and the
     // login. The UID and the home directory that were the subtitle here are
     // nothing anyone changes from this page.
-    Card {
+    SettingsGroup {
         visible: section.part === "" || section.part === "account"
         RowLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.lg)
 
             Rectangle {
-                Layout.preferredWidth: Design.s(88)
-                Layout.preferredHeight: Design.s(88)
+                Layout.preferredWidth: Design.s(Design.size.avatar)
+                Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: width / 2
                 color: Design.tint(Design.accent, 0.14)
                 clip: true
@@ -126,7 +126,7 @@ ColumnLayout {
                     color: Design.accent
                 }
 
-                MouseArea {
+                Clickable {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: avatarFileDialog.open()
@@ -154,14 +154,14 @@ ColumnLayout {
                     Layout.topMargin: Design.s(Design.space.xs)
                     spacing: Design.s(Design.space.sm)
 
-                    ActionButton {
+                    Button {
                         Layout.fillWidth: false
                         icon: "\u{f03e}"
                         label: I18n.tr("Change Avatar")
                         onActivated: avatarFileDialog.open()
                     }
 
-                    ActionButton {
+                    Button {
                         Layout.fillWidth: false
                         icon: "\u{f084}"
                         label: I18n.tr("Change Password")
@@ -172,14 +172,13 @@ ColumnLayout {
         }
     }
 
-    Card {
+    SettingsGroup {
         // No reader that fprintd can drive: no card, rather than one saying
         // what is missing on a machine that has nothing to put a finger on.
         visible: (section.part === "lock" || section.part === "fingerprint") && section.fp.available
         title: I18n.tr("Fingerprint")
         subtitle: section.fp.available ? section.fp.device : I18n.tr("Open the lock screen with a touch")
         icon: "\u{f0237}"
-        accentColor: Design.teal
 
         EmptyState {
             visible: !section.fp.available
@@ -201,13 +200,13 @@ ColumnLayout {
                 required property var modelData
                 required property int index
                 Layout.fillWidth: true
-                Icon { text: "\u{f0237}"; color: Design.teal }
+                Icon { text: "\u{f0237}"; color: Design.textDim }
                 Label { text: I18n.tr("Fingerprint %1", index + 1); Layout.fillWidth: true }
-                ActionButton {
+                Button {
                     icon: "\u{f0a7a}"
                     label: I18n.tr("Remove")
                     destructive: true
-                    confirmLabel: I18n.tr("Remove?")
+                    confirmText: I18n.tr("Remove?")
                     onActivated: {
                         fpDelete.command = [section.daemonCmd, "fingerprint", "delete", modelData];
                         fpDelete.running = true;
@@ -227,7 +226,7 @@ ColumnLayout {
             visible: section.fp.available
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
-            ActionButton {
+            Button {
                 visible: !section.fpEnrolling && section.fpFinger !== ""
                 icon: "\u{f0415}"
                 label: I18n.tr("Add a fingerprint")
@@ -240,13 +239,13 @@ ColumnLayout {
                     fpEnroll.running = true;
                 }
             }
-            ActionButton {
+            Button {
                 visible: section.fpEnrolling
                 icon: "\u{f0156}"
                 label: I18n.tr("Cancel")
                 onActivated: fpEnroll.running = false
             }
-            ActionButton {
+            Button {
                 visible: !section.fpEnrolling && (section.fp.enrolled || []).length > 0
                 icon: "\u{f0237}"
                 label: section.fpTest === "listening" ? I18n.tr("Touch the reader…") : I18n.tr("Test")
@@ -271,13 +270,13 @@ ColumnLayout {
             spacing: Design.s(Design.space.xs)
             Row {
                 visible: section.fpEnrolling && section.fp.stages > 0
-                spacing: Design.s(6)
+                spacing: Design.s(Design.space.xs)
                 Repeater {
                     model: section.fp.stages
                     Rectangle {
                         required property int index
-                        width: Design.s(14); height: width; radius: width / 2
-                        color: index < section.fpDone ? Design.teal : Design.hover
+                        width: Design.s(Design.space.md); height: width; radius: width / 2
+                        color: index < section.fpDone ? Design.accent : Design.hover
                         Behavior on color { ColorAnimation { duration: Design.duration.base } }
                     }
                 }
@@ -290,7 +289,7 @@ ColumnLayout {
             }
         }
 
-        Toggle {
+        SwitchRow {
             visible: section.fp.available
             label: I18n.tr("Unlock with a fingerprint")
             subtitle: I18n.tr("On the lock screen, a touch on the reader works as well as the password")
@@ -300,11 +299,11 @@ ColumnLayout {
 
         // The login screen: a system file (/etc/pam.d/sddm, and only that
         // one), so it asks for the administrator password.
-        Toggle {
+        SwitchRow {
             visible: section.fp.available && section.fpLogin.supported === true
             enabled: !fpLoginSet.running
             label: I18n.tr("Fingerprint at the login screen")
-            subtitle: I18n.tr("Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.")
+            note: I18n.tr("Leave the password empty, press Enter and touch the reader. Only the login screen; sudo and system prompts still want the password. The keyring stays locked until a password is typed.")
             checked: section.fpLogin.enabled === true
             onToggled: {
                 fpLoginSet.command = ["pkexec", section.daemonCmd, "fingerprint", "login", checked ? "off" : "on"];
@@ -314,103 +313,54 @@ ColumnLayout {
     }
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
-    Card {
+    SettingsGroup {
         visible: section.part === "" || section.part === "account"
         title: I18n.tr("Account Details & Shell")
-        subtitle: I18n.tr("System user configurations and login preferences")
         icon: "\u{f013}"
-        accentColor: Design.blue
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            // Full Name Input
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: I18n.tr("Display / Full Name")
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: I18n.tr("Real name shown on lockscreen and greeter")
-                        dim: true
-                    }
-                }
-
-                Field {
-                    id: nameField
-                    Layout.preferredWidth: Design.s(220)
-                    text: section.userInfo.name || ""
-                    placeholder: I18n.tr("Enter full name...")
-                    onCommitted: v => {
-                        if (v.trim().length > 0) {
-                            Quickshell.execDetached([section.daemonCmd, "user", "set-name", v.trim()]);
-                            section.loadUserInfo();
-                        }
-                    }
-                }
-
-                ActionButton {
-                    Layout.fillWidth: false
-                    icon: "\u{f00c}"
-                    label: I18n.tr("Save")
-                    tone: Design.sapphire
-                    onActivated: {
-                        if (nameField.text.trim().length > 0) {
-                            Quickshell.execDetached([section.daemonCmd, "user", "set-name", nameField.text.trim()]);
-                            section.loadUserInfo();
-                        }
+        SettingsRow {
+            label: I18n.tr("Display / Full Name")
+            note: I18n.tr("Real name shown on lockscreen and greeter")
+            Field {
+                id: nameField
+                Layout.preferredWidth: Design.s(Design.width.control)
+                text: section.userInfo.name || ""
+                placeholder: I18n.tr("Enter full name...")
+                onCommitted: v => {
+                    if (v.trim().length > 0) {
+                        Quickshell.execDetached([section.daemonCmd, "user", "set-name", v.trim()]);
+                        section.loadUserInfo();
                     }
                 }
             }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(1)
-                color: Design.line
-            }
-
-            // Default Shell
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Design.s(Design.space.md)
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Design.s(Design.space.xs)
-
-                    Label {
-                        text: I18n.tr("Default Shell")
-                        weight: Design.weight.medium
-                    }
-                    Label {
-                        text: I18n.tr("Login shell executed for terminals and virtual consoles")
-                        dim: true
+            Button {
+                icon: "\u{f00c}"
+                label: I18n.tr("Save")
+                onActivated: {
+                    if (nameField.text.trim().length > 0) {
+                        Quickshell.execDetached([section.daemonCmd, "user", "set-name", nameField.text.trim()]);
+                        section.loadUserInfo();
                     }
                 }
+            }
+        }
 
-                RowLayout {
-                    spacing: Design.s(Design.space.xs)
-
-                    Repeater {
-                        model: section.availableShells
-
-                        Pill {
-                            label: modelData.label
-                            active: section.userInfo.shell && (section.userInfo.shell === modelData.path || section.userInfo.shell.endsWith("/" + modelData.label))
-                            onClicked: {
-                                Quickshell.execDetached([section.daemonCmd, "user", "set-shell", modelData.path]);
-                                section.loadUserInfo();
-                            }
-                        }
-                    }
+        // One shell of a few: a segmented control, as every other choice.
+        SettingsRow {
+            label: I18n.tr("Default Shell")
+            note: I18n.tr("Login shell executed for terminals and virtual consoles")
+            SegmentedControl {
+                visible: section.availableShells.length > 0
+                size: "sm"
+                model: section.availableShells.map(sh => ({ id: sh.path, label: sh.label }))
+                current: {
+                    const cur = section.userInfo.shell || "";
+                    const hit = section.availableShells.find(sh => cur === sh.path || cur.endsWith("/" + sh.label));
+                    return hit ? hit.path : "";
+                }
+                onPicked: function(id) {
+                    Quickshell.execDetached([section.daemonCmd, "user", "set-shell", id]);
+                    section.loadUserInfo();
                 }
             }
         }
@@ -441,34 +391,32 @@ ColumnLayout {
     // passkey get a QR code, and the phone that scans it signs in. On by
     // default, as on other desktops; only where there is Bluetooth, which
     // the phone needs to show it is nearby.
-    Card {
+    SettingsGroup {
         visible: section.part === "lock" && !!Network.adapter
         title: I18n.tr("Passkeys")
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Sign in to websites with your phone")
-            subtitle: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
+            note: I18n.tr("When a website asks for a passkey, a QR code comes up; scan it with the phone that keeps the passkey. Works in every browser. Bluetooth has to be on.")
             checked: Settings.passkeyPhone !== false
             onToggled: Settings.set("passkeyPhone", Settings.passkeyPhone === false)
         }
     }
 
-    Card {
+    SettingsGroup {
         visible: section.part === "lock"
         title: I18n.tr("Session & Login Screen")
-        subtitle: I18n.tr("What draws this desktop, and what greets you before it")
         icon: "\u{f108}"
-        accentColor: Design.green
 
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("Compositor"); Layout.fillWidth: true }
-            Badge { text: section.compositorName; color: Design.green }
+        // A value, not a status: plain text, as in About.
+        SettingsRow {
+            label: I18n.tr("Compositor")
+            Label { text: section.compositorName || "—"; dim: true }
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: I18n.tr("Login screen theme"); Layout.fillWidth: true }
-            Badge { text: section.greeterTheme; color: Design.sapphire }
+        // A value, not a status: plain text, as in About.
+        SettingsRow {
+            label: I18n.tr("Login screen theme")
+            Label { text: section.greeterTheme || "—"; dim: true }
         }
     }
 

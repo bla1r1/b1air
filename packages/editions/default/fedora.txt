@@ -1,0 +1,9 @@
+# The default edition on Fedora: what it adds to minimal.
+# Format: see lib/distro.sh. `?name` = optional.
+
+?wine ?winetricks ?bottles
+# Proton outside Steam (src/scripts/b1air-windows).
+?umu-launcher
+flatpak
+distrobox podman
+NetworkManager-openvpn wireguard-tools ?tailscale firewalld

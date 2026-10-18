@@ -22,8 +22,9 @@ RowLayout {
 
     // Like a switch's label: the row's name, in the text colour.
     Label {
+        visible: row.label !== ""
         text: row.label
-        Layout.fillWidth: true
+        Layout.fillWidth: row.label !== ""
         elide: Text.ElideRight
     }
 
@@ -32,11 +33,13 @@ RowLayout {
         property string glyph: ""
         signal activated()
 
-        Layout.preferredWidth: Design.s(30)
-        Layout.preferredHeight: Design.s(Design.size.field)
+        Layout.preferredWidth: Design.s(Design.size.md)
+        Layout.preferredHeight: Design.s(Design.size.md)
         radius: Design.s(Design.radius.ctl)
 
-        color: stepArea.pressed ? Design.active : Design.raised
+        color: Design.translucent
+               ? (stepArea.pressed ? Design.tint(Design.text, 0.20) : (stepArea.containsMouse ? Design.veilBold : Design.well))
+               : (stepArea.pressed ? Design.active : Design.raised)
         border.color: stepArea.containsMouse ? Design.accent : "transparent"
         border.width: Design.border
 
@@ -47,10 +50,17 @@ RowLayout {
             anchors.centerIn: parent
             text: step.glyph
             role: "subhead"
-            weight: Design.weight.bold
+            weight: Design.weight.semibold
         }
 
-        Clickable { id: stepArea; onClicked: step.activated() }
+        Clickable { id: stepArea; keyboard: false; onClicked: step.activated() }
+
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: step.glyph
+        Keys.onReturnPressed: event => { step.activated(); event.accepted = true; }
+        Keys.onSpacePressed: event => { step.activated(); event.accepted = true; }
+        FocusRing { target: step }
     }
 
     StepButton {
@@ -60,10 +70,12 @@ RowLayout {
 
     Label {
         text: row.valueText
-        weight: Design.weight.bold
-        color: Design.accent
+        // In the text colour: the accent marks what is chosen or in focus,
+        // and a number in a stepper is neither.
+        weight: Design.weight.medium
+        tabular: true
         horizontalAlignment: Text.AlignHCenter
-        Layout.minimumWidth: Design.s(44)
+        Layout.minimumWidth: Design.s(Design.size.md + Design.space.md)
     }
 
     StepButton {

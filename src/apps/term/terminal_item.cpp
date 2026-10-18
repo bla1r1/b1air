@@ -29,7 +29,6 @@
 
 namespace b1air {
 
-// Default Catppuccin Mocha Palette
 // All of it to the pty, which is non-blocking: a long paste fills its
 // buffer, and what did not fit was dropped (write's result went unread).
 // Waits for room, up to a second at a time, while the shell drains it.
@@ -49,20 +48,6 @@ static void writeAll(int fd, const char *data, size_t len) {
         }
     }
 }
-
-static const QColor MochaBase(30, 30, 46);         // #1e1e2e
-static const QColor MochaText(205, 214, 244);       // #cdd6f4
-static const QColor MochaSubtext0(166, 173, 200);   // #a6adc8
-static const QColor MochaSurface0(49, 50, 68);      // #313244
-static const QColor MochaSurface2(88, 91, 112);     // #585b70
-static const QColor MochaBlue(137, 180, 250);       // #89b4fa
-static const QColor MochaRed(243, 139, 168);        // #f38ba8
-static const QColor MochaGreen(166, 227, 161);      // #a6e3a1
-static const QColor MochaYellow(249, 226, 175);     // #f9e2af
-static const QColor MochaPeach(250, 179, 135);      // #fab387
-static const QColor MochaTeal(148, 226, 213);       // #94e2d5
-static const QColor MochaSapphire(116, 199, 236);   // #74c7ec
-static const QColor MochaLavender(180, 190, 254);   // #b4befe
 
 TerminalItem::TerminalItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
@@ -162,6 +147,11 @@ void TerminalItem::initTerminal(int rows, int cols) {
     m_screenCallbacks.sb_popline = cbSbPopline;
 
     vterm_screen_set_callbacks(m_vts, &m_screenCallbacks, this);
+    m_selectionCallbacks = {};
+    m_selectionCallbacks.set = cbSelectionSet;
+    // No `query`: a program does not get to read the clipboard back.
+    vterm_state_set_selection_callbacks(vterm_obtain_state(m_vt), &m_selectionCallbacks, this,
+                                        m_selectionBuf, sizeof(m_selectionBuf));
     vterm_screen_reset(m_vts, 1);
     // The reset reports a blinking block through settermprop; the default
     // here is the bar. A program that wants a block still gets one by asking.
@@ -420,6 +410,27 @@ void TerminalItem::setForegroundColor(const QColor &c) {
     update();
 }
 
+QVariantList TerminalItem::ansiColors() const {
+    QVariantList out;
+    if (m_hasAnsi)
+        for (const QColor &c : m_ansi) out << c;
+    return out;
+}
+
+void TerminalItem::setAnsiColors(const QVariantList &colors) {
+    bool ok = colors.size() == 16;
+    QColor next[16];
+    for (int i = 0; ok && i < 16; ++i) {
+        next[i] = colors[i].value<QColor>();
+        ok = next[i].isValid();
+    }
+    if (ok == m_hasAnsi && (!ok || std::equal(next, next + 16, m_ansi))) return;
+    m_hasAnsi = ok;
+    if (ok) std::copy(next, next + 16, m_ansi);
+    emit paletteChanged();
+    update();
+}
+
 QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColor) const {
     if (VTERM_COLOR_IS_RGB(&color)) {
         return QColor(color.rgb.red, color.rgb.green, color.rgb.blue);
@@ -430,8 +441,7 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
         // Black is a grey that shows on the background (Breeze's equals
         // it, so text printed in black vanished), and the bright eight are
         // brighter than the normal eight, which Breeze's red and magenta
-        // were not. They were Catppuccin Mocha's pastels, a few shades from
-        // each other and from the default text.
+        // were not.
         static const QColor ansi16[16] = {
             QColor(0x4d, 0x53, 0x59), // 0: Black (a visible grey)
             QColor(0xed, 0x4b, 0x5b), // 1: Red
@@ -452,30 +462,32 @@ QColor TerminalItem::toQColor(const VTermColor &color, const QColor &defaultColo
         };
         // On a light background (Breeze or Adwaita Light) the set above is
         // too pale, and "white" — what programs use for plain bright text,
-        // fastfetch's values among them — vanished. Catppuccin Latte's
-        // deeper colours instead, with black and white swapped the way light
-        // terminal themes do, so "white" text is the dark one.
-        static const QColor latte16[16] = {
-            QColor(188, 192, 204), // 0: Black → Surface1 (the light end)
-            QColor(210, 15, 57),   // 1: Red
-            QColor(64, 160, 43),   // 2: Green
-            QColor(223, 142, 29),  // 3: Yellow
-            QColor(30, 102, 245),  // 4: Blue
-            QColor(234, 118, 203), // 5: Magenta
-            QColor(23, 146, 153),  // 6: Cyan
-            QColor(92, 95, 119),   // 7: White → Subtext1
-            QColor(140, 143, 161), // 8: Bright Black → Overlay1
-            QColor(210, 15, 57),   // 9: Bright Red
-            QColor(64, 160, 43),   // 10: Bright Green
-            QColor(223, 142, 29),  // 11: Bright Yellow
-            QColor(32, 159, 181),  // 12: Bright Blue → Sapphire
-            QColor(136, 57, 239),  // 13: Bright Magenta → Mauve
-            QColor(23, 146, 153),  // 14: Bright Cyan
-            QColor(76, 79, 105)    // 15: Bright White → Text
+        // fastfetch's values among them — vanished. The same hues deeper,
+        // with black and white swapped the way light terminal themes do, so
+        // "white" text is the dark one. (Only when TermWindow has not handed
+        // over the theme's own sixteen, which it does.)
+        static const QColor light16[16] = {
+            QColor(0xc4, 0xc8, 0xcd), // 0: Black → a light grey
+            QColor(0xc6, 0x28, 0x3a), // 1: Red
+            QColor(0x1f, 0x8f, 0x4e), // 2: Green
+            QColor(0xb8, 0x6e, 0x0a), // 3: Yellow
+            QColor(0x13, 0x6f, 0xc0), // 4: Blue
+            QColor(0x8a, 0x4f, 0xb5), // 5: Magenta
+            QColor(0x12, 0x86, 0x70), // 6: Cyan
+            QColor(0x4d, 0x53, 0x59), // 7: White → a dark grey
+            QColor(0x8a, 0x91, 0x98), // 8: Bright Black
+            QColor(0xa8, 0x1c, 0x2c), // 9: Bright Red
+            QColor(0x17, 0x73, 0x3e), // 10: Bright Green
+            QColor(0x95, 0x58, 0x05), // 11: Bright Yellow
+            QColor(0x0e, 0x5a, 0x9e), // 12: Bright Blue
+            QColor(0x6f, 0x3a, 0x96), // 13: Bright Magenta
+            QColor(0x0c, 0x6b, 0x59), // 14: Bright Cyan
+            QColor(0x23, 0x26, 0x29)  // 15: Bright White → the text
         };
         if (color.indexed.idx < 16) {
+            if (m_hasAnsi) return m_ansi[color.indexed.idx];
             const bool light = m_background.lightnessF() > 0.5;
-            return (light ? latte16 : ansi16)[color.indexed.idx];
+            return (light ? light16 : ansi16)[color.indexed.idx];
         }
     }
     return defaultColor;
@@ -592,7 +604,7 @@ void TerminalItem::paint(QPainter *painter) {
             // matters: it is how a terminal program says "this part", and
             // without it there was no difference between selected and not.
             // libvterm hands the default colour over as RGB with a flag on
-            // it — the Mocha text it was created with — so asking only
+            // it — the text colour it was created with — so asking only
             // IS_RGB drew "default" text light-on-light under a light theme.
             // The background already checked the flag; the foreground now too.
             QColor fg = VTERM_COLOR_IS_DEFAULT_FG(&cell.fg) ? m_foreground
@@ -872,6 +884,47 @@ void TerminalItem::keyPressEvent(QKeyEvent *event) {
     }
 }
 
+// A program that turned mouse reporting on (Claude Code's full screen, vim,
+// tmux, htop) gets the clicks and drags, not only the wheel: it selects, and
+// copies with OSC 52, by itself. Before, every click made a selection here
+// instead, over a screen the program kept redrawing, and its own selection
+// never started. Shift held keeps the terminal's selection, as in xterm,
+// Konsole and GNOME Terminal.
+bool TerminalItem::forwardMouse(QMouseEvent *event, bool pressed) {
+    if (m_mouseMode == VTERM_PROP_MOUSE_NONE || !m_vt || m_masterFd < 0) return false;
+    if (pressed && (event->modifiers() & Qt::ShiftModifier)) return false;
+    int button = 0;
+    switch (event->button()) {
+    case Qt::LeftButton:   button = 1; break;
+    case Qt::MiddleButton: button = 2; break;
+    case Qt::RightButton:  button = 3; break;
+    default: return false;
+    }
+    int mod = VTERM_MOD_NONE;
+    if (event->modifiers() & Qt::ControlModifier) mod |= VTERM_MOD_CTRL;
+    if (event->modifiers() & Qt::AltModifier)     mod |= VTERM_MOD_ALT;
+    const int row = std::clamp(static_cast<int>(event->position().y() / m_cellHeight), 0, m_rows - 1);
+    const int col = std::clamp(static_cast<int>(event->position().x() / m_cellWidth), 0, m_cols - 1);
+    vterm_mouse_move(m_vt, row, col, static_cast<VTermModifier>(mod));
+    vterm_mouse_button(m_vt, button, pressed, static_cast<VTermModifier>(mod));
+    return true;
+}
+
+int TerminalItem::cbSelectionSet(VTermSelectionMask mask, VTermStringFragment frag, void *user) {
+    auto *term = static_cast<TerminalItem*>(user);
+    if (frag.initial) term->m_osc52.clear();
+    // A runaway stream is not let to grow without end.
+    if (term->m_osc52.size() < 16 * 1024 * 1024) term->m_osc52.append(frag.str, static_cast<qsizetype>(frag.len));
+    if (!frag.final) return 1;
+    const QString text = QString::fromUtf8(term->m_osc52);
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    if (mask & VTERM_SELECTION_CLIPBOARD) clipboard->setText(text, QClipboard::Clipboard);
+    if ((mask & VTERM_SELECTION_PRIMARY) && clipboard->supportsSelection())
+        clipboard->setText(text, QClipboard::Selection);
+    term->m_osc52.clear();
+    return 1;
+}
+
 void TerminalItem::mousePressEvent(QMouseEvent *event) {
     forceActiveFocus();
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier)) {
@@ -881,6 +934,11 @@ void TerminalItem::mousePressEvent(QMouseEvent *event) {
             QDesktopServices::openUrl(QUrl(link.url));
             return;
         }
+    }
+    if (forwardMouse(event, true)) {
+        m_mouseForwarding = true;
+        if (m_hasSelection) { m_hasSelection = false; update(); }
+        return;
     }
     if (event->button() == Qt::LeftButton) {
         int col = (int)(event->pos().x() / m_cellWidth);
@@ -948,6 +1006,13 @@ void TerminalItem::selectLineAt(int row) {
 }
 
 void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
+    if (m_mouseForwarding && m_vt) {
+        // libvterm reports the drag only in the modes that ask for it.
+        const int row = std::clamp(static_cast<int>(event->position().y() / m_cellHeight), 0, m_rows - 1);
+        const int col = std::clamp(static_cast<int>(event->position().x() / m_cellWidth), 0, m_cols - 1);
+        vterm_mouse_move(m_vt, row, col, VTERM_MOD_NONE);
+        return;
+    }
     if (m_selecting) {
         int col = std::max(0, std::min(m_cols - 1, (int)(event->pos().x() / m_cellWidth)));
         int row = std::max(0, std::min(m_rows - 1, (int)(event->pos().y() / m_cellHeight)));
@@ -958,6 +1023,11 @@ void TerminalItem::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void TerminalItem::mouseReleaseEvent(QMouseEvent *event) {
+    if (m_mouseForwarding) {
+        forwardMouse(event, false);
+        if (!event->buttons()) m_mouseForwarding = false;
+        return;
+    }
     if (event->button() == Qt::LeftButton && m_selecting) {
         m_selecting = false;
     }
@@ -1182,8 +1252,9 @@ void TerminalItem::dropUrls(const QStringList& addresses) {
         words << word;
     }
     if (words.isEmpty()) return;
-    pasteText(words.join(' ') + ' ');
     forceActiveFocus();
+    if (m_viewOffset > 0) { m_viewOffset = 0; update(); }
+    pasteText(words.join(' ') + ' ');
 }
 
 void TerminalItem::zoomIn() {

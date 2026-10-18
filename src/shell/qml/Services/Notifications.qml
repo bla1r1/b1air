@@ -24,6 +24,8 @@ Singleton {
         actionsSupported: true
         imageSupported: true
         persistenceSupported: true
+        // A messenger's "reply here": the toast and the list show a field.
+        inlineReplySupported: true
         // Hints outside the spec arrive only when named here.
         extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value"]
 
@@ -134,8 +136,42 @@ Singleton {
         function onDndScheduleStartChanged() { root._checkQuietHours(); }
         function onDndScheduleEndChanged() { root._checkQuietHours(); }
     }
-    property int toastTimeoutMs: 5000
+    property int toastTimeoutMs: 6000
     readonly property int unreadCount: history.count
+
+    // ── Time, in words ───────────────────────────────────────────────────────
+    //
+    // "now", "5 min", "21:04", "yesterday 21:04": what the toasts and the list
+    // show instead of a clock time, and the list's sections. `now` moves on
+    // every half minute, so "now" becomes "1 min" without a new notification.
+    property double now: Date.now()
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: root.now = Date.now()
+    }
+    function relTime(ts) {
+        if (!ts) return "";
+        const mins = Math.floor((root.now - ts) / 60000);
+        if (mins < 1) return I18n.tr("now");
+        if (mins < 60) return I18n.tr("%1 min", mins);
+        const d = new Date(ts), today = new Date(root.now);
+        const hm = d.toLocaleTimeString(I18n.locale, "hh:mm");
+        if (d.toDateString() === today.toDateString()) return hm;
+        const y = new Date(root.now - 86400000);
+        if (d.toDateString() === y.toDateString()) return I18n.tr("yesterday %1", hm);
+        return d.toLocaleDateString(I18n.locale, "d MMM") + " " + hm;
+    }
+    // "now" (the last hour), "today", "yesterday", "earlier".
+    function sectionOf(ts) {
+        if (!ts) return "earlier";
+        if (root.now - ts < 3600000) return "now";
+        const d = new Date(ts).toDateString();
+        if (d === new Date(root.now).toDateString()) return "today";
+        if (d === new Date(root.now - 86400000).toDateString()) return "yesterday";
+        return "earlier";
+    }
 
     // Dynamically tracked applications that have sent notifications
     property var trackedApps: []
@@ -169,11 +205,23 @@ Singleton {
     // model used to read `notif.icon`, which a notification does not have,
     // so no notification ever showed an icon or a screenshot's thumbnail.
     function _iconSource(notif) {
-        const src = notif.image || notif.appIcon || "";
+        return root._resolveIcon(notif.image || notif.appIcon || "");
+    }
+    // A path, a URL or an icon theme name, as something an Image can load.
+    function _resolveIcon(src) {
+        src = String(src || "");
         if (src === "") return "";
         if (src.startsWith("/")) return "file://" + src;
         if (src.indexOf("://") >= 0) return src;
         return Quickshell.iconPath(src, true);
+    }
+    // The app's own icon, apart from any picture sent with the notification:
+    // the badge on a sender's picture. From the notification, or the icon of
+    // the desktop entry it names (Services/Apps).
+    function _appIconSource(notif) {
+        if (notif.appIcon) return root._resolveIcon(notif.appIcon);
+        const icon = Apps.iconFor(notif.desktopEntry || notif.appName || "");
+        return icon ? Apps.iconSource(icon) : "";
     }
 
     function _handleIncoming(notif) {
@@ -193,8 +241,14 @@ Singleton {
             summary: notif.summary || "",
             body: notif.body || "",
             icon: root._iconSource(notif),
+            // Apart: a sender's picture (or a screenshot), and the app's icon.
+            image: root._resolveIcon(notif.image || ""),
+            appIcon: root._appIconSource(notif),
             urgency: notif.urgency,
+            critical: notif.urgency === NotificationUrgency.Critical,
             time: new Date().toLocaleTimeString(I18n.locale, "hh:mm"),
+            ts: Date.now(),
+            count: 1,
             obj: notif
         };
 
@@ -211,8 +265,41 @@ Singleton {
         // looking at in the notification centre is noise, and it used to land
         // on top of that very list.
         if ((!root.dnd || root.allowedNow(item.appName)) && !root.isAppMuted(item.appName) && !root.listVisible) {
+            // Another from the same app and sender while one is up (a chat
+            // going on): one toast, the newest on it and how many under it,
+            // not a column of them.
+            for (let i = 0; i < root.activeToasts.count; i++) {
+                const t = root.activeToasts.get(i);
+                if (t.appName === item.appName && t.summary === item.summary && !t.critical) {
+                    item.count = (t.count || 1) + 1;
+                    root.activeToasts.set(i, item);
+                    return;
+                }
+            }
             root.activeToasts.append(item);
         }
+    }
+
+    // A messenger's reply, typed in a toast or the list. False when the
+    // notification is gone (its app closed it, or the shell restarted).
+    function reply(item, text) {
+        const n = item ? item.obj : null;
+        if (!n || !n.hasInlineReply || typeof n.sendInlineReply !== "function" || String(text).trim() === "")
+            return false;
+        n.sendInlineReply(String(text));
+        return true;
+    }
+    // The action a click on the notification itself means, where the app
+    // offers one ("default", in the specification).
+    function activate(item) {
+        const n = item ? item.obj : null;
+        const acts = n && n.actions ? n.actions : [];
+        const def = acts.find(a => a.identifier === "default");
+        if (def && typeof def.invoke === "function") {
+            def.invoke();
+            return true;
+        }
+        return false;
     }
 
     function dismissToast(index) {
@@ -295,9 +382,13 @@ Singleton {
             // `obj` is the live Quickshell notification; it cannot be
             // serialised and means nothing after a restart, so only the fields
             // the list actually draws are stored.
+            // A picture from the bus is an image provider URL that means
+            // nothing after a restart; a file stays.
+            const keep = s => String(s || "").startsWith("file://") ? s : "";
             arr.push({
                 id: it.id, appName: it.appName, summary: it.summary,
-                body: it.body, icon: it.icon, urgency: it.urgency, time: it.time
+                body: it.body, icon: keep(it.icon), image: keep(it.image), appIcon: keep(it.appIcon),
+                urgency: it.urgency, critical: !!it.critical, time: it.time, ts: it.ts || 0
             });
         }
         root._pendingSave = JSON.stringify(arr);

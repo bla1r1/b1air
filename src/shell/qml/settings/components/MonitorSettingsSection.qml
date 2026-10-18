@@ -95,6 +95,12 @@ ColumnLayout {
 
     function reload() {
         const list = Monitors.outputs;
+        // The screen that was selected stays selected, by name: after a drag
+        // the outputs come back in another order, and the selection jumped to
+        // whichever screen the pointer had ended up on.
+        const keep = section.activeEditIndex >= 0 && section.activeEditIndex < monitorsModel.count
+            ? monitorsModel.get(section.activeEditIndex).name : "";
+        let kept = -1;
         monitorsModel.clear();
 
         let minX = 999999, minY = 999999;
@@ -117,9 +123,13 @@ ColumnLayout {
                 uiX: (o.x - minX) * section.uiScale,
                 uiY: (o.y - minY) * section.uiScale
             });
-            if (o.focused)
+            if (o.name === keep)
+                kept = i;
+            else if (o.focused && keep === "")
                 section.activeEditIndex = i;
         }
+        if (kept >= 0)
+            section.activeEditIndex = kept;
         if (section.activeEditIndex >= monitorsModel.count)
             section.activeEditIndex = 0;
         section.dirty = false;
@@ -174,22 +184,51 @@ ColumnLayout {
         return { x: cx, y: cy };
     }
 
+    // Where a screen dragged to (pX, pY) lands: the nearest place against an
+    // edge of another screen, sliding along that edge, that overlaps nothing —
+    // then lined up with an edge or the centre when it is close. Where the
+    // drag was let go of is never refused: there is always a spot to show.
+    function dockedSpot(pX, pY, mW, mH, skipIdx) {
+        let best = null, bestDist = Infinity;
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+        for (let j = 0; j < monitorsModel.count; j++) {
+            if (j === skipIdx) continue;
+            const o = monitorsModel.get(j);
+            const sW = (o.resW / o.sysScale) * section.uiScale;
+            const sH = (o.resH / o.sysScale) * section.uiScale;
+            const alongY = clamp(pY, o.uiY - mH + 1, o.uiY + sH - 1);
+            const alongX = clamp(pX, o.uiX - mW + 1, o.uiX + sW - 1);
+            const sides = [
+                { x: o.uiX + sW, y: alongY }, { x: o.uiX - mW, y: alongY },
+                { x: alongX, y: o.uiY + sH }, { x: alongX, y: o.uiY - mH }
+            ];
+            for (const c of sides) {
+                const aligned = section.getPerimeterSnap(c.x, c.y, o.uiX, o.uiY, sW, sH, mW, mH, 12);
+                // The side it is docked on stays exact; only the slide snaps.
+                const spot = (c.x === o.uiX + sW || c.x === o.uiX - mW) ? { x: c.x, y: aligned.y } : { x: aligned.x, y: c.y };
+                if (section.isOverlappingAny(spot.x, spot.y, mW, mH, skipIdx)) continue;
+                const d = Math.hypot(pX - spot.x, pY - spot.y);
+                if (d < bestDist) { bestDist = d; best = spot; }
+            }
+        }
+        return best;
+    }
+
     // =========================================================================
     // 1. THE SCREENS
     // =========================================================================
-    Card {
+    SettingsGroup {
         title: I18n.tr("Displays")
         subtitle: monitorsModel.count > 1
             ? I18n.tr("Select a screen to change its settings. Drag it to rearrange.")
             : I18n.tr("Select a screen to change its settings.")
         icon: "\u{f0379}"
-        accentColor: section.selectedResAccent
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(260)
+            Layout.preferredHeight: Design.s(Design.size.canvas)
             radius: Design.s(Design.radius.card)
-            color: Design.sunken
+            color: Design.well
             border.color: Design.tint(Design.line, 0.5)
             border.width: Design.border
             clip: true
@@ -198,10 +237,10 @@ ColumnLayout {
                 anchors.centerIn: parent
                 rows: 25
                 columns: 40
-                spacing: Design.s(18)
+                spacing: Design.s(Design.space.lg)
                 Repeater {
                     model: 1000
-                    Rectangle { width: Design.s(2); height: Design.s(2); radius: Design.s(1); color: Design.tint(Design.text, 0.08) }
+                    Rectangle { width: Design.s(Design.space.xxs); height: Design.s(Design.space.xxs); radius: Design.s(Design.border); color: Design.tint(Design.text, 0.08) }
                 }
             }
 
@@ -283,22 +322,30 @@ ColumnLayout {
                             required property real uiY
 
                             readonly property bool isActive: section.activeEditIndex === monitorNode.index
+                            // Being dragged: the card follows the pointer and a
+                            // frame shows where it will land. It used to move only
+                            // to places that overlapped nothing, so across the
+                            // screen beside it — most of any drag — it sat still
+                            // and looked as if it could not be moved at all.
+                            readonly property bool dragging: dragArea.drag.active
+                            property var spot: null
 
                             Rectangle {
                                 id: monitorCard
-                                x: monitorNode.uiX
-                                y: monitorNode.uiY
+                                x: monitorNode.dragging ? ghostDrag.x : monitorNode.uiX
+                                y: monitorNode.dragging ? ghostDrag.y : monitorNode.uiY
                                 width: (monitorNode.resW / monitorNode.sysScale) * section.uiScale
                                 height: (monitorNode.resH / monitorNode.sysScale) * section.uiScale
 
-                                radius: Design.s(8)
+                                radius: Design.s(Design.radius.ctl)
                                 color: monitorNode.isActive ? Design.tint(section.selectedResAccent, 0.18) : Design.ground
                                 border.color: monitorNode.isActive ? section.selectedResAccent : Design.active
                                 border.width: monitorNode.isActive ? 2 : 1
-                                z: monitorNode.isActive ? 5 : 0
+                                z: monitorNode.dragging ? 8 : monitorNode.isActive ? 5 : 0
+                                opacity: monitorNode.dragging ? 0.85 : 1
 
-                                Behavior on x { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
-                                Behavior on y { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
+                                Behavior on x { enabled: !monitorNode.dragging; NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
+                                Behavior on y { enabled: !monitorNode.dragging; NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
                                 Behavior on color { ColorAnimation { duration: Design.duration.base } }
                                 Behavior on border.color { ColorAnimation { duration: Design.duration.base } }
                                 Behavior on width { NumberAnimation { duration: Design.duration.slow; easing.type: Easing.OutQuint } }
@@ -308,7 +355,7 @@ ColumnLayout {
                                 // the canvas zoom is.
                                 Item {
                                     anchors.centerIn: parent
-                                    width: 120
+                                    width: Design.width.field
                                     // A fourth line for the main display's mark.
                                     height: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name ? 92 : 76
 
@@ -324,7 +371,7 @@ ColumnLayout {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
                                             font.weight: Font.Bold
-                                            font.pixelSize: 34
+                                            font.pixelSize: Design.font.display
                                             color: monitorNode.isActive ? section.selectedResAccent : Design.textDim
                                             text: monitorNode.index + 1
                                             Behavior on color { ColorAnimation { duration: Design.duration.base } }
@@ -333,14 +380,14 @@ ColumnLayout {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
                                             font.weight: Font.DemiBold
-                                            font.pixelSize: 12
+                                            font.pixelSize: Design.font.footnote
                                             color: Design.text
                                             text: monitorNode.name
                                         }
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             font.family: Design.font.mono
-                                            font.pixelSize: 10
+                                            font.pixelSize: Design.font.caption
                                             color: Design.textDim
                                             text: monitorNode.resW + "×" + monitorNode.resH
                                                 + " @ " + monitorNode.rate + "Hz"
@@ -348,7 +395,7 @@ ColumnLayout {
                                         Text {
                                             Layout.alignment: Qt.AlignHCenter
                                             visible: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name
-                                            font.pixelSize: 10
+                                            font.pixelSize: Design.font.caption
                                             font.weight: Font.DemiBold
                                             color: section.selectedResAccent
                                             text: I18n.tr("★ Main")
@@ -357,8 +404,22 @@ ColumnLayout {
                                 }
                             }
 
-                            // Invisible dragger: the card animates to the snapped
-                            // position, this one follows the pointer.
+                            // Where it lands on release.
+                            Rectangle {
+                                visible: monitorNode.dragging && monitorNode.spot !== null
+                                x: monitorNode.spot ? monitorNode.spot.x : 0
+                                y: monitorNode.spot ? monitorNode.spot.y : 0
+                                width: monitorCard.width
+                                height: monitorCard.height
+                                radius: Design.s(Design.radius.ctl)
+                                color: Design.tint(section.selectedResAccent, 0.10)
+                                border.color: section.selectedResAccent
+                                border.width: Design.focusWidth
+                                z: 7
+                            }
+
+                            // Invisible dragger: follows the pointer; the card
+                            // follows it while the drag lasts.
                             Item {
                                 id: ghostDrag
                                 x: monitorNode.uiX
@@ -368,6 +429,7 @@ ColumnLayout {
                                 z: monitorNode.isActive ? 10 : 1
 
                                 MouseArea {
+                                    id: dragArea
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: monitorsModel.count > 1 ? Qt.SizeAllCursor : Qt.PointingHandCursor
@@ -378,63 +440,24 @@ ColumnLayout {
                                         section.activeEditIndex = monitorNode.index;
                                         ghostDrag.x = monitorNode.uiX;
                                         ghostDrag.y = monitorNode.uiY;
+                                        monitorNode.spot = null;
                                     }
 
                                     onPositionChanged: {
                                         if (!drag.active || monitorsModel.count < 2)
                                             return;
-
-                                        const mW = monitorCard.width;
-                                        const mH = monitorCard.height;
-                                        const padding = 40;
-
-                                        let boundMinX = 999999, boundMinY = 999999;
-                                        let boundMaxX = -999999, boundMaxY = -999999;
-
-                                        for (let j = 0; j < monitorsModel.count; j++) {
-                                            if (j === monitorNode.index) continue;
-                                            const sModel = monitorsModel.get(j);
-                                            const sW = (sModel.resW / sModel.sysScale) * section.uiScale;
-                                            const sH = (sModel.resH / sModel.sysScale) * section.uiScale;
-
-                                            boundMinX = Math.min(boundMinX, sModel.uiX - mW - padding);
-                                            boundMinY = Math.min(boundMinY, sModel.uiY - mH - padding);
-                                            boundMaxX = Math.max(boundMaxX, sModel.uiX + sW + padding);
-                                            boundMaxY = Math.max(boundMaxY, sModel.uiY + sH + padding);
-                                        }
-
-                                        ghostDrag.x = Math.max(boundMinX, Math.min(ghostDrag.x, boundMaxX));
-                                        ghostDrag.y = Math.max(boundMinY, Math.min(ghostDrag.y, boundMaxY));
-
-                                        let bestX = ghostDrag.x, bestY = ghostDrag.y, bestDist = 999999;
-
-                                        for (let j = 0; j < monitorsModel.count; j++) {
-                                            if (j === monitorNode.index) continue;
-                                            const sModel = monitorsModel.get(j);
-                                            const sW = (sModel.resW / sModel.sysScale) * section.uiScale;
-                                            const sH = (sModel.resH / sModel.sysScale) * section.uiScale;
-
-                                            const snapped = section.getPerimeterSnap(
-                                                ghostDrag.x, ghostDrag.y,
-                                                sModel.uiX, sModel.uiY,
-                                                sW, sH, mW, mH, 20);
-
-                                            const dist = Math.hypot(ghostDrag.x - snapped.x, ghostDrag.y - snapped.y);
-                                            if (dist < bestDist) {
-                                                bestDist = dist;
-                                                bestX = snapped.x;
-                                                bestY = snapped.y;
-                                            }
-                                        }
-
-                                        if (!section.isOverlappingAny(bestX, bestY, mW, mH, monitorNode.index)) {
-                                            monitorsModel.setProperty(monitorNode.index, "uiX", bestX);
-                                            monitorsModel.setProperty(monitorNode.index, "uiY", bestY);
-                                            section.markMoved();
-                                        }
+                                        monitorNode.spot = section.dockedSpot(ghostDrag.x, ghostDrag.y,
+                                            monitorCard.width, monitorCard.height, monitorNode.index);
                                     }
 
                                     onReleased: {
+                                        const spot = monitorNode.spot;
+                                        monitorNode.spot = null;
+                                        if (spot && (spot.x !== monitorNode.uiX || spot.y !== monitorNode.uiY)) {
+                                            monitorsModel.setProperty(monitorNode.index, "uiX", spot.x);
+                                            monitorsModel.setProperty(monitorNode.index, "uiY", spot.y);
+                                            section.markMoved();
+                                        }
                                         ghostDrag.x = monitorNode.uiX;
                                         ghostDrag.y = monitorNode.uiY;
                                         section.layoutRev++;
@@ -463,7 +486,7 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Pill {
+            Button {
                 label: I18n.tr("Identify Displays")
                 icon: "\u{f0379}"
                 onClicked: Monitors.identify()
@@ -500,13 +523,12 @@ ColumnLayout {
     Process { id: profileForget; onExited: profileReader.running = true }
     Timer { id: profileRecheck; interval: 1500; onTriggered: profileReader.running = true }
 
-    Card {
+    SettingsGroup {
         title: I18n.tr("Remembered layouts")
         subtitle: section.profiles.length === 0
             ? I18n.tr("Apply a layout and it is kept for this set of screens")
             : I18n.tr("Put back automatically whenever the same screens are connected")
         icon: "\u{f0379}"
-        accentColor: Design.teal
 
         Repeater {
             model: section.profiles
@@ -530,7 +552,7 @@ ColumnLayout {
                         color: modelData.current ? Design.accent : Design.textDim
                     }
                 }
-                ActionButton {
+                Button {
                     Layout.fillWidth: false
                     icon: "\u{f0a7a}"
                     label: I18n.tr("Forget")
@@ -551,7 +573,7 @@ ColumnLayout {
     // =========================================================================
     // The built-in panel too: it was on Power & Battery, so brightness was
     // on two pages depending on which screen it was for.
-    Card {
+    SettingsGroup {
         title: I18n.tr("Brightness")
         subtitle: Power.hasBacklight
             ? (Monitors.hasBrightness ? I18n.tr("The built-in screen, and external ones over DDC/CI")
@@ -559,14 +581,12 @@ ColumnLayout {
             : (Monitors.hasBrightness ? I18n.tr("External screens that take brightness over DDC/CI")
                                       : I18n.tr("No external screen answered over DDC/CI"))
         icon: "\u{f00df}"
-        accentColor: Design.yellow
 
         Slider {
             visible: Power.hasBacklight
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(Design.size.ctl)
+            Layout.preferredHeight: Design.s(Design.size.md)
             value: Power.brightness
-            tone: Design.yellow
             icon: "\u{f00df}"
             label: I18n.tr("Built-in screen")
             onMoved: pct => Power.setBrightness(pct)
@@ -577,9 +597,8 @@ ColumnLayout {
             delegate: Slider {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.ctl)
+                Layout.preferredHeight: Design.s(Design.size.md)
                 value: modelData.brightness
-                tone: Design.yellow
                 icon: "\u{f00df}"
                 label: modelData.name
                 onMoved: pct => Monitors.setBrightness(modelData.id, pct)
@@ -595,8 +614,11 @@ ColumnLayout {
             text: I18n.tr("Most monitors do, over the same cable as the picture. It needs ddcutil and the i2c-dev module; some panels have DDC/CI switched off in their own menu.")
         }
 
-        ButtonRow {
-            ActionButton {
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+            Item { Layout.fillWidth: true }
+            Button {
                 icon: "\u{f0450}"
                 label: I18n.tr("Detect again")
                 onActivated: Monitors.redetect()
@@ -607,7 +629,7 @@ ColumnLayout {
     // =========================================================================
     // 2. THE SELECTED SCREEN
     // =========================================================================
-    Card {
+    SettingsGroup {
         visible: section.activeMonitor !== null
         title: section.activeMonitor
             ? (section.activeEditIndex + 1) + ". " + section.activeMonitor.name : ""
@@ -616,10 +638,9 @@ ColumnLayout {
                || I18n.tr("Settings for the selected screen"))
             : ""
         icon: "\u{f0379}"
-        accentColor: section.selectedRateAccent
 
         // The main display: full bar, workspace 1, the focus at login.
-        Toggle {
+        SwitchRow {
             visible: monitorsModel.count > 1
             label: I18n.tr("Main display")
             subtitle: I18n.tr("Carries the full bar and workspace 1, and has the focus at login")
@@ -632,7 +653,7 @@ ColumnLayout {
             }
         }
 
-        Toggle {
+        SwitchRow {
             visible: monitorsModel.count > 1 && section.activeMonitor !== null
                 && Screens.primaryName === section.activeMonitor.name
             label: I18n.tr("Notifications on the main display")
@@ -644,7 +665,7 @@ ColumnLayout {
         }
 
         // Display power / state toggle
-        Toggle {
+        SwitchRow {
             label: I18n.tr("Enable display")
             subtitle: I18n.tr("Turn this video output on or off in Sway")
             checked: section.activeMonitor ? (section.activeMonitor.active !== false) : true
@@ -679,7 +700,7 @@ ColumnLayout {
                     required property var modelData
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Design.s(44)
+                    Layout.preferredHeight: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isSel: section.activeMonitor
@@ -692,9 +713,6 @@ ColumnLayout {
                                          : (resMa.containsMouse ? Design.glassHover : Design.glassCard)
 
                     Behavior on color { ColorAnimation { duration: Design.duration.base } }
-
-                    scale: resMa.pressed ? 0.96 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutSine } }
 
                     ColumnLayout {
                         anchors.centerIn: parent
@@ -740,7 +758,7 @@ ColumnLayout {
         Item {
             id: sliderContainer
             Layout.fillWidth: true
-            Layout.preferredHeight: Design.s(56)
+            Layout.preferredHeight: Design.s(Design.size.tile)
             Layout.leftMargin: Design.s(Design.space.md)
             Layout.rightMargin: Design.s(Design.space.md)
 
@@ -769,9 +787,9 @@ ColumnLayout {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.topMargin: Design.s(Design.space.sm)
-                height: Design.s(12)
-                radius: Design.s(6)
-                color: Design.sunken
+                height: Design.s(Design.space.md)
+                radius: Design.s(Design.space.xs)
+                color: Design.well
                 border.color: Design.ground
                 border.width: Design.border
 
@@ -791,7 +809,7 @@ ColumnLayout {
                     id: tick
                     required property int index
                     x: (tick.index / (sliderContainer.rates.length - 1)) * track.width
-                    y: track.y + Design.s(22)
+                    y: track.y + Design.s(Design.space.xl)
 
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -806,8 +824,8 @@ ColumnLayout {
 
             Rectangle {
                 id: knob
-                width: Design.s(24)
-                height: Design.s(24)
+                width: Design.s(Design.size.xs)
+                height: Design.s(Design.size.xs)
                 radius: width / 2
                 color: sliderMa.containsPress ? section.selectedRateAccent : Design.text
                 anchors.verticalCenter: track.verticalCenter
@@ -826,7 +844,8 @@ ColumnLayout {
 
             Clickable {
                 id: sliderMa
-                anchors.margins: Design.s(-15)
+                keyboard: false
+                anchors.margins: -Design.s(Design.space.lg)
                 enabled: section.activeMonitor !== null
 
                 function updateSelection(mouseX, snapToGrid) {
@@ -850,11 +869,13 @@ ColumnLayout {
         }
 
         // Scale stepper
-        Stepper {
+        SettingsRow {
             label: I18n.tr("Scale")
-            valueText: (Math.round(section.currentSysScale * 100) / 100) + "×"
-            onDecrement: section.setSysScale(section.currentSysScale - 0.25)
-            onIncrement: section.setSysScale(section.currentSysScale + 0.25)
+            Stepper {
+                valueText: (Math.round(section.currentSysScale * 100) / 100) + "×"
+                onDecrement: section.setSysScale(section.currentSysScale - 0.25)
+                onIncrement: section.setSysScale(section.currentSysScale + 0.25)
+            }
         }
 
         // Orientation row
@@ -875,7 +896,7 @@ ColumnLayout {
                     { id: "270",    label: "270°", tip: "Portrait (Flipped)" }
                 ]
 
-                Pill {
+                Chip {
                     required property var modelData
                     label: modelData.label
                     active: section.activeMonitor && (section.activeMonitor.transform || "normal") === modelData.id
@@ -916,23 +937,21 @@ ColumnLayout {
                 text: section.dirty ? I18n.tr("Unapplied changes") : I18n.tr("Matches what sway is running")
                 role: "caption"
                 dim: !section.dirty
-                color: section.dirty ? Design.peach : Design.textDim
+                color: section.dirty ? Design.warn : Design.textDim
                 Layout.fillWidth: true
             }
 
-            Pill {
+            Button {
                 label: I18n.tr("Reset")
                 enabled: section.dirty
-                opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.reload()
             }
 
-            Pill {
+            Button {
+                variant: section.dirty ? "primary" : "secondary"
                 label: monitorsModel.count > 1 ? I18n.tr("Apply All") : I18n.tr("Apply")
                 icon: "\u{f012c}"
-                active: section.dirty
                 enabled: section.dirty
-                opacity: section.dirty ? Design.opacity.full : Design.opacity.disabled
                 onClicked: section.applyLayout()
             }
         }
@@ -1009,48 +1028,22 @@ ColumnLayout {
 
     // A virtual screen a tablet shows over VNC. It was on Remote Desktop;
     // it is a screen, and arranged with the others here.
-    Card {
+    SettingsGroup {
         title: I18n.tr("A tablet as a second screen")
-        subtitle: I18n.tr("Create a virtual second monitor to stream to an iPad or tablet via VNC")
         icon: "\u{f004b}"
-        accentColor: Design.mauve
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.md)
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-                Label { text: I18n.tr("Virtual Headless Display"); weight: Design.weight.semibold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                Label {
-                    // Wrapped: on one line it pushed the buttons past the card's edge.
-                    text: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
-                    role: "caption"
-                    dim: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
+        SettingsRow {
+            label: I18n.tr("Virtual Headless Display")
+            note: I18n.tr("Creates an extra 1920x1080 workspace that can be viewed on another device")
+            Button {
+                label: I18n.tr("Create Display")
+                icon: "\u{f0079}"
+                onActivated: Daemon.sidecarCreate(1920, 1080)
             }
-
-            ButtonRow {
-                spacing: Design.s(Design.space.sm)
-
-                ActionButton {
-                    label: I18n.tr("Create Display")
-                    icon: "\u{f0079}"
-                    onActivated: {
-                        Daemon.sidecarCreate(1920, 1080);
-                    }
-                }
-
-                ActionButton {
-                    label: I18n.tr("Remove")
-                    icon: "\u{f00d}"
-                    onActivated: {
-                        Daemon.sidecarRemove();
-                    }
-                }
+            Button {
+                label: I18n.tr("Remove")
+                icon: "\u{f00d}"
+                onActivated: Daemon.sidecarRemove()
             }
         }
     }

@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import "../../Ui"
 import "../../Services"
 
-Card {
+SettingsGroup {
     id: section
 
     property string apiKey: ""
@@ -16,7 +16,6 @@ Card {
     title: I18n.tr("Weather")
     subtitle: I18n.tr("Used by the bar, the calendar and the lock screen. The key is kept in the encrypted secret store, not in the settings file.")
     icon: "\u{f0590}"
-    accentColor: Design.yellow
 
     // What the forecast is coming from right now. This used to test the key
     // field, which is always empty — the key is in the secret store, not the
@@ -66,7 +65,7 @@ Card {
                 }
             }
 
-            ActionButton {
+            Button {
                 Layout.fillWidth: false
                 visible: Settings.weatherKeyStored
                 icon: "\u{f01b4}"
@@ -116,7 +115,7 @@ Card {
                     { id: "imperial", label: I18n.tr("Fahrenheit") }
                 ]
 
-                Pill {
+                Chip {
                     required property var modelData
                     Layout.fillWidth: true
                     label: modelData.label

@@ -1,5 +1,6 @@
 # GTK 2.0 User Settings
-# Tokyo Night Dark Theme configuration
+# The look GTK 3 has (adw-gtk3); b1air-daemon keeps GTK 3 and 4 in step
+# with the desktop, GTK 2 apps only get these.
 
 gtk-theme-name = "adw-gtk3-dark"
 gtk-icon-theme-name = "Papirus-Dark"
@@ -16,6 +17,3 @@ gtk-xft-antialias = 1
 gtk-xft-hinting = 1
 gtk-xft-hintstyle = "hintslight"
 gtk-xft-rgba = "rgb"
-
-# Tokyo Night Scheme Fallbacks
-gtk-color-scheme = "text_color:#c0caf5\nbase_color:#16161e\nfg_color:#c0caf5\nbg_color:#1a1b26\nselected_fg_color:#1a1b26\nselected_bg_color:#7aa2f7\ntooltip_fg_color:#c0caf5\ntooltip_bg_color:#1f2335"

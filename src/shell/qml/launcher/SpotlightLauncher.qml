@@ -142,6 +142,42 @@ PopupShell {
         }
     }
 
+    // ── Software to install ──────────────────────────────────────────────────
+    // "install vlc" (or "установить …", "встановити …"): what Flathub, the
+    // distribution and the AUR have, through b1air-software, which installs
+    // the one picked in a terminal that asks first. A prefix, not every query:
+    // the package indexes are not something to read at each keystroke.
+    readonly property string installQuery: {
+        const m = window.query.match(/^\s*(install|get|установить|встановити)\s+(.+)$/i);
+        return m ? m[2].trim() : "";
+    }
+    property var softwareHits: []
+    Timer {
+        id: softwareDelay
+        interval: 350
+        onTriggered: {
+            if (window.installQuery.length < 2) { window.softwareHits = []; return; }
+            softwareFind.running = false;
+            softwareFind.command = ["b1air-software", "search", window.installQuery];
+            softwareFind.running = true;
+        }
+    }
+    Process {
+        id: softwareFind
+        stdout: StdioCollector {
+            onStreamFinished: window.softwareHits = this.text.split("\n").filter(l => l.length > 0).map(l => {
+                const f = l.split("\t");
+                return { source: f[0], id: f[1], name: f[2] || f[1], summary: f[3] || "" };
+            })
+        }
+    }
+    readonly property var sourceNames: ({ "flathub": "Flathub", "repo": I18n.tr("Repositories"), "aur": "AUR" })
+
+    // The files are the slow part; while they are still coming an empty list
+    // is not yet an answer.
+    readonly property bool searchingFiles: fileDelay.running || fileFind.running || findFallback.running
+        || softwareDelay.running || softwareFind.running
+
     // ── Results ──────────────────────────────────────────────────────────────
 
     readonly property string calcResult: window.hasQuery ? (window.evaluateMath(window.query) || window.convert(window.query)) : ""
@@ -150,6 +186,8 @@ PopupShell {
         window.selectedIndex = 0;
         window.fileHits = [];
         fileDelay.restart();
+        window.softwareHits = [];
+        softwareDelay.restart();
     }
 
     function matches(q, ...fields) {
@@ -161,6 +199,13 @@ PopupShell {
         const q = window.query.trim().toLowerCase();
         if (!q) return [];
         const out = [];
+        if (window.installQuery !== "") {
+            for (const h of window.softwareHits)
+                out.push({ section: I18n.tr("Install"), kind: "software", title: h.name,
+                           sub: window.sourceNames[h.source] + (h.summary ? " · " + h.summary : ""),
+                           glyph: "\u{f03d3}", source: h.source, pkg: h.id });
+            return out;
+        }
         if (window.calcResult !== "")
             out.push({ section: I18n.tr("Calculator"), kind: "calc", title: window.calcResult,
                        sub: window.query.trim(), glyph: "\u{f1ec}" });
@@ -186,6 +231,11 @@ PopupShell {
 
         for (const c of window.commands.filter(c => window.matches(q, c.name, c.desc)))
             out.push({ section: I18n.tr("Commands"), kind: "command", title: c.name, sub: c.desc, glyph: c.glyph, cmd: c.cmd });
+
+        // Nothing installed by that name: offer to look for it.
+        if (apps.length === 0 && q.length >= 3)
+            out.push({ section: I18n.tr("Install"), kind: "findsoftware", title: I18n.tr("Find “%1” to install", window.query.trim()),
+                       sub: I18n.tr("Flathub and the repositories"), glyph: "\u{f03d3}" });
 
         if (out.length === 0)
             out.push({ section: I18n.tr("Commands"), kind: "run", title: I18n.tr("Run “%1”", window.query.trim()),
@@ -224,8 +274,13 @@ PopupShell {
             window.close();
             return;
         }
+        if (item.kind === "findsoftware") {
+            window.query = "install " + window.query.trim();
+            return;
+        }
         window.close();
-        if (item.kind === "setting") Quickshell.execDetached(["b1air-settings", item.page]);
+        if (item.kind === "software") Quickshell.execDetached(["b1air-software", "install", item.source, item.pkg]);
+        else if (item.kind === "setting") Quickshell.execDetached(["b1air-settings", item.page]);
         else if (item.kind === "file") Quickshell.execDetached(["xdg-open", item.path]);
         else if (item.kind === "app" && item.terminal) Quickshell.execDetached(["b1air-term", "-e", "sh", "-c", item.cmd.replace(/%[a-zA-Z]/g, "")]);
         else window.safeLaunchCommand(item.cmd);
@@ -253,9 +308,9 @@ PopupShell {
         // As tall as what it found, up to the window; at least room for the
         // preview.
         height: window.hasQuery
-            ? Math.min(parent.height, Design.s(59) + Math.max(Design.s(320), list.contentHeight + Design.s(Design.space.sm) * 2))
-            : Design.s(58)
-        radius: Design.s(16)
+            ? Math.min(parent.height, Design.s(Design.size.tile) + Math.max(Design.s(Design.width.text), list.contentHeight + Design.s(Design.space.sm) * 2))
+            : Design.s(Design.size.tile)
+        radius: Design.s(Design.radius.panel)
         color: Design.glassBg
         border.color: Design.glassBorder
         border.width: 1
@@ -279,10 +334,10 @@ PopupShell {
             // ── The field ───────────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(58)
-                Layout.leftMargin: Design.s(18)
-                Layout.rightMargin: Design.s(18)
-                spacing: Design.s(12)
+                Layout.preferredHeight: Design.s(Design.size.tile)
+                Layout.leftMargin: Design.s(Design.space.lg)
+                Layout.rightMargin: Design.s(Design.space.lg)
+                spacing: Design.s(Design.space.md)
 
                 Icon { text: "\u{f002}"; role: "subhead"; color: Design.textDim }
 
@@ -291,7 +346,7 @@ PopupShell {
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
                     font.family: Design.font.sans
-                    font.pixelSize: Design.s(20)
+                    font.pixelSize: Design.s(Design.font.title)
                     color: Design.text
                     selectByMouse: true
                     clip: true
@@ -326,11 +381,26 @@ PopupShell {
 
             Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.glassBorder; visible: window.hasQuery }
 
+            AppState {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                mode: !window.hasQuery || window.results.length > 0 ? ""
+                    : window.searchingFiles ? "loading" : "empty"
+                icon: "\u{f002}"
+                title: window.installQuery !== ""
+                    ? (mode === "loading" ? I18n.tr("Looking for “%1”…", window.installQuery)
+                                          : I18n.tr("Nothing to install called “%1”", window.installQuery))
+                    : (mode === "loading" ? I18n.tr("Searching files…")
+                                          : I18n.tr("No results for “%1”", window.query.trim()))
+                hint: window.installQuery !== "" ? I18n.tr("Flathub and the repositories were searched.")
+                    : I18n.tr("Apps, settings, files and sums show up here. “install …” finds new ones.")
+            }
+
             // ── Results | preview ────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: window.hasQuery
+                visible: window.hasQuery && window.results.length > 0
                 spacing: 0
 
                 ListView {
@@ -348,7 +418,7 @@ PopupShell {
                         required property string section
                         width: list.width
                         topPadding: Design.s(Design.space.sm)
-                        bottomPadding: Design.s(2)
+                        bottomPadding: Design.s(Design.space.xxs)
                         leftPadding: Design.s(Design.space.sm)
                         text: section
                         role: "caption"
@@ -362,8 +432,8 @@ PopupShell {
                         required property int index
                         readonly property bool on: index === window.selectedIndex
                         width: list.width
-                        height: Design.s(38)
-                        radius: Design.s(7)
+                        height: Design.s(Design.size.knob)
+                        radius: Design.s(Design.radius.ctl)
                         color: row.on ? Design.accent : (rowMa.containsMouse ? Design.glassHover : "transparent")
 
                         RowLayout {
@@ -372,8 +442,8 @@ PopupShell {
                             anchors.rightMargin: Design.s(Design.space.sm)
                             spacing: Design.s(Design.space.sm)
                             Item {
-                                Layout.preferredWidth: Design.s(22)
-                                Layout.preferredHeight: Design.s(22)
+                                Layout.preferredWidth: Design.s(Design.size.mini)
+                                Layout.preferredHeight: Design.s(Design.size.mini)
                                 IconImage {
                                     anchors.fill: parent
                                     visible: !!row.modelData.image
@@ -396,7 +466,10 @@ PopupShell {
                             }
                             Label {
                                 Layout.maximumWidth: list.width * 0.45
-                                text: row.modelData.kind === "file" ? row.modelData.sub : ""
+                                // Where it is, for a file; where it comes from, for a program to
+                                // install (the same name from Flathub and the repositories).
+                                text: row.modelData.kind === "file" ? row.modelData.sub
+                                    : row.modelData.kind === "software" ? window.sourceNames[row.modelData.source] : ""
                                 visible: text !== ""
                                 role: "caption"
                                 color: row.on ? Design.tint(Design.accentText, 0.75) : Design.textFaint
@@ -431,8 +504,8 @@ PopupShell {
                         visible: !!preview.it
                         Item {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: preview.picture ? parent.width : Design.s(88)
-                            Layout.preferredHeight: preview.picture ? Design.s(160) : Design.s(88)
+                            Layout.preferredWidth: preview.picture ? parent.width : Design.s(Design.size.avatar)
+                            Layout.preferredHeight: preview.picture ? Design.s(Design.width.label) : Design.s(Design.size.avatar)
                             Image {
                                 anchors.fill: parent
                                 visible: preview.picture
@@ -440,7 +513,7 @@ PopupShell {
                                 source: !preview.picture ? ""
                                       : window.isImage(preview.it.path) ? Paths.fileUrl(preview.it.path)
                                       : "image://thumb/" + encodeURIComponent(preview.it.path)
-                                sourceSize: Qt.size(Design.s(400), Design.s(340))
+                                sourceSize: Qt.size(Design.s(Design.width.menuMax), Design.s(Design.width.dialog))
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                             }
@@ -453,13 +526,13 @@ PopupShell {
                             Rectangle {
                                 anchors.fill: parent
                                 visible: !preview.picture && !!preview.it && !preview.it.image
-                                radius: Design.s(20)
+                                radius: Design.s(Design.radius.panel)
                                 color: Design.tint(Design.accent, 0.16)
                                 Text {
                                     anchors.centerIn: parent
                                     text: preview.it ? (preview.it.glyph || "") : ""
                                     font.family: Design.font.icon
-                                    font.pixelSize: Design.s(44)
+                                    font.pixelSize: Design.s(Design.font.hero)
                                     color: Design.accent
                                 }
                             }
@@ -495,6 +568,8 @@ PopupShell {
                                 : preview.it.kind === "calc" ? I18n.tr("Enter copies the result")
                                 : preview.it.kind === "file" ? I18n.tr("Enter opens it, Ctrl+Enter shows it in Files")
                                 : preview.it.kind === "setting" ? I18n.tr("Enter opens this page of Settings")
+                                : preview.it.kind === "software" ? I18n.tr("Enter installs it, in a terminal that asks first")
+                                : preview.it.kind === "findsoftware" ? I18n.tr("Enter searches for it")
                                 : I18n.tr("Enter opens it · Tab goes to the next section")
                         }
                     }

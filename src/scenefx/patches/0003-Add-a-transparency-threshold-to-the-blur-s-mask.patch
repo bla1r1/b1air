@@ -1,0 +1,174 @@
+From 479905312bead1b4a954078ad69e6331cf201370 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sat, 17 Oct 2026 06:52:21 +0000
+Subject: [PATCH] Add a transparency threshold to the blur's mask
+
+wlr_scene_blur_set_transparency_threshold(): with a transparency mask
+source, a pixel at or below this alpha counts as transparent and gets no
+blur behind it. 0, the default, is the original test, alpha == 0.
+
+A full-screen layer that draws its panel and the panel's soft shadow
+itself had the blur under the shadow as well: a blurred halo round every
+panel. With the threshold above the shadow's alpha and below the panel's,
+the blur stays under the panel.
+---
+ include/render/fx_renderer/shaders.h |  1 +
+ include/scenefx/render/pass.h        |  6 ++++++
+ include/scenefx/types/wlr_scene.h    | 11 +++++++++++
+ render/fx_renderer/fx_pass.c         |  2 ++
+ render/fx_renderer/shaders.c         |  1 +
+ render/fx_renderer/shaders/tex.frag  |  3 ++-
+ types/scene/wlr_scene.c              | 12 ++++++++++++
+ 7 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/include/render/fx_renderer/shaders.h b/include/render/fx_renderer/shaders.h
+index f3a2bd5..f4fd5fc 100644
+--- a/include/render/fx_renderer/shaders.h
++++ b/include/render/fx_renderer/shaders.h
+@@ -116,6 +116,7 @@ struct tex_shader {
+ 	GLint pos_attrib;
+ 
+ 	GLint discard_transparent;
++	GLint discard_threshold;
+ 
+ 	// Only used for the effects shader
+ 	struct {
+diff --git a/include/scenefx/render/pass.h b/include/scenefx/render/pass.h
+index 0ef3750..dfa458e 100644
+--- a/include/scenefx/render/pass.h
++++ b/include/scenefx/render/pass.h
+@@ -46,6 +46,9 @@ struct fx_render_texture_options {
+ 	const struct wlr_box *clip_box; // Used to clip csd. Ignored if NULL
+ 	struct fx_corner_fradii corners;
+ 	bool discard_transparent;
++	// With discard_transparent: a pixel at or below this alpha counts as
++	// transparent. 0 is the original test, alpha == 0.
++	float discard_threshold;
+ 	struct clipped_fregion clipped_region;
+ };
+ 
+@@ -88,6 +91,9 @@ struct fx_render_blur_pass_options {
+ 	struct blur_data *blur_data;
+ 	bool use_optimized_blur;
+ 	bool ignore_transparent;
++	// With ignore_transparent: what counts as transparent (see
++	// fx_render_texture_options.discard_threshold).
++	float transparency_threshold;
+ 	float blur_strength;
+ 	struct fx_corner_fradii corners;
+ 	struct clipped_fregion clipped_region;
+diff --git a/include/scenefx/types/wlr_scene.h b/include/scenefx/types/wlr_scene.h
+index 4ebc2b6..0d91691 100644
+--- a/include/scenefx/types/wlr_scene.h
++++ b/include/scenefx/types/wlr_scene.h
+@@ -182,6 +182,8 @@ struct wlr_scene_blur {
+ 	bool should_only_blur_bottom_layer;
+ 
+ 	struct linked_node transparency_mask_source;
++	// The alpha at or below which the mask source counts as transparent.
++	float transparency_threshold;
+ };
+ 
+ /** A scene-graph node telling SceneFX to render the optimized blur */
+@@ -660,6 +662,15 @@ void wlr_scene_blur_set_should_only_blur_bottom_layer(struct wlr_scene_blur *blu
+ void wlr_scene_blur_set_transparency_mask_source(struct wlr_scene_blur *blur,
+ 	   struct wlr_scene_buffer *source);
+ 
++/**
++ * Sets the alpha, from 0 to 1, at or below which the transparency mask
++ * source counts as transparent: no blur behind it. 0, the default, is fully
++ * transparent only. Higher lets a surface draw a soft shadow of its own, or a
++ * faint glow, without the blur showing through around it.
++ */
++void wlr_scene_blur_set_transparency_threshold(struct wlr_scene_blur *blur,
++	float threshold);
++
+ /**
+  * get the transparency mask source for the blur
+  */
+diff --git a/render/fx_renderer/fx_pass.c b/render/fx_renderer/fx_pass.c
+index 39b6226..116e6e2 100644
+--- a/render/fx_renderer/fx_pass.c
++++ b/render/fx_renderer/fx_pass.c
+@@ -476,6 +476,7 @@ void fx_render_pass_add_texture(struct fx_gles_render_pass *pass,
+ 	glUniform1f(shader->alpha, alpha);
+ 
+ 	glUniform1f(shader->discard_transparent, fx_options->discard_transparent);
++	glUniform1f(shader->discard_threshold, fx_options->discard_threshold);
+ 
+ 	if (use_effects) {
+ 		struct fx_corner_fradii corners = fx_options->corners;
+@@ -1141,6 +1142,7 @@ void fx_render_pass_add_blur(struct fx_gles_render_pass *pass,
+ 
+ 		struct fx_render_texture_options tex_options = fx_options->tex_options;
+ 		tex_options.discard_transparent = true;
++		tex_options.discard_threshold = fx_options->transparency_threshold;
+ 		tex_options.clipped_region = fx_options->clipped_region;
+ 		fx_render_pass_add_texture(pass, &tex_options);
+ 
+diff --git a/render/fx_renderer/shaders.c b/render/fx_renderer/shaders.c
+index 51cfe90..a4a4e5c 100644
+--- a/render/fx_renderer/shaders.c
++++ b/render/fx_renderer/shaders.c
+@@ -262,6 +262,7 @@ bool link_tex_program(struct tex_shader *shader, enum fx_tex_shader_source sourc
+ 	shader->tex_proj = glGetUniformLocation(prog, "tex_proj");
+ 
+ 	shader->discard_transparent = glGetUniformLocation(prog, "discard_transparent");
++	shader->discard_threshold = glGetUniformLocation(prog, "discard_threshold");
+ 
+ 	if (!effects) {
+ 		return true;
+diff --git a/render/fx_renderer/shaders/tex.frag b/render/fx_renderer/shaders/tex.frag
+index 11e3102..6245420 100644
+--- a/render/fx_renderer/shaders/tex.frag
++++ b/render/fx_renderer/shaders/tex.frag
+@@ -46,6 +46,7 @@ uniform float clip_radius_bottom_right;
+ #endif
+ 
+ uniform bool discard_transparent;
++uniform float discard_threshold;
+ 
+ vec4 sample_texture() {
+ #if SOURCE == SOURCE_TEXTURE_RGBA || SOURCE == SOURCE_TEXTURE_EXTERNAL
+@@ -88,7 +89,7 @@ void main() {
+ 	gl_FragColor = sample_texture() * alpha;
+ #endif
+ 
+-	if (discard_transparent && gl_FragColor.a == 0.0) {
++	if (discard_transparent && gl_FragColor.a <= discard_threshold) {
+ 		discard;
+ 	}
+ }
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index d2d111f..74debed 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1254,6 +1254,17 @@ void wlr_scene_blur_set_transparency_mask_source(struct wlr_scene_blur *blur,
+ 	scene_node_update(&blur->node, NULL);
+ }
+ 
++void wlr_scene_blur_set_transparency_threshold(struct wlr_scene_blur *blur,
++		float threshold) {
++	if (threshold < 0.0f) threshold = 0.0f;
++	if (threshold > 1.0f) threshold = 1.0f;
++	if (blur->transparency_threshold == threshold) {
++		return;
++	}
++	blur->transparency_threshold = threshold;
++	scene_node_update(&blur->node, NULL);
++}
++
+ struct wlr_scene_buffer *wlr_scene_blur_get_transparency_mask_source(
+ 	struct wlr_scene_blur *blur) {
+ 	struct linked_node *node = linked_nodes_get_sibling(&blur->transparency_mask_source);
+@@ -2354,6 +2365,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
+ 			.use_optimized_blur = blur->should_only_blur_bottom_layer,
+ 			.blur_data = &scene->blur_data,
+ 			.ignore_transparent = mask != NULL,
++			.transparency_threshold = blur->transparency_threshold,
+ 			.blur_strength = blur->strength,
+ 		};
+ 		fx_render_pass_add_blur(fx_pass, &blur_options);
+-- 
+2.43.0
+

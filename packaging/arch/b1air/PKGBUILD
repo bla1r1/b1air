@@ -1,0 +1,127 @@
+# The b1air desktop as a pacman package: the suite (src/), the session, the
+# login screen theme, the defaults every account starts from. What install.sh
+# used to copy into the system with sudo, piece by piece and untracked, is
+# owned by this package — `pacman -Ql b1air` lists it, `pacman -R b1air`
+# removes it.
+#
+# Built from this checkout, not a download: it is how the desktop is
+# developed. The CMake tree in src/build is reused, so a rebuild after a pull
+# compiles only what changed. Built by install.sh and update-dotfiles.sh on
+# Arch; by hand:
+#
+#     cd packaging/arch/b1air && makepkg -sif
+#
+# What stays in install.sh is per account or per machine, not files: the
+# user's ~/.config, groups, enabling services, the wallpaper cache.
+
+_repo="$(cd "$startdir/../../.." && pwd)"
+
+pkgname=b1air
+# From git here, not a pkgver() function: makepkg writes what that returns
+# back into this file, which would leave the checkout modified on every build.
+pkgver="r$(git -C "$_repo" rev-list --count HEAD).$(git -C "$_repo" rev-parse --short HEAD)"
+pkgrel=1
+pkgdesc="b1air desktop: shell, apps and session on swayfx"
+arch=(x86_64 aarch64)
+url="https://github.com/bla1r1/b1air"
+license=(GPL-2.0-only)
+# The dependencies are packages/arch.txt and packages/arch-aur.txt — the
+# lists install.sh installs from — so there is one list, not two that drift.
+# What was only there went with the next `pacman -Rns` of something that had
+# pulled it in: removing Plasma took qt6-virtualkeyboard (the login theme fell
+# back to SDDM's own), smbclient and the rest, and network shares were gone.
+# Optional entries (?name) are depended on too: nothing to install by hand.
+_list() {   # _list <file> — every package named in it, ? or not
+    local line word
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%%#*}"
+        for word in $line; do echo "${word#\?}"; done
+    done < "$_repo/packages/$1"
+}
+# Needed to build, not to run.
+_build_only=(base-devel git cmake ccache pkgconf wayland-protocols unzip rust nlohmann-json)
+# Ours replaces it (b1air-swayfx, which provides sway).
+_not_ours=(swayfx)
+_filter() {
+    local p skip x
+    for p in "$@"; do
+        skip=0
+        for x in "${_build_only[@]}" "${_not_ours[@]}"; do [[ "$p" == "$x" ]] && skip=1; done
+        (( skip )) || echo "$p"
+    done
+}
+depends=(sway $(_filter $(_list arch.txt) $(_list arch-aur.txt)))
+makedepends=(cmake git rsync pkgconf wayland-protocols rust nlohmann-json)
+# The editions (packages/editions/) are not depended on: install.sh installs
+# the one chosen on top of this package. These are what they bring that the
+# desktop uses when it is there.
+optdepends=('b1air-swayfx: blur, rounded corners and the b1air patches (else plain sway)'
+            'bottles: run Windows programs opened from Files (AUR)'
+            'wine: run Windows programs opened from Files ([multilib])'
+            'winetricks: Windows components for Wine'
+            'debtap: install .deb packages opened from Files (AUR)')
+backup=(etc/sddm.conf.d/10-b1air.conf)
+install=b1air.install
+# !lto: makepkg's -flto=auto turns the C half of the passkey's `ring` crate
+# into GCC bytecode, which rust-lld cannot link ("undefined symbol:
+# ring_core_…"). !strip: the suite's own build decides that.
+options=(!debug !strip !lto)
+
+build() {
+    git -C "$_repo" submodule update --init --quiet || true
+    make -C "$_repo/src" -j"$(nproc)"
+}
+
+package() {
+    local r="$_repo"
+
+    # The suite: binaries, QML, desktop entries, icons, cursors, fonts.
+    make -C "$r/src" install DESTDIR="$pkgdir" \
+        PREFIX=/usr/bin DATADIR=/usr/share \
+        QMLDIR=/usr/share/b1air-shell/qml COMPATDIR=/usr/share/b1air-shell/qs-compat
+
+    # The session.
+    install -Dm755 "$r/usr/bin/b1air-session" "$pkgdir/usr/bin/b1air-session"
+    install -Dm644 "$r/usr/share/wayland-sessions/b1air.desktop" -t "$pkgdir/usr/share/wayland-sessions/"
+    install -Dm644 "$r/usr/share/xdg-desktop-portal/b1air-portals.conf" -t "$pkgdir/usr/share/xdg-desktop-portal/"
+
+    # udev rules: a package's go in /usr/lib, /etc stays the admin's.
+    install -Dm644 "$r"/etc/udev/rules.d/*.rules -t "$pkgdir/usr/lib/udev/rules.d/"
+    # More memory maps and ntsync, for Windows programs (install.sh: the
+    # editions' own settings, gaming's, are not the package's).
+    install -Dm644 "$r"/etc/sysctl.d/*.conf -t "$pkgdir/usr/lib/sysctl.d/"
+    install -Dm644 "$r"/etc/modules-load.d/*.conf -t "$pkgdir/usr/lib/modules-load.d/"
+    echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' \
+        > "$pkgdir/usr/lib/udev/rules.d/99-b1air-uinput.rules"
+
+    # The phone passkey helper, when it was built (needs cargo).
+    if [[ -x "$pkgdir/usr/bin/b1air-fido-uhid" ]]; then
+        install -Dm644 "$r/usr/lib/systemd/system/b1air-fido-uhid.service" -t "$pkgdir/usr/lib/systemd/system/"
+        sed -i 's|^ExecStart=.*/b1air-fido-uhid|ExecStart=/usr/bin/b1air-fido-uhid|' \
+            "$pkgdir/usr/lib/systemd/system/b1air-fido-uhid.service"
+    fi
+
+    # Login screen: the theme, and the setting that picks it (a drop-in, so
+    # it neither replaces nor fights an /etc/sddm.conf of the admin's).
+    install -d "$pkgdir/usr/share/sddm/themes"
+    cp -a "$r/usr/share/sddm/themes/b1air" "$pkgdir/usr/share/sddm/themes/"
+    install -Dm644 "$r/etc/sddm.conf" "$pkgdir/etc/sddm.conf.d/10-b1air.conf"
+
+    # Defaults for every account (install.sh, install_system_defaults):
+    # b1air-session copies them in at a first login.
+    install -d "$pkgdir/usr/share/b1air/skel"
+    cp -a "$r/.config" "$pkgdir/usr/share/b1air/skel/.config"
+    # Rendered for swayfx (b1air-swayfx) whatever the build machine runs now:
+    # this runs before the compositor package is installed.
+    (source "$r/lib/distro.sh" && have_swayfx() { return 0; } \
+        && render_config_tree "$pkgdir/usr/share/b1air/skel/.config" /usr/bin)
+    mkdir -p "$pkgdir/usr/share/b1air/skel/.config/b1air/themes"
+    git -C "$r" rev-parse --short HEAD > "$pkgdir/usr/share/b1air/skel-version"
+    if [[ -d "$r/.wallpapers" ]]; then
+        install -d "$pkgdir/usr/share/b1air/wallpapers"
+        rsync -a --chmod=D755,F644 "$r/.wallpapers/" "$pkgdir/usr/share/b1air/wallpapers/"
+    fi
+
+    chmod -R u+rwX,go+rX,go-w "$pkgdir/usr/share/b1air" "$pkgdir/usr/share/b1air-shell"
+    install -Dm644 "$r/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
