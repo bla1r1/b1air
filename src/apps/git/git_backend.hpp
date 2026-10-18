@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QTimer>
 #include <functional>
+#include "syntax.hpp"
 
 /**
  * The commit log of HEAD, read a page at a time.
@@ -35,8 +36,10 @@ public:
     // CoAuthorsRole: the names from Co-authored-by trailers. The row showed
     // the author alone, so a commit written by two people credited one.
     // EmailRole: the author's email, for the avatar.
+    // TagsRole: the tags on the commit, BranchesRole the branches (local and
+    // remote) that point at it — git log's decorations, drawn as labels.
     enum Role { FullHashRole = Qt::UserRole + 1, HashRole, AuthorRole, TimeRole, MessageRole, SyncRole,
-                CoAuthorsRole, EmailRole };
+                CoAuthorsRole, EmailRole, TagsRole, BranchesRole };
 
     explicit HistoryModel(QObject* parent = nullptr) : QAbstractListModel(parent) {}
 
@@ -48,10 +51,22 @@ public:
 
     int count() const { return m_rows.size(); }
     Q_INVOKABLE QString hashAt(int row) const;
+    /** SyncRole of a row, for rows not on screen. */
+    Q_INVOKABLE QString syncAt(int row) const { return row >= 0 && row < m_rows.size() ? syncStateOf(m_rows.at(row).fullHash) : QString(); }
 
-    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; QString email; };
-    /** A page of the log, newest first; safe off the GUI thread. */
-    static QList<Commit> readPage(const QString& repoPath, int skip);
+    struct Commit { QString fullHash, hash, author; qint64 time; QString message; QStringList coAuthors; QString email;
+                    QStringList tags, branches; };
+    /**
+     * A page of the log, newest first; safe off the GUI thread. range is a
+     * revision range for git log ("HEAD..main"; empty is HEAD); filter keeps
+     * the commits whose subject, author or hash has it in, any case.
+     */
+    static QList<Commit> readPage(const QString& repoPath, int skip, const QString& range = QString(),
+                                  const QString& filter = QString());
+
+    void setQuery(const QString& range, const QString& filter) { m_range = range; m_filter = filter; }
+    QString range() const { return m_range; }
+    QString filter() const { return m_filter; }
 
     /** Start again from the newest commit of the repository at path. */
     void reload(const QString& repoPath);
@@ -69,9 +84,11 @@ signals:
     void countChanged();
 
 private:
-    QList<Commit> readPage(int skip) const { return readPage(m_repoPath, skip); }
+    QList<Commit> readPage(int skip) const { return readPage(m_repoPath, skip, m_range, m_filter); }
 
     QString m_repoPath;
+    QString m_range;
+    QString m_filter;
     QList<Commit> m_rows;
     bool m_atEnd = true;
     QSet<QString> m_unpushed;
@@ -98,7 +115,9 @@ class GitBackend : public QObject {
     // restored here: { ref, files } or empty.
     Q_PROPERTY(QVariantMap branchStash READ branchStash NOTIFY branchChanged)
     Q_PROPERTY(bool upstreamGone READ upstreamGone NOTIFY syncChanged)
-    // { active, branch, conflicts } while a merge is in progress.
+    // { active, kind, branch, conflicts } while a merge, rebase, cherry-pick
+    // or revert is in progress; kind is one of those four words. Each stops
+    // on a conflict and waits to be continued or aborted.
     Q_PROPERTY(QVariantMap mergeState READ mergeState NOTIFY statusChanged)
     // Every worktree of the repository: { path, branch, main, current }.
     Q_PROPERTY(QVariantList worktrees READ worktrees NOTIFY branchChanged)
@@ -153,6 +172,48 @@ class GitBackend : public QObject {
     // Signed-in hosting accounts, through the providers' own CLIs: gh for
     // GitHub, glab for GitLab. Each entry: provider, name, installed, login.
     Q_PROPERTY(QVariantList accounts READ accounts NOTIFY accountsChanged)
+    // Every remote: { name, url }. For Repository settings.
+    Q_PROPERTY(QVariantList remotes READ remotes NOTIFY syncChanged)
+    // Diffs drawn with whitespace-only changes left out (git diff -w). Lines
+    // cannot be staged one by one then: the rows are not the file's.
+    Q_PROPERTY(bool ignoreWhitespace READ ignoreWhitespace WRITE setIgnoreWhitespace NOTIFY diffOptionsChanged)
+    // The open pull requests of the repository on GitHub (gh pr list):
+    // { number, title, branch, author, draft, updated }.
+    Q_PROPERTY(QVariantList pullRequests READ pullRequests NOTIFY pullRequestsChanged)
+    Q_PROPERTY(bool loadingPullRequests READ loadingPullRequests NOTIFY pullRequestsChanged)
+    // The signed-in account's repositories on GitHub, for Clone:
+    // { name, url, description, private, owner }.
+    Q_PROPERTY(QVariantList remoteRepos READ remoteRepos NOTIFY remoteReposChanged)
+    Q_PROPERTY(bool loadingRemoteRepos READ loadingRemoteRepos NOTIFY remoteReposChanged)
+    // GitHub's .gitignore templates, by name, for New repository.
+    Q_PROPERTY(QStringList gitignoreTemplates READ gitignoreTemplates NOTIFY gitignoreTemplatesChanged)
+    // Where Clone and New repository put things unless told otherwise.
+    Q_PROPERTY(QString defaultProjectsDir READ defaultProjectsDir CONSTANT)
+    // History: what is searched for, and which branch the list is compared
+    // with — "behind" lists its commits this branch lacks, "ahead" this
+    // branch's that it lacks. Counts for both while a branch is picked.
+    Q_PROPERTY(QString historyFilter READ historyFilter WRITE setHistoryFilter NOTIFY historyQueryChanged)
+    Q_PROPERTY(QString compareBranch READ compareBranch NOTIFY historyQueryChanged)
+    Q_PROPERTY(QString compareMode READ compareMode NOTIFY historyQueryChanged)
+    Q_PROPERTY(int compareAhead READ compareAhead NOTIFY historyQueryChanged)
+    Q_PROPERTY(int compareBehind READ compareBehind NOTIFY historyQueryChanged)
+    // Branches only on a remote, to check out as GitHub Desktop's "Other
+    // branches": "origin/feature", without the local ones that track them.
+    Q_PROPERTY(QStringList remoteBranches READ remoteBranches NOTIFY branchChanged)
+    // The whole file around the changes, not three lines of context.
+    Q_PROPERTY(bool fullFile READ fullFile WRITE setFullFile NOTIFY diffOptionsChanged)
+    // The pull request of the current branch on GitHub, if there is one:
+    // { number, title, url, state, checks } — checks is "success",
+    // "failure", "pending" or "" for none.
+    Q_PROPERTY(QVariantMap currentPullRequest READ currentPullRequest NOTIFY currentPullRequestChanged)
+    // Submodules: { path, commit, state } — state " " up to date, "+" at
+    // another commit than recorded, "-" not checked out, "U" conflicted.
+    Q_PROPERTY(QVariantList submodules READ submodules NOTIFY syncChanged)
+    // Git LFS: { used, installed, ready } — the repository keeps files in
+    // LFS, git-lfs is on this machine, and its filters are set up.
+    Q_PROPERTY(QVariantMap lfs READ lfs NOTIFY syncChanged)
+    // git config pull.rebase for this repository.
+    Q_PROPERTY(bool pullRebase READ pullRebase NOTIFY syncChanged)
 
 public:
     explicit GitBackend(QObject* parent = nullptr);
@@ -170,8 +231,22 @@ public:
 
     /** Merge a branch into the current one. Conflicts leave the merge open. */
     Q_INVOKABLE void mergeBranch(const QString& branch);
-    Q_INVOKABLE void commitMerge();
-    Q_INVOKABLE void abortMerge();
+    /** Replay the current branch's own commits on top of another. */
+    Q_INVOKABLE void rebaseBranch(const QString& onto);
+    /** Merge the default branch in — its remote copy when there is one. */
+    Q_INVOKABLE void updateFromDefault();
+    /** Finish what mergeState describes, once its conflicts are staged. */
+    Q_INVOKABLE void continueOperation();
+    Q_INVOKABLE void abortOperation();
+    // The old names, for the merge banner.
+    Q_INVOKABLE void commitMerge() { continueOperation(); }
+    Q_INVOKABLE void abortMerge() { abortOperation(); }
+    /**
+     * A conflicted file, settled with one side whole: "mine" is the branch
+     * being worked on, "theirs" what is coming in. (In a rebase git's own
+     * words are the other way round; this is what they mean to a person.)
+     */
+    Q_INVOKABLE void resolveWith(const QString& path, const QString& side);
 
     /** Check a branch out into a new worktree beside the main one. Returns its path. */
     Q_INVOKABLE QString createWorktree(const QString& branch);
@@ -210,13 +285,118 @@ public:
     /** Add a pattern to .gitignore. */
     Q_INVOKABLE void ignorePattern(const QString& pattern);
     Q_INVOKABLE void revertCommit(const QString& hash);
+    /** Copy a commit onto a branch: the current one, or another (switched to first). */
+    Q_INVOKABLE void cherryPick(const QString& hash, const QString& branch);
+    /**
+     * Move the branch back to a commit. What came after stays in the working
+     * tree as uncommitted changes, as GitHub Desktop's "Reset to commit" does.
+     */
+    Q_INVOKABLE void resetToCommit(const QString& hash);
+    /**
+     * Fold a commit into the one before it, keeping both messages. Only for
+     * commits that are on no remote: it rewrites them.
+     */
+    Q_INVOKABLE void squashIntoParent(const QString& hash);
+    // Editing single commits, as an interactive rebase would, for commits on
+    // no remote. Each rewrites from the commit up to HEAD.
+    /** The commit's whole message, as written. */
+    Q_INVOKABLE QString commitMessage(const QString& hash) const;
+    Q_INVOKABLE void rewordCommit(const QString& hash, const QString& message);
+    /**
+     * Stop at the commit with its changes checked out: files changed and
+     * staged then go into it when the rebase is continued.
+     */
+    Q_INVOKABLE void editCommit(const QString& hash);
+    Q_INVOKABLE void dropCommit(const QString& hash);
+    /** Swap with the next commit: direction +1 newer, -1 older. */
+    Q_INVOKABLE void moveCommit(const QString& hash, int direction);
+    /** Throw away single lines of the selected file's changes (rows of currentDiff). */
+    Q_INVOKABLE void discardLines(const QVariantList& rows);
+    /**
+     * An image file as two pictures, before and after: { before, after } as
+     * file:// URLs or "" where there is none. commit empty is the working tree.
+     */
+    Q_INVOKABLE QVariantMap imagePair(const QString& path, const QString& commit);
     Q_INVOKABLE void createBranchAt(const QString& name, const QString& hash);
     Q_INVOKABLE void createTag(const QString& name, const QString& hash);
     Q_INVOKABLE bool renameBranch(const QString& from, const QString& to);
     Q_INVOKABLE void openOnWeb();
     Q_INVOKABLE void openPullRequest();
+    Q_INVOKABLE void refreshPullRequests();
+    /** gh pr checkout: the pull request's branch, fetched and switched to. */
+    Q_INVOKABLE void checkoutPullRequest(int number);
+    Q_INVOKABLE void openPullRequestOnWeb(int number);
+
+    /** Clone url into parentDir/<name>, then open it. */
+    Q_INVOKABLE void cloneRepo(const QString& url, const QString& parentDir);
+    Q_INVOKABLE void refreshRemoteRepos();
+    /**
+     * git init in parentDir/name, with a README and a .gitignore from
+     * GitHub's templates if asked, and a first commit; then open it.
+     */
+    Q_INVOKABLE void createRepo(const QString& parentDir, const QString& name, const QString& description,
+                                bool readme, const QString& gitignore);
+    Q_INVOKABLE void refreshGitignoreTemplates();
+    /** A repository with no remote, put on GitHub with gh repo create, and pushed. */
+    Q_INVOKABLE void publishRepo(const QString& name, const QString& description, bool isPrivate);
+    /** A folder chosen in Files; folderPicked(purpose, path) answers. */
+    Q_INVOKABLE void pickFolder(const QString& purpose, const QString& start = QString());
+
+    // Repository settings.
+    Q_INVOKABLE bool setRemote(const QString& name, const QString& url);
+    Q_INVOKABLE bool removeRemote(const QString& name);
+    /** user.name and user.email, for this repository or (global) every one. */
+    Q_INVOKABLE bool setIdentity(const QString& name, const QString& email, bool global);
+    /** .gitignore in the editor, made first if there is none. */
+    Q_INVOKABLE void editGitignore();
+    /** The repository, or a file in it, in a code editor. */
+    Q_INVOKABLE void openInEditor(const QString& relPath = QString());
     QString selectedCommitSync() const { return m_history->syncStateOf(m_selectedCommit); }
     QVariantList accounts() const { return m_accounts; }
+    QVariantList remotes() const { return m_remotes; }
+    bool ignoreWhitespace() const { return m_ignoreWhitespace; }
+    void setIgnoreWhitespace(bool on);
+    QVariantList pullRequests() const { return m_pullRequests; }
+    bool loadingPullRequests() const { return m_loadingPrs; }
+    QVariantList remoteRepos() const { return m_remoteRepos; }
+    bool loadingRemoteRepos() const { return m_loadingRemoteRepos; }
+    QStringList gitignoreTemplates() const { return m_gitignoreTemplates; }
+    QString defaultProjectsDir() const;
+    QString historyFilter() const { return m_history->filter(); }
+    void setHistoryFilter(const QString& filter);
+    QString compareBranch() const { return m_compareBranch; }
+    QString compareMode() const { return m_compareMode; }
+    int compareAhead() const { return m_compareAhead; }
+    int compareBehind() const { return m_compareBehind; }
+    QStringList remoteBranches() const { return m_remoteBranches; }
+    QVariantList submodules() const { return m_submodules; }
+    QVariantMap lfs() const { return m_lfs; }
+    /** git submodule update --init --recursive. */
+    Q_INVOKABLE void updateSubmodules();
+    /** Set up Git LFS for this repository and fetch its files. */
+    Q_INVOKABLE void setupLfs();
+    bool fullFile() const { return m_fullFile; }
+    void setFullFile(bool on);
+    QVariantMap currentPullRequest() const { return m_currentPr; }
+    bool pullRebase() const { return m_pullRebase; }
+    Q_INVOKABLE void setPullRebase(bool on);
+    Q_INVOKABLE void refreshCurrentPullRequest();
+    /** Delete a tag here (not on the remote). */
+    Q_INVOKABLE void deleteTag(const QString& name);
+    Q_INVOKABLE void openCommitOnWeb(const QString& hash);
+    /**
+     * Put a commit just after another one, or (squash) fold it into that
+     * one, as dragging one commit onto another does in GitHub Desktop.
+     */
+    Q_INVOKABLE void reorderCommit(const QString& hash, const QString& target, bool squash);
+    /** Compare the history with a branch (empty: back to the plain log). */
+    Q_INVOKABLE void setCompare(const QString& branch, const QString& mode);
+
+    /**
+     * The colours code is drawn in: keyword, string, comment, number, type,
+     * as "#rrggbb". From the window, which knows the theme.
+     */
+    Q_INVOKABLE void setSyntaxPalette(const QVariantMap& colors);
 
     /** Re-read who is signed in. Asynchronous; accountsChanged when done. */
     Q_INVOKABLE void refreshAccounts();
@@ -245,8 +425,18 @@ public:
     Q_INVOKABLE void unstageFile(const QString& filePath);
     Q_INVOKABLE void stageAll();
     Q_INVOKABLE void unstageAll();
-    Q_INVOKABLE void commit(const QString& message);
+    /** amend: replace the last commit with this one (its changes and these). */
+    Q_INVOKABLE void commit(const QString& message, bool amend = false);
+    /**
+     * Stage or unstage single lines of the selected file: rows are indices
+     * into currentDiff. The rest of the file stays as it was in the index.
+     */
+    Q_INVOKABLE void setLinesStaged(const QVariantList& rows, bool staged);
+    /** Put every uncommitted change away for this branch (offered back on return). */
+    Q_INVOKABLE void stashAll();
     Q_INVOKABLE void push();
+    /** Push over what the remote has, unless it changed since the last fetch. */
+    Q_INVOKABLE void forcePush();
     Q_INVOKABLE void pull();
     Q_INVOKABLE void fetch();
     /**
@@ -313,6 +503,15 @@ signals:
     void syncChanged();
     void accountsChanged();
     void commandFailed(const QString& message);
+    void diffOptionsChanged();
+    void historyQueryChanged();
+    void currentPullRequestChanged();
+    void pullRequestsChanged();
+    void remoteReposChanged();
+    void gitignoreTemplatesChanged();
+    void folderPicked(const QString& purpose, const QString& path);
+    /** Clone or New repository finished; ok false keeps the dialog open. */
+    void repoCreated(bool ok, const QString& path);
 
 private:
     // trim=false for output whose leading whitespace is significant:
@@ -343,6 +542,41 @@ private:
 
     QVariantList m_accounts;
     int m_accountProbes = 0;
+    QVariantList m_remotes;
+    bool m_ignoreWhitespace = false;
+    syntax::Palette m_syntax;
+    QVariantList m_pullRequests;
+    bool m_loadingPrs = false;
+    QString m_prsRepo;
+    QVariantList m_remoteRepos;
+    bool m_loadingRemoteRepos = false;
+    QStringList m_gitignoreTemplates;
+    QStringList m_remoteBranches;
+    QVariantList m_submodules;
+    QVariantMap m_lfs;
+    bool m_fullFile = false;
+    bool m_pullRebase = false;
+    QVariantMap m_currentPr;
+    QString m_currentPrKey;
+    bool m_loadingCurrentPr = false;
+    QString m_compareBranch;
+    QString m_compareMode = "behind";
+    int m_compareAhead = 0;
+    int m_compareBehind = 0;
+    void applyHistoryQuery();
+    // Rewrites the commits after `base` (empty: from the root) to the todo
+    // lines given, through rebase -i with this list in place of its own.
+    void rewriteHistory(const QString& base, const QStringList& todo, const QString& busyText,
+                        const QString& doneText);
+    // The commits from just before `hash` to HEAD, oldest first, or empty
+    // with an error said when they cannot be rewritten (pushed, merges, changes).
+    QStringList rewritable(const QString& hash, QString* base, int extraBack = 0);
+    // Runs a command that is not git in the repository (gh), output to done.
+    void runTool(const QString& program, const QStringList& args, const QString& workdir,
+                 std::function<void(bool, const QString&, const QString&)> done);
+    // A task that needs no repository open: clone. Same busy state as runTask.
+    void runTaskIn(const QString& workdir, const QString& kind, const QString& text, const QStringList& args,
+                   std::function<void(bool, const QString&, const QString&)> done);
 
     QString m_repoPath;
     QString m_branchName = "main";

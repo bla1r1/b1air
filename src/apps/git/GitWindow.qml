@@ -77,6 +77,14 @@ ApplicationWindow {
         id: repoMenu
         Action { text: I18n.tr("Open in Terminal"); onTriggered: GitBackend.openTerminal(repoMenu.target) }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(repoMenu.target) }
+        Action { text: I18n.tr("Open in Editor"); onTriggered: GitBackend.openInEditor(repoMenu.target) }
+        AppMenuSeparator {}
+        Action { text: I18n.tr("Repository settings…"); onTriggered: settingsDialog.show() }
+        Action {
+            text: I18n.tr("Publish to GitHub…")
+            enabled: !GitBackend.hasRemote
+            onTriggered: publishDialog.show()
+        }
         AppMenuSeparator {}
         Action {
             text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? I18n.tr("View on GitLab") : I18n.tr("View on GitHub")
@@ -108,8 +116,26 @@ ApplicationWindow {
         property bool staged: false
         property bool conflicted: false
         Action { text: I18n.tr("Open"); onTriggered: GitBackend.openFile(fileMenu.target) }
+        Action { text: I18n.tr("Open in Editor"); onTriggered: GitBackend.openInEditor(fileMenu.target) }
+        Action {
+            text: I18n.tr("Open submodule")
+            enabled: GitBackend.submodules.some(m => m.path === fileMenu.target)
+            onTriggered: GitBackend.openRepo(GitBackend.absolutePath(fileMenu.target))
+        }
         Action { text: I18n.tr("Show in Files"); onTriggered: GitBackend.openFileManager(fileMenu.target) }
         Action { text: I18n.tr("Open folder in Terminal"); onTriggered: GitBackend.openTerminal(fileMenu.target) }
+        AppMenuSeparator { visible: fileMenu.conflicted }
+        // A conflict settled with one side whole, as GitHub Desktop offers it.
+        Action {
+            text: I18n.tr("Use my version (%1)", GitBackend.branchName)
+            enabled: fileMenu.conflicted
+            onTriggered: GitBackend.resolveWith(fileMenu.target, "mine")
+        }
+        Action {
+            text: I18n.tr("Use their version (%1)", GitBackend.mergeState.branch || I18n.tr("incoming"))
+            enabled: fileMenu.conflicted
+            onTriggered: GitBackend.resolveWith(fileMenu.target, "theirs")
+        }
         AppMenuSeparator {}
         Action { text: I18n.tr("Copy path"); onTriggered: GitBackend.copyText(GitBackend.absolutePath(fileMenu.target)) }
         Action { text: I18n.tr("Copy relative path"); onTriggered: GitBackend.copyText(fileMenu.target) }
@@ -147,11 +173,57 @@ ApplicationWindow {
         }
     }
 
+    // A commit dragged onto another in History: where it goes.
+    ContextMenu {
+        id: dropMenu
+        property string hash: ""
+        property int index: -1
+        property string subject: ""
+        Action {
+            text: I18n.tr("Move above “%1”", dropMenu.subject)
+            onTriggered: GitBackend.reorderCommit(dropMenu.hash, dropMenu.target, false)
+        }
+        Action {
+            readonly property string below: GitBackend.history.hashAt(dropMenu.index + 1)
+            text: I18n.tr("Move below “%1”", dropMenu.subject)
+            enabled: below !== "" && below !== dropMenu.hash
+            onTriggered: GitBackend.reorderCommit(dropMenu.hash, below, false)
+        }
+        AppMenuSeparator {}
+        Action {
+            text: I18n.tr("Squash into “%1”", dropMenu.subject)
+            onTriggered: GitBackend.reorderCommit(dropMenu.hash, dropMenu.target, true)
+        }
+    }
+
+    // Lines of the diff, on a right click on their numbers.
+    ContextMenu {
+        id: lineMenu
+        property var rows: []
+        Action {
+            text: lineMenu.rows.length === 1 ? I18n.tr("Discard this line…") : I18n.tr("Discard these lines…")
+            onTriggered: {
+                const rows = lineMenu.rows;
+                window.ask({
+                    title: rows.length === 1 ? I18n.tr("Discard this line?") : I18n.tr("Discard these lines?"),
+                    text: I18n.tr("The change goes back to what the last commit has. A copy of the file goes to the trash."),
+                    confirm: I18n.tr("Discard"), destructive: true,
+                    accept: () => GitBackend.discardLines(rows)
+                });
+            }
+        }
+    }
+
     ContextMenu {
         id: changesMenu
         Action { text: I18n.tr("Stage all"); onTriggered: GitBackend.stageAll() }
         Action { text: I18n.tr("Unstage all"); onTriggered: GitBackend.unstageAll() }
         AppMenuSeparator {}
+        Action {
+            text: I18n.tr("Stash all changes")
+            enabled: GitBackend.changedFiles.length > 0 && GitBackend.branchStash.ref === undefined
+            onTriggered: GitBackend.stashAll()
+        }
         Action {
             text: I18n.tr("Discard all changes…")
             enabled: GitBackend.changedFiles.length > 0
@@ -175,8 +247,95 @@ ApplicationWindow {
     ContextMenu {
         id: commitMenu
         property string subject: ""
+        // On no remote yet: history that may be rewritten.
+        property bool local: false
+        property bool isHead: false
+        // The commit before it is on no remote either, so the two can swap.
+        property bool olderLocal: false
+        property bool pushed: false
+        property var tags: []
         Action { text: I18n.tr("Copy SHA"); onTriggered: GitBackend.copyText(commitMenu.target) }
         Action { text: I18n.tr("Copy message"); onTriggered: GitBackend.copyText(commitMenu.subject) }
+        Action {
+            text: GitBackend.webUrl.indexOf("gitlab") >= 0 ? I18n.tr("View on GitLab") : I18n.tr("View on GitHub")
+            enabled: GitBackend.webUrl !== "" && commitMenu.pushed
+            onTriggered: GitBackend.openCommitOnWeb(commitMenu.target)
+        }
+        AppMenuSeparator {}
+        Action {
+            text: I18n.tr("Amend commit…")
+            enabled: commitMenu.isHead && GitBackend.lastCommit.canAmend === true && !window.busy
+            onTriggered: window.startAmend()
+        }
+        // Any commit on no remote yet, not only the last: its message, its
+        // files, its place, or gone.
+        Action {
+            text: I18n.tr("Edit message…")
+            enabled: commitMenu.local && !window.busy
+                     && GitBackend.changedFiles.length === 0
+            onTriggered: rewordDialog.show(commitMenu.target)
+        }
+        Action {
+            text: I18n.tr("Edit commit's changes")
+            enabled: commitMenu.local && !window.busy && GitBackend.changedFiles.length === 0
+            onTriggered: GitBackend.editCommit(commitMenu.target)
+        }
+        Action {
+            text: I18n.tr("Move up (later)")
+            enabled: commitMenu.local && !commitMenu.isHead && !window.busy && GitBackend.changedFiles.length === 0
+            onTriggered: GitBackend.moveCommit(commitMenu.target, 1)
+        }
+        Action {
+            text: I18n.tr("Move down (earlier)")
+            enabled: commitMenu.local && commitMenu.olderLocal && !window.busy && GitBackend.changedFiles.length === 0
+            onTriggered: GitBackend.moveCommit(commitMenu.target, -1)
+        }
+        Action {
+            text: I18n.tr("Squash into previous commit")
+            enabled: commitMenu.local && !window.busy && GitBackend.changedFiles.length === 0
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: I18n.tr("Squash commit?"),
+                             text: I18n.tr("It becomes part of the commit before it, both messages kept."),
+                             confirm: I18n.tr("Squash"), accept: () => GitBackend.squashIntoParent(hash) });
+            }
+        }
+        Action {
+            text: I18n.tr("Drop commit…")
+            enabled: commitMenu.local && !window.busy && GitBackend.changedFiles.length === 0
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: I18n.tr("Drop this commit?"),
+                             text: I18n.tr("Its changes are taken out of the branch, and the commits after it are rewritten without them."),
+                             confirm: I18n.tr("Drop"), destructive: true,
+                             accept: () => GitBackend.dropCommit(hash) });
+            }
+        }
+        Action {
+            text: I18n.tr("Reset to this commit…")
+            // Only while what it undoes is this machine's alone.
+            enabled: !commitMenu.isHead && !window.busy
+                     && (!GitBackend.hasRemote || GitBackend.upstream === "" || GitBackend.aheadCount > 0)
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: I18n.tr("Reset to this commit?"),
+                             text: I18n.tr("%1 moves back here. The commits after it are undone; their changes stay as uncommitted changes.", GitBackend.branchName),
+                             confirm: I18n.tr("Reset"), destructive: true,
+                             accept: () => GitBackend.resetToCommit(hash) });
+            }
+        }
+        Action {
+            text: I18n.tr("Cherry-pick onto branch…")
+            enabled: !window.busy
+            onTriggered: {
+                const hash = commitMenu.target;
+                window.ask({ title: I18n.tr("Cherry-pick commit"),
+                             text: I18n.tr("Copy this commit onto a branch. Leave the name as it is for the current one."),
+                             input: true, value: GitBackend.branchName, placeholder: I18n.tr("Branch name"),
+                             confirm: I18n.tr("Cherry-pick"),
+                             accept: v => GitBackend.cherryPick(hash, v) });
+            }
+        }
         AppMenuSeparator {}
         Action {
             text: I18n.tr("Revert changes in commit")
@@ -190,6 +349,17 @@ ApplicationWindow {
                 window.ask({ title: I18n.tr("Create branch"), text: I18n.tr("A new branch starting at this commit."),
                              input: true, placeholder: I18n.tr("Branch name"), confirm: I18n.tr("Create branch"),
                              accept: v => GitBackend.createBranchAt(v, hash) });
+            }
+        }
+        Action {
+            text: commitMenu.tags.length ? I18n.tr("Delete tag %1…", commitMenu.tags[0]) : I18n.tr("Delete tag…")
+            enabled: commitMenu.tags.length > 0
+            onTriggered: {
+                const tag = commitMenu.tags[0];
+                window.ask({ title: I18n.tr("Delete tag %1?", tag),
+                             text: I18n.tr("Only here; a copy already pushed stays on the remote."),
+                             confirm: I18n.tr("Delete"), destructive: true,
+                             accept: () => GitBackend.deleteTag(tag) });
             }
         }
         Action {
@@ -212,7 +382,11 @@ ApplicationWindow {
     // The three dropdowns are Ui's Popover now; the flags stay the one way
     // the rest of the file opens and closes them.
     onRepoDropdownOpenChanged: repoDropdownOpen ? repoPop.open() : repoPop.close()
-    onBranchDropdownOpenChanged: branchDropdownOpen ? branchPop.open() : branchPop.close()
+    onBranchDropdownOpenChanged: {
+        if (!branchDropdownOpen) { branchPop.close(); return; }
+        branchPop.open();
+        if (window.branchView === "prs") GitBackend.refreshPullRequests();
+    }
     onAccountsDropdownOpenChanged: accountsDropdownOpen ? accountsPop.open() : accountsPop.close()
     // Closed by Esc or a click outside: clear what was half-done in it.
     function closeDropdowns() {
@@ -252,6 +426,7 @@ ApplicationWindow {
     ContextMenu {
         id: branchMenu
         property string worktree: ""
+        property bool remote: false
         readonly property bool isCurrent: branchMenu.target === GitBackend.branchName
         Action {
             text: I18n.tr("Merge into %1", GitBackend.branchName)
@@ -259,7 +434,19 @@ ApplicationWindow {
             onTriggered: { window.branchDropdownOpen = false; GitBackend.mergeBranch(branchMenu.target); }
         }
         Action {
+            text: I18n.tr("Rebase %1 onto this", GitBackend.branchName)
+            enabled: !branchMenu.isCurrent && !GitBackend.mergeState.active && GitBackend.changedFiles.length === 0
+            onTriggered: {
+                const onto = branchMenu.target;
+                window.branchDropdownOpen = false;
+                window.ask({ title: I18n.tr("Rebase %1?", GitBackend.branchName),
+                             text: I18n.tr("Its own commits are replayed on top of %1. If they were pushed, pushing again needs a force push.", onto),
+                             confirm: I18n.tr("Rebase"), accept: () => GitBackend.rebaseBranch(onto) });
+            }
+        }
+        Action {
             text: I18n.tr("Rename…")
+            enabled: !branchMenu.remote
             onTriggered: {
                 const from = branchMenu.target;
                 window.ask({ title: I18n.tr("Rename branch"), text: I18n.tr("New name for %1.", from),
@@ -270,12 +457,44 @@ ApplicationWindow {
         AppMenuSeparator {}
         Action {
             text: branchMenu.worktree !== "" ? I18n.tr("Open its worktree") : I18n.tr("Open in new worktree")
-            enabled: !branchMenu.isCurrent
+            enabled: !branchMenu.isCurrent && !branchMenu.remote
             onTriggered: {
                 const path = branchMenu.worktree !== "" ? branchMenu.worktree
                                                         : GitBackend.createWorktree(branchMenu.target);
                 if (path !== "") { window.branchDropdownOpen = false; GitBackend.openRepo(path); }
             }
+        }
+    }
+
+    // Every way to talk to the remote, on the sync cell's right click; the
+    // cell itself does the one that applies.
+    ContextMenu {
+        id: syncMenu
+        Action { text: I18n.tr("Fetch"); enabled: GitBackend.hasRemote && !window.busy; onTriggered: GitBackend.fetch() }
+        Action { text: I18n.tr("Pull"); enabled: GitBackend.upstream !== "" && !window.busy; onTriggered: GitBackend.pull() }
+        Action { text: I18n.tr("Push"); enabled: GitBackend.hasRemote && !window.busy; onTriggered: GitBackend.push() }
+        AppMenuSeparator {}
+        Action {
+            text: I18n.tr("Force push…")
+            enabled: GitBackend.upstream !== "" && !window.busy && GitBackend.aheadCount > 0
+            onTriggered: window.ask({
+                title: I18n.tr("Force push %1?", GitBackend.branchName),
+                text: I18n.tr("What %1 has for this branch is replaced by yours. It is refused if someone pushed since the last fetch.", GitBackend.remoteName),
+                confirm: I18n.tr("Force push"), destructive: true,
+                accept: () => GitBackend.forcePush()
+            })
+        }
+        AppMenuSeparator {}
+        Action {
+            text: I18n.tr("Update from %1", GitBackend.defaultBranch)
+            enabled: GitBackend.defaultBranch !== "" && GitBackend.defaultBranch !== GitBackend.branchName && !window.busy
+                     && !GitBackend.mergeState.active
+            onTriggered: GitBackend.updateFromDefault()
+        }
+        Action {
+            text: I18n.tr("Publish to GitHub…")
+            enabled: !GitBackend.hasRemote && window.hasRepo
+            onTriggered: publishDialog.show()
         }
     }
 
@@ -291,6 +510,135 @@ ApplicationWindow {
             text: I18n.tr("Remove worktree…")
             enabled: worktreeMenu.removable
             onTriggered: { window.branchDropdownOpen = true; window.pendingRemoveWorktree = worktreeMenu.target; }
+        }
+    }
+
+    // Half of a side-by-side row: one line, its number, and (in the working
+    // tree's diff) the number as the place to stage it.
+    component SplitHalf: Rectangle {
+        id: half
+        property var side: null
+        property bool working: false
+        readonly property real textHeight: halfText.implicitHeight
+        readonly property bool stageable: working && !!side && side.canStage === true
+        clip: true
+        color: !side ? Design.tint(Design.text, 0.03)
+             : side.type === "add" ? Design.tint(Design.ok, 0.10)
+             : side.type === "del" ? Design.tint(Design.danger, 0.11) : "transparent"
+        Rectangle {
+            visible: !!half.side && (half.side.type === "add" || half.side.type === "del")
+            width: Design.s(Design.focusWidth)
+            height: parent.height
+            color: half.side && half.side.type === "add" ? Design.ok : Design.danger
+        }
+        Rectangle {
+            visible: half.stageable
+            x: Design.s(Design.focusWidth)
+            width: Design.s(Design.size.row) - Design.s(Design.focusWidth)
+            height: parent.height
+            color: half.side && half.side.staged ? Design.tint(Design.accent, halfArea.containsMouse ? 0.55 : 0.4)
+                 : halfArea.containsMouse ? Design.tint(Design.accent, 0.15) : "transparent"
+        }
+        MouseArea {
+            id: halfArea
+            enabled: half.stageable
+            width: Design.s(Design.size.row)
+            height: parent.height
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
+                if (mouse.button === Qt.RightButton) {
+                    lineMenu.rows = [half.side.i];
+                    window.showMenu(lineMenu, "");
+                } else {
+                    GitBackend.setLinesStaged([half.side.i], !half.side.staged);
+                }
+            }
+        }
+        Rectangle {
+            visible: !!half.side && !!half.side.chg && (!!half.side.html || half.side.text.indexOf("\t") < 0)
+            x: Design.s(Design.size.row) + (visible ? window.colX(half.side.text, half.side.chg[0]) : 0)
+            width: visible ? window.colX(half.side.text, half.side.chg[1]) - window.colX(half.side.text, half.side.chg[0]) : 0
+            height: parent.height
+            color: half.side && half.side.type === "add" ? Design.tint(Design.ok, 0.28) : Design.tint(Design.danger, 0.30)
+        }
+        Text {
+            width: Design.s(Design.size.row)
+            anchors.verticalCenter: parent.verticalCenter
+            text: half.side && half.side.n !== undefined ? String(half.side.n) : ""
+            horizontalAlignment: Text.AlignRight
+            rightPadding: 8
+            font.family: Design.font.mono
+            font.pixelSize: Design.s(Design.font.caption)
+            color: Design.textDim
+        }
+        Text {
+            id: halfText
+            x: Design.s(Design.size.row)
+            anchors.verticalCenter: parent.verticalCenter
+            // Coloured code (syntax.cpp) where the language is known.
+            textFormat: half.side && half.side.html ? Text.StyledText : Text.PlainText
+            text: !half.side ? "" : half.side.html ? half.side.html : half.side.text
+            font.family: Design.font.mono
+            font.pixelSize: Design.s(Design.font.caption)
+            color: Design.text
+        }
+    }
+
+    // A picture before and after, side by side, on a checked ground so
+    // transparency shows.
+    component ImageCompare: Item {
+        id: cmp
+        property var pair: ({ before: "", after: "" })
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: Design.s(Design.space.md)
+            spacing: Design.s(Design.space.md)
+            Repeater {
+                model: [{ label: I18n.tr("Before"), url: cmp.pair.before || "", tone: Design.danger },
+                        { label: I18n.tr("After"), url: cmp.pair.after || "", tone: Design.ok }]
+                delegate: ColumnLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: Design.s(Design.space.xs)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { role: "caption"; weight: Design.weight.semibold; color: modelData.tone; text: modelData.label }
+                        Label {
+                            Layout.fillWidth: true
+                            role: "caption"; dim: true
+                            horizontalAlignment: Text.AlignRight
+                            text: pic.status === Image.Ready ? pic.implicitWidth + " × " + pic.implicitHeight : ""
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: Design.s(Design.radius.ctl)
+                        color: Design.sunken
+                        border.color: Design.tint(modelData.tone, 0.5)
+                        border.width: Design.border
+                        clip: true
+                        Image {
+                            id: pic
+                            anchors.fill: parent
+                            anchors.margins: Design.s(Design.space.sm)
+                            source: modelData.url
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            cache: false
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            visible: modelData.url === ""
+                            role: "caption"; dim: true
+                            text: I18n.tr("None")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -492,11 +840,18 @@ ApplicationWindow {
     // The one action the sync cell offers, GitHub Desktop's order: a branch
     // with no upstream is published; with commits to pull, pulling comes
     // first, since a push would be refused; then push; otherwise fetch.
-    readonly property string syncAction: !window.hasRepo || !GitBackend.hasRemote ? "none"
+    readonly property string syncAction: !window.hasRepo ? "none"
+        : !GitBackend.hasRemote ? "publishRepo"
         : GitBackend.upstream === "" ? "publish"
         : GitBackend.behindCount > 0 ? "pull"
         : GitBackend.aheadCount > 0 ? "push" : "fetch"
     property bool repoDropdownOpen: false
+    // A commit being dragged in History, and the row it is over.
+    property string dragHash: ""
+    property int dragOver: -1
+    // The branch list or the pull requests, in the branch dropdown.
+    property string branchView: "branches"
+    readonly property bool onGithub: GitBackend.webUrl.indexOf("github.com") >= 0
     property bool branchDropdownOpen: false
     property bool accountsDropdownOpen: false
 
@@ -530,6 +885,78 @@ ApplicationWindow {
     // A file's state as an icon rather than a letter: the Octicons git diff
     // set, which is what the letters were standing in for. Same colours as
     // before; the word is in the tooltip.
+    // Code in the theme's colours (syntax.cpp), handed over again when the
+    // theme changes.
+    readonly property var syntaxPalette: ({
+        keyword: String(Design.mauve), string: String(Design.green), comment: String(Design.textFaint),
+        number: String(Design.peach), type: String(Design.yellow)
+    })
+    onSyntaxPaletteChanged: GitBackend.setSyntaxPalette(window.syntaxPalette)
+    Component.onCompleted: GitBackend.setSyntaxPalette(window.syntaxPalette)
+
+    // The diff's monospace advance, to place the marks under changed words
+    // (the rows' "chg", in columns).
+    FontMetrics {
+        id: monoMetrics
+        font.family: Design.font.mono
+        font.pixelSize: Design.s(Design.font.caption)
+    }
+    // Where column `col` of a line starts, measured on the line itself: a
+    // multiple of one character's width drifts, the drawn advances being
+    // rounded. Tabs as the coloured lines draw them, four spaces.
+    function colX(text, col) {
+        return monoMetrics.advanceWidth(String(text || "").replace(/\t/g, "    ").slice(0, col));
+    }
+
+    // Unified or side by side, remembered.
+    property bool splitDiff: false
+    Settings {
+        category: "diff"
+        property alias split: window.splitDiff
+    }
+
+    // The diff's rows as pairs for side by side: a run of removed lines next
+    // to the run of added lines after it, line for line; context on both
+    // sides. Each side keeps its row's index, for staging.
+    function splitRows(rows) {
+        const out = [];
+        const side = (r, i) => r ? { n: r.type === "add" ? r.newLine : r.oldLine, text: r.text.slice(1), type: r.type,
+                                    i: i, staged: r.staged === true, canStage: r.canStage === true, html: r.html || "",
+                                    chg: r.chg || null } : null;
+        let dels = [], adds = [];
+        const flush = () => {
+            for (let k = 0; k < Math.max(dels.length, adds.length); ++k)
+                out.push({ kind: "pair", l: dels[k] || null, r: adds[k] || null });
+            dels = []; adds = [];
+        };
+        for (let i = 0; i < rows.length; ++i) {
+            const r = rows[i];
+            if (r.type === "del") { if (adds.length) flush(); dels.push(side(r, i)); continue; }
+            if (r.type === "add") { adds.push(side(r, i)); continue; }
+            flush();
+            if (r.type === "header") { out.push({ kind: "header", text: r.text, i: i }); continue; }
+            if (r.text.startsWith("\\")) continue;
+            out.push({ kind: "pair", l: { n: r.oldLine, text: r.text.slice(1), type: "ctx", i: i, html: r.html || "" },
+                                     r: { n: r.newLine, text: r.text.slice(1), type: "ctx", i: i, html: r.html || "" } });
+        }
+        flush();
+        return out;
+    }
+
+    // Pictures are compared as pictures.
+    function isImage(path) {
+        return /\.(png|jpe?g|gif|webp|bmp|svg|ico|avif)$/i.test(path || "");
+    }
+
+    // The stageable rows of the hunk whose header is row i of the diff.
+    function hunkRows(i) {
+        const rows = [];
+        const d = GitBackend.currentDiff;
+        for (let j = i + 1; j < d.length && d[j].type !== "header"; ++j)
+            if (d[j].canStage) rows.push(j);
+        return rows;
+    }
+
     function statusIcon(st) {
         if (st === "conflicted") return "";
         return st === "added" ? "" : st === "deleted" ? ""
@@ -586,12 +1013,27 @@ ApplicationWindow {
             anchors.margins: av.ring
             visible: ready
             onWidthChanged: requestPaint()
-            Component.onCompleted: if (av.picture !== "") loadImage(av.picture)
+            // imageLoaded comes only for a picture this Canvas had to read:
+            // one Qt already holds (the same author higher up the history,
+            // a row scrolled back into view) is loaded at once, silently, and
+            // a disc that waited for the signal kept its initials for good.
+            // So it is asked straight after, and on the signal as well.
+            function show() {
+                face.ready = av.picture !== "" && face.isImageLoaded(av.picture);
+                if (face.ready) requestPaint();
+            }
+            function load() {
+                face.ready = false;
+                if (av.picture === "") return;
+                face.loadImage(av.picture);
+                face.show();
+            }
+            Component.onCompleted: face.load()
             Connections {
                 target: av
-                function onPictureChanged() { if (av.picture !== "") face.loadImage(av.picture); }
+                function onPictureChanged() { face.load(); }
             }
-            onImageLoaded: { face.ready = true; requestPaint(); }
+            onImageLoaded: face.show()
             onPaint: {
                 const ctx = getContext("2d");
                 ctx.reset();
@@ -614,13 +1056,36 @@ ApplicationWindow {
     }
     readonly property bool busy: GitBackend.busy !== ""
 
+    // Amending: the commit box rewrites the last commit, its message loaded
+    // into the fields, until it is done or cancelled.
+    property bool amending: false
+    function startAmend() {
+        window.currentTab = 0;
+        window.amending = true;
+        sumInput.text = GitBackend.lastCommit.subject || "";
+        descInput.text = GitBackend.lastCommit.body || "";
+        sumInput.forceActiveFocus();
+    }
+    function cancelAmend() {
+        window.amending = false;
+        sumInput.text = "";
+        descInput.text = "";
+    }
+    // "Name <email>" entries, comma separated, as Co-authored-by trailers —
+    // how GitHub credits a commit to more than one person.
+    property bool coAuthorsOpen: false
+    readonly property var coAuthorList: coAuthorInput.text.split(",").map(t => t.trim())
+        .filter(t => /^[^<>]+<[^<>@\s]+@[^<>\s]+>$/.test(t))
     function commitNow() {
         if (!window.hasRepo || window.busy || sumInput.text.trim() === "") return;
         let msg = sumInput.text.trim();
-        if (descInput.text.trim()) msg += "\n\n" + descInput.text.trim();
+        let body = descInput.text.trim();
+        if (window.coAuthorsOpen && window.coAuthorList.length > 0)
+            body += (body ? "\n\n" : "") + window.coAuthorList.map(a => "Co-authored-by: " + a).join("\n");
+        if (body) msg += "\n\n" + body;
         // The fields are cleared when the commit has gone in (onCommitted
         // below), not here: a commit that failed took the message with it.
-        GitBackend.commit(msg);
+        GitBackend.commit(msg, window.amending);
     }
     readonly property int stagedCount: GitBackend.changedFiles.filter(f => f.isStaged).length
     readonly property bool syncBusy: ["push", "publish", "pull", "fetch"].indexOf(GitBackend.busy) >= 0
@@ -852,7 +1317,8 @@ Item {
                                         Layout.preferredHeight: Design.s(Design.size.md)
                                         visible: GitBackend.mergeState.active === true
                                         readonly property int conflicts: GitBackend.mergeState.conflicts || 0
-                                        color: conflicts > 0 ? Design.tint(Design.danger, 0.14) : Design.tint(Design.ok, 0.14)
+                                        color: conflicts > 0 ? Design.tint(Design.danger, 0.14)
+                                             : GitBackend.mergeState.editing ? Design.tint(Design.accent, 0.14) : Design.tint(Design.ok, 0.14)
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -861,8 +1327,15 @@ Item {
                                             spacing: Design.s(Design.space.sm)
                                             Text {
                                                 Layout.fillWidth: true
-                                                text: I18n.tr("Merging %1 — %2", GitBackend.mergeState.branch || "",
-                                                             parent.parent.conflicts > 0
+                                                readonly property string kind: GitBackend.mergeState.kind || "merge"
+                                                readonly property string what: kind === "rebase" ? I18n.tr("Rebasing onto %1", GitBackend.mergeState.branch || "")
+                                                    : kind === "cherry-pick" ? I18n.tr("Cherry-picking %1", GitBackend.mergeState.branch || "")
+                                                    : kind === "revert" ? I18n.tr("Reverting %1", GitBackend.mergeState.branch || "")
+                                                    : I18n.tr("Merging %1", GitBackend.mergeState.branch || "")
+                                                text: GitBackend.mergeState.editing
+                                                      ? I18n.tr("Editing %1 — change files, stage them, then Continue",
+                                                                GitBackend.mergeState.editingSubject || GitBackend.mergeState.editing)
+                                                      : what + " — " + (parent.parent.conflicts > 0
                                                              ? I18n.trn("%1 conflict", "%1 conflicts", parent.parent.conflicts)
                                                              : I18n.tr("ready"))
                                                 font.family: Design.font.sans
@@ -872,7 +1345,8 @@ Item {
                                                 elide: Text.ElideRight
                                             }
                                             Text {
-                                                text: GitBackend.busy === "commit" ? I18n.tr("Committing…") : I18n.tr("Commit merge")
+                                                text: window.busy ? I18n.tr("Continuing…")
+                                                    : (GitBackend.mergeState.kind || "merge") === "merge" ? I18n.tr("Commit merge") : I18n.tr("Continue")
                                                 visible: parent.parent.conflicts === 0
                                                 enabled: !window.busy
                                                 font.family: Design.font.sans
@@ -887,6 +1361,39 @@ Item {
                                                 font.pixelSize: Design.s(Design.font.caption)
                                                 color: Design.textDim
                                                 Clickable { anchors.fill: parent; anchors.margins: -Design.s(Design.space.xs); cursorShape: Qt.PointingHandCursor; onClicked: GitBackend.abortMerge() }
+                                            }
+                                        }
+                                    }
+
+                                    // Git LFS: the repository keeps large files
+                                    // there, and this machine cannot fetch them
+                                    // yet — GitHub Desktop asks the same.
+                                    Rectangle {
+                                        readonly property var lfs: GitBackend.lfs
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: lfsText.implicitHeight + Design.s(Design.space.md)
+                                        visible: lfs.used === true && (lfs.installed !== true || lfs.ready !== true)
+                                        color: Design.tint(Design.warn, 0.12)
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Design.s(Design.space.sm)
+                                            anchors.rightMargin: Design.s(Design.space.xs)
+                                            spacing: Design.s(Design.space.sm)
+                                            Label {
+                                                id: lfsText
+                                                Layout.fillWidth: true
+                                                role: "caption"
+                                                wrapMode: Text.Wrap
+                                                text: parent.parent.lfs.installed !== true
+                                                      ? I18n.tr("This repository keeps large files in Git LFS. Install git-lfs to get them.")
+                                                      : I18n.tr("This repository keeps large files in Git LFS, not set up here yet.")
+                                            }
+                                            Button {
+                                                visible: parent.parent.lfs.installed === true
+                                                size: "sm"
+                                                label: I18n.tr("Set up")
+                                                enabled: !window.busy
+                                                onClicked: GitBackend.setupLfs()
                                             }
                                         }
                                     }
@@ -1001,7 +1508,8 @@ Item {
 
                                                     Text {
                                                         anchors.centerIn: parent
-                                                        text: "✓"
+                                                        // Some lines staged, some not.
+                                                        text: modelData.partial ? "–" : "✓"
                                                         font.pixelSize: Design.s(Design.font.caption)
                                                         font.weight: Design.weight.semibold
                                                         color: Design.accentText
@@ -1012,7 +1520,7 @@ Item {
                                                         anchors.fill: parent
                                                         cursorShape: Qt.PointingHandCursor
                                                         onClicked: {
-                                                            if (modelData.isStaged) GitBackend.unstageFile(modelData.path);
+                                                            if (modelData.isStaged && !modelData.partial) GitBackend.unstageFile(modelData.path);
                                                             else GitBackend.stageFile(modelData.path);
                                                         }
                                                     }
@@ -1070,6 +1578,8 @@ Item {
                                         Layout.fillWidth: true
                                         height: Design.s(Design.width.label) + (lastCommitBar.visible ? Design.s(Design.size.row) : 0)
                                                 + (identityWarning.visible ? Design.s(Design.space.lg) : 0)
+                                                + (amendBar.visible ? Design.s(Design.size.row) : 0)
+                                                + (coAuthorInput.visible ? Design.s(Design.size.row) : 0)
                                         color: "transparent"
 
                                         Connections {
@@ -1077,6 +1587,9 @@ Item {
                                             function onCommitted() {
                                                 sumInput.text = "";
                                                 descInput.text = "";
+                                                coAuthorInput.text = "";
+                                                window.coAuthorsOpen = false;
+                                                window.amending = false;
                                             }
                                             function onRestoreMessage(summary, description) {
                                                 sumInput.text = summary;
@@ -1102,7 +1615,7 @@ Item {
                                                 id: lastCommitBar
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: Design.s(Design.size.md)
-                                                visible: GitBackend.lastCommit.canUndo === true
+                                                visible: GitBackend.lastCommit.canUndo === true && !window.amending
                                                 radius: Design.s(Design.radius.sm)
                                                 color: Design.glassCard
                                                 border.color: Design.glassBorder
@@ -1161,15 +1674,50 @@ Item {
                                                 }
                                             }
 
+                                            // Amending: what the button will do, and the way out.
+                                            Rectangle {
+                                                id: amendBar
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: Design.s(Design.size.md)
+                                                visible: window.amending
+                                                radius: Design.s(Design.radius.sm)
+                                                color: Design.tint(Design.accent, 0.12)
+                                                border.color: Design.tint(Design.accent, 0.35)
+                                                border.width: Design.border
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                                    spacing: Design.s(Design.space.sm)
+                                                    Label {
+                                                        Layout.fillWidth: true
+                                                        role: "caption"
+                                                        text: I18n.tr("Amending the last commit")
+                                                        elide: Text.ElideRight
+                                                    }
+                                                    Button {
+                                                        variant: "ghost"; size: "sm"
+                                                        label: I18n.tr("Cancel")
+                                                        onClicked: window.cancelAmend()
+                                                    }
+                                                }
+                                            }
+
                                             Text {
                                                 id: identityWarning
                                                 Layout.fillWidth: true
                                                 visible: window.hasRepo && (!GitBackend.identity.name || !GitBackend.identity.email)
-                                                text: I18n.tr("Set your name and email: git config user.name / user.email")
+                                                text: I18n.tr("Set your name and email for commits…")
                                                 font.family: Design.font.sans
                                                 font.pixelSize: Design.s(Design.font.caption)
+                                                font.underline: true
                                                 color: Design.warn
                                                 elide: Text.ElideRight
+                                                Clickable {
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: settingsDialog.show()
+                                                }
                                             }
 
                                             // Summary (Required)
@@ -1207,6 +1755,19 @@ Item {
                                                             window.commitNow();
                                                             e.accepted = true;
                                                         }
+                                                    }
+
+                                                    // How long the summary is, from 50
+                                                    // characters on: git's convention,
+                                                    // and GitHub cuts it at 72.
+                                                    Text {
+                                                        anchors.right: parent.right
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        visible: sumInput.text.length > 50
+                                                        text: String(72 - sumInput.text.length)
+                                                        font.family: Design.font.mono
+                                                        font.pixelSize: Design.s(Design.font.caption)
+                                                        color: sumInput.text.length > 72 ? Design.danger : Design.warn
                                                     }
 
                                                     Text {
@@ -1265,6 +1826,30 @@ Item {
                                                         }
                                                     }
                                                 }
+                                                Button {
+                                                    anchors.right: parent.right
+                                                    anchors.bottom: parent.bottom
+                                                    anchors.margins: Design.s(Design.space.xxs)
+                                                    variant: "ghost"; size: "sm"; iconOnly: true
+                                                    checked: window.coAuthorsOpen
+                                                    icon: "\u{f0849}"
+                                                    tip: window.coAuthorsOpen ? I18n.tr("Remove co-authors") : I18n.tr("Add co-authors")
+                                                    enabled: window.hasRepo
+                                                    onClicked: {
+                                                        window.coAuthorsOpen = !window.coAuthorsOpen;
+                                                        if (window.coAuthorsOpen) coAuthorInput.focusInput();
+                                                    }
+                                                }
+                                            }
+
+                                            // Co-authors, behind the toggle at the
+                                            // description's corner.
+                                            Field {
+                                                id: coAuthorInput
+                                                Layout.fillWidth: true
+                                                visible: window.coAuthorsOpen
+                                                mono: true
+                                                placeholder: I18n.tr("Name <email>, Name <email>")
                                             }
 
                                             // Commit Action Button
@@ -1274,6 +1859,7 @@ Item {
                                                 radius: height / 2
                                                 readonly property bool committing: GitBackend.busy === "commit"
                                                 readonly property bool ready: window.hasRepo && sumInput.text.trim().length > 0 && !window.busy
+                                                    && (window.amending || GitBackend.changedFiles.length > 0)
                                                 color: ready ? (commitArea.containsMouse ? Qt.lighter(Design.accent, 1.1) : Design.accent) : Design.raised
                                                 enabled: ready
 
@@ -1306,6 +1892,7 @@ Item {
                                                     visible: !parent.committing
                                                     // Nothing ticked commits everything.
                                                     text: !window.hasRepo ? I18n.tr("No repository open")
+                                                          : window.amending ? I18n.tr("Amend last commit")
                                                           : window.stagedCount === 0 && GitBackend.changedFiles.length > 0
                                                             ? I18n.tr("Commit all to %1", GitBackend.branchName)
                                                             : I18n.tr("Commit to %1", GitBackend.branchName)
@@ -1329,14 +1916,87 @@ Item {
                             }
 
                             // Tab 1: History Commit List
-                            Item {
+                            ColumnLayout {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 visible: window.currentTab === 1
+                                spacing: 0
+
+                                // Search, and a branch to compare with — the
+                                // commits it has that this one lacks, or the
+                                // other way round, as GitHub Desktop's compare.
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.margins: Design.s(Design.space.sm)
+                                    Layout.topMargin: 0
+                                    spacing: Design.s(Design.space.xs)
+
+                                    Field {
+                                        id: historySearch
+                                        Layout.fillWidth: true
+                                        placeholder: I18n.tr("Filter by message, author or SHA")
+                                        onTextChanged: historySearchDelay.restart()
+                                        Timer {
+                                            id: historySearchDelay
+                                            interval: 250
+                                            onTriggered: GitBackend.historyFilter = historySearch.text
+                                        }
+                                        Connections {
+                                            target: GitBackend
+                                            function onRepoChanged() { historySearch.text = ""; }
+                                        }
+                                    }
+                                    Select {
+                                        Layout.fillWidth: true
+                                        placeholder: I18n.tr("Compare with a branch…")
+                                        // Local branches, their remote copies, and branches
+                                        // only on a remote: origin/main is the usual one to
+                                        // compare with.
+                                        model: {
+                                            const names = GitBackend.branches.filter(b => b !== GitBackend.branchName);
+                                            for (const b of GitBackend.branches) {
+                                                const up = (GitBackend.branchInfo[b] || {}).upstream || "";
+                                                if (up !== "" && names.indexOf(up) < 0) names.push(up);
+                                            }
+                                            for (const r of GitBackend.remoteBranches) if (names.indexOf(r) < 0) names.push(r);
+                                            return [{ id: "", label: I18n.tr("No comparison") }].concat(names.map(b => ({ id: b, label: b })));
+                                        }
+                                        current: GitBackend.compareBranch
+                                        onPicked: id => GitBackend.setCompare(id, GitBackend.compareMode)
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        visible: GitBackend.compareBranch !== ""
+                                        spacing: Design.s(Design.space.xs)
+                                        SegmentedControl {
+                                            Layout.fillWidth: true
+                                            size: "sm"
+                                            model: [
+                                                { id: "behind", label: I18n.tr("Behind %1", GitBackend.compareBehind) },
+                                                { id: "ahead", label: I18n.tr("Ahead %1", GitBackend.compareAhead) }
+                                            ]
+                                            current: GitBackend.compareMode
+                                            onPicked: id => GitBackend.setCompare(GitBackend.compareBranch, id)
+                                        }
+                                    }
+                                    Button {
+                                        Layout.fillWidth: true
+                                        visible: GitBackend.compareBranch !== "" && GitBackend.compareMode === "behind" && GitBackend.compareBehind > 0
+                                        size: "sm"; variant: "primary"
+                                        enabled: !window.busy && !GitBackend.mergeState.active
+                                        label: I18n.trn("Merge %1 commit into %2", "Merge %1 commits into %2", GitBackend.compareBehind, GitBackend.branchName)
+                                        onClicked: {
+                                            const b = GitBackend.compareBranch;
+                                            GitBackend.setCompare("", "behind");
+                                            GitBackend.mergeBranch(b);
+                                        }
+                                    }
+                                }
 
                                 ListView {
                                     id: historyList
-                                    anchors.fill: parent
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
                                     clip: true
                                     model: GitBackend.history
                                     spacing: 1
@@ -1348,8 +2008,11 @@ Item {
                                         width: parent.width
                                         visible: window.hasRepo && GitBackend.history.count === 0
                                         icon: "\u{f02da}"
-                                        title: I18n.tr("No commits yet")
-                                        hint: I18n.tr("Make your first commit in Changes.")
+                                        title: GitBackend.historyFilter !== "" ? I18n.tr("No commits match")
+                                             : GitBackend.compareBranch !== "" ? I18n.tr("Nothing to show")
+                                             : I18n.tr("No commits yet")
+                                        hint: GitBackend.historyFilter !== "" || GitBackend.compareBranch !== "" ? ""
+                                            : I18n.tr("Make your first commit in Changes.")
                                     }
 
                                     // The rows were hover-only: nothing
@@ -1361,6 +2024,7 @@ Item {
                                         radius: Design.s(Design.radius.ctl)
                                         height: Design.s(Design.size.rowTall)
                                         readonly property bool isSelected: GitBackend.selectedCommit === model.fullHash
+                                        readonly property string subject: model.message || ""
                                         color: isSelected ? Design.selection
                                                           : (hArea.containsMouse ? Design.tint(Design.text, 0.05) : "transparent")
 
@@ -1403,6 +2067,30 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 spacing: Design.s(Design.space.xs)
+                                                // Tags on the commit, as labels.
+                                                Repeater {
+                                                    model: tags || []
+                                                    delegate: Rectangle {
+                                                        required property string modelData
+                                                        Layout.preferredHeight: Design.s(Design.size.micro)
+                                                        Layout.preferredWidth: tagText.implicitWidth + Design.s(Design.space.sm)
+                                                        Layout.maximumWidth: Design.s(Design.size.thumb)
+                                                        radius: Design.s(Design.radius.sm)
+                                                        color: Design.tint(Design.yellow, 0.18)
+                                                        border.color: Design.tint(Design.yellow, 0.45)
+                                                        border.width: Design.border
+                                                        Text {
+                                                            id: tagText
+                                                            anchors.centerIn: parent
+                                                            width: Math.min(implicitWidth, parent.width - Design.s(Design.space.xs))
+                                                            text: "\u{f04f9} " + modelData
+                                                            font.family: Design.font.sans
+                                                            font.pixelSize: Design.s(Design.font.caption)
+                                                            color: Design.yellow
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                }
                                                 AuthorAvatar {
                                                     Layout.preferredWidth: Design.s(Design.size.micro)
                                                     Layout.preferredHeight: Design.s(Design.size.micro)
@@ -1423,16 +2111,60 @@ Item {
                                             }
                                         }
 
+                                        // Held and dragged onto another commit: moved
+                                        // there or squashed into it (dropMenu), as
+                                        // GitHub Desktop's history lets one drag.
+                                        // Commits on no remote only.
+                                        readonly property bool draggable: model.sync !== "pushed" && GitBackend.compareBranch === ""
+                                        opacity: window.dragHash === model.fullHash ? 0.45 : 1
+                                        border.width: window.dragHash !== "" && window.dragOver === model.index
+                                                      && window.dragHash !== model.fullHash ? Design.s(Design.focusWidth) : 0
+                                        border.color: Design.accent
+
                                         MouseArea {
                                             id: hArea
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
+                                            cursorShape: window.dragHash !== "" ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                             acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            pressAndHoldInterval: 350
+                                            preventStealing: window.dragHash !== ""
+                                            onPressAndHold: mouse => {
+                                                if (mouse.button !== Qt.LeftButton || !parent.draggable || window.busy) return;
+                                                window.dragHash = model.fullHash;
+                                                window.dragOver = model.index;
+                                            }
+                                            onPositionChanged: mouse => {
+                                                if (window.dragHash === "") return;
+                                                const p = mapToItem(historyList.contentItem, mouse.x, mouse.y);
+                                                window.dragOver = historyList.indexAt(p.x, p.y);
+                                            }
+                                            onReleased: {
+                                                if (window.dragHash === "") return;
+                                                const hash = window.dragHash, over = window.dragOver;
+                                                window.dragHash = "";
+                                                window.dragOver = -1;
+                                                const target = GitBackend.history.hashAt(over);
+                                                if (target === "" || target === hash) return;
+                                                dropMenu.hash = hash;
+                                                dropMenu.index = over;
+                                                dropMenu.subject = historyList.itemAtIndex(over) ? historyList.itemAtIndex(over).subject : target.slice(0, 7);
+                                                window.showMenu(dropMenu, target);
+                                            }
                                             onClicked: (mouse) => {
                                                 GitBackend.selectCommit(model.fullHash);
                                                 if (mouse.button === Qt.RightButton) {
                                                     commitMenu.subject = model.message;
+                                                    commitMenu.pushed = model.sync === "pushed";
+                                                    commitMenu.tags = model.tags || [];
+                                                    // Compared with another branch, only this branch's
+                                                    // own commits (ahead) are its to rewrite.
+                                                    commitMenu.local = model.sync !== "pushed"
+                                                        && (GitBackend.compareBranch === "" || GitBackend.compareMode === "ahead");
+                                                    commitMenu.isHead = model.index === 0 && GitBackend.compareBranch === "";
+                                                    commitMenu.olderLocal = model.index + 1 < GitBackend.history.count
+                                                        && GitBackend.history.syncAt(model.index + 1) !== "pushed"
+                                                        && GitBackend.compareBranch === "";
                                                     window.showMenu(commitMenu, model.fullHash);
                                                 }
                                             }
@@ -1517,17 +2249,18 @@ Item {
                                     id: syncBtn
                                     enabled: window.syncAction !== "none" && !window.busy
                                     spinning: window.syncBusy || GitBackend.fetching
-                                    icon: window.syncAction === "publish" ? "󰅧"
+                                    icon: window.syncAction === "publish" || window.syncAction === "publishRepo" ? "󰅧"
                                         : window.syncAction === "pull" ? "󰁅"
                                         : window.syncAction === "push" ? "󰁝" : "󰑐"
-                                    title: window.syncAction === "publish" ? I18n.tr("Publish branch")
+                                    title: window.syncAction === "publishRepo" ? I18n.tr("Publish repository")
+                                         : window.syncAction === "publish" ? I18n.tr("Publish branch")
                                          : window.syncAction === "pull" ? I18n.tr("Pull %1", GitBackend.remoteName)
                                          : window.syncAction === "push" ? I18n.tr("Push %1", GitBackend.remoteName)
                                          : window.syncAction === "fetch" ? I18n.tr("Fetch %1", GitBackend.remoteName)
                                          : I18n.tr("Fetch origin")
                                     caption: window.syncBusy ? GitBackend.busyText
                                            : !window.hasRepo ? I18n.tr("No repository")
-                                           : !GitBackend.hasRemote ? I18n.tr("This repository has no remote")
+                                           : !GitBackend.hasRemote ? I18n.tr("Put this repository on GitHub")
                                            : GitBackend.fetching ? I18n.tr("Fetching…")
                                            : GitBackend.upstreamGone ? I18n.tr("Deleted on %1 — publish again?", GitBackend.remoteName)
                                            : window.syncAction === "publish" ? I18n.tr("Publish this branch to %1", GitBackend.remoteName)
@@ -1537,11 +2270,28 @@ Item {
                                     badge: (GitBackend.behindCount > 0 ? GitBackend.behindCount + "↓" : "")
                                          + (GitBackend.behindCount > 0 && GitBackend.aheadCount > 0 ? " " : "")
                                          + (GitBackend.aheadCount > 0 && window.syncAction !== "publish" ? GitBackend.aheadCount + "↑" : "")
+                                    onRightClicked: if (window.hasRepo) window.showMenu(syncMenu, "")
                                     onClicked: {
-                                        if (window.syncAction === "pull") GitBackend.pull();
+                                        if (window.syncAction === "publishRepo") publishDialog.show();
+                                        else if (window.syncAction === "pull") GitBackend.pull();
                                         else if (window.syncAction === "push" || window.syncAction === "publish") GitBackend.push();
                                         else GitBackend.fetch();
                                     }
+                                }
+
+                                // The branch's pull request and how its checks
+                                // went, GitHub Desktop's badge on the branch.
+                                ToolbarCell {
+                                    readonly property var pr: GitBackend.currentPullRequest
+                                    visible: pr.number !== undefined && pr.number > 0
+                                    compact: true
+                                    icon: pr.checks === "success" ? "\u{f012c}" : pr.checks === "failure" ? "\u{f0156}"
+                                        : pr.checks === "pending" ? "\u{f0996}" : "\u{f041b}"
+                                    title: "#" + (pr.number || "")
+                                    caption: (pr.title || "") + (pr.checks === "success" ? " — " + I18n.tr("checks passed")
+                                             : pr.checks === "failure" ? " — " + I18n.tr("checks failed")
+                                             : pr.checks === "pending" ? " — " + I18n.tr("checks running") : "")
+                                    onClicked: Qt.openUrlExternally(pr.url)
                                 }
 
                                 Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
@@ -1599,6 +2349,64 @@ Item {
                                         color: modelData.type === "add" ? Design.ok : Design.danger
                                     }
 
+                                    // Lines of the working tree's diff are
+                                    // staged one by one by their numbers, as in
+                                    // GitHub Desktop: the numbers of a staged
+                                    // line are filled in the accent colour, and
+                                    // a click there (or on a hunk's header, for
+                                    // the hunk) takes it in or out.
+                                    readonly property bool stageable: ListView.view === diffList && modelData.canStage === true
+                                    readonly property bool hunkStageable: ListView.view === diffList && modelData.type === "header"
+                                                                          && window.hunkRows(index).length > 0
+                                    Rectangle {
+                                        visible: parent.stageable
+                                        x: Design.s(Design.focusWidth)
+                                        width: Design.s(Design.size.row) * 2 - Design.s(Design.focusWidth)
+                                        height: parent.height
+                                        color: modelData.staged ? Design.tint(Design.accent, gutterArea.containsMouse ? 0.55 : 0.4)
+                                             : gutterArea.containsMouse ? Design.tint(Design.accent, 0.15) : "transparent"
+                                    }
+                                    MouseArea {
+                                        id: gutterArea
+                                        enabled: parent.stageable || parent.hunkStageable
+                                        width: parent.hunkStageable ? parent.width : Design.s(Design.size.row) * 2
+                                        height: parent.height
+                                        hoverEnabled: true
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: mouse => {
+                                            if (mouse.button === Qt.RightButton) {
+                                                lineMenu.rows = parent.hunkStageable ? window.hunkRows(index) : [index];
+                                                window.showMenu(lineMenu, "");
+                                                return;
+                                            }
+                                            if (parent.hunkStageable) {
+                                                const rows = window.hunkRows(index);
+                                                const all = rows.every(i => GitBackend.currentDiff[i].staged);
+                                                GitBackend.setLinesStaged(rows, !all);
+                                            } else {
+                                                GitBackend.setLinesStaged([index], !modelData.staged);
+                                            }
+                                        }
+                                    }
+                                    // The words that changed, a shade deeper.
+                                    // Where tabs are drawn as Text's own tab
+                                    // stops (no colouring) the columns would
+                                    // not line up, so there it is left out.
+                                    Rectangle {
+                                        readonly property var chg: modelData.chg
+                                        visible: !!chg && (!!modelData.html || (modelData.text || "").indexOf("\t") < 0)
+                                        x: Design.s(Design.size.row) * 2 + (chg ? window.colX(modelData.text, chg[0] + 1) : 0)
+                                        width: chg ? window.colX(modelData.text, chg[1] + 1) - window.colX(modelData.text, chg[0] + 1) : 0
+                                        height: parent.height
+                                        color: modelData.type === "add" ? Design.tint(Design.ok, 0.28) : Design.tint(Design.danger, 0.30)
+                                    }
+                                    ToolTip.visible: gutterArea.containsMouse
+                                    ToolTip.delay: 700
+                                    ToolTip.text: hunkStageable ? I18n.tr("Stage or unstage this hunk")
+                                                : modelData.staged ? I18n.tr("Staged — click to unstage this line")
+                                                : I18n.tr("Click to stage this line")
+
                                     RowLayout {
                                         anchors.fill: parent
                                         spacing: 0
@@ -1633,11 +2441,69 @@ Item {
                                         Text {
                                             id: diffLineText
                                             Layout.fillWidth: true
-                                            text: modelData.text || ""
+                                            // Coloured code where the language is
+                                            // known: the line as StyledText after
+                                            // its + or -.
+                                            textFormat: modelData.html ? Text.StyledText : Text.PlainText
+                                            text: modelData.html
+                                                  ? (modelData.type === "add" ? "+" : modelData.type === "del" ? "-" : "&nbsp;") + modelData.html
+                                                  : (modelData.text || "")
                                             font.family: Design.font.mono
                                             font.pixelSize: Design.s(Design.font.caption)
                                             color: modelData.type === "header" ? Design.accent : Design.text
                                         }
+                                    }
+                                }
+                            }
+
+                            // One row of the side-by-side diff: a hunk's
+                            // header across both halves, or a pair of lines.
+                            Component {
+                                id: splitRowDelegate
+
+                                Rectangle {
+                                    id: sRow
+                                    readonly property bool working: ListView.view === diffList
+                                    readonly property bool header: modelData.kind === "header"
+                                    readonly property bool hunkStageable: working && header && window.hunkRows(modelData.i).length > 0
+                                    width: ListView.view ? ListView.view.width : 0
+                                    height: Math.max(20, (header ? headText.implicitHeight : Math.max(leftHalf.textHeight, rightHalf.textHeight)) + 4)
+                                    color: header ? Design.tint(Design.accent, hunkArea.containsMouse ? 0.16 : 0.08) : "transparent"
+
+                                    Text {
+                                        id: headText
+                                        visible: sRow.header
+                                        x: Design.s(Design.size.row) * 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: sRow.header ? modelData.text : ""
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(Design.font.caption)
+                                        color: Design.accent
+                                    }
+                                    MouseArea {
+                                        id: hunkArea
+                                        anchors.fill: parent
+                                        enabled: sRow.hunkStageable
+                                        hoverEnabled: true
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        onClicked: mouse => {
+                                            const rows = window.hunkRows(modelData.i);
+                                            if (mouse.button === Qt.RightButton) {
+                                                lineMenu.rows = rows;
+                                                window.showMenu(lineMenu, "");
+                                                return;
+                                            }
+                                            GitBackend.setLinesStaged(rows, !rows.every(i => GitBackend.currentDiff[i].staged));
+                                        }
+                                    }
+
+                                    Row {
+                                        visible: !sRow.header
+                                        anchors.fill: parent
+                                        SplitHalf { id: leftHalf; width: parent.width / 2; height: parent.height; side: sRow.header ? null : modelData.l; working: sRow.working }
+                                        Rectangle { width: 1; height: parent.height; color: Design.glassBorder }
+                                        SplitHalf { id: rightHalf; width: parent.width / 2 - 1; height: parent.height; side: sRow.header ? null : modelData.r; working: sRow.working }
                                     }
                                 }
                             }
@@ -1698,7 +2564,37 @@ Item {
                                             font.pixelSize: Design.s(Design.font.caption)
                                             color: Design.textDim
                                         }
+
+                                        Button {
+                                            variant: "ghost"; size: "sm"; iconOnly: true
+                                            icon: "\u{f0bdd}"
+                                            checked: GitBackend.ignoreWhitespace
+                                            tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes")
+                                                                             : I18n.tr("Hide whitespace changes (lines can't be staged one by one then)")
+                                            onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
+                                        }
+                                        Button {
+                                            variant: "ghost"; size: "sm"; iconOnly: true
+                                            icon: "\u{f0219}"
+                                            checked: GitBackend.fullFile
+                                            tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
+                                            onClicked: GitBackend.fullFile = !GitBackend.fullFile
+                                        }
+                                        Button {
+                                            variant: "ghost"; size: "sm"; iconOnly: true
+                                            icon: "\u{f0db}"
+                                            checked: window.splitDiff
+                                            tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
+                                            onClicked: window.splitDiff = !window.splitDiff
+                                        }
                                     }
+                                }
+
+                                ImageCompare {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    visible: window.isImage(GitBackend.selectedFile)
+                                    pair: (GitBackend.currentDiff, visible ? GitBackend.imagePair(GitBackend.selectedFile, "") : ({}))
                                 }
 
                                 // Diff Lines ListView
@@ -1708,8 +2604,9 @@ Item {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     clip: true
-                                    model: GitBackend.currentDiff
-                                    delegate: diffRowDelegate
+                                    visible: !window.isImage(GitBackend.selectedFile)
+                                    model: window.splitDiff ? window.splitRows(GitBackend.currentDiff) : GitBackend.currentDiff
+                                    delegate: window.splitDiff ? splitRowDelegate : diffRowDelegate
 
                                     // Empty State when clean
                                     ColumnLayout {
@@ -1735,7 +2632,9 @@ Item {
                                                 model: {
                                                     const items = [];
                                                     const remote = GitBackend.remoteName || "origin";
-                                                    if (window.syncAction === "publish")
+                                                    if (window.syncAction === "publishRepo")
+                                                        items.push({ title: I18n.tr("Publish your repository"), text: I18n.tr("It has no remote yet. Put it on GitHub."), button: I18n.tr("Publish repository"), run: "publishRepo" });
+                                                    else if (window.syncAction === "publish")
                                                         items.push({ title: I18n.tr("Publish your branch"), text: I18n.tr("Put %1 on %2.", GitBackend.branchName, remote), button: I18n.tr("Publish branch"), run: "push" });
                                                     else if (GitBackend.behindCount > 0)
                                                         items.push({ title: I18n.trn("Pull %1 commit from %2", "Pull %1 commits from %2", GitBackend.behindCount, remote), text: I18n.tr("They're on the remote and not here yet."), button: I18n.tr("Pull"), run: "pull" });
@@ -1783,7 +2682,7 @@ Item {
                                                             }
                                                         }
                                                         Rectangle {
-                                                            readonly property bool primary: index === 0 && ["push", "pull"].indexOf(modelData.run) >= 0
+                                                            readonly property bool primary: index === 0 && ["push", "pull", "publishRepo"].indexOf(modelData.run) >= 0
                                                             Layout.preferredWidth: sugText.implicitWidth + Design.s(Design.space.lg)
                                                             Layout.preferredHeight: Design.s(Design.size.xs)
                                                             radius: Design.s(Design.radius.sm)
@@ -1809,7 +2708,8 @@ Item {
                                                                 cursorShape: Qt.PointingHandCursor
                                                                 onClicked: {
                                                                     const r = modelData.run;
-                                                                    if (r === "push") GitBackend.push();
+                                                                    if (r === "publishRepo") publishDialog.show();
+                                                                    else if (r === "push") GitBackend.push();
                                                                     else if (r === "pull") GitBackend.pull();
                                                                     else if (r === "pr") GitBackend.openPullRequest();
                                                                     else if (r === "term") GitBackend.openTerminal("");
@@ -2082,18 +2982,48 @@ Item {
                                                 color: Design.glassBorder
                                             }
 
-                                            Text {
+                                            RowLayout {
                                                 anchors.fill: parent
                                                 anchors.leftMargin: Design.s(Design.space.md)
-                                                anchors.rightMargin: Design.s(Design.space.md)
-                                                verticalAlignment: Text.AlignVCenter
-                                                text: GitBackend.commitFile
-                                                font.family: Design.font.mono
-                                                font.pixelSize: Design.s(Design.font.caption)
-                                                font.weight: Design.weight.semibold
-                                                color: Design.text
-                                                elide: Text.ElideMiddle
+                                                anchors.rightMargin: Design.s(Design.space.xs)
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: GitBackend.commitFile
+                                                    font.family: Design.font.mono
+                                                    font.pixelSize: Design.s(Design.font.caption)
+                                                    font.weight: Design.weight.semibold
+                                                    color: Design.text
+                                                    elide: Text.ElideMiddle
+                                                }
+                                                Button {
+                                                    variant: "ghost"; size: "sm"; iconOnly: true
+                                                    icon: "\u{f0bdd}"
+                                                    checked: GitBackend.ignoreWhitespace
+                                                    tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes") : I18n.tr("Hide whitespace changes")
+                                                    onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
+                                                }
+                                                Button {
+                                                    variant: "ghost"; size: "sm"; iconOnly: true
+                                                    icon: "\u{f0219}"
+                                                    checked: GitBackend.fullFile
+                                                    tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
+                                                    onClicked: GitBackend.fullFile = !GitBackend.fullFile
+                                                }
+                                                Button {
+                                                    variant: "ghost"; size: "sm"; iconOnly: true
+                                                    icon: "\u{f0db}"
+                                                    checked: window.splitDiff
+                                                    tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
+                                                    onClicked: window.splitDiff = !window.splitDiff
+                                                }
                                             }
+                                        }
+
+                                        ImageCompare {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            visible: window.isImage(GitBackend.commitFile)
+                                            pair: visible ? GitBackend.imagePair(GitBackend.commitFile, GitBackend.selectedCommit) : ({})
                                         }
 
                                         ListView {
@@ -2101,8 +3031,9 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             clip: true
-                                            model: GitBackend.commitDiff
-                                            delegate: diffRowDelegate
+                                            visible: !window.isImage(GitBackend.commitFile)
+                                            model: window.splitDiff ? window.splitRows(GitBackend.commitDiff) : GitBackend.commitDiff
+                                            delegate: window.splitDiff ? splitRowDelegate : diffRowDelegate
                                             ScrollBar.vertical: OverflowBar {}
 
                                             EmptyState {
@@ -2215,36 +3146,31 @@ Item {
                             }
                         }
 
-                        // Open a folder the way every other application does.
-                        // The only way in used to be typing a path into a text
-                        // field, with no browser of any kind.
-                        Rectangle {
+                        // Open a folder the way every other application does,
+                        // or clone or start one, as GitHub Desktop's File menu.
+                        RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Design.s(Design.size.sm)
-                            radius: Design.s(Design.radius.sm)
-                            color: openArea.containsMouse ? Design.glassHover : Design.well
-                            border.color: Design.glassBorder
-                            border.width: Design.border
-
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: Design.s(Design.space.xs)
-                                Text { text: "󰉋"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.footnote); color: Design.textDim }
-                                Text {
-                                    text: I18n.tr("Open repository…")
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(Design.font.caption)
-                                    font.weight: Design.weight.semibold
-                                    color: Design.text
-                                }
+                            spacing: Design.s(Design.space.xs)
+                            Button {
+                                Layout.fillWidth: true
+                                size: "sm"; icon: "󰉋"
+                                label: I18n.tr("Open…")
+                                tip: I18n.tr("Add a repository from this computer")
+                                onClicked: { window.repoDropdownOpen = false; GitBackend.pickRepoFolder(); }
                             }
-
-                            Clickable {
-                                id: openArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: GitBackend.pickRepoFolder()
+                            Button {
+                                Layout.fillWidth: true
+                                size: "sm"; icon: "\u{f01da}"
+                                label: I18n.tr("Clone…")
+                                tip: I18n.tr("Clone a repository from GitHub or a URL")
+                                onClicked: { window.repoDropdownOpen = false; cloneDialog.show(); }
+                            }
+                            Button {
+                                Layout.fillWidth: true
+                                size: "sm"; icon: "\u{f0415}"
+                                label: I18n.tr("New…")
+                                tip: I18n.tr("Create a new repository")
+                                onClicked: { window.repoDropdownOpen = false; newRepoDialog.show(); }
                             }
                         }
 
@@ -2409,6 +3335,73 @@ Item {
                             }
                         }
 
+                        // The open repository's submodules, each a repository
+                        // of its own to open, and the one way to bring them
+                        // all to the commits recorded.
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: GitBackend.submodules.length > 0
+                            spacing: 1
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    role: "caption"; dim: true; weight: Design.weight.semibold
+                                    text: I18n.tr("Submodules of %1", GitBackend.repoName)
+                                }
+                                Button {
+                                    variant: "ghost"; size: "sm"
+                                    label: I18n.tr("Update")
+                                    tip: I18n.tr("Check every submodule out at the commit this repository records")
+                                    enabled: !window.busy
+                                    onClicked: GitBackend.updateSubmodules()
+                                }
+                            }
+                            Repeater {
+                                model: GitBackend.submodules
+                                delegate: Rectangle {
+                                    id: subRow
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Design.s(Design.size.sm)
+                                    radius: Design.s(Design.radius.sm)
+                                    color: subArea.containsMouse ? Design.glassHover : "transparent"
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Design.s(Design.space.sm)
+                                        anchors.rightMargin: Design.s(Design.space.sm)
+                                        spacing: Design.s(Design.space.sm)
+                                        Text {
+                                            text: "\u{f0b9c}"
+                                            font.family: Design.font.mono
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: subRow.modelData.state === "+" ? Design.warn
+                                                 : subRow.modelData.state === "-" ? Design.textFaint
+                                                 : subRow.modelData.state === "U" ? Design.danger : Design.textDim
+                                        }
+                                        Label { Layout.fillWidth: true; role: "caption"; text: subRow.modelData.path; elide: Text.ElideMiddle }
+                                        Label {
+                                            role: "caption"; dim: true
+                                            text: subRow.modelData.state === "-" ? I18n.tr("not checked out")
+                                                : subRow.modelData.state === "+" ? I18n.tr("at another commit")
+                                                : subRow.modelData.state === "U" ? I18n.tr("conflicted") : subRow.modelData.commit
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: subArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        enabled: subRow.modelData.state !== "-"
+                                        onClicked: {
+                                            window.repoDropdownOpen = false;
+                                            GitBackend.openRepo(GitBackend.absolutePath(subRow.modelData.path));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         EmptyState {
                             visible: window.filteredRepos.length === 0
                             icon: GitBackend.repos.length === 0 ? "\u{f02a2}" : "\u{f0349}"
@@ -2502,15 +3495,33 @@ Item {
                         spacing: Design.s(Design.space.sm)
 
                         Text {
+                            visible: !window.onGithub
                             text: I18n.tr("Branches")
                             font.family: Design.font.sans
                             font.pixelSize: Design.s(Design.font.body)
                             font.weight: Design.weight.semibold
                             color: Design.text
                         }
+                        // On GitHub, its pull requests beside the branches, as
+                        // GitHub Desktop's branch list has them.
+                        SegmentedControl {
+                            Layout.fillWidth: true
+                            visible: window.onGithub
+                            size: "sm"
+                            model: [
+                                { id: "branches", label: I18n.tr("Branches") },
+                                { id: "prs", label: I18n.tr("Pull requests") + (GitBackend.pullRequests.length ? "  " + GitBackend.pullRequests.length : "") }
+                            ]
+                            current: window.branchView
+                            onPicked: id => {
+                                window.branchView = id;
+                                if (id === "prs") GitBackend.refreshPullRequests();
+                            }
+                        }
 
                         // Creating a branch needed a terminal before this.
                         Rectangle {
+                            visible: window.branchView === "branches" || !window.onGithub
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.sm)
                             radius: Design.s(Design.radius.sm)
@@ -2586,18 +3597,113 @@ Item {
                             }
                         }
 
+                        // Open pull requests: a click checks one out (gh pr
+                        // checkout), the icon at its end opens it on GitHub.
                         ListView {
-                            id: branchList
+                            id: prList
+                            visible: window.onGithub && window.branchView === "prs"
                             ScrollBar.vertical: OverflowBar {}
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
                             spacing: 1
-                            model: {
+                            model: GitBackend.pullRequests
+
+                            EmptyState {
+                                parent: prList
+                                anchors.centerIn: parent
+                                width: parent.width
+                                visible: prList.count === 0
+                                icon: "\u{f041b}"
+                                title: GitBackend.loadingPullRequests ? I18n.tr("Loading pull requests…") : I18n.tr("No open pull requests")
+                                hint: GitBackend.loadingPullRequests ? "" : !window.githubAccount || !window.githubAccount.login
+                                      ? I18n.tr("Sign in to GitHub under Accounts to see them.") : ""
+                            }
+
+                            delegate: Rectangle {
+                                id: prRow
+                                required property var modelData
+                                width: prList.width
+                                height: Design.s(Design.size.md)
+                                radius: Design.s(Design.radius.sm)
+                                readonly property bool isCurrent: modelData.branch === GitBackend.branchName
+                                color: isCurrent ? Design.selection : (prArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
+
+                                MouseArea {
+                                    id: prArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (prRow.isCurrent) return;
+                                        window.branchDropdownOpen = false;
+                                        GitBackend.checkoutPullRequest(prRow.modelData.number);
+                                    }
+                                }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Design.s(Design.space.xs)
+                                    anchors.rightMargin: Design.s(Design.space.xxs)
+                                    spacing: Design.s(Design.space.xs)
+                                    Text {
+                                        text: "\u{f041b}"
+                                        font.family: Design.font.mono
+                                        font.pixelSize: Design.s(Design.font.caption)
+                                        color: prRow.modelData.draft ? Design.textDim : Design.ok
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: prRow.modelData.title
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            font.weight: Design.weight.semibold
+                                            color: Design.text
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: "#" + prRow.modelData.number + " · " + prRow.modelData.author
+                                                  + (prRow.modelData.draft ? " · " + I18n.tr("draft") : "")
+                                                  + " · " + window.relTime(prRow.modelData.updated)
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.caption)
+                                            color: Design.textDim
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                    Button {
+                                        variant: "ghost"; size: "sm"; iconOnly: true
+                                        icon: "\u{f03cc}"
+                                        tip: I18n.tr("Open on GitHub")
+                                        onClicked: GitBackend.openPullRequestOnWeb(prRow.modelData.number)
+                                    }
+                                }
+                            }
+                        }
+
+                        ListView {
+                            id: branchList
+                            visible: window.branchView === "branches" || !window.onGithub
+                            ScrollBar.vertical: OverflowBar {}
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            spacing: 1
+                            // Local branches, then the ones only on a remote.
+                            readonly property var locals: {
                                 const q = newBranchInput.text.trim().toLowerCase();
                                 return q === "" ? GitBackend.branches
                                                 : GitBackend.branches.filter(b => b.toLowerCase().indexOf(q) >= 0);
                             }
+                            readonly property var remotes: {
+                                const q = newBranchInput.text.trim().toLowerCase();
+                                return q === "" ? GitBackend.remoteBranches
+                                                : GitBackend.remoteBranches.filter(b => b.toLowerCase().indexOf(q) >= 0);
+                            }
+                            model: locals.concat(remotes)
 
                             EmptyState {
                                 parent: branchList
@@ -2611,8 +3717,12 @@ Item {
                             delegate: Rectangle {
                                 id: branchRowItem
                                 required property var modelData
+                                required property int index
+                                readonly property bool isRemote: index >= branchList.locals.length
+                                // The first remote one carries the heading above it.
+                                readonly property bool firstRemote: isRemote && index === branchList.locals.length
                                 width: branchList.width
-                                height: Design.s(Design.size.sm)
+                                height: Design.s(Design.size.sm) + (firstRemote ? Design.s(Design.size.xs) : 0)
                                 radius: Design.s(Design.radius.sm)
                                 readonly property bool isCurrent: modelData === GitBackend.branchName
                                 color: isCurrent ? Design.selection
@@ -2627,6 +3737,7 @@ Item {
                                     onClicked: (mouse) => {
                                         const wt = (GitBackend.branchInfo[branchRowItem.modelData] || {}).worktree || "";
                                         if (mouse.button === Qt.RightButton) {
+                                            branchMenu.remote = branchRowItem.isRemote;
                                             branchMenu.worktree = wt;
                                             branchMenu.target = branchRowItem.modelData;
                                             branchMenu.popup();
@@ -2649,13 +3760,23 @@ Item {
                                     }
                                 }
 
+                                Label {
+                                    visible: branchRowItem.firstRemote
+                                    x: Design.s(Design.space.xs)
+                                    height: Design.s(Design.size.xs)
+                                    verticalAlignment: Text.AlignVCenter
+                                    role: "caption"; dim: true; weight: Design.weight.semibold
+                                    text: I18n.tr("Other branches")
+                                }
+
                                 RowLayout {
                                     anchors.fill: parent
+                                    anchors.topMargin: branchRowItem.firstRemote ? Design.s(Design.size.xs) : 0
                                     anchors.leftMargin: Design.s(Design.space.xs)
                                     anchors.rightMargin: Design.s(Design.space.xs)
                                     spacing: Design.s(Design.space.xs)
 
-                                    Text { text: ""; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+                                    Text { text: branchRowItem.isRemote ? "\u{f015f}" : ""; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
                                     Text {
                                         Layout.fillWidth: true
                                         text: branchRowItem.modelData
@@ -2668,7 +3789,7 @@ Item {
                                     // Where it stands against its remote.
                                     Text {
                                         readonly property var info: GitBackend.branchInfo[branchRowItem.modelData] || ({})
-                                        visible: text !== ""
+                                        visible: text !== "" && !branchRowItem.isRemote
                                         text: info.worktree ? "in worktree"
                                             : info.gone ? "deleted on remote"
                                             : !info.upstream ? "local only"
@@ -2693,7 +3814,7 @@ Item {
                                         Layout.preferredWidth: Design.s(Design.size.mini)
                                         Layout.preferredHeight: Design.s(Design.size.mini)
                                         radius: Design.s(Design.radius.sm)
-                                        visible: !branchRowItem.isCurrent && (bArea.containsMouse || delArea.containsMouse)
+                                        visible: !branchRowItem.isCurrent && !branchRowItem.isRemote && (bArea.containsMouse || delArea.containsMouse)
                                         color: delArea.containsMouse ? Design.tint(Design.danger, 0.30) : "transparent"
                                         Text {
                                             anchors.centerIn: parent
@@ -2726,7 +3847,7 @@ Item {
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 1
-                            visible: GitBackend.worktrees.length > 1
+                            visible: GitBackend.worktrees.length > 1 && branchList.visible
 
                             Text {
                                 text: I18n.tr("Worktrees")
@@ -3156,6 +4277,385 @@ Item {
                 visible: window.dialog !== null && window.dialog.input === true
                 placeholder: window.dialog ? (window.dialog.placeholder || "") : ""
                 onAccepted: askDialog.accept()
+            }
+        }
+    }
+
+    // ── A commit's message ────────────────────────────────────────────────
+    AppDialog {
+        id: rewordDialog
+        property string hash: ""
+        function show(h) {
+            hash = h;
+            const msg = GitBackend.commitMessage(h);
+            const cut = msg.indexOf("\n");
+            rewordSummary.text = cut < 0 ? msg : msg.slice(0, cut);
+            rewordBody.text = cut < 0 ? "" : msg.slice(cut).replace(/^\n+/, "");
+            open();
+            rewordSummary.focusInput();
+        }
+        title: I18n.tr("Edit commit message")
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        buttonText: ({ [Dialog.Ok]: I18n.tr("Save message") })
+        onAccepted: {
+            const summary = rewordSummary.text.trim();
+            if (summary === "") { Qt.callLater(rewordDialog.open); return; }
+            const body = rewordBody.text.trim();
+            GitBackend.rewordCommit(rewordDialog.hash, summary + (body ? "\n\n" + body : ""));
+        }
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            Field { id: rewordSummary; Layout.fillWidth: true; placeholder: I18n.tr("Summary (required)") }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(Design.width.label)
+                radius: Design.s(Design.radius.ctl)
+                color: Design.sunken
+                border.color: rewordBody.activeFocus ? Design.accent : Design.line
+                border.width: Design.border
+                ScrollView {
+                    id: rewordScroll
+                    anchors.fill: parent
+                    clip: true
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical: OverflowBar { view: rewordScroll }
+                    TextArea {
+                        id: rewordBody
+                        placeholderText: I18n.tr("Description")
+                        wrapMode: TextEdit.Wrap
+                        font.family: Design.font.sans
+                        font.pixelSize: Design.s(Design.font.body)
+                        color: Design.text
+                        background: null
+                        selectByMouse: true
+                    }
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                role: "caption"; color: Design.textFaint
+                wrapMode: Text.Wrap
+                text: I18n.tr("The commits after it are rewritten too; they keep their changes.")
+            }
+        }
+    }
+
+    // ── Clone ─────────────────────────────────────────────────────────────
+    // GitHub Desktop's: the account's repositories to pick from, or any URL,
+    // and where on this machine it goes.
+    AppDialog {
+        id: cloneDialog
+        property string mode: "github"
+        property string picked: ""
+        function show() {
+            picked = "";
+            cloneUrl.text = "";
+            cloneFilter.text = "";
+            if (cloneParent.text === "") cloneParent.text = GitBackend.defaultProjectsDir;
+            mode = window.githubAccount && window.githubAccount.login ? "github" : "url";
+            if (mode === "github") GitBackend.refreshRemoteRepos();
+            open();
+            if (mode === "url") cloneUrl.focusInput(); else cloneFilter.focusInput();
+        }
+        readonly property string url: mode === "github" ? picked : cloneUrl.text.trim()
+        readonly property string repoName: {
+            const u = cloneDialog.url.replace(/\/+$/, "").replace(/\.git$/, "");
+            return u.split(/[\/:]/).pop();
+        }
+        title: I18n.tr("Clone a repository")
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        buttonText: ({ [Dialog.Ok]: I18n.tr("Clone") })
+        onAccepted: {
+            if (cloneDialog.url === "") { Qt.callLater(cloneDialog.open); return; }
+            GitBackend.cloneRepo(cloneDialog.url, cloneParent.text);
+        }
+        Connections {
+            target: GitBackend
+            function onFolderPicked(purpose, path) {
+                if (purpose === "clone") cloneParent.text = path;
+                else if (purpose === "new") newParent.text = path;
+            }
+            function onRepoCreated(ok, path) {
+                if (ok) window.currentTab = 0;
+            }
+        }
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            SegmentedControl {
+                Layout.fillWidth: true
+                size: "sm"
+                model: [{ id: "github", label: "GitHub" }, { id: "url", label: I18n.tr("URL") }]
+                current: cloneDialog.mode
+                onPicked: id => {
+                    cloneDialog.mode = id;
+                    if (id === "github" && GitBackend.remoteRepos.length === 0) GitBackend.refreshRemoteRepos();
+                }
+            }
+            Field {
+                id: cloneFilter
+                Layout.fillWidth: true
+                visible: cloneDialog.mode === "github"
+                placeholder: I18n.tr("Filter your repositories")
+            }
+            ListView {
+                id: remoteRepoList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Design.s(Design.width.label) * 2
+                visible: cloneDialog.mode === "github"
+                clip: true
+                spacing: 1
+                ScrollBar.vertical: OverflowBar {}
+                model: {
+                    const q = cloneFilter.text.trim().toLowerCase();
+                    return q === "" ? GitBackend.remoteRepos
+                                    : GitBackend.remoteRepos.filter(r => r.name.toLowerCase().indexOf(q) >= 0);
+                }
+                EmptyState {
+                    parent: remoteRepoList
+                    anchors.centerIn: parent
+                    width: parent.width
+                    visible: remoteRepoList.count === 0
+                    icon: "\u{f02a4}"
+                    title: GitBackend.loadingRemoteRepos ? I18n.tr("Loading your repositories…")
+                         : !window.githubAccount || !window.githubAccount.login ? I18n.tr("Not signed in to GitHub")
+                         : I18n.tr("No repositories")
+                    hint: !GitBackend.loadingRemoteRepos && (!window.githubAccount || !window.githubAccount.login)
+                          ? I18n.tr("Sign in under Accounts, or clone by URL.") : ""
+                }
+                delegate: Rectangle {
+                    id: rrRow
+                    required property var modelData
+                    width: remoteRepoList.width
+                    height: Design.s(Design.size.md)
+                    radius: Design.s(Design.radius.sm)
+                    readonly property bool chosen: cloneDialog.picked === modelData.url
+                    color: chosen ? Design.selection : (rrArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(Design.space.sm)
+                        anchors.rightMargin: Design.s(Design.space.sm)
+                        spacing: Design.s(Design.space.sm)
+                        Text {
+                            text: rrRow.modelData.private ? "\u{f033e}" : "\u{f02a4}"
+                            font.family: Design.font.mono
+                            font.pixelSize: Design.s(Design.font.caption)
+                            color: Design.textDim
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Label { Layout.fillWidth: true; role: "caption"; weight: Design.weight.semibold; text: rrRow.modelData.name; elide: Text.ElideRight }
+                            Label {
+                                Layout.fillWidth: true
+                                visible: text !== ""
+                                role: "caption"; dim: true
+                                text: rrRow.modelData.description || ""
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                    MouseArea {
+                        id: rrArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: cloneDialog.picked = rrRow.modelData.url
+                        onDoubleClicked: { cloneDialog.picked = rrRow.modelData.url; cloneDialog.accept(); }
+                    }
+                }
+            }
+            Field {
+                id: cloneUrl
+                Layout.fillWidth: true
+                visible: cloneDialog.mode === "url"
+                mono: true
+                placeholder: I18n.tr("https://github.com/owner/name, git@…, or owner/name")
+            }
+            Label { role: "caption"; dim: true; text: I18n.tr("Into the folder") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
+                Field { id: cloneParent; Layout.fillWidth: true; mono: true }
+                Button { size: "sm"; label: I18n.tr("Choose…"); onClicked: GitBackend.pickFolder("clone", cloneParent.text) }
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: cloneDialog.repoName !== ""
+                role: "caption"; color: Design.textFaint
+                text: I18n.tr("Clones to %1", cloneParent.text.replace(/\/+$/, "") + "/" + cloneDialog.repoName)
+                elide: Text.ElideMiddle
+            }
+        }
+    }
+
+    // ── New repository ────────────────────────────────────────────────────
+    AppDialog {
+        id: newRepoDialog
+        property bool readme: true
+        property string gitignore: ""
+        function show() {
+            newName.text = "";
+            newDesc.text = "";
+            if (newParent.text === "") newParent.text = GitBackend.defaultProjectsDir;
+            GitBackend.refreshGitignoreTemplates();
+            open();
+            newName.focusInput();
+        }
+        title: I18n.tr("Create a new repository")
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        buttonText: ({ [Dialog.Ok]: I18n.tr("Create repository") })
+        onAccepted: {
+            if (newName.text.trim() === "") { Qt.callLater(newRepoDialog.open); return; }
+            GitBackend.createRepo(newParent.text, newName.text, newDesc.text, newRepoDialog.readme, newRepoDialog.gitignore);
+        }
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            Label { role: "caption"; dim: true; text: I18n.tr("Name") }
+            Field { id: newName; Layout.fillWidth: true; mono: true; placeholder: I18n.tr("my-project") }
+            Label { role: "caption"; dim: true; text: I18n.tr("Description") }
+            Field { id: newDesc; Layout.fillWidth: true; placeholder: I18n.tr("Optional") }
+            Label { role: "caption"; dim: true; text: I18n.tr("Local path") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
+                Field { id: newParent; Layout.fillWidth: true; mono: true }
+                Button { size: "sm"; label: I18n.tr("Choose…"); onClicked: GitBackend.pickFolder("new", newParent.text) }
+            }
+            CheckBox {
+                text: I18n.tr("Start with a README")
+                checked: newRepoDialog.readme
+                onToggled: newRepoDialog.readme = !newRepoDialog.readme
+            }
+            Label { role: "caption"; dim: true; text: I18n.tr(".gitignore template") }
+            Select {
+                Layout.fillWidth: true
+                model: [{ id: "", label: I18n.tr("None") }].concat(GitBackend.gitignoreTemplates.map(t => ({ id: t, label: t })))
+                current: newRepoDialog.gitignore
+                onPicked: id => newRepoDialog.gitignore = id
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: newName.text.trim() !== ""
+                role: "caption"; color: Design.textFaint
+                text: I18n.tr("Creates %1", newParent.text.replace(/\/+$/, "") + "/" + newName.text.trim())
+                elide: Text.ElideMiddle
+            }
+        }
+    }
+
+    // ── Publish to GitHub ─────────────────────────────────────────────────
+    AppDialog {
+        id: publishDialog
+        property bool isPrivate: true
+        function show() {
+            if (!window.githubAccount || !window.githubAccount.login) {
+                notice.show(I18n.tr("Sign in to GitHub under Accounts first"), true);
+                window.accountsDropdownOpen = true;
+                return;
+            }
+            pubName.text = GitBackend.repoName;
+            pubDesc.text = "";
+            open();
+            pubName.focusInput();
+        }
+        title: I18n.tr("Publish repository")
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        buttonText: ({ [Dialog.Ok]: I18n.tr("Publish") })
+        onAccepted: GitBackend.publishRepo(pubName.text, pubDesc.text, publishDialog.isPrivate)
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            Label {
+                Layout.fillWidth: true
+                dim: true
+                wrapMode: Text.Wrap
+                text: I18n.tr("A new repository on GitHub under %1, with this one's commits pushed to it.",
+                              window.githubAccount ? window.githubAccount.login : "")
+            }
+            Label { role: "caption"; dim: true; text: I18n.tr("Name") }
+            Field { id: pubName; Layout.fillWidth: true; mono: true }
+            Label { role: "caption"; dim: true; text: I18n.tr("Description") }
+            Field { id: pubDesc; Layout.fillWidth: true; placeholder: I18n.tr("Optional") }
+            CheckBox {
+                text: I18n.tr("Keep this code private")
+                checked: publishDialog.isPrivate
+                onToggled: publishDialog.isPrivate = !publishDialog.isPrivate
+            }
+        }
+    }
+
+    // ── Repository settings ───────────────────────────────────────────────
+    // The remote, who commits, and what is ignored — GitHub Desktop's
+    // Repository settings.
+    AppDialog {
+        id: settingsDialog
+        property bool globalIdentity: false
+        readonly property var firstRemote: GitBackend.remotes.length ? GitBackend.remotes[0] : null
+        function show() {
+            remoteName.text = firstRemote ? firstRemote.name : "origin";
+            remoteUrl.text = firstRemote ? firstRemote.url : "";
+            idName.text = GitBackend.identity.name || "";
+            idEmail.text = GitBackend.identity.email || "";
+            open();
+        }
+        title: I18n.tr("Repository settings")
+        standardButtons: Dialog.Cancel | Dialog.Save
+        onAccepted: {
+            const r = settingsDialog.firstRemote;
+            const url = remoteUrl.text.trim();
+            if (url !== "" && (!r || r.name !== remoteName.text.trim() || r.url !== url))
+                GitBackend.setRemote(remoteName.text.trim() || "origin", url);
+            if (idName.text.trim() !== (GitBackend.identity.name || "") || idEmail.text.trim() !== (GitBackend.identity.email || "")
+                    || settingsDialog.globalIdentity)
+                GitBackend.setIdentity(idName.text, idEmail.text, settingsDialog.globalIdentity);
+        }
+        contentItem: ColumnLayout {
+            implicitWidth: Design.s(Design.width.menuMax)
+            spacing: Design.s(Design.space.sm)
+            SectionLabel { text: I18n.tr("Remote") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Design.s(Design.space.xs)
+                Field { id: remoteName; Layout.preferredWidth: Design.s(Design.size.thumb); mono: true; placeholder: "origin" }
+                Field { id: remoteUrl; Layout.fillWidth: true; mono: true; placeholder: "https://github.com/owner/name.git" }
+            }
+            Repeater {
+                // Any others, read-only here, with a way to drop them.
+                model: GitBackend.remotes.slice(1)
+                delegate: RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Label { role: "caption"; text: modelData.name; weight: Design.weight.semibold }
+                    Label { Layout.fillWidth: true; role: "caption"; dim: true; text: modelData.url; elide: Text.ElideMiddle }
+                    Button {
+                        variant: "ghost"; size: "sm"; label: I18n.tr("Remove")
+                        destructive: true
+                        onActivated: GitBackend.removeRemote(modelData.name)
+                    }
+                }
+            }
+            SectionLabel { text: I18n.tr("Author"); Layout.topMargin: Design.s(Design.space.sm) }
+            Field { id: idName; Layout.fillWidth: true; placeholder: I18n.tr("Name") }
+            Field { id: idEmail; Layout.fillWidth: true; mono: true; placeholder: I18n.tr("Email") }
+            CheckBox {
+                text: I18n.tr("Use for every repository")
+                checked: settingsDialog.globalIdentity
+                onToggled: settingsDialog.globalIdentity = !settingsDialog.globalIdentity
+            }
+            SectionLabel { text: I18n.tr("Pulling"); Layout.topMargin: Design.s(Design.space.sm) }
+            CheckBox {
+                text: I18n.tr("Rebase my commits on top when pulling")
+                checked: GitBackend.pullRebase
+                onToggled: GitBackend.setPullRebase(!GitBackend.pullRebase)
+            }
+            SectionLabel { text: I18n.tr("Ignored files"); Layout.topMargin: Design.s(Design.space.sm) }
+            Button {
+                size: "sm"; icon: "\u{f0219}"
+                label: I18n.tr("Edit .gitignore")
+                onClicked: { settingsDialog.close(); GitBackend.editGitignore(); }
             }
         }
     }

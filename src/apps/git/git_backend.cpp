@@ -146,6 +146,13 @@ QVariantList parseDiff(const QString& out) {
             row["text"] = l;
             row["oldLine"] = "";
             row["newLine"] = "";
+        } else if (l.startsWith("\\")) {
+            // "\ No newline at end of file": about the line before it, not
+            // a line of its own, so it takes no number.
+            row["type"] = "ctx";
+            row["text"] = l;
+            row["oldLine"] = "";
+            row["newLine"] = "";
         } else if (l.startsWith("+")) {
             row["type"] = "add";
             row["text"] = l;
@@ -224,6 +231,8 @@ QVariant HistoryModel::data(const QModelIndex& index, int role) const {
     case MessageRole: return c.message;
     case CoAuthorsRole: return c.coAuthors;
     case EmailRole: return c.email;
+    case TagsRole: return c.tags;
+    case BranchesRole: return c.branches;
     case SyncRole: return !m_hasRemote ? QString()
                         : m_unpushed.contains(c.fullHash) ? QStringLiteral("local")
                                                           : QStringLiteral("pushed");
@@ -234,7 +243,7 @@ QVariant HistoryModel::data(const QModelIndex& index, int role) const {
 QHash<int, QByteArray> HistoryModel::roleNames() const {
     return {{FullHashRole, "fullHash"}, {HashRole, "hash"}, {AuthorRole, "author"},
             {TimeRole, "time"}, {MessageRole, "message"}, {SyncRole, "sync"},
-            {CoAuthorsRole, "coAuthors"}, {EmailRole, "email"}};
+            {CoAuthorsRole, "coAuthors"}, {EmailRole, "email"}, {TagsRole, "tags"}, {BranchesRole, "branches"}};
 }
 
 bool HistoryModel::canFetchMore(const QModelIndex& parent) const {
@@ -279,24 +288,44 @@ void HistoryModel::reset(const QString& repoPath, const QList<Commit>& firstPage
     emit countChanged();
 }
 
-QList<HistoryModel::Commit> HistoryModel::readPage(const QString& repoPath, int skip) {
+QList<HistoryModel::Commit> HistoryModel::readPage(const QString& repoPath, int skip, const QString& range,
+                                                   const QString& filter) {
     QList<Commit> page;
     QString out;
+    QStringList args{"log"};
+    // A search reads the whole log and keeps what matches: git can grep the
+    // message or the author, but not either one, and not the hash. Even a
+    // long history is a second at most, and only while something is typed.
+    if (filter.isEmpty()) args << "--skip=" + QString::number(skip) << "-n" << QString::number(kHistoryPage);
+    args << "--pretty=format:%H%x1f%h%x1f%an%x1f%ct%x1f%s%x1f"
+            "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)%x1f%ae%x1f%D%x1e";
+    if (!range.isEmpty()) args << range;
     // Silently: a repository with no commits yet has no HEAD, and git log
     // failing there is the answer "nothing", not an error to show.
-    if (!gitOk(repoPath, QStringList() << "log" << "--skip=" + QString::number(skip)
-                                         << "-n" << QString::number(kHistoryPage)
-                                         << "--pretty=format:%H%x1f%h%x1f%an%x1f%ct%x1f%s%x1f"
-                                            "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)%x1f%ae%x1e",
-               nullptr, &out))
-        return page;
+    if (!gitOk(repoPath, args, nullptr, &out)) return page;
 
+    int matched = 0;
     for (const auto& rec : out.split(kRecordSep, Qt::SkipEmptyParts)) {
         const QStringList parts = rec.trimmed().split(kFieldSep);
         if (parts.size() < 5) continue;
+        if (!filter.isEmpty()) {
+            const bool hit = parts[4].contains(filter, Qt::CaseInsensitive) || parts[2].contains(filter, Qt::CaseInsensitive)
+                          || parts[0].startsWith(filter, Qt::CaseInsensitive)
+                          || (parts.size() > 6 && parts[6].contains(filter, Qt::CaseInsensitive));
+            if (!hit || matched++ < skip) continue;
+            if (page.size() >= kHistoryPage) break;
+        }
+        // "HEAD -> main, tag: v1.0, origin/main, origin/HEAD"
+        QStringList tags, branches;
+        for (QString ref : parts.value(7).split(", ", Qt::SkipEmptyParts)) {
+            ref = ref.trimmed();
+            if (ref.startsWith("tag: ")) tags << ref.mid(5);
+            else if (ref.startsWith("HEAD -> ")) branches << ref.mid(8);
+            else if (ref != "HEAD" && !ref.endsWith("/HEAD")) branches << ref;
+        }
         page.append({parts[0], parts[1], parts[2], parts[3].toLongLong(), parts[4],
                      parts.size() > 5 ? coAuthorNames(parts[5]) : QStringList(),
-                     parts.size() > 6 ? parts[6] : QString()});
+                     parts.size() > 6 ? parts[6] : QString(), tags, branches});
     }
     return page;
 }
@@ -514,6 +543,41 @@ QString GitBackend::runGit(const QStringList& args, bool trim) {
     return out;
 }
 
+void GitBackend::setHistoryFilter(const QString& filter) {
+    if (filter.trimmed() == m_history->filter()) return;
+    m_history->setQuery(m_history->range(), filter.trimmed());
+    emit historyQueryChanged();
+    applyHistoryQuery();
+}
+
+void GitBackend::setCompare(const QString& branch, const QString& mode) {
+    m_compareBranch = branch.trimmed();
+    m_compareMode = mode == QLatin1String("ahead") ? QStringLiteral("ahead") : QStringLiteral("behind");
+    m_compareAhead = m_compareBehind = 0;
+    if (!m_compareBranch.isEmpty()) {
+        QString out;
+        // "behind ahead": left is the branch, right is HEAD.
+        if (gitOk(m_repoPath, {"rev-list", "--left-right", "--count", m_compareBranch + "...HEAD"}, nullptr, &out)) {
+            const QStringList n = out.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            m_compareBehind = n.value(0).toInt();
+            m_compareAhead = n.value(1).toInt();
+        }
+    }
+    const QString range = m_compareBranch.isEmpty() ? QString()
+                        : m_compareMode == "ahead" ? m_compareBranch + "..HEAD" : "HEAD.." + m_compareBranch;
+    m_history->setQuery(range, m_history->filter());
+    emit historyQueryChanged();
+    applyHistoryQuery();
+}
+
+void GitBackend::applyHistoryQuery() {
+    // Read again at once rather than on the next refresh, and the commit
+    // shown dropped if it is not in the new list.
+    m_historyHead.clear();
+    m_history->reload(m_isRepo ? m_repoPath : QString());
+    clearCommit();
+}
+
 void GitBackend::openRepo(const QString& path) {
     QDir dir(path);
     while (!dir.isRoot() && !dir.exists(".git")) {
@@ -538,8 +602,12 @@ void GitBackend::openRepo(const QString& path) {
 
     resolveGitPaths();
 
-    // A commit belongs to the repository it was picked in.
+    // A commit belongs to the repository it was picked in, and so do a
+    // search and a comparison.
     clearCommit();
+    m_compareBranch.clear();
+    m_history->setQuery(QString(), QString());
+    emit historyQueryChanged();
     emit repoChanged();
     refresh();
 
@@ -587,6 +655,14 @@ struct GitRefresh {
     QString webUrl;
     QString defaultBranch;
     QVariantMap identity;
+    QVariantList remotes;
+    QStringList remoteBranches;
+    QVariantList submodules;
+    QVariantMap lfs;
+    bool pullRebase = false;
+    bool fullFile = false;
+    bool ignoreWhitespace = false;
+    syntax::Palette syntax;
     QString statusOut;
     QVariantList changedFiles;
     QVariantMap mergeState;
@@ -594,6 +670,8 @@ struct GitRefresh {
     QString selectedFile;   // the one shown before, then the one to show
     QString pollStamp;
     bool historyReload = false;
+    QString historyRange;
+    QString historyFilter;
     QString historyKey;
     QList<HistoryModel::Commit> historyRows;
     QVariantList diff;      // of selectedFile
@@ -646,6 +724,10 @@ QString stampOf(const QString& statusOut, const QString& repo, const QHash<QStri
     addFile(gitPaths.value("packed-refs"));
     addFile(gitPaths.value("FETCH_HEAD"));
     addFile(gitPaths.value("MERGE_HEAD"));
+    addFile(gitPaths.value("CHERRY_PICK_HEAD"));
+    addFile(gitPaths.value("REVERT_HEAD"));
+    addFile(gitPaths.value("rebase-merge"));
+    addFile(gitPaths.value("rebase-apply"));
     addFile(gitPaths.value("worktrees"));
     const QString refs = gitPaths.value("refs");
     QDirIterator refsIt(refs, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
@@ -668,31 +750,204 @@ QString stampOf(const QString& statusOut, const QString& repo, const QHash<QStri
 }
 
 
+// Columns as drawn: a tab is four (syntax.cpp draws it so).
+int displayColumn(const QString& s, int index) {
+    int col = 0;
+    for (int i = 0; i < index && i < s.size(); ++i) col += s.at(i) == '\t' ? 4 : 1;
+    return col;
+}
+
+// The words that changed inside a changed line, as GitHub Desktop marks
+// them: a removed line and the added line paired with it (a run of removals
+// with the run of additions after it, line for line) share a start and an
+// end; what lies between, widened to whole words, gets "chg": [from, to] in
+// drawn columns. A line that shares nothing with its pair is left whole.
+void addIntraline(QVariantList& rows) {
+    auto isWord = [](QChar c) { return c.isLetterOrNumber() || c == '_'; };
+    auto mark = [&](int del, int add) {
+        QVariantMap d = rows[del].toMap(), a = rows[add].toMap();
+        const QString x = d.value("text").toString().mid(1), y = a.value("text").toString().mid(1);
+        int pre = 0;
+        while (pre < x.size() && pre < y.size() && x.at(pre) == y.at(pre)) ++pre;
+        int suf = 0;
+        while (suf < x.size() - pre && suf < y.size() - pre && x.at(x.size() - 1 - suf) == y.at(y.size() - 1 - suf)) ++suf;
+        if (pre == 0 && suf == 0) return;
+        // Whole words: back to the start of the word the change begins in,
+        // on to the end of the one it ends in, on either line.
+        auto inside = [&](const QString& s, int pos) {
+            return pos > 0 && pos < s.size() && isWord(s.at(pos - 1)) && isWord(s.at(pos));
+        };
+        while (pre > 0 && (inside(x, pre) || inside(y, pre))) --pre;
+        while (suf > 0 && (inside(x, x.size() - suf) || inside(y, y.size() - suf))) --suf;
+        const int xEnd = x.size() - suf, yEnd = y.size() - suf;
+        // Nearly all of it changed: marking it says nothing more.
+        if (xEnd - pre > x.size() * 0.8 && yEnd - pre > y.size() * 0.8) return;
+        if (xEnd > pre) { d["chg"] = QVariantList{displayColumn(x, pre), displayColumn(x, xEnd)}; rows[del] = d; }
+        if (yEnd > pre) { a["chg"] = QVariantList{displayColumn(y, pre), displayColumn(y, yEnd)}; rows[add] = a; }
+    };
+    QList<int> dels, adds;
+    auto flush = [&]() {
+        for (int k = 0; k < dels.size() && k < adds.size(); ++k) mark(dels[k], adds[k]);
+        dels.clear();
+        adds.clear();
+    };
+    for (int i = 0; i < rows.size(); ++i) {
+        const QString type = rows[i].toMap().value("type").toString();
+        if (type == "del") { if (!adds.isEmpty()) flush(); dels << i; }
+        else if (type == "add") adds << i;
+        else flush();
+    }
+    flush();
+}
+
+// A file kept in Git LFS changes as its pointer: three lines of text. Said
+// so above them, with the size it stands for.
+void addLfsNote(QVariantList& rows) {
+    QString size;
+    bool lfs = false;
+    for (const auto& v : rows) {
+        const QString t = v.toMap().value("text").toString().mid(1);
+        if (t.startsWith("version https://git-lfs.github.com/spec/")) lfs = true;
+        if (t.startsWith("size ")) size = t.mid(5).trimmed();
+    }
+    if (!lfs) return;
+    const qint64 bytes = size.toLongLong();
+    const QString human = bytes >= 1 << 30 ? QString::number(bytes / double(1 << 30), 'f', 1) + " GB"
+                        : bytes >= 1 << 20 ? QString::number(bytes / double(1 << 20), 'f', 1) + " MB"
+                        : bytes >= 1 << 10 ? QString::number(bytes / double(1 << 10), 'f', 1) + " KB"
+                                           : QString::number(bytes) + " B";
+    rows.prepend(QVariantMap{{"type", "header"}, {"text", "Stored in Git LFS" + (size.isEmpty() ? QString() : " — " + human)},
+                             {"oldLine", ""}, {"newLine", ""}, {"note", true}});
+}
+
+// Code coloured: each row gets "html", the line from the side it is on, out
+// of the whole file highlighted at once. Files over a megabyte are left plain.
+void addHtml(QVariantList& rows, const QString& path, const QString& before, const QString& after,
+             const syntax::Palette& palette) {
+    if (palette.isEmpty() || !syntax::knows(path) || before.size() > (1 << 20) || after.size() > (1 << 20)) return;
+    const QStringList oldLines = before.isEmpty() ? QStringList() : syntax::highlight(before, path, palette);
+    const QStringList newLines = after.isEmpty() ? QStringList() : syntax::highlight(after, path, palette);
+    for (auto& v : rows) {
+        QVariantMap row = v.toMap();
+        const QString type = row.value("type").toString();
+        if (type == "header" || row.value("text").toString().startsWith('\\')) continue;
+        const bool old = type == "del";
+        const int n = (old ? row.value("oldLine") : row.value("newLine")).toInt();
+        const QStringList& lines = old ? oldLines : newLines;
+        if (n < 1 || n > lines.size()) continue;
+        row["html"] = lines.at(n - 1);
+        v = row;
+    }
+}
+
+QString blobText(const QString& repo, const QString& spec) {
+    QString out;
+    return gitOk(repo, {"show", spec}, nullptr, &out) ? out : QString();
+}
+
+QString diskText(const QString& path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly) || f.size() > (1 << 20)) return {};
+    return QString::fromUtf8(f.readAll());
+}
+
+// Numbers of the lines a -U0 diff adds (new side) or removes (old side).
+QSet<int> changedLines(const QString& out, QChar kind) {
+    QSet<int> lines;
+    static const QRegularExpression hunkRe("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)");
+    int oldL = 0, newL = 0;
+    bool inHunk = false;
+    for (const auto& l : out.split('\n')) {
+        const auto m = hunkRe.match(l);
+        if (m.hasMatch()) {
+            oldL = m.captured(1).toInt();
+            newL = m.captured(2).toInt();
+            inHunk = true;
+            continue;
+        }
+        if (!inHunk || l.isEmpty()) continue;
+        if (l.startsWith('+') && !l.startsWith("+++")) {
+            if (kind == '+') lines.insert(newL);
+            ++newL;
+        } else if (l.startsWith('-') && !l.startsWith("---")) {
+            if (kind == '-') lines.insert(oldL);
+            ++oldL;
+        }
+    }
+    return lines;
+}
+
 // The rows of the diff view for one file of the working tree.
-QVariantList diffOf(const QString& repo, const QString& file, QStringList* errors) {
+//
+// Each added or removed row also says whether it is staged, so single lines
+// can be ticked as GitHub Desktop has it. The rows are HEAD against the
+// working tree; the index sits between the two. Both of the other diffs share
+// a side with this one, which is what lines them up: a line HEAD lacks is
+// unstaged when the index lacks it too (index → working tree adds it, at the
+// same working-tree line number), and a line removed from HEAD is staged when
+// the index has removed it (HEAD → index removes it, at the same HEAD line).
+QVariantList diffOf(const QString& repo, const QString& file, bool ignoreWhitespace, QStringList* errors,
+                    const syntax::Palette& palette = {}, bool fullFile = false) {
     if (file.isEmpty()) return {};
-    QString out = runIn(repo, QStringList() << "diff" << "HEAD" << "--" << file, true, errors);
+    QStringList ws = ignoreWhitespace ? QStringList{"-w"} : QStringList();
+    // The whole file as context: the rows are still the file's lines against
+    // HEAD, so lines stage one by one all the same.
+    if (fullFile) ws << "-U1000000";
+    bool vsHead = true;
+    QString out = runIn(repo, QStringList() << "diff" << ws << "HEAD" << "--" << file, true, errors);
     if (out.isEmpty()) {
-        out = runIn(repo, QStringList() << "diff" << "--" << file, true, errors);
+        vsHead = false;
+        out = runIn(repo, QStringList() << "diff" << ws << "--" << file, true, errors);
     }
     if (out.isEmpty()) {
-        // Untracked file: show file content as added lines
+        // Untracked file: show file content as added lines, none staged.
         QFile f(repo + "/" + file);
         if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
             QVariantList rows;
-            const QStringList fileLines = QString::fromUtf8(f.readAll()).split("\n");
+            QString text = QString::fromUtf8(f.readAll());
+            if (text.endsWith('\n')) text.chop(1);
+            const QStringList fileLines = text.split("\n");
+            QVariantMap head;
+            head["type"] = "header";
+            head["text"] = QStringLiteral("@@ -0,0 +1,%1 @@").arg(fileLines.size());
+            head["oldLine"] = "";
+            head["newLine"] = "";
+            rows.append(head);
             for (int i = 0; i < fileLines.size(); ++i) {
                 QVariantMap row;
                 row["type"] = "add";
                 row["newLine"] = i + 1;
                 row["oldLine"] = "";
                 row["text"] = "+" + fileLines[i];
+                row["staged"] = false;
+                row["canStage"] = !ignoreWhitespace;
                 rows.append(row);
             }
+            addHtml(rows, file, QString(), text, palette);
             return rows;
         }
     }
-    return parseDiff(out);
+    QVariantList rows = parseDiff(out);
+    addIntraline(rows);
+    addLfsNote(rows);
+    addHtml(rows, file, vsHead ? blobText(repo, "HEAD:" + file) : blobText(repo, ":" + file),
+            diskText(repo + "/" + file), palette);
+    // Line by line only where the rows are the file's own lines against HEAD:
+    // not with whitespace hidden, not for a binary file or a rename.
+    if (ignoreWhitespace || !vsHead || out.contains("\nrename from ") || out.contains("\nBinary files "))
+        return rows;
+    const QSet<int> unstagedAdds = changedLines(runIn(repo, {"diff", "-U0", "--", file}, false, nullptr), '+');
+    const QSet<int> stagedDels = changedLines(runIn(repo, {"diff", "--cached", "-U0", "HEAD", "--", file}, false, nullptr), '-');
+    for (auto& v : rows) {
+        QVariantMap row = v.toMap();
+        const QString type = row.value("type").toString();
+        if (type == "add") row["staged"] = !unstagedAdds.contains(row.value("newLine").toInt());
+        else if (type == "del") row["staged"] = stagedDels.contains(row.value("oldLine").toInt());
+        else continue;
+        row["canStage"] = true;
+        v = row;
+    }
+    return rows;
 }
 
 void collectBranch(GitRefresh& r) {
@@ -704,6 +959,17 @@ void collectBranch(GitRefresh& r) {
         return;
     }
     QString out = run(r, QStringList() << "branch" << "--show-current");
+    // A rebase stopped on a conflict has HEAD detached; the branch it is
+    // rebasing is in its state directory.
+    if (out.isEmpty()) {
+        for (const char* dir : {"rebase-merge", "rebase-apply"}) {
+            QFile f(r.gitPaths.value(dir) + "/head-name");
+            if (f.open(QIODevice::ReadOnly)) {
+                out = QString::fromUtf8(f.readAll()).trimmed().remove(QRegularExpression("^refs/heads/"));
+                break;
+            }
+        }
+    }
     r.branchName = out.isEmpty() ? "detached" : out;
 
     // for-each-ref rather than `git branch`: one call gives each branch's
@@ -728,6 +994,18 @@ void collectBranch(GitRefresh& r) {
         info["worktree"] = (!wt.isEmpty() && QDir::cleanPath(wt) != QDir::cleanPath(r.repo)) ? wt : QString();
         r.branches.append(name);
         r.branchInfo[name] = info;
+    }
+
+    // Remote branches with no local branch of the same name tracking them.
+    r.remoteBranches.clear();
+    QSet<QString> tracked;
+    for (const auto& v : r.branchInfo) tracked.insert(v.toMap().value("upstream").toString());
+    const QString remoteRefs = run(r, QStringList() << "for-each-ref" << "refs/remotes" << "--format=%(refname:short)");
+    for (const auto& line : remoteRefs.split('\n', Qt::SkipEmptyParts)) {
+        const QString ref = line.trimmed();
+        if (ref.endsWith("/HEAD") || !ref.contains('/') || tracked.contains(ref)) continue;
+        if (r.branches.contains(ref.section('/', 1))) continue;
+        r.remoteBranches << ref;
     }
 
     r.worktrees.clear();
@@ -789,6 +1067,9 @@ void collectSync(GitRefresh& r) {
         }
         hasRemote = !remotes.isEmpty();
     }
+    r.remotes.clear();
+    for (const auto& name : remotes)
+        r.remotes.append(QVariantMap{{"name", name}, {"url", remoteUrls.value(name)}});
     if (hasRemote) {
         QString out;
         const QVariantMap info = r.branchInfo.value(r.branchName).toMap();
@@ -839,6 +1120,9 @@ void collectSync(GitRefresh& r) {
                 lc["time"] = f[3].toLongLong();
                 // A merge or the first commit can't be undone softly; a pushed one shouldn't be.
                 lc["canUndo"] = parents.size() == 1 && (!hasRemote || unpushed.contains(f[0]));
+                // Amending rewrites it, so the same rule, but a first commit
+                // can be amended where it cannot be undone.
+                lc["canAmend"] = parents.size() <= 1 && (!hasRemote || unpushed.contains(f[0]));
             }
         }
         r.lastCommit = lc;
@@ -877,6 +1161,31 @@ void collectSync(GitRefresh& r) {
             }
         }
         r.identity = id;
+        QString rebase;
+        r.pullRebase = r.isRepo && gitOk(r.repo, {"config", "--get", "pull.rebase"}, nullptr, &rebase)
+                       && rebase.trimmed() != "false";
+
+        r.submodules.clear();
+        if (r.isRepo && QFileInfo::exists(r.repo + "/.gitmodules")) {
+            QString sub;
+            gitOk(r.repo, {"submodule", "status"}, nullptr, &sub);
+            // "+1a2b3c… path (describe)"
+            for (const auto& line : sub.split('\n', Qt::SkipEmptyParts)) {
+                if (line.size() < 43) continue;
+                r.submodules.append(QVariantMap{{"state", line.left(1)}, {"commit", line.mid(1, 7)},
+                                                {"path", line.mid(42).section(" (", 0, 0).trimmed()}});
+            }
+        }
+
+        r.lfs.clear();
+        QFile attrs(r.repo + "/.gitattributes");
+        if (r.isRepo && attrs.open(QIODevice::ReadOnly) && attrs.readAll().contains("filter=lfs")) {
+            QString filter;
+            r.lfs["used"] = true;
+            r.lfs["installed"] = !QStandardPaths::findExecutable("git-lfs").isEmpty();
+            r.lfs["ready"] = gitOk(r.repo, {"config", "--get", "filter.lfs.process"}, nullptr, &filter)
+                             && !filter.trimmed().isEmpty();
+        }
     }
 
     r.unpushed = unpushed;
@@ -930,6 +1239,8 @@ void collectStatus(GitRefresh& r) {
         const bool conflicted = x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D');
         // A conflicted file is not staged until it is marked resolved.
         item["isStaged"] = !conflicted && x != ' ' && x != '?';
+        // Some of it staged, some not: the checkbox shows a dash.
+        item["partial"] = !conflicted && x != ' ' && x != '?' && y != ' ';
 
         QString status = "modified";
         if (conflicted) status = "conflicted";
@@ -953,8 +1264,46 @@ void collectStatus(GitRefresh& r) {
         if (msg.open(QIODevice::ReadOnly)) first = QString::fromUtf8(msg.readLine()).trimmed();
         static const QRegularExpression nameRe("'([^']+)'");
         r.mergeState["active"] = true;
+        r.mergeState["kind"] = QStringLiteral("merge");
         r.mergeState["branch"] = nameRe.match(first).captured(1);
         r.mergeState["conflicts"] = conflicts;
+    } else if (QFileInfo::exists(r.gitPaths.value("rebase-merge")) || QFileInfo::exists(r.gitPaths.value("rebase-apply"))) {
+        // What it is being rebased onto: "onto" holds a hash; its name, if a
+        // branch points there, reads better.
+        QString onto;
+        for (const char* dir : {"rebase-merge", "rebase-apply"}) {
+            QFile f(r.gitPaths.value(dir) + "/onto");
+            if (f.open(QIODevice::ReadOnly)) { onto = QString::fromUtf8(f.readAll()).trimmed(); break; }
+        }
+        QString name;
+        if (!onto.isEmpty()) gitOk(r.repo, {"name-rev", "--name-only", "--exclude=refs/tags/*", onto}, nullptr, &name);
+        name = name.trimmed();
+        r.mergeState["active"] = true;
+        r.mergeState["kind"] = QStringLiteral("rebase");
+        r.mergeState["branch"] = name.isEmpty() || name == "undefined" ? onto.left(7) : name.remove(QRegularExpression("^remotes/"));
+        r.mergeState["conflicts"] = conflicts;
+        // Stopped on purpose at a commit to change it ("edit"): what is staged
+        // goes into that commit on Continue.
+        QFile amend(r.gitPaths.value("rebase-merge") + "/amend");
+        if (amend.open(QIODevice::ReadOnly)) {
+            const QString hash = QString::fromUtf8(amend.readAll()).trimmed();
+            r.mergeState["editing"] = hash.left(7);
+            QString subject;
+            gitOk(r.repo, {"log", "-1", "--format=%s", hash}, nullptr, &subject);
+            r.mergeState["editingSubject"] = subject.trimmed();
+        }
+    } else {
+        for (const char* head : {"CHERRY_PICK_HEAD", "REVERT_HEAD"}) {
+            QFile f(r.gitPaths.value(head));
+            if (!f.open(QIODevice::ReadOnly)) continue;
+            const QString hash = QString::fromUtf8(f.readAll()).trimmed();
+            r.mergeState["active"] = true;
+            r.mergeState["kind"] = QLatin1String(head) == QLatin1String("REVERT_HEAD") ? QStringLiteral("revert")
+                                                                                        : QStringLiteral("cherry-pick");
+            r.mergeState["branch"] = hash.left(7);
+            r.mergeState["conflicts"] = conflicts;
+            break;
+        }
     }
 
     if (r.changedFiles.isEmpty()) {
@@ -985,11 +1334,19 @@ void collectHistory(GitRefresh& r) {
         gitOk(r.repo, QStringList() << "rev-parse" << "--verify" << "-q" << "HEAD", nullptr, &head);
         head = head.trimmed();
     }
-    const QString key = r.isRepo ? r.repo + '\n' + head : QString();
+    // The comparison's other end moves too (a fetch, a commit there).
+    QString other;
+    if (r.isRepo && !r.historyRange.isEmpty()) {
+        gitOk(r.repo, {"rev-parse", "--verify", "-q", r.historyRange.section("..", 0, 0) == "HEAD"
+                                                      ? r.historyRange.section("..", 1) : r.historyRange.section("..", 0, 0)},
+              nullptr, &other);
+    }
+    const QString key = r.isRepo ? r.repo + '\n' + head + '\n' + r.historyRange + '\n' + other.trimmed() + '\n' + r.historyFilter
+                                 : QString();
     if (key == r.historyHead && !r.historyEmpty) return;
     r.historyReload = true;
     r.historyKey = key;
-    if (r.isRepo) r.historyRows = HistoryModel::readPage(r.repo, 0);
+    if (r.isRepo) r.historyRows = HistoryModel::readPage(r.repo, 0, r.historyRange, r.historyFilter);
 }
 
 } // namespace
@@ -1014,6 +1371,11 @@ void GitBackend::refresh() {
     r->mergeState = m_mergeState;
     r->pollStamp = m_pollStamp;
     r->selectedFile = m_selectedFile;
+    r->ignoreWhitespace = m_ignoreWhitespace;
+    r->syntax = m_syntax;
+    r->fullFile = m_fullFile;
+    r->historyRange = m_history->range();
+    r->historyFilter = m_history->filter();
     QPointer<GitBackend> self(this);
     std::thread([self, r]() {
         collectBranch(*r);
@@ -1022,7 +1384,7 @@ void GitBackend::refresh() {
         collectSync(*r);
         collectStatus(*r);
         collectHistory(*r);
-        r->diff = diffOf(r->repo, r->selectedFile, &r->errors);
+        r->diff = diffOf(r->repo, r->selectedFile, r->ignoreWhitespace, &r->errors, r->syntax, r->fullFile);
         QMetaObject::invokeMethod(qApp, [self, r]() {
             if (self) self->applyRefresh(*r);
         }, Qt::QueuedConnection);
@@ -1049,12 +1411,23 @@ void GitBackend::applyRefresh(const GitRefresh& r) {
         m_webUrl = r.webUrl;
         m_defaultBranch = r.defaultBranch;
         m_identity = r.identity;
+        m_remotes = r.remotes;
+        m_remoteBranches = r.remoteBranches;
+        m_pullRebase = r.pullRebase;
+        m_submodules = r.submodules;
+        m_lfs = r.lfs;
         m_history->setUnpushed(r.unpushed, r.hasRemote);
         m_hasRemote = r.hasRemote;
         m_upstream = r.upstream;
         m_ahead = r.ahead;
         m_behind = r.behind;
         emit syncChanged();
+        // Another branch, or a push that may have opened its pull request.
+        const QString prKey = m_repoPath + '\n' + m_branchName + '\n' + m_upstream;
+        if (prKey != m_currentPrKey) {
+            m_currentPrKey = prKey;
+            refreshCurrentPullRequest();
+        }
 
         // The file shown: the one picked, if it is still among the changes —
         // picked now, not when the worker started, which may be another.
@@ -1070,12 +1443,13 @@ void GitBackend::applyRefresh(const GitRefresh& r) {
         emit statusChanged();
         emit selectedFileChanged();
 
-        if (r.historyReload) {
+        // Read for a query since changed: the next refresh reads the new one.
+        if (r.historyReload && r.historyRange == m_history->range() && r.historyFilter == m_history->filter()) {
             m_historyHead = r.historyKey;
             m_history->reset(r.isRepo ? r.repo : QString(), r.historyRows);
         }
 
-        if (m_selectedFile == r.selectedFile) {
+        if (m_selectedFile == r.selectedFile && m_ignoreWhitespace == r.ignoreWhitespace && m_fullFile == r.fullFile) {
             m_currentDiff = r.diff;
             emit diffChanged();
         } else {
@@ -1348,7 +1722,10 @@ void GitBackend::updateCommitDiff() {
     }
 
     QStringList args = QStringList() << "show" << "--format=" << "--no-color" << "-M"
-                                     << "--diff-merges=first-parent" << m_selectedCommit << "--";
+                                     << "--diff-merges=first-parent";
+    if (m_ignoreWhitespace) args << "-w";
+    if (m_fullFile) args << "-U1000000";
+    args << m_selectedCommit << "--";
     // A rename is only detected when both of its paths are in the pathspec;
     // with the new one alone git reports the whole file as added.
     for (const auto& v : m_commitFiles) {
@@ -1360,6 +1737,14 @@ void GitBackend::updateCommitDiff() {
     args << m_commitFile;
 
     m_commitDiff = parseDiff(runGit(args, false));
+    addIntraline(m_commitDiff);
+    addLfsNote(m_commitDiff);
+    QString oldPath = m_commitFile;
+    for (const auto& v : m_commitFiles)
+        if (v.toMap().value("path") == m_commitFile && !v.toMap().value("oldPath").toString().isEmpty())
+            oldPath = v.toMap().value("oldPath").toString();
+    addHtml(m_commitDiff, m_commitFile, blobText(m_repoPath, m_selectedCommit + "^:" + oldPath),
+            blobText(m_repoPath, m_selectedCommit + ":" + m_commitFile), m_syntax);
     emit commitDiffChanged();
 }
 
@@ -1371,7 +1756,7 @@ void GitBackend::selectFile(const QString& filePath) {
 
 void GitBackend::updateDiff() {
     QStringList errors;
-    m_currentDiff = diffOf(m_repoPath, m_selectedFile, &errors);
+    m_currentDiff = diffOf(m_repoPath, m_selectedFile, m_ignoreWhitespace, &errors, m_syntax, m_fullFile);
     for (const QString& e : errors) emit commandFailed(e);
     emit diffChanged();
 }
@@ -1483,9 +1868,22 @@ QString gitError(const QString& err, const QString& out, const QString& fallback
 }
 } // namespace
 
-void GitBackend::commit(const QString& message) {
+void GitBackend::commit(const QString& message, bool amend) {
     if (message.trimmed().isEmpty()) return;
     const QString branch = m_branchName;
+    if (amend) {
+        // Whatever is staged goes into it; nothing staged rewrites the message.
+        runTask("commit", "Amending…", {"commit", "--amend", "-m", message},
+                [this](bool ok, const QString& out, const QString& err) {
+            if (ok) {
+                emit committed();
+                emit notice("Amended the last commit");
+            } else {
+                emit commandFailed(gitError(err, out, "Could not amend"));
+            }
+        });
+        return;
+    }
     // Nothing ticked means everything, as in GitHub Desktop, whose layout
     // this copies. It used to run a bare `git commit`, which with nothing
     // staged fails with git's "On branch master … nothing added to commit".
@@ -1510,8 +1908,8 @@ void GitBackend::push() {
     const bool publish = m_upstream.isEmpty() && !m_remoteName.isEmpty();
     // A new branch has no upstream, and plain `git push` refuses it.
     const QStringList args = publish
-        ? QStringList{"push", "--progress", "--set-upstream", m_remoteName, "HEAD"}
-        : QStringList{"push", "--progress"};
+        ? QStringList{"push", "--progress", "--follow-tags", "--set-upstream", m_remoteName, "HEAD"}
+        : QStringList{"push", "--progress", "--follow-tags"};
     const QString branch = m_branchName;
     runTask(publish ? "publish" : "push",
             publish ? "Publishing " + branch + "…" : "Pushing to " + remote + "…", args,
@@ -1527,6 +1925,21 @@ void GitBackend::pull() {
             [this, remote](bool ok, const QString& out, const QString& err) {
         if (!ok) emit commandFailed(gitError(err, out, "Pull failed"));
         else emit notice(out.contains("Already up to date") ? "Already up to date" : "Pulled from " + remote);
+    });
+}
+
+void GitBackend::forcePush() {
+    if (m_upstream.isEmpty()) {
+        push();
+        return;
+    }
+    const QString remote = m_remoteName.isEmpty() ? QStringLiteral("origin") : m_remoteName;
+    // --force-with-lease: refuses if the remote moved since it was last
+    // fetched, so someone else's pushed work is not thrown away unseen.
+    runTask("push", "Force pushing to " + remote + "…", {"push", "--progress", "--force-with-lease"},
+            [this, remote](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Force pushed to " + remote);
+        else emit commandFailed(gitError(err, out, "Force push failed"));
     });
 }
 
@@ -1553,7 +1966,12 @@ void GitBackend::switchBranch(const QString& branch, const QString& changes) {
         }
     }
     const bool stashed = changes == QLatin1String("stash");
-    runTask("checkout", "Switching to " + branch + "…", {"checkout", "--progress", branch},
+    // A branch only on a remote ("origin/feature") becomes a local one
+    // tracking it, as GitHub Desktop checks such branches out.
+    const bool remote = !m_branches.contains(branch) && m_remoteBranches.contains(branch);
+    const QStringList args = remote ? QStringList{"checkout", "--progress", "--track", branch}
+                                    : QStringList{"checkout", "--progress", branch};
+    runTask("checkout", "Switching to " + branch + "…", args,
             [this, branch, stashed](bool ok, const QString& out, const QString& err) {
         if (ok) {
             emit notice("Switched to " + branch);
@@ -1709,7 +2127,8 @@ void GitBackend::resolveGitPaths() {
     m_gitPaths.clear();
     if (!m_isRepo) return;
     static const QStringList names = {"HEAD", "logs/HEAD", "logs", "FETCH_HEAD", "MERGE_HEAD",
-                                      "MERGE_MSG", "packed-refs", "refs", "worktrees"};
+                                      "MERGE_MSG", "packed-refs", "refs", "worktrees",
+                                      "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD"};
     QStringList args{"rev-parse"};
     for (const auto& n : names) args << "--git-path" << n;
     QString out;
@@ -1730,23 +2149,6 @@ void GitBackend::mergeBranch(const QString& branch) {
         else if (QFileInfo::exists(gitPath("MERGE_HEAD"))) emit notice("Merge has conflicts to resolve");
         else emit commandFailed(gitError(err, out, "Merge failed"));
     });
-}
-
-void GitBackend::commitMerge() {
-    if (m_mergeState.value("conflicts").toInt() > 0) {
-        emit commandFailed(QStringLiteral("Resolve the conflicts and stage those files first"));
-        return;
-    }
-    runTask("commit", "Committing merge…", {"commit", "--no-edit"},
-            [this](bool ok, const QString& out, const QString& err) {
-        if (ok) emit notice("Merge committed");
-        else emit commandFailed(gitError(err, out, "Commit failed"));
-    });
-}
-
-void GitBackend::abortMerge() {
-    runGit(QStringList() << "merge" << "--abort");
-    refresh();
 }
 
 QString GitBackend::createWorktree(const QString& branch) {
@@ -1823,6 +2225,958 @@ void GitBackend::copyText(const QString& text) {
     QGuiApplication::clipboard()->setText(text);
 }
 
+// ── Single lines ────────────────────────────────────────────────────────────
+//
+// The index is rebuilt for the file from HEAD: reset to HEAD, then a patch of
+// exactly the lines that should be staged is applied to it. A line left out of
+// the patch is an added line dropped, or a removed line kept as context. The
+// counts in each hunk header are git's to work out (--recount); the old start
+// is what places the hunk.
+
+namespace {
+
+QString patchOf(const QString& path, bool inHead, const QVariantList& rows, QSet<int> keep) {
+    // A last line with no newline cannot have a line added after it while it
+    // stays as it is: kept as context it would run into the added one
+    // ("5FIVE"). Its removal comes along with any added line after it.
+    for (int i = 0; i + 1 < rows.size(); ++i) {
+        const QVariantMap row = rows[i].toMap();
+        if (row.value("type") != "del" || keep.contains(i)
+            || !rows[i + 1].toMap().value("text").toString().startsWith('\\')) continue;
+        for (int j = i + 2; j < rows.size() && rows[j].toMap().value("type") != "header"; ++j)
+            if (rows[j].toMap().value("type") == "add" && keep.contains(j)) { keep.insert(i); break; }
+    }
+    QString patch = "diff --git a/" + path + " b/" + path + "\n";
+    patch += inHead ? "--- a/" + path + "\n" : "new file mode 100644\n--- /dev/null\n";
+    patch += "+++ b/" + path + "\n";
+    static const QRegularExpression hunkRe("^@@ -(\\d+)");
+    int delta = 0;
+    bool any = false;
+    for (int i = 0; i < rows.size();) {
+        const QVariantMap head = rows[i].toMap();
+        const auto m = hunkRe.match(head.value("text").toString());
+        if (head.value("type") != "header" || !m.hasMatch()) { ++i; continue; }
+        const int oldStart = m.captured(1).toInt();
+        QStringList body;
+        int oldCount = 0, newCount = 0;
+        bool changes = false, droppedLast = false;
+        for (++i; i < rows.size() && rows[i].toMap().value("type") != "header"; ++i) {
+            const QVariantMap row = rows[i].toMap();
+            const QString text = row.value("text").toString();
+            const QString type = row.value("type").toString();
+            if (text.startsWith('\\')) {            // "\ No newline at end of file"
+                if (!droppedLast) body << text;
+                continue;
+            }
+            droppedLast = false;
+            if (type == "add") {
+                if (keep.contains(i)) { body << text; ++newCount; changes = true; }
+                else droppedLast = true;
+            } else if (type == "del") {
+                if (keep.contains(i)) { body << text; ++oldCount; changes = true; }
+                else { body << " " + text.mid(1); ++oldCount; ++newCount; }
+            } else {
+                body << (text.isEmpty() ? QStringLiteral(" ") : text);
+                ++oldCount; ++newCount;
+            }
+        }
+        if (!changes) continue;
+        any = true;
+        const int newStart = oldCount == 0 && oldStart == 0 ? 1 : oldStart + delta;
+        patch += QStringLiteral("@@ -%1,%2 +%3,%4 @@\n").arg(oldStart).arg(oldCount).arg(newStart).arg(newCount);
+        patch += body.join('\n') + '\n';
+        delta += newCount - oldCount;
+    }
+    return any ? patch : QString();
+}
+
+bool gitWithInput(const QString& repo, const QStringList& args, const QByteArray& input, QString* err) {
+    QProcess proc;
+    proc.setWorkingDirectory(repo);
+    proc.start("git", args);
+    proc.write(input);
+    proc.closeWriteChannel();
+    proc.waitForFinished(30000);
+    if (err) *err = QString::fromUtf8(proc.readAllStandardError()).trimmed();
+    return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
+}
+
+} // namespace
+
+void GitBackend::setLinesStaged(const QVariantList& rows, bool staged) {
+    if (!m_isRepo || m_selectedFile.isEmpty() || m_ignoreWhitespace || !m_busy.isEmpty()) return;
+    const QString path = m_selectedFile;
+    QSet<int> keep;
+    for (int i = 0; i < m_currentDiff.size(); ++i) {
+        const QVariantMap row = m_currentDiff[i].toMap();
+        if (row.value("canStage").toBool() && row.value("staged").toBool()) keep.insert(i);
+    }
+    for (const auto& v : rows) {
+        const int i = v.toInt();
+        if (i < 0 || i >= m_currentDiff.size() || !m_currentDiff[i].toMap().value("canStage").toBool()) continue;
+        if (staged) keep.insert(i); else keep.remove(i);
+    }
+    const bool inHead = gitOk(m_repoPath, {"cat-file", "-e", "HEAD:" + path});
+    const QString patch = patchOf(path, inHead, m_currentDiff, keep);
+
+    // What is staged now, to put back if the new patch does not apply.
+    QString before;
+    gitOk(m_repoPath, {"diff", "--cached", "--binary", "--", path}, nullptr, &before);
+    gitOk(m_repoPath, {"reset", "-q", "--", path});
+    QString err;
+    if (!patch.isEmpty()
+        && !gitWithInput(m_repoPath, {"apply", "--cached", "--recount", "--whitespace=nowarn", "-"}, patch.toUtf8(), &err)) {
+        if (!before.isEmpty()) gitWithInput(m_repoPath, {"apply", "--cached", "-"}, before.toUtf8(), nullptr);
+        emit commandFailed(gitError(err, QString(), "Could not stage those lines"));
+    }
+    refresh();
+}
+
+void GitBackend::setSyntaxPalette(const QVariantMap& colors) {
+    syntax::Palette p{colors.value("keyword").toString(), colors.value("string").toString(),
+                      colors.value("comment").toString(), colors.value("number").toString(),
+                      colors.value("type").toString()};
+    if (p.keyword == m_syntax.keyword && p.string == m_syntax.string && p.comment == m_syntax.comment
+        && p.number == m_syntax.number && p.type == m_syntax.type) return;
+    m_syntax = p;
+    updateDiff();
+    updateCommitDiff();
+}
+
+void GitBackend::setIgnoreWhitespace(bool on) {
+    if (on == m_ignoreWhitespace) return;
+    m_ignoreWhitespace = on;
+    emit diffOptionsChanged();
+    updateDiff();
+    updateCommitDiff();
+}
+
+void GitBackend::stashAll() {
+    if (!m_isRepo || m_changedFiles.isEmpty()) return;
+    QString err;
+    // The same marker a branch switch uses, so the bar offers it back here.
+    if (!gitOk(m_repoPath, {"stash", "push", "--include-untracked", "-m", "b1air-git:" + m_branchName}, &err))
+        emit commandFailed(gitError(err, QString(), "Could not stash the changes"));
+    else
+        emit notice("Changes stashed");
+    refresh();
+}
+
+// ── Rewriting history ───────────────────────────────────────────────────────
+
+void GitBackend::cherryPick(const QString& hash, const QString& branch) {
+    if (!m_isRepo || hash.isEmpty()) return;
+    const QString target = branch.trimmed().isEmpty() ? m_branchName : branch.trimmed();
+    auto pick = [this, hash, target]() {
+        runTask("cherry-pick", "Cherry-picking…", {"cherry-pick", hash},
+                [this, target](bool ok, const QString& out, const QString& err) {
+            if (ok) emit notice("Cherry-picked onto " + target);
+            else if (QFileInfo::exists(gitPath("CHERRY_PICK_HEAD"))) emit notice("Cherry-pick has conflicts to resolve");
+            else emit commandFailed(gitError(err, out, "Cherry-pick failed"));
+        });
+    };
+    if (target == m_branchName) { pick(); return; }
+    if (!m_changedFiles.isEmpty()) {
+        emit commandFailed(QStringLiteral("Commit or stash your changes before cherry-picking onto another branch"));
+        return;
+    }
+    clearCommit();
+    runTask("checkout", "Switching to " + target + "…", {"checkout", target},
+            [this, pick, target](bool ok, const QString& out, const QString& err) {
+        if (!ok) { emit commandFailed(gitError(err, out, "Could not switch to " + target)); return; }
+        // runTask refreshes when this returns; the pick starts after that.
+        QTimer::singleShot(0, this, pick);
+    });
+}
+
+void GitBackend::resetToCommit(const QString& hash) {
+    if (!m_isRepo || hash.isEmpty()) return;
+    clearCommit();
+    runTask("reset", "Resetting…", {"reset", "--mixed", "-q", hash},
+            [this](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Reset; the later changes are uncommitted");
+        else emit commandFailed(gitError(err, out, "Could not reset"));
+    });
+}
+
+// ── Editing single commits ──────────────────────────────────────────────────
+//
+// Each is an interactive rebase from just before the commit, given its to-do
+// list ready-made: git's own list is replaced by ours with a `cp` as the
+// sequence editor, so nothing is edited by pattern and nothing waits for a
+// person at an editor (core.editor=true keeps the messages git proposes).
+
+QStringList GitBackend::rewritable(const QString& hash, QString* base, int extraBack) {
+    if (!m_isRepo || hash.isEmpty()) return {};
+    if (!m_changedFiles.isEmpty()) {
+        emit commandFailed(QStringLiteral("Commit or stash your changes first"));
+        return {};
+    }
+    if (m_mergeState.value("active").toBool()) {
+        emit commandFailed(QStringLiteral("Finish or abort what is in progress first"));
+        return {};
+    }
+    if (!gitOk(m_repoPath, {"merge-base", "--is-ancestor", hash, "HEAD"})) {
+        emit commandFailed(QStringLiteral("That commit is not on this branch"));
+        return {};
+    }
+    QString start = hash;
+    if (extraBack > 0) {
+        QString out;
+        if (!gitOk(m_repoPath, {"rev-parse", "--verify", "-q", hash + "~" + QString::number(extraBack)}, nullptr, &out)) {
+            emit commandFailed(QStringLiteral("There is no commit before it"));
+            return {};
+        }
+        start = out.trimmed();
+    }
+    // Rewriting what a remote has means a force push for everyone who has it.
+    QString remoteHas;
+    gitOk(m_repoPath, {"branch", "-r", "--contains", start}, nullptr, &remoteHas);
+    if (!remoteHas.trimmed().isEmpty()) {
+        emit commandFailed(QStringLiteral("That commit is already pushed; only commits on no remote can be changed"));
+        return {};
+    }
+    QString parent;
+    const bool hasParent = gitOk(m_repoPath, {"rev-parse", "--verify", "-q", start + "^"}, nullptr, &parent);
+    *base = hasParent ? parent.trimmed() : QString();
+    const QString range = hasParent ? *base + "..HEAD" : QStringLiteral("HEAD");
+    QString merges;
+    gitOk(m_repoPath, {"rev-list", "--merges", range}, nullptr, &merges);
+    if (!merges.trimmed().isEmpty()) {
+        emit commandFailed(QStringLiteral("There is a merge after that commit; it cannot be rewritten here"));
+        return {};
+    }
+    QString list;
+    gitOk(m_repoPath, {"rev-list", "--reverse", range}, nullptr, &list);
+    return list.split('\n', Qt::SkipEmptyParts);
+}
+
+void GitBackend::rewriteHistory(const QString& base, const QStringList& todo, const QString& busyText,
+                                const QString& doneText) {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + "/b1air-git";
+    QDir().mkpath(dir);
+    const QString todoFile = dir + "/todo-" + QString::number(QCoreApplication::applicationPid());
+    QSaveFile f(todoFile);
+    if (!f.open(QIODevice::WriteOnly)) return;
+    f.write((todo.join('\n') + '\n').toUtf8());
+    if (!f.commit()) return;
+    QStringList args{"-c", "core.editor=true", "-c", "sequence.editor=cp '" + todoFile + "'", "rebase", "-i",
+                     "--empty=keep"};
+    args << (base.isEmpty() ? QStringLiteral("--root") : base);
+    clearCommit();
+    runTask("rebase", busyText, args, [this, doneText](bool ok, const QString& out, const QString& err) {
+        // An "edit" stop is a success to git: it did what the list said.
+        if (ok && !QFileInfo::exists(gitPath("rebase-merge"))) emit notice(doneText);
+        else if (QFileInfo::exists(gitPath("rebase-merge"))) {
+            emit notice(QFileInfo::exists(gitPath("rebase-merge") + "/amend")
+                        ? QStringLiteral("Stopped at the commit: change it, then Continue")
+                        : QStringLiteral("Stopped on a conflict"));
+        }
+        else emit commandFailed(gitError(err, out, "Could not rewrite the commits"));
+    });
+}
+
+QString GitBackend::commitMessage(const QString& hash) const {
+    QString out;
+    gitOk(m_repoPath, {"log", "-1", "--format=%B", hash}, nullptr, &out);
+    return out.trimmed();
+}
+
+void GitBackend::rewordCommit(const QString& hash, const QString& message) {
+    if (message.trimmed().isEmpty()) return;
+    QString base;
+    const QStringList commits = rewritable(hash, &base);
+    if (commits.isEmpty()) return;
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + "/b1air-git";
+    QDir().mkpath(dir);
+    const QString msgFile = dir + "/message-" + QString::number(QCoreApplication::applicationPid());
+    QSaveFile f(msgFile);
+    if (!f.open(QIODevice::WriteOnly)) return;
+    f.write(message.trimmed().toUtf8() + '\n');
+    if (!f.commit()) return;
+    QStringList todo;
+    for (const auto& c : commits) {
+        todo << "pick " + c;
+        if (c == commits.first())
+            todo << "exec git commit --amend --allow-empty --no-verify -q -F '" + msgFile + "'";
+    }
+    rewriteHistory(base, todo, "Changing the message…", "Message changed");
+}
+
+void GitBackend::editCommit(const QString& hash) {
+    QString base;
+    const QStringList commits = rewritable(hash, &base);
+    if (commits.isEmpty()) return;
+    QStringList todo;
+    for (const auto& c : commits) todo << (c == commits.first() ? "edit " : "pick ") + c;
+    rewriteHistory(base, todo, "Opening the commit…", "Done");
+}
+
+void GitBackend::dropCommit(const QString& hash) {
+    QString base;
+    const QStringList commits = rewritable(hash, &base);
+    if (commits.isEmpty()) return;
+    QStringList todo;
+    for (const auto& c : commits.mid(1)) todo << "pick " + c;
+    // A list with nothing in it means "do nothing" to git; dropping the only
+    // commit after base is a reset.
+    if (todo.isEmpty()) {
+        clearCommit();
+        runTask("reset", "Dropping…", {"reset", "--hard", "-q", base.isEmpty() ? hash : base},
+                [this](bool ok, const QString& out, const QString& err) {
+            if (ok) emit notice("Commit dropped");
+            else emit commandFailed(gitError(err, out, "Could not drop the commit"));
+        });
+        return;
+    }
+    rewriteHistory(base, todo, "Dropping…", "Commit dropped");
+}
+
+void GitBackend::moveCommit(const QString& hash, int direction) {
+    QString base;
+    // Older: the one before it is part of the swap, so start one further back.
+    const QStringList commits = rewritable(hash, &base, direction < 0 ? 1 : 0);
+    if (commits.size() < 2) {
+        if (!commits.isEmpty()) emit commandFailed(QStringLiteral("It is the newest commit already"));
+        return;
+    }
+    QStringList todo;
+    for (const auto& c : commits) todo << "pick " + c;
+    todo.swapItemsAt(0, 1);
+    rewriteHistory(base, todo, "Moving the commit…", "Commit moved");
+}
+
+void GitBackend::squashIntoParent(const QString& hash) {
+    QString base;
+    const QStringList commits = rewritable(hash, &base, 1);
+    if (commits.size() < 2) return;
+    QStringList todo;
+    for (int i = 0; i < commits.size(); ++i) todo << (i == 1 ? "squash " : "pick ") + commits[i];
+    rewriteHistory(base, todo, "Squashing…", "Squashed into the commit before");
+}
+
+// ── Throwing away single lines ──────────────────────────────────────────────
+
+void GitBackend::discardLines(const QVariantList& rows) {
+    if (!m_isRepo || m_selectedFile.isEmpty() || m_ignoreWhitespace || !m_busy.isEmpty() || rows.isEmpty()) return;
+    const QString path = m_selectedFile;
+    const QString abs = m_repoPath + "/" + path;
+    QSet<int> picked;
+    for (const auto& v : rows) {
+        const int i = v.toInt();
+        if (i >= 0 && i < m_currentDiff.size() && m_currentDiff[i].toMap().value("canStage").toBool()) picked.insert(i);
+    }
+    if (picked.isEmpty()) return;
+
+    // A copy first, to the trash, as discarding whole files does.
+    const QString backup = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+                         + "/b1air-git/discarded-" + QFileInfo(m_repoPath).fileName() + "-"
+                         + QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
+    QDir().mkpath(QFileInfo(backup + "/" + path).absolutePath());
+    QFile::copy(abs, backup + "/" + path);
+
+    QString err;
+    bool ok = true;
+    if (!gitOk(m_repoPath, {"cat-file", "-e", "HEAD:" + path})) {
+        // A new file: its added lines simply go.
+        QFile f(abs);
+        if (!f.open(QIODevice::ReadOnly)) return;
+        QStringList lines = QString::fromUtf8(f.readAll()).split('\n');
+        f.close();
+        QSet<int> drop;
+        for (int i : picked) drop.insert(m_currentDiff[i].toMap().value("newLine").toInt());
+        QStringList keep;
+        for (int n = 0; n < lines.size(); ++n)
+            if (!drop.contains(n + 1)) keep << lines[n];
+        QSaveFile out(abs);
+        ok = out.open(QIODevice::WriteOnly) && out.write(keep.join('\n').toUtf8()) >= 0 && out.commit();
+    } else {
+        // The picked changes as a patch whose new side is the file on disk
+        // (lines not picked: an added one stays as context, a removed one is
+        // not there), applied in reverse to the working tree.
+        QString patch = "diff --git a/" + path + " b/" + path + "\n--- a/" + path + "\n+++ b/" + path + "\n";
+        static const QRegularExpression hunkRe("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)");
+        for (int i = 0; i < m_currentDiff.size();) {
+            const auto m = hunkRe.match(m_currentDiff[i].toMap().value("text").toString());
+            if (m_currentDiff[i].toMap().value("type") != "header" || !m.hasMatch()) { ++i; continue; }
+            QStringList body;
+            int oldCount = 0, newCount = 0;
+            bool changes = false, droppedLast = false;
+            for (++i; i < m_currentDiff.size() && m_currentDiff[i].toMap().value("type") != "header"; ++i) {
+                const QVariantMap row = m_currentDiff[i].toMap();
+                const QString text = row.value("text").toString();
+                const QString type = row.value("type").toString();
+                if (text.startsWith('\\')) { if (!droppedLast) body << text; continue; }
+                droppedLast = false;
+                if (type == "add") {
+                    if (picked.contains(i)) { body << text; ++newCount; changes = true; }
+                    else { body << " " + text.mid(1); ++oldCount; ++newCount; }
+                } else if (type == "del") {
+                    if (picked.contains(i)) { body << text; ++oldCount; changes = true; }
+                    else droppedLast = true;
+                } else {
+                    body << (text.isEmpty() ? QStringLiteral(" ") : text);
+                    ++oldCount; ++newCount;
+                }
+            }
+            if (!changes) continue;
+            patch += QStringLiteral("@@ -%1,%2 +%3,%4 @@\n").arg(m.captured(1)).arg(oldCount).arg(m.captured(2)).arg(newCount);
+            patch += body.join('\n') + '\n';
+        }
+        ok = gitWithInput(m_repoPath, {"apply", "-R", "--recount", "--whitespace=nowarn", "-"}, patch.toUtf8(), &err);
+    }
+    if (QProcess::execute("gio", {"trash", backup}) != 0) QProcess::execute("trash-put", {backup});
+    if (ok) emit notice(picked.size() == 1 ? "Discarded a line" : "Discarded " + QString::number(picked.size()) + " lines");
+    else emit commandFailed(gitError(err, QString(), "Could not discard those lines"));
+    refresh();
+}
+
+// ── Images ──────────────────────────────────────────────────────────────────
+
+QVariantMap GitBackend::imagePair(const QString& path, const QString& commit) {
+    QVariantMap pair{{"before", QString()}, {"after", QString()}};
+    if (!m_isRepo || path.isEmpty()) return pair;
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + "/b1air-git/images";
+    QDir().mkpath(dir);
+    const QString ext = QFileInfo(path).suffix();
+    // A blob out to a file named by its hash, once.
+    auto blob = [&](const QString& rev) -> QString {
+        QString hash;
+        if (!gitOk(m_repoPath, {"rev-parse", "--verify", "-q", rev + ":" + path}, nullptr, &hash)) return {};
+        const QString file = dir + "/" + hash.trimmed() + "." + ext;
+        if (!QFileInfo::exists(file)) {
+            QProcess proc;
+            proc.setWorkingDirectory(m_repoPath);
+            proc.setStandardOutputFile(file);
+            proc.start("git", {"cat-file", "blob", hash.trimmed()});
+            proc.waitForFinished(30000);
+        }
+        return QUrl::fromLocalFile(file).toString();
+    };
+    if (commit.isEmpty()) {
+        pair["before"] = blob("HEAD");
+        const QString disk = m_repoPath + "/" + path;
+        // ?mtime so an edited picture is read again rather than from Qt's cache.
+        if (QFileInfo::exists(disk))
+            pair["after"] = QUrl::fromLocalFile(disk).toString() + "?" + QString::number(QFileInfo(disk).lastModified().toMSecsSinceEpoch());
+    } else {
+        pair["before"] = blob(commit + "^");
+        pair["after"] = blob(commit);
+    }
+    return pair;
+}
+
+void GitBackend::rebaseBranch(const QString& onto) {
+    if (!m_isRepo || onto.isEmpty() || onto == m_branchName) return;
+    if (!m_changedFiles.isEmpty()) {
+        emit commandFailed(QStringLiteral("Commit or stash your changes before rebasing"));
+        return;
+    }
+    clearCommit();
+    const QString branch = m_branchName;
+    runTask("rebase", "Rebasing onto " + onto + "…", {"-c", "core.editor=true", "rebase", onto},
+            [this, branch, onto](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Rebased " + branch + " onto " + onto);
+        else if (QFileInfo::exists(gitPath("rebase-merge")) || QFileInfo::exists(gitPath("rebase-apply")))
+            emit notice("Rebase has conflicts to resolve");
+        else emit commandFailed(gitError(err, out, "Rebase failed"));
+    });
+}
+
+void GitBackend::updateFromDefault() {
+    if (m_defaultBranch.isEmpty() || m_defaultBranch == m_branchName) return;
+    const QString remoteRef = m_remoteName.isEmpty() ? QString() : m_remoteName + "/" + m_defaultBranch;
+    mergeBranch(!remoteRef.isEmpty() && gitOk(m_repoPath, {"rev-parse", "--verify", "-q", remoteRef})
+                    ? remoteRef : m_defaultBranch);
+}
+
+void GitBackend::continueOperation() {
+    const QString kind = m_mergeState.value("kind").toString();
+    if (m_mergeState.value("conflicts").toInt() > 0) {
+        emit commandFailed(QStringLiteral("Resolve the conflicts and stage those files first"));
+        return;
+    }
+    QStringList args{"-c", "core.editor=true"};
+    if (kind == "rebase") args << "rebase" << "--continue";
+    else if (kind == "cherry-pick") args << "cherry-pick" << "--continue";
+    else if (kind == "revert") args << "revert" << "--continue";
+    else args << "commit" << "--no-edit";
+    runTask(kind == "rebase" ? "rebase" : "commit", "Continuing…", args,
+            [this, kind](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice(kind == "rebase" ? "Rebase finished" : kind == "merge" || kind.isEmpty() ? "Merge committed" : "Done");
+        else if (QFileInfo::exists(gitPath("rebase-merge"))) emit notice("The next commit has conflicts too");
+        else emit commandFailed(gitError(err, out, "Could not continue"));
+    });
+}
+
+void GitBackend::abortOperation() {
+    const QString kind = m_mergeState.value("kind").toString();
+    const QString cmd = kind.isEmpty() ? QStringLiteral("merge") : kind;
+    QString err;
+    if (!gitOk(m_repoPath, {cmd, "--abort"}, &err)) emit commandFailed(gitError(err, QString(), "Could not abort"));
+    else emit notice("Aborted the " + cmd);
+    refresh();
+}
+
+void GitBackend::resolveWith(const QString& path, const QString& side) {
+    if (!m_isRepo || path.isEmpty()) return;
+    // In a rebase "ours" is the branch being rebased onto, "theirs" the
+    // commit being replayed — the work of the person rebasing.
+    const bool rebase = m_mergeState.value("kind") == QLatin1String("rebase");
+    const bool mine = side == QLatin1String("mine");
+    const QString flag = (mine != rebase) ? QStringLiteral("--ours") : QStringLiteral("--theirs");
+    QString err;
+    if (!gitOk(m_repoPath, {"checkout", flag, "--", path}, &err) || !gitOk(m_repoPath, {"add", "--", path}, &err))
+        emit commandFailed(gitError(err, QString(), "Could not resolve " + path));
+    refresh();
+}
+
+// ── Tools that are not git ──────────────────────────────────────────────────
+
+void GitBackend::runTool(const QString& program, const QStringList& args, const QString& workdir,
+                         std::function<void(bool, const QString&, const QString&)> done) {
+    auto* proc = new QProcess(this);
+    if (!workdir.isEmpty()) proc->setWorkingDirectory(workdir);
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("GH_PROMPT_DISABLED", "1");
+    env.insert("GIT_TERMINAL_PROMPT", "0");
+    env.insert("NO_COLOR", "1");
+    proc->setProcessEnvironment(env);
+    connect(proc, &QProcess::finished, this, [proc, done](int code, QProcess::ExitStatus st) {
+        proc->deleteLater();
+        if (done) done(st == QProcess::NormalExit && code == 0, QString::fromUtf8(proc->readAllStandardOutput()),
+                       QString::fromUtf8(proc->readAllStandardError()));
+    });
+    connect(proc, &QProcess::errorOccurred, this, [proc, done, program](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart) return;
+        proc->deleteLater();
+        if (done) done(false, QString(), program + " is not installed");
+    });
+    proc->start(program, args);
+    proc->closeWriteChannel();
+}
+
+void GitBackend::refreshPullRequests() {
+    if (!m_isRepo || m_loadingPrs || m_webUrl.indexOf("github.com") < 0) {
+        if (m_webUrl.indexOf("github.com") < 0 && !m_pullRequests.isEmpty()) {
+            m_pullRequests.clear();
+            emit pullRequestsChanged();
+        }
+        return;
+    }
+    m_loadingPrs = true;
+    m_prsRepo = m_repoPath;
+    emit pullRequestsChanged();
+    runTool("gh", {"pr", "list", "--limit", "100", "--json", "number,title,headRefName,author,isDraft,updatedAt"},
+            m_repoPath, [this](bool ok, const QString& out, const QString& err) {
+        m_loadingPrs = false;
+        if (m_prsRepo != m_repoPath) { emit pullRequestsChanged(); return; }
+        QVariantList list;
+        if (ok) {
+            for (const auto& v : QJsonDocument::fromJson(out.toUtf8()).array()) {
+                const QJsonObject o = v.toObject();
+                list.append(QVariantMap{
+                    {"number", o.value("number").toInt()}, {"title", o.value("title").toString()},
+                    {"branch", o.value("headRefName").toString()},
+                    {"author", o.value("author").toObject().value("login").toString()},
+                    {"draft", o.value("isDraft").toBool()},
+                    {"updated", QDateTime::fromString(o.value("updatedAt").toString(), Qt::ISODate).toSecsSinceEpoch()}});
+            }
+        } else if (!err.contains("not installed")) {
+            emit commandFailed(gitError(err, out, "Could not list pull requests"));
+        }
+        m_pullRequests = list;
+        emit pullRequestsChanged();
+    });
+}
+
+void GitBackend::checkoutPullRequest(int number) {
+    if (!m_isRepo || number <= 0 || !m_busy.isEmpty()) return;
+    if (!m_changedFiles.isEmpty()) {
+        emit commandFailed(QStringLiteral("Commit or stash your changes before checking out a pull request"));
+        return;
+    }
+    clearCommit();
+    m_busy = "checkout";
+    m_busyText = "Checking out #" + QString::number(number) + "…";
+    m_busyLabel = m_busyText;
+    emit busyChanged();
+    runTool("gh", {"pr", "checkout", QString::number(number)}, m_repoPath,
+            [this, number](bool ok, const QString& out, const QString& err) {
+        m_busy.clear();
+        m_busyText.clear();
+        emit busyChanged();
+        if (ok) emit notice("Checked out pull request #" + QString::number(number));
+        else emit commandFailed(gitError(err, out, "Could not check out the pull request"));
+        refresh();
+    });
+}
+
+void GitBackend::openPullRequestOnWeb(int number) {
+    if (!m_webUrl.isEmpty()) QDesktopServices::openUrl(QUrl(m_webUrl + "/pull/" + QString::number(number)));
+}
+
+void GitBackend::refreshCurrentPullRequest() {
+    if (!m_isRepo || m_loadingCurrentPr || m_webUrl.indexOf("github.com") < 0 || m_upstream.isEmpty()
+        || m_branchName == m_defaultBranch) {
+        if (!m_currentPr.isEmpty()) {
+            m_currentPr.clear();
+            emit currentPullRequestChanged();
+        }
+        return;
+    }
+    m_loadingCurrentPr = true;
+    const QString key = m_currentPrKey;
+    runTool("gh", {"pr", "view", "--json", "number,title,url,state,statusCheckRollup"}, m_repoPath,
+            [this, key](bool ok, const QString& out, const QString&) {
+        m_loadingCurrentPr = false;
+        if (key != m_currentPrKey) { refreshCurrentPullRequest(); return; }
+        QVariantMap pr;
+        if (ok) {
+            const QJsonObject o = QJsonDocument::fromJson(out.toUtf8()).object();
+            pr["number"] = o.value("number").toInt();
+            pr["title"] = o.value("title").toString();
+            pr["url"] = o.value("url").toString();
+            pr["state"] = o.value("state").toString().toLower();
+            // Checks and commit statuses come in two shapes; any failure is a
+            // failure, anything unfinished is pending, else they passed.
+            bool fail = false, pending = false, any = false;
+            for (const auto& v : o.value("statusCheckRollup").toArray()) {
+                const QJsonObject c = v.toObject();
+                any = true;
+                const QString conclusion = c.value("conclusion").toString().toUpper();
+                const QString status = c.value("status").toString().toUpper();
+                const QString state = c.value("state").toString().toUpper();
+                if (conclusion == "FAILURE" || conclusion == "TIMED_OUT" || conclusion == "CANCELLED"
+                    || conclusion == "ACTION_REQUIRED" || state == "FAILURE" || state == "ERROR") fail = true;
+                else if ((!status.isEmpty() && status != "COMPLETED") || state == "PENDING" || state == "EXPECTED") pending = true;
+            }
+            pr["checks"] = !any ? QString() : fail ? QStringLiteral("failure") : pending ? QStringLiteral("pending")
+                                                                                      : QStringLiteral("success");
+        }
+        if (pr != m_currentPr) {
+            m_currentPr = pr;
+            emit currentPullRequestChanged();
+        }
+    });
+}
+
+void GitBackend::updateSubmodules() {
+    runTask("submodule", "Updating submodules…", {"submodule", "update", "--init", "--recursive", "--progress"},
+            [this](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Submodules updated");
+        else emit commandFailed(gitError(err, out, "Could not update the submodules"));
+    });
+}
+
+void GitBackend::setupLfs() {
+    if (!m_isRepo) return;
+    QString err;
+    if (!gitOk(m_repoPath, {"lfs", "install", "--local"}, &err)) {
+        emit commandFailed(gitError(err, QString(), "Could not set up Git LFS"));
+        return;
+    }
+    runTask("pull", "Fetching LFS files…", {"lfs", "pull"}, [this](bool ok, const QString& out, const QString& err) {
+        if (ok) emit notice("Git LFS is set up");
+        else emit commandFailed(gitError(err, out, "Could not fetch the LFS files"));
+    });
+}
+
+void GitBackend::setPullRebase(bool on) {
+    if (!m_isRepo) return;
+    gitOk(m_repoPath, {"config", "--local", "pull.rebase", on ? "true" : "false"});
+    refresh();
+}
+
+void GitBackend::setFullFile(bool on) {
+    if (on == m_fullFile) return;
+    m_fullFile = on;
+    emit diffOptionsChanged();
+    updateDiff();
+    updateCommitDiff();
+}
+
+void GitBackend::deleteTag(const QString& name) {
+    QString err;
+    if (!m_isRepo || !gitOk(m_repoPath, {"tag", "-d", name}, &err))
+        emit commandFailed(gitError(err, QString(), "Could not delete the tag"));
+    else
+        emit notice("Deleted tag " + name);
+    m_historyHead.clear();
+    refresh();
+}
+
+void GitBackend::openCommitOnWeb(const QString& hash) {
+    if (!m_webUrl.isEmpty())
+        QDesktopServices::openUrl(QUrl(m_webUrl + (m_webUrl.contains("gitlab") ? "/-/commit/" : "/commit/") + hash));
+}
+
+void GitBackend::reorderCommit(const QString& hash, const QString& target, bool squash) {
+    if (hash.isEmpty() || target.isEmpty() || hash == target) return;
+    // From whichever of the two is older.
+    const bool targetOlder = gitOk(m_repoPath, {"merge-base", "--is-ancestor", target, hash});
+    QString base;
+    const QStringList commits = rewritable(targetOlder ? target : hash, &base);
+    if (commits.isEmpty()) return;
+    QStringList order = commits;
+    order.removeAll(hash);
+    const int at = order.indexOf(target);
+    if (at < 0) return;
+    order.insert(at + 1, hash);
+    QStringList todo;
+    for (const auto& c : order) todo << (squash && c == hash ? "squash " : "pick ") + c;
+    rewriteHistory(base, todo, squash ? "Squashing…" : "Moving the commit…",
+                   squash ? "Squashed" : "Commit moved");
+}
+
+// ── Clone, new, publish ─────────────────────────────────────────────────────
+
+QString GitBackend::defaultProjectsDir() const {
+    for (const char* name : {"Projects", "projects", "src", "Code", "code", "dev"}) {
+        const QString d = QDir::homePath() + "/" + name;
+        if (QFileInfo(d).isDir()) return d;
+    }
+    return QDir::homePath() + "/Projects";
+}
+
+void GitBackend::pickFolder(const QString& purpose, const QString& start) {
+    const QString out = QDir::tempPath() + QStringLiteral("/b1air-git-pick-%1-%2")
+                            .arg(QCoreApplication::applicationPid()).arg(purpose);
+    QFile::remove(out);
+    auto* proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [this, proc, out, purpose](int, QProcess::ExitStatus) {
+        QFile f(out);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QString path = QString::fromUtf8(f.readAll()).trimmed();
+            if (!path.isEmpty()) emit folderPicked(purpose, path);
+        }
+        QFile::remove(out);
+        proc->deleteLater();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError) {
+        emit commandFailed(QStringLiteral("Could not start the file manager"));
+        proc->deleteLater();
+    });
+    const QString from = !start.isEmpty() && QFileInfo(start).isDir() ? start : QDir::homePath();
+    proc->start("b1air-files", QStringList() << "--pick-folder" << out << from);
+}
+
+void GitBackend::runTaskIn(const QString& workdir, const QString& kind, const QString& text, const QStringList& args,
+                           std::function<void(bool, const QString&, const QString&)> done) {
+    // runTask wants an open repository; clone has none yet. The same busy
+    // state and progress, from a directory of its own.
+    const QString repo = m_repoPath;
+    const bool isRepo = m_isRepo;
+    m_repoPath = workdir;
+    m_isRepo = true;
+    runTask(kind, text, args, done);
+    m_repoPath = repo;
+    m_isRepo = isRepo;
+}
+
+void GitBackend::cloneRepo(const QString& url, const QString& parentDir) {
+    QString u = url.trimmed();
+    if (u.isEmpty()) return;
+    // "owner/name" is a GitHub repository, as gh and GitHub Desktop take it.
+    static const QRegularExpression shorthand("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$");
+    if (shorthand.match(u).hasMatch()) u = "https://github.com/" + u + ".git";
+    QString name = QUrl(u).path().section('/', -1);
+    if (name.isEmpty()) name = u.section(':', -1).section('/', -1);
+    if (name.endsWith(".git")) name.chop(4);
+    const QString parent = parentDir.trimmed().isEmpty() ? defaultProjectsDir() : parentDir.trimmed();
+    const QString dest = parent + "/" + name;
+    if (QFileInfo::exists(dest)) {
+        emit commandFailed(dest + " already exists");
+        emit repoCreated(false, QString());
+        return;
+    }
+    QDir().mkpath(parent);
+    runTaskIn(parent, "clone", "Cloning " + name + "…", {"clone", "--progress", "--recurse-submodules", u, dest},
+              [this, dest, name](bool ok, const QString& out, const QString& err) {
+        if (!ok) {
+            emit commandFailed(gitError(err, out, "Could not clone " + name));
+            emit repoCreated(false, QString());
+            return;
+        }
+        emit notice("Cloned " + name);
+        addRepo(dest);
+        emit repoCreated(true, dest);
+    });
+}
+
+void GitBackend::refreshRemoteRepos() {
+    if (m_loadingRemoteRepos) return;
+    m_loadingRemoteRepos = true;
+    emit remoteReposChanged();
+    runTool("gh", {"repo", "list", "--limit", "300", "--json", "nameWithOwner,url,description,isPrivate,owner"},
+            QString(), [this](bool ok, const QString& out, const QString&) {
+        m_loadingRemoteRepos = false;
+        QVariantList list;
+        if (ok) {
+            for (const auto& v : QJsonDocument::fromJson(out.toUtf8()).array()) {
+                const QJsonObject o = v.toObject();
+                list.append(QVariantMap{{"name", o.value("nameWithOwner").toString()},
+                                        {"url", o.value("url").toString()},
+                                        {"description", o.value("description").toString()},
+                                        {"private", o.value("isPrivate").toBool()}});
+            }
+        }
+        m_remoteRepos = list;
+        emit remoteReposChanged();
+    });
+}
+
+void GitBackend::refreshGitignoreTemplates() {
+    if (!m_gitignoreTemplates.isEmpty()) return;
+    runTool("gh", {"api", "gitignore/templates"}, QString(), [this](bool ok, const QString& out, const QString&) {
+        if (!ok) return;
+        QStringList names;
+        for (const auto& v : QJsonDocument::fromJson(out.toUtf8()).array()) names << v.toString();
+        m_gitignoreTemplates = names;
+        emit gitignoreTemplatesChanged();
+    });
+}
+
+void GitBackend::createRepo(const QString& parentDir, const QString& name, const QString& description,
+                            bool readme, const QString& gitignore) {
+    const QString n = name.trimmed();
+    if (n.isEmpty() || n.contains('/')) {
+        emit commandFailed(QStringLiteral("A repository needs a name, without slashes"));
+        emit repoCreated(false, QString());
+        return;
+    }
+    const QString dest = (parentDir.trimmed().isEmpty() ? defaultProjectsDir() : parentDir.trimmed()) + "/" + n;
+    if (QFileInfo::exists(dest + "/.git")) {
+        emit commandFailed(dest + " is a repository already");
+        emit repoCreated(false, QString());
+        return;
+    }
+    // The template first (a request to GitHub), the rest when it is back.
+    auto finish = [this, dest, n, description, readme](const QString& ignoreText) {
+        QDir().mkpath(dest);
+        QString err;
+        if (!gitOk(dest, {"init", "-q"}, &err)) {
+            emit commandFailed(gitError(err, QString(), "git init failed"));
+            emit repoCreated(false, QString());
+            return;
+        }
+        auto write = [&dest](const QString& file, const QString& text) {
+            if (QFileInfo::exists(dest + "/" + file)) return;
+            QSaveFile f(dest + "/" + file);
+            if (f.open(QIODevice::WriteOnly)) { f.write(text.toUtf8()); f.commit(); }
+        };
+        if (readme) write("README.md", "# " + n + "\n" + (description.trimmed().isEmpty() ? QString() : "\n" + description.trimmed() + "\n"));
+        if (!ignoreText.isEmpty()) write(".gitignore", ignoreText);
+        gitOk(dest, {"add", "-A"});
+        // A first commit only when there is something to put in it; an empty
+        // folder stays an empty repository rather than failing here.
+        if (!gitOk(dest, {"diff", "--cached", "--quiet"}))
+            if (!gitOk(dest, {"commit", "-q", "-m", "Initial commit"}, &err))
+                emit commandFailed(gitError(err, QString(), "The first commit failed"));
+        addRepo(dest);
+        emit notice("Created " + n);
+        emit repoCreated(true, dest);
+    };
+    if (gitignore.isEmpty()) { finish(QString()); return; }
+    runTool("gh", {"api", "gitignore/templates/" + gitignore, "--jq", ".source"}, QString(),
+            [this, finish](bool ok, const QString& out, const QString& err) {
+        if (!ok) emit commandFailed(gitError(err, out, "Could not fetch the .gitignore template"));
+        finish(ok ? out : QString());
+    });
+}
+
+void GitBackend::publishRepo(const QString& name, const QString& description, bool isPrivate) {
+    if (!m_isRepo || m_hasRemote || !m_busy.isEmpty()) return;
+    QStringList args{"repo", "create", name.trimmed().isEmpty() ? repoName() : name.trimmed(),
+                     isPrivate ? "--private" : "--public", "--source", m_repoPath, "--remote", "origin"};
+    if (!description.trimmed().isEmpty()) args << "--description" << description.trimmed();
+    // Nothing to push in a repository with no commits yet.
+    if (!m_lastCommit.isEmpty()) args << "--push";
+    m_busy = "publish";
+    m_busyText = "Publishing to GitHub…";
+    m_busyLabel = m_busyText;
+    emit busyChanged();
+    runTool("gh", args, m_repoPath, [this](bool ok, const QString& out, const QString& err) {
+        m_busy.clear();
+        m_busyText.clear();
+        emit busyChanged();
+        if (ok) emit notice("Published to GitHub");
+        else emit commandFailed(gitError(err, out, "Could not publish the repository"));
+        refresh();
+    });
+}
+
+// ── Repository settings ─────────────────────────────────────────────────────
+
+bool GitBackend::setRemote(const QString& name, const QString& url) {
+    const QString n = name.trimmed(), u = url.trimmed();
+    if (!m_isRepo || n.isEmpty() || u.isEmpty()) return false;
+    bool exists = false;
+    for (const auto& v : m_remotes) exists = exists || v.toMap().value("name") == n;
+    QString err;
+    if (!gitOk(m_repoPath, exists ? QStringList{"remote", "set-url", n, u} : QStringList{"remote", "add", n, u}, &err)) {
+        emit commandFailed(gitError(err, QString(), "Could not set the remote"));
+        return false;
+    }
+    emit notice(exists ? "Changed " + n : "Added " + n);
+    refresh();
+    return true;
+}
+
+bool GitBackend::removeRemote(const QString& name) {
+    QString err;
+    if (!m_isRepo || !gitOk(m_repoPath, {"remote", "remove", name}, &err)) {
+        emit commandFailed(gitError(err, QString(), "Could not remove the remote"));
+        return false;
+    }
+    emit notice("Removed " + name);
+    refresh();
+    return true;
+}
+
+bool GitBackend::setIdentity(const QString& name, const QString& email, bool global) {
+    if (!m_isRepo && !global) return false;
+    const QString scope = global ? QStringLiteral("--global") : QStringLiteral("--local");
+    QString err;
+    for (const auto& kv : {std::pair<const char*, QString>{"user.name", name.trimmed()},
+                           std::pair<const char*, QString>{"user.email", email.trimmed()}}) {
+        const bool ok = kv.second.isEmpty()
+            ? (gitOk(m_repoPath, {"config", scope, "--unset", kv.first}, &err) || true)
+            : gitOk(m_isRepo ? m_repoPath : QDir::homePath(), {"config", scope, kv.first, kv.second}, &err);
+        if (!ok) {
+            emit commandFailed(gitError(err, QString(), "Could not save the identity"));
+            return false;
+        }
+    }
+    emit notice(global ? "Saved for every repository" : "Saved for this repository");
+    refresh();
+    return true;
+}
+
+void GitBackend::editGitignore() {
+    if (!m_isRepo) return;
+    QFile f(m_repoPath + "/.gitignore");
+    if (!f.exists() && f.open(QIODevice::WriteOnly)) f.close();
+    openInEditor(".gitignore");
+}
+
+void GitBackend::openInEditor(const QString& relPath) {
+    if (m_repoPath.isEmpty()) return;
+    const QString path = absolutePath(relPath);
+    // A code editor if there is one, in the order people tend to have them;
+    // the suite's own otherwise. $VISUAL first, as a terminal would.
+    QStringList editors;
+    const QString visual = qEnvironmentVariable("VISUAL").section(' ', 0, 0);
+    if (!visual.isEmpty() && !QStringList{"vi", "vim", "nvim", "nano", "emacs", "hx"}.contains(QFileInfo(visual).fileName()))
+        editors << visual;
+    editors << "code" << "codium" << "zed" << "zeditor" << "subl" << "kate" << "gnome-text-editor" << "b1air-text";
+    for (const auto& e : editors) {
+        if (QStandardPaths::findExecutable(e).isEmpty()) continue;
+        if (QProcess::startDetached(e, {path}, m_repoPath)) return;
+    }
+    emit commandFailed(QStringLiteral("No editor found"));
+}
+
 // ── Fetching in the background ───────────────────────────────────────────────
 //
 // GitHub Desktop fetches on its own; this app never did, so nothing about the
@@ -1858,7 +3212,10 @@ void GitBackend::startBackgroundFetch() {
         m_bgFetch = nullptr;
         emit fetchingChanged();
         // Offline, or a remote that wants credentials: silently nothing.
-        if (repo == m_repoPath) refresh();
+        if (repo == m_repoPath) {
+            refresh();
+            refreshCurrentPullRequest();
+        }
     });
     connect(m_bgFetch, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
         if (e != QProcess::FailedToStart) return;
