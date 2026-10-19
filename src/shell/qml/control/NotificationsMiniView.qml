@@ -64,14 +64,24 @@ MiniView {
         // with the newest one's picture, actions and reply. Yesterday and
         // earlier are one line each until opened: what is old is there, and
         // not in the way.
+        //
+        // Worked out when the list or the time of day changes, not as a
+        // binding: reading a ListModel's rows inside one bound the result to
+        // the rows themselves, and Qt reported a binding loop on every
+        // change — twenty-odd times when the centre opened over a full list.
         property var opened: ({})
-        property int stamp: 0
+        property var sections: []
         Connections {
             target: Notifications.history
-            function onCountChanged() { page.stamp++; }
+            function onCountChanged() { page.rebuild(); }
         }
-        readonly property var sections: {
-            const _ = page.stamp, __ = Notifications.now;
+        Connections {
+            target: Notifications
+            function onNowChanged() { page.rebuild(); }
+            function onArchiveStampChanged() { page.find(); }
+        }
+        Component.onCompleted: page.rebuild()
+        function rebuild() {
             const order = ["now", "today", "yesterday", "earlier"];
             const out = order.map(id => ({ id: id, cards: [], items: 0, apps: [] }));
             for (let i = 0; i < Notifications.history.count; i++) {
@@ -88,7 +98,7 @@ MiniView {
                 sec.items++;
                 if (sec.apps.indexOf(it.appIcon || it.icon || "") < 0) sec.apps.push(it.appIcon || it.icon || "");
             }
-            return out.filter(s => s.cards.length > 0);
+            page.sections = out.filter(s => s.cards.length > 0);
         }
         function sectionTitle(id) {
             return id === "now" ? I18n.tr("Now") : id === "today" ? I18n.tr("Today")
@@ -107,9 +117,14 @@ MiniView {
         // ── Search, through the week's archive ───────────────────────────────
         property string query: ""
         readonly property bool searching: page.query.trim() !== ""
-        readonly property var found: {
-            const _ = Notifications.archiveStamp;
-            return page.searching ? Notifications.search(page.query, 100) : [];
+        // Found when the query or the archive changes (see rebuild()).
+        property var found: []
+        onQueryChanged: page.find()
+        // From the query itself: `searching` may not have caught up with it
+        // yet when this runs.
+        function find() {
+            const q = page.query.trim();
+            page.found = q !== "" ? Notifications.search(q, 100) : [];
         }
         Field {
             id: search
