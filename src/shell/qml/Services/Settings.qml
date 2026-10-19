@@ -261,6 +261,13 @@ Singleton {
     readonly property alias focusMode: data.focusMode
     readonly property alias focusLastMode: data.focusLastMode
     readonly property alias focusAllow: data.focusAllow
+    // Calendars (.ics files, vdir folders, links) whose meetings bring the
+    // Meeting focus mode in while they last, when focusDuringMeetings is on.
+    readonly property alias calendarSources: data.calendarSources
+    readonly property alias focusDuringMeetings: data.focusDuringMeetings
+    // Synced lyrics looked up on LRCLIB for a track with none of its own:
+    // off until asked, as it tells a server what is playing.
+    readonly property alias lyricsOnline: data.lyricsOnline
 
     // Night Light. These two were declared in the adapter but had no public
     // alias, so Settings.nightLightEnabled / .nightLightTemp read back as
@@ -664,6 +671,9 @@ Singleton {
         focusMode: "",
         focusLastMode: "dnd",
         focusAllow: {},
+        calendarSources: [],
+        focusDuringMeetings: false,
+        lyricsOnline: false,
         focusWorkDuration: 25,
         focusShortBreak: 5,
         focusLongBreak: 15,
@@ -842,6 +852,9 @@ Singleton {
             property string focusMode: ""
             property string focusLastMode: "dnd"
             property var focusAllow: ({})
+            property var calendarSources: []
+            property bool focusDuringMeetings: false
+            property bool lyricsOnline: false
             property int focusWorkDuration: 25
             property int focusShortBreak: 5
             property int focusLongBreak: 15

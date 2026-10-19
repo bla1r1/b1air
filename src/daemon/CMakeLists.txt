@@ -27,6 +27,7 @@ add_library(b1air-core STATIC
     fingerprint.cpp
     file_index.cpp
     backlight.cpp
+    calendar.cpp
     daemon_dbus.cpp
     focustime_db.cpp
     magic_mouse.cpp

@@ -92,7 +92,15 @@ PopupShell {
         Media.refresh();
     }
 
-    Component.onDestruction: Media.release()
+    Component.onDestruction: {
+        Media.release();
+        if (root.showLyrics) Lyrics.release();
+    }
+
+    // Lyrics in place of the title and artist (Services/Lyrics): the line
+    // being sung, and the next one under it.
+    property bool showLyrics: false
+    onShowLyricsChanged: root.showLyrics ? Lyrics.acquire() : Lyrics.release()
 
     // Accumulators for Process standard output
     property string accumulatedMusicOut: ""
@@ -397,6 +405,7 @@ PopupShell {
                             // HARD-LOCKED SEAMLESS INFINITE MARQUEE
                             Item {
                                 id: titleClipRect
+                                visible: !root.showLyrics
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.s(Design.size.sm) 
                                 clip: true
@@ -461,7 +470,88 @@ PopupShell {
                                 }
                             }
 
+                            // ── Lyrics, in the title's place ──────────────────
+                            Item {
+                                id: lyricsView
+                                visible: root.showLyrics
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Design.s(Design.size.sm) + Design.s(Design.size.mini)
+                                                        + Design.s(Design.space.xs)
+                                readonly property bool synced: Lyrics.state === "found" && Lyrics.synced
+                                readonly property int at: Lyrics.current
+                                readonly property string now: !synced ? ""
+                                    : at < 0 ? "\u2026" : (Lyrics.lines[at].text || "\u266a")
+                                readonly property string after: !synced || at + 1 >= Lyrics.lines.length ? ""
+                                    : (Lyrics.lines[at + 1].text || "\u266a")
+                                onNowChanged: lineIn.restart()
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    visible: lyricsView.synced
+                                    spacing: Design.s(Design.space.xxs)
+                                    Label {
+                                        id: lyricNow
+                                        Layout.fillWidth: true
+                                        text: lyricsView.now
+                                        color: root.dynamicTextColor
+                                        role: "title"
+                                        weight: Design.weight.semibold
+                                        elide: Text.ElideRight
+                                        NumberAnimation on opacity {
+                                            id: lineIn
+                                            from: 0.3; to: 1
+                                            duration: Design.reduceMotion ? 0 : Design.duration.base
+                                            easing.type: Easing.OutCubic
+                                        }
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: lyricsView.after
+                                        role: "footnote"
+                                        color: Design.textDim
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                // Plain lyrics: the words, to scroll through.
+                                ScrollArea {
+                                    anchors.fill: parent
+                                    framed: false
+                                    visible: Lyrics.state === "found" && !Lyrics.synced
+                                    Label {
+                                        width: parent.width
+                                        text: Lyrics.lines.map(l => l.text).join("\n")
+                                        role: "footnote"
+                                        color: Design.textDim
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    visible: Lyrics.state !== "found"
+                                    spacing: Design.s(Design.space.xxs)
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: Lyrics.state === "loading" ? I18n.tr("Looking for lyrics…")
+                                            : I18n.tr("No lyrics for this track")
+                                        role: "body"
+                                        color: Design.textDim
+                                        elide: Text.ElideRight
+                                    }
+                                    Button {
+                                        visible: Lyrics.state === "ask"
+                                        size: "sm"
+                                        variant: "ghost"
+                                        label: I18n.tr("Look on LRCLIB")
+                                        tip: I18n.tr("Sends the title and artist to lrclib.net, for this and later tracks")
+                                        onClicked: Lyrics.allowOnline()
+                                    }
+                                }
+                            }
+
                             Label {
+                                visible: !root.showLyrics
                                 text: root.musicData.artist ? I18n.tr("BY %1", root.musicData.artist) : ""
                                 color: Design.textDim // Better matugen match
                                 size: Design.s(Design.font.glyphSm)
@@ -490,6 +580,12 @@ PopupShell {
                                             weight: Design.weight.semibold
                                         }
                                     }
+                                }
+                                IconButton {
+                                    icon: "\u{f0370}"
+                                    label: root.showLyrics ? I18n.tr("Hide lyrics") : I18n.tr("Lyrics")
+                                    tone: root.showLyrics ? Design.accent : Design.textDim
+                                    onClicked: root.showLyrics = !root.showLyrics
                                 }
                                 Label {
                                     text: I18n.tr("VIA %1", I18n.tr(root.musicData.source || "Offline"))
@@ -541,8 +637,10 @@ PopupShell {
                                         temp.percent = value;
                                         root.musicData = temp;
 
-                                        var safePlayer = root.musicData.playerName ? root.musicData.playerName : "";
-                                        Media.seek(value.toFixed(2));
+                                        // The bar is in percent, the player in seconds:
+                                        // it was handed the percent, so every seek
+                                        // landed in the first hundred seconds.
+                                        Media.seek(value / 100 * (Media.player ? Media.player.length : 0));
                                         
                                         seekDebounceTimer.restart();
                                     }

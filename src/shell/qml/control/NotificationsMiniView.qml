@@ -16,7 +16,8 @@ import "../notifications"
 //
 // The list is a timeline (Now, Today, Yesterday, Earlier), one card for an
 // app and sender with its lines in it, quiet fills and no frames; Do Not
-// Disturb and Clear are chips in the header.
+// Disturb and Clear are chips in the header. Over it, a search through the
+// last seven days (Notifications.archive), cleared ones included.
 // =============================================================================
 
 MiniView {
@@ -103,12 +104,110 @@ MiniView {
             for (const i of idx) Notifications.dismissHistoryItem(i);
         }
 
+        // ── Search, through the week's archive ───────────────────────────────
+        property string query: ""
+        readonly property bool searching: page.query.trim() !== ""
+        readonly property var found: {
+            const _ = Notifications.archiveStamp;
+            return page.searching ? Notifications.search(page.query, 100) : [];
+        }
+        Field {
+            id: search
+            Layout.fillWidth: true
+            visible: Notifications.archive.count > 0
+            placeholder: I18n.tr("Search the last 7 days")
+            onEdited: value => page.query = value
+            Keys.onEscapePressed: { search.text = ""; page.query = ""; }
+        }
+
+        ScrollArea {
+            id: results
+            framed: false
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: page.searching && page.found.length > 0
+
+            ColumnLayout {
+                width: results.availableWidth
+                spacing: Design.s(Design.space.xs)
+                Repeater {
+                    model: page.found
+                    delegate: ListRow {
+                        id: hit
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: hitBody.implicitHeight + Design.s(Design.space.sm) * 2
+                        onClicked: Notifications.activate(hit.modelData)
+                        RowLayout {
+                            id: hitBody
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.leftMargin: Design.s(Design.space.sm)
+                            anchors.rightMargin: Design.s(Design.space.sm)
+                            spacing: Design.s(Design.space.sm)
+                            NotificationIcon {
+                                Layout.alignment: Qt.AlignTop
+                                size: Design.s(Design.size.sm)
+                                image: hit.modelData.image || ""
+                                appIcon: hit.modelData.appIcon || hit.modelData.icon || ""
+                                critical: !!hit.modelData.critical
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: hit.modelData.summary
+                                        weight: Design.weight.semibold
+                                        elide: Text.ElideRight
+                                    }
+                                    Label {
+                                        text: Notifications.relTime(hit.modelData.ts)
+                                        role: "caption"
+                                        dim: true
+                                        tabular: true
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    visible: text !== ""
+                                    text: hit.modelData.body
+                                    role: "caption"
+                                    color: Design.textDim
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    text: hit.modelData.appName
+                                    role: "caption"
+                                    color: Design.textFaint
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        AppState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            mode: page.searching && page.found.length === 0 ? "empty" : ""
+            icon: "\u{f0349}"
+            title: I18n.tr("Nothing found")
+            hint: I18n.tr("Notifications are kept for 7 days.")
+        }
+
         ScrollArea {
             id: scroll
             framed: false
             Layout.fillWidth: true
             Layout.fillHeight: true
-            visible: Notifications.history.count > 0
+            visible: Notifications.history.count > 0 && !page.searching
 
             ColumnLayout {
                 width: scroll.availableWidth
@@ -326,7 +425,7 @@ MiniView {
         AppState {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            mode: Notifications.history.count === 0 ? "empty" : ""
+            mode: !page.searching && Notifications.history.count === 0 ? "empty" : ""
             icon: "\u{f009b}"
             title: I18n.tr("No notifications")
             hint: I18n.tr("You're all caught up.")

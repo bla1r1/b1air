@@ -8,6 +8,7 @@
 #include "fingerprint.hpp"
 #include "settings_manager.hpp"
 #include "magic_mouse.hpp"
+#include "calendar.hpp"
 #include "session_manager.hpp"
 #include "daemon_dbus.hpp"
 #include "runtime.hpp"
@@ -58,6 +59,7 @@ static void print_usage(const char* prog) {
               << "  media-status                       Get top-bar Media Player JSON\n"
               << "  media-info                         Get full MPRIS & album art palette JSON for player\n"
               << "  weather [json|current|icon|temp]   Get live weather forecast JSON or current conditions\n"
+              << "  calendar [--hours N] <source>…    Events ahead from .ics files, vdir folders or links (JSON)\n"
               << "  schedule                           Get calendar schedule JSON\n"
               << "  appearance apply                   Colour GTK and Qt apps from the theme (Appearance page)\n"
               << "  open-default {terminal|files|browser}\n"
@@ -796,6 +798,19 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " ddc {list|set <id> <val>|up [N]|down [N]|status|refresh|dim|undim}\n";
             return 1;
         }
+    } else if (cmd == "calendar") {
+        // calendar [--hours N] <source>…: the events in the next N hours
+        // (24 by default) from .ics files, vdir folders and links, as JSON.
+        // The shell passes the sources from settings (calendarSources).
+        int hours = 24;
+        std::vector<std::string> sources;
+        for (int i = 2; i < argc; ++i) {
+            const std::string a = argv[i];
+            if (a == "--hours" && i + 1 < argc) hours = std::atoi(argv[++i]);
+            else if (a != "events") sources.push_back(a);
+        }
+        std::cout << Calendar::events_json(sources, hours) << "\n";
+        return 0;
     } else if (cmd == "weather") {
         std::string sub = (argc >= 3) ? argv[2] : "json";
         if (sub == "json" || sub == "--json") {

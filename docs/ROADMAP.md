@@ -99,7 +99,8 @@ place:
   environment-variable editor and the system services manager.
 - **Security theatre.** USB Guard and captive-portal detection are real
   measures in a fleet and a ritual on one personal laptop.
-- **Novelty.** Mechanical keyboard sound simulation, song lyrics.
+- **Novelty.** Mechanical keyboard sound simulation. (Song lyrics were here
+  too, and were built after all: M14.)
 - **Overlap with what already exists.** The "Glance Layer canvas widgets" are
   the Control Center and calendar panels, which are now arrangeable and
   resizable in place.
@@ -318,15 +319,27 @@ large-text preset in M13 are kept.
 
 ## M14: Notification Intelligence and Focus Ecosystem
 
-- [/] Add scheduled Do Not Disturb / Focus Hours automation (e.g. night hours or calendar meetings).
-      **Built:** quiet hours, a daily range (Settings → Screen Time & DND).
-      **Missing:** calendar meetings.
-- [/] Add granular per-application notification priority rules and channel filtering.
-      **Built:** a per-app on/off for banners and sounds (Settings → Screen
-      Time). **Missing:** priorities and channels.
-- [ ] Add 7-day searchable notification history archive.
-- [~] Add synchronized LRC song lyrics display in the expanded media player.
-      **Cut:** Novelty.
+- [x] Add scheduled Do Not Disturb / Focus Hours automation (e.g. night hours or calendar meetings).
+      Quiet hours, a daily range, and a Meeting focus mode while an event
+      in a calendar is under way (Settings → Notifications → During
+      meetings). Calendars are read by `b1air-daemon calendar`
+      (src/daemon/calendar.cpp): .ics files, vdir folders, links (Google's
+      secret iCal address, webcal), and CalDAV accounts — iCloud with an
+      app-specific password, Nextcloud, Fastmail — whose password is kept in
+      the secret store. Recurring events, exceptions and time zones handled.
+- [x] Add granular per-application notification priority rules and channel filtering.
+      Each app and each of its channels (the `category` hint: messages, mail,
+      calls, transfers…) is Priority (through focus modes and quiet hours),
+      Normal, Quiet (into the list, no banner) or Off; a channel follows its
+      app unless set. Critical notifications come through a focus mode.
+- [x] Add 7-day searchable notification history archive.
+      Kept apart from the notification centre, so what is cleared there is
+      still found; searched from the centre, stored encrypted.
+- [x] Add synchronized LRC song lyrics display in the expanded media player.
+      Once cut as novelty, built on request: a .lrc beside the track, a kept
+      copy, or LRCLIB when allowed from the player (off until then, as it
+      tells a server what is playing). The line sung and the next, in the
+      title's place (Services/Lyrics).
 
 ## M15: The application suite
 

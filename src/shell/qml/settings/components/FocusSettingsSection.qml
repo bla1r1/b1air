@@ -25,8 +25,6 @@ ColumnLayout {
     property bool autoDnd: Settings.focusAutoDnd !== undefined ? Settings.focusAutoDnd : true
     property bool breakReminders: Settings.focusBreakReminders !== undefined ? Settings.focusBreakReminders : true
 
-    property var notifRules: Settings.notificationRules || {}
-
     // ── Screen time ──────────────────────────────────────────────────────────
     //
     // Both figures below used to come from Power.upHours/upMins — the system's
@@ -72,52 +70,85 @@ ColumnLayout {
         }
     }
 
-    function isRuleEnabled(app) {
-        if (!app) return true;
-        let key = app.toLowerCase().trim();
-        return section.notifRules && section.notifRules[key] !== undefined ? section.notifRules[key] : true;
+    // The apps heard from (Services/Notifications.sources), for the focus
+    // modes' lists of who gets through.
+    readonly property var activeApps: Notifications.sources.length > 0
+        ? Notifications.sources.map(a => ({ name: a.name, icon: a.icon }))
+        : [{ name: "System", icon: "" }]
+
+    // An app's row, then one per channel it has used, for the levels below.
+    readonly property var levelRows: {
+        const _ = Settings.notificationRules;
+        const rows = [];
+        for (const app of Notifications.sources) {
+            rows.push({ app: app.name, channel: "", label: app.name,
+                        note: app.channels.length > 0
+                            ? I18n.trn("%1 channel", "%1 channels", app.channels.length) : "" });
+            for (const ch of app.channels)
+                rows.push({ app: app.name, channel: ch, label: Notifications.channelName(ch),
+                            note: I18n.tr("Channel of %1", app.name) });
+        }
+        return rows;
+    }
+    function levelChoices(app, channel) {
+        const all = Notifications.levels.map(l => ({ id: l, label: Notifications.levelName(l) }));
+        return channel
+            ? [{ id: "", label: I18n.tr("As the app (%1)", Notifications.levelName(Notifications.levelOf(app, ""))) }].concat(all)
+            : all;
     }
 
-    function toggleRule(app) {
-        if (!app) return;
-        let key = app.toLowerCase().trim();
-        var rules = Object.assign({}, section.notifRules || {});
-        rules[key] = !section.isRuleEnabled(key);
-        section.notifRules = rules;
-        Settings.set("notificationRules", rules);
+    function _clock(ms) { return Qt.formatTime(new Date(ms), "hh:mm"); }
+
+    // ── Calendars ────────────────────────────────────────────────────────────
+    //
+    // A source as b1air-daemon calendar takes it: a path or link as it is,
+    // "icloud:<Apple ID>", "caldav:https://user@host/path". The password of
+    // an account goes to the secret store as calendar-<md5 of the source>,
+    // where the daemon reads it; never into settings.json.
+    function calendarLabel(src) {
+        if (src.startsWith("icloud:")) return src.slice(7);
+        if (src.startsWith("caldav:")) return src.slice(7).replace(/^https?:\/\/(.*@)?([^/]+).*$/, "$2");
+        if (src.indexOf("calendar.google.com") >= 0) return "Google Calendar";
+        return src.indexOf("://") > 0 ? src.replace(/^[a-z]+:\/\/([^/]+).*$/, "$1") : src;
     }
-
-    // Dynamically detected notification sources
-    readonly property var activeApps: {
-        let _t = Notifications.trackedApps;
-        let _h = Notifications.history.count;
-        let list = [];
-        let seen = {};
-
-        if (Notifications.trackedApps && Notifications.trackedApps.length > 0) {
-            for (let app of Notifications.trackedApps) {
-                let key = (app.name || "").toLowerCase().trim();
-                if (key && !seen[key]) {
-                    seen[key] = true;
-                    list.push({ name: app.name, icon: app.icon || "", subtitle: I18n.tr("Active notification source") });
-                }
-            }
+    function calendarKind(src) {
+        return src.startsWith("icloud:") ? "iCloud"
+             : src.startsWith("caldav:") ? I18n.tr("CalDAV account")
+             : src.indexOf("calendar.google.com") >= 0 ? I18n.tr("Google, by its secret address")
+             : src.indexOf("://") > 0 ? I18n.tr("Calendar link") : I18n.tr("Calendar file or folder");
+    }
+    function addCalendar(kind, where, user, password) {
+        let src = where;
+        if (kind === "icloud") src = "icloud:" + user;
+        else if (kind === "caldav") {
+            const url = /^https?:\/\//.test(where) ? where : "https://" + where;
+            src = "caldav:" + url.replace(/^(https?:\/\/)/, "$1" + user + "@");
         }
-
-        for (let i = 0; i < Notifications.history.count; i++) {
-            let item = Notifications.history.get(i);
-            let key = (item.appName || "").toLowerCase().trim();
-            if (key && !seen[key]) {
-                seen[key] = true;
-                list.push({ name: item.appName, icon: item.icon || "", subtitle: I18n.tr("Recent notification in history") });
-            }
-        }
-
-        if (list.length === 0) {
-            list.push({ name: "System", icon: "", subtitle: I18n.tr("System and hardware alerts") });
-        }
-
-        return list;
+        if ((Settings.calendarSources || []).indexOf(src) >= 0) return;
+        if (kind === "icloud" || kind === "caldav") section._storeSecret("calendar-" + Qt.md5(src), password);
+        Settings.set("calendarSources", (Settings.calendarSources || []).concat([src]));
+        calWhere.text = ""; calUser.text = ""; calPassword.text = "";
+    }
+    function removeCalendar(i) {
+        const list = (Settings.calendarSources || []).slice();
+        const src = list[i];
+        if (src && (src.startsWith("icloud:") || src.startsWith("caldav:")))
+            section._storeSecret("calendar-" + Qt.md5(src), "");
+        list.splice(i, 1);
+        Settings.set("calendarSources", list);
+    }
+    function _storeSecret(name, value) {
+        secretWriter.value = value;
+        secretWriter.command = ["b1air-secret-service", "set", name];
+        secretWriter.running = true;
+    }
+    Process {
+        id: secretWriter
+        property string value: ""
+        stdinEnabled: true
+        onStarted: { write(secretWriter.value); secretWriter.value = ""; stdinEnabled = false; }
+        // The calendar is read once the password is there to read it with.
+        onExited: { stdinEnabled = true; Notifications.refreshCalendar(); }
     }
 
     // (The page title is in the Settings header bar now.)
@@ -210,22 +241,36 @@ ColumnLayout {
         }
     }
 
-    // ── 3. Application Notification Filters ──────────────────────────────────
+    // ── 3. Priorities and channels ───────────────────────────────────────────
     SettingsGroup {
         visible: section.part === "notifications"
-        title: I18n.tr("Application Notification Filters")
+        title: I18n.tr("Notifications by app")
+        subtitle: I18n.tr("Priority comes through focus modes and quiet hours, Quiet goes straight to the list, Off is not kept. A channel is the kind of notification an app says it sends; it follows its app unless set here")
         icon: "\u{f0f3}"
 
         Repeater {
-            model: section.activeApps
+            model: section.levelRows
 
-            SwitchRow {
+            SettingsRow {
                 required property var modelData
-                label: modelData.name
-                note: modelData.subtitle
-                checked: section.isRuleEnabled(modelData.name)
-                onToggled: section.toggleRule(modelData.name)
+                label: modelData.label
+                note: modelData.note
+                Select {
+                    Layout.preferredWidth: Design.s(Design.width.control)
+                    model: section.levelChoices(modelData.app, modelData.channel)
+                    current: modelData.channel ? Notifications.ownLevel(modelData.app, modelData.channel)
+                                               : Notifications.levelOf(modelData.app, "")
+                    onPicked: id => Notifications.setLevel(modelData.app, modelData.channel, id)
+                }
             }
+        }
+        Label {
+            visible: section.levelRows.length === 0
+            Layout.fillWidth: true
+            text: I18n.tr("Apps appear here once they have sent a notification.")
+            role: "caption"
+            dim: true
+            wrapMode: Text.WordWrap
         }
     }
 
@@ -323,7 +368,7 @@ ColumnLayout {
         id: modesCard
         visible: section.part === "notifications"
         title: I18n.tr("Focus modes")
-        subtitle: I18n.tr("Each one holds back banners and sounds, except from the apps you let through. Sleep also comes on with quiet hours, Work with the focus timer, Gaming with Game Mode")
+        subtitle: I18n.tr("Each one holds back banners and sounds, except from the apps you let through. Sleep also comes on with quiet hours, Meeting with your calendar, Work with the focus timer, Gaming with Game Mode")
         icon: "\u{f0594}"
         property string editing: "dnd"
 
@@ -404,6 +449,115 @@ ColumnLayout {
                 valueText: section._hhmm(Settings.dndScheduleEnd)
                 onDecrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, -30)
                 onIncrement: section._stepTime("dndScheduleEnd", Settings.dndScheduleEnd, 30)
+            }
+        }
+    }
+
+    // ── Meetings ─────────────────────────────────────────────────────────────
+    //
+    // The Meeting mode while an event in a calendar is under way
+    // (Services/Notifications, b1air-daemon calendar). A calendar is a .ics
+    // file, a folder of them (vdirsyncer's, khal's) or a link to one.
+    SettingsGroup {
+        id: meetings
+        visible: section.part === "notifications"
+        icon: "\u{f0ed7}"
+
+        SwitchRow {
+            label: I18n.tr("During meetings")
+            note: Notifications.meetingNow
+                ? I18n.tr("On now — %1, until %2", Notifications.meetingNow.title, section._clock(Notifications.meetingNow.end))
+                : Notifications.calendarOn && Notifications.nextMeeting
+                ? I18n.tr("Next: %1 at %2", Notifications.nextMeeting.title, section._clock(Notifications.nextMeeting.start))
+                : I18n.tr("The Meeting mode comes on while an event in your calendar is under way. All-day events and ones marked free do not count")
+            checked: Settings.focusDuringMeetings === true
+            onToggled: Settings.set("focusDuringMeetings", !(Settings.focusDuringMeetings === true))
+        }
+
+        Repeater {
+            model: Settings.focusDuringMeetings === true ? (Settings.calendarSources || []) : []
+            SettingsRow {
+                required property string modelData
+                required property int index
+                label: section.calendarLabel(modelData)
+                note: section.calendarKind(modelData)
+                IconButton {
+                    icon: "\u{f0156}"
+                    label: I18n.tr("Remove")
+                    onClicked: section.removeCalendar(index)
+                }
+            }
+        }
+
+        // Adding one: what kind, then what it needs.
+        SettingsRow {
+            visible: Settings.focusDuringMeetings === true
+            label: I18n.tr("Add a calendar")
+            SegmentedControl {
+                id: calKind
+                size: "sm"
+                model: [{ id: "google", label: "Google" }, { id: "icloud", label: "iCloud" },
+                        { id: "caldav", label: "CalDAV" }, { id: "link", label: I18n.tr("Link or file") }]
+                current: "google"
+                onPicked: id => calKind.current = id
+            }
+        }
+        Label {
+            visible: Settings.focusDuringMeetings === true
+            Layout.fillWidth: true
+            text: calKind.current === "google"
+                ? I18n.tr("In Google Calendar on the web: Settings, then your calendar, then Integrate calendar. Copy its Secret address in iCal format and paste it here")
+                : calKind.current === "icloud"
+                ? I18n.tr("Your Apple ID and an app-specific password for it, made at account.apple.com under Sign-In and Security. Every calendar of the account is read")
+                : calKind.current === "caldav"
+                ? I18n.tr("The server's address (Nextcloud, Fastmail, Radicale…), your user name and password. Every calendar of the account is read")
+                : I18n.tr("A .ics file, a folder of them (as vdirsyncer and khal keep them), or a link to one (webcal or https)")
+            role: "caption"
+            dim: true
+            wrapMode: Text.WordWrap
+        }
+        RowLayout {
+            visible: Settings.focusDuringMeetings === true
+            Layout.fillWidth: true
+            spacing: Design.s(Design.space.sm)
+            Field {
+                id: calWhere
+                Layout.fillWidth: true
+                visible: calKind.current !== "icloud"
+                placeholder: calKind.current === "google" ? "https://calendar.google.com/calendar/ical/…/basic.ics"
+                           : calKind.current === "caldav" ? "https://cloud.example.org/remote.php/dav"
+                           : "~/.calendars/work"
+            }
+            Field {
+                id: calUser
+                Layout.fillWidth: true
+                visible: calKind.current === "icloud" || calKind.current === "caldav"
+                placeholder: calKind.current === "icloud" ? I18n.tr("Apple ID") : I18n.tr("User name")
+            }
+            Field {
+                id: calPassword
+                Layout.fillWidth: true
+                visible: calKind.current === "icloud" || calKind.current === "caldav"
+                echoMode: TextInput.Password
+                placeholder: calKind.current === "icloud" ? I18n.tr("App-specific password") : I18n.tr("Password")
+            }
+            Button {
+                label: I18n.tr("Add")
+                enabled: calKind.current === "icloud" ? calUser.text.trim() !== "" && calPassword.text !== ""
+                       : calKind.current === "caldav" ? calWhere.text.trim() !== "" && calUser.text.trim() !== "" && calPassword.text !== ""
+                       : calWhere.text.trim() !== ""
+                onClicked: section.addCalendar(calKind.current, calWhere.text.trim(), calUser.text.trim(), calPassword.text)
+            }
+        }
+
+        Repeater {
+            model: Settings.focusDuringMeetings === true ? Notifications.calendarErrors : []
+            InlineStatus {
+                required property string modelData
+                Layout.fillWidth: true
+                status: "warning"
+                showRetry: false
+                text: modelData
             }
         }
     }

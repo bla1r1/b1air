@@ -27,7 +27,7 @@ Singleton {
         // A messenger's "reply here": the toast and the list show a field.
         inlineReplySupported: true
         // Hints outside the spec arrive only when named here.
-        extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value", "x-b1air-open"]
+        extraHints: ["x-b1air-osd", "x-canonical-private-synchronous", "value", "x-b1air-open", "category"]
 
         onNotification: notif => {
             root._handleIncoming(notif);
@@ -39,6 +39,13 @@ Singleton {
 
     // Notification History model (for Control Center history panel)
     readonly property ListModel history: ListModel {}
+
+    // Everything that arrived in the last seven days, newest first, kept
+    // apart from `history`: clearing the list, or a line in it, takes it out
+    // of the notification centre and not out of here, so what was cleared
+    // can still be searched for (search() below).
+    readonly property ListModel archive: ListModel {}
+    readonly property int archiveDays: 7
 
     // Do Not Disturb.
     //
@@ -58,16 +65,19 @@ Singleton {
     // except from the apps it lets through (Settings → Notifications): Do Not
     // Disturb and Personal are picked by hand, Sleep is also on through quiet
     // hours, Work while the focus timer runs (when that silences), Gaming
-    // while Game Mode does. One at a time: the one picked by hand first.
+    // while Game Mode does, Meeting while the calendar has one (below). One
+    // at a time: the one picked by hand first, then a meeting.
     readonly property var modes: [
         { id: "dnd",      name: I18n.tr("Do Not Disturb"), glyph: "\u{f0594}" },
         { id: "work",     name: I18n.tr("Work"),           glyph: "\u{f00d6}" },
         { id: "personal", name: I18n.tr("Personal"),       glyph: "\u{f0004}" },
+        { id: "meeting",  name: I18n.tr("Meeting"),        glyph: "\u{f0ed7}" },
         { id: "sleep",    name: I18n.tr("Sleep"),          glyph: "\u{f04b2}" },
         { id: "game",     name: I18n.tr("Gaming"),         glyph: "\u{f0eb5}" }
     ]
     function modeById(id) { return root.modes.find(m => m.id === id) || null; }
     readonly property string mode: Settings.focusMode !== "" ? Settings.focusMode
+        : root.meetingNow ? "meeting"
         : root.quietHours ? "sleep"
         : (Settings.gameModeEnabled === true && Settings.gameModeDND === true) ? "game"
         : Focus.wantsDnd ? "work" : ""
@@ -193,11 +203,85 @@ Singleton {
         }
     }
 
-    function isAppMuted(appName) {
-        if (!appName) return false;
-        let rules = Settings.notificationRules || {};
-        let key = appName.toLowerCase().trim();
-        return rules[key] === false;
+    // ── Priorities and channels ──────────────────────────────────────────────
+    //
+    // Each app, and each of its channels (the kind of notification it says
+    // it sends, the specification's `category` hint: "im.received",
+    // "email.arrived", "transfer.complete"…), has a level:
+    //
+    //   priority  a banner even in a focus mode or quiet hours
+    //   normal    a banner, unless a focus mode holds it back
+    //   quiet     straight into the list, no banner
+    //   off       not kept at all
+    //
+    // A channel with no level of its own has its app's. Stored in
+    // Settings.notificationRules as "app" and "app/channel" keys; true and
+    // false there are the on/off switch this replaced (false: quiet).
+    readonly property var levels: ["priority", "normal", "quiet", "off"]
+    function levelName(level) {
+        return level === "priority" ? I18n.tr("Priority") : level === "quiet" ? I18n.tr("Quiet")
+             : level === "off" ? I18n.tr("Off") : I18n.tr("Normal");
+    }
+    function _ruleKey(appName, channel) {
+        const app = String(appName || "").toLowerCase().trim();
+        return channel ? app + "/" + String(channel).toLowerCase().trim() : app;
+    }
+    function _asLevel(v) {
+        return v === false ? "quiet" : (typeof v === "string" && root.levels.indexOf(v) >= 0) ? v : "";
+    }
+    // The level set for exactly this app or channel, "" for none.
+    function ownLevel(appName, channel) {
+        return root._asLevel((Settings.notificationRules || {})[root._ruleKey(appName, channel)]);
+    }
+    // The level in force: the channel's, else its app's, else normal.
+    function levelOf(appName, channel) {
+        return (channel ? root.ownLevel(appName, channel) : "") || root.ownLevel(appName) || "normal";
+    }
+    // `level` "" takes a channel's own level away, so it follows its app's.
+    function setLevel(appName, channel, level) {
+        const rules = Object.assign({}, Settings.notificationRules || {});
+        const key = root._ruleKey(appName, channel);
+        if (!level || (!channel && level === "normal")) delete rules[key];
+        else rules[key] = level;
+        Settings.set("notificationRules", rules);
+    }
+    // A channel's name in words, for the kinds the specification names.
+    function channelName(category) {
+        const c = String(category || "");
+        const known = {
+            "im": I18n.tr("Messages"), "im.received": I18n.tr("Messages"), "im.error": I18n.tr("Message errors"),
+            "email": I18n.tr("Mail"), "email.arrived": I18n.tr("New mail"), "email.bounced": I18n.tr("Bounced mail"),
+            "call": I18n.tr("Calls"), "call.incoming": I18n.tr("Incoming calls"), "call.unanswered": I18n.tr("Missed calls"),
+            "device": I18n.tr("Devices"), "device.added": I18n.tr("Device connected"), "device.removed": I18n.tr("Device removed"),
+            "device.error": I18n.tr("Device errors"), "network": I18n.tr("Network"),
+            "network.connected": I18n.tr("Connected"), "network.disconnected": I18n.tr("Disconnected"),
+            "network.error": I18n.tr("Network errors"), "presence": I18n.tr("Presence"),
+            "presence.online": I18n.tr("Came online"), "presence.offline": I18n.tr("Went offline"),
+            "transfer": I18n.tr("Transfers"), "transfer.complete": I18n.tr("Transfer finished"),
+            "transfer.error": I18n.tr("Transfer errors")
+        };
+        return known[c] || c;
+    }
+    // The apps heard from in the last seven days, each with the channels it
+    // used: what the Notifications page lists.
+    readonly property var sources: {
+        const _ = root.archiveStamp, __ = root.trackedApps;
+        const byKey = {};
+        const out = [];
+        const add = (name, icon, channel) => {
+            const key = String(name || "").toLowerCase().trim();
+            if (!key) return;
+            let app = byKey[key];
+            if (!app) { app = byKey[key] = { name: name, icon: icon || "", channels: [] }; out.push(app); }
+            if (!app.icon && icon) app.icon = icon;
+            if (channel && app.channels.indexOf(channel) < 0) app.channels.push(channel);
+        };
+        for (const a of root.trackedApps) add(a.name, a.icon, "");
+        for (let i = 0; i < root.archive.count; i++) {
+            const it = root.archive.get(i);
+            add(it.appName, it.appIcon || it.icon, it.category || "");
+        }
+        return out;
     }
 
     // What to draw for a notification: its image (a picture sent with it),
@@ -246,6 +330,7 @@ Singleton {
             appIcon: root._appIconSource(notif),
             urgency: notif.urgency,
             critical: notif.urgency === NotificationUrgency.Critical,
+            category: String(hints["category"] || ""),
             time: new Date().toLocaleTimeString(I18n.locale, "hh:mm"),
             ts: Date.now(),
             count: 1,
@@ -260,16 +345,22 @@ Singleton {
         // Record app to trackedApps list
         root._recordApp(item.appName, notif.appIcon || "");
 
+        const level = root.levelOf(item.appName, item.category);
+        if (level === "off") return;
+
         // Add to history
         root.history.insert(0, item);
         if (root.history.count > 50) root.history.remove(50);
         root._save();
+        root._archive(item);
 
-        // Show a toast only if DND is off, the app is not muted, and the list
-        // is not already on screen. A toast that repeats a line the user is
-        // looking at in the notification centre is noise, and it used to land
-        // on top of that very list.
-        if ((!root.dnd || root.allowedNow(item.appName)) && !root.isAppMuted(item.appName) && !root.listVisible) {
+        // A banner unless the app or channel is quiet, a focus mode holds it
+        // back (priority and critical ones come through), or the list is
+        // already on screen. A toast that repeats a line the user is looking
+        // at in the notification centre is noise, and it used to land on top
+        // of that very list.
+        const through = !root.dnd || root.allowedNow(item.appName) || level === "priority" || item.critical;
+        if (level !== "quiet" && through && !root.listVisible) {
             // Another from the same app and sender while one is up (a chat
             // going on): one toast, the newest on it and how many under it,
             // not a column of them.
@@ -399,13 +490,7 @@ Singleton {
             // the list actually draws are stored.
             // A picture from the bus is an image provider URL that means
             // nothing after a restart; a file stays.
-            const keep = s => String(s || "").startsWith("file://") ? s : "";
-            arr.push({
-                id: it.id, appName: it.appName, summary: it.summary,
-                body: it.body, icon: keep(it.icon), image: keep(it.image), appIcon: keep(it.appIcon),
-                urgency: it.urgency, critical: !!it.critical, time: it.time, ts: it.ts || 0,
-                open: it.open || "", desktopEntry: it.desktopEntry || ""
-            });
+            arr.push(root._stored(it));
         }
         root._pendingSave = JSON.stringify(arr);
         saveDebounce.restart();
@@ -450,6 +535,182 @@ Singleton {
             historySaver.stdinEnabled = true;
             historySaver.running = true;
         }
+    }
+
+    // ── The archive ──────────────────────────────────────────────────────────
+    //
+    // The same store as the list (b1air-secret-service, so what people wrote
+    // is not left in a plain file), its own key. A thousand at most, and
+    // long bodies cut, so a chatty week does not make it unwieldy.
+    readonly property int archiveMax: 1000
+    property int archiveStamp: 0
+    function _archive(item) {
+        root.archive.insert(0, root._stored(item));
+        root._pruneArchive();
+        root._saveArchive();
+    }
+    function _pruneArchive() {
+        const oldest = Date.now() - root.archiveDays * 86400000;
+        while (root.archive.count > 0
+               && (root.archive.count > root.archiveMax || (root.archive.get(root.archive.count - 1).ts || 0) < oldest))
+            root.archive.remove(root.archive.count - 1);
+        root.archiveStamp++;
+    }
+    // What is kept of a notification: what the lists draw, nothing live.
+    // A picture from the bus is an image provider URL that means nothing
+    // after a restart; a file stays.
+    function _stored(it) {
+        const keep = s => String(s || "").startsWith("file://") ? s : "";
+        return {
+            id: it.id, appName: it.appName, summary: it.summary,
+            body: String(it.body || "").slice(0, 2000), icon: keep(it.icon), image: keep(it.image),
+            appIcon: keep(it.appIcon), urgency: it.urgency, critical: !!it.critical,
+            category: it.category || "", time: it.time, ts: it.ts || 0,
+            open: it.open || "", desktopEntry: it.desktopEntry || ""
+        };
+    }
+    // The notifications of the last seven days with every word of `query`
+    // in their app, title or text, newest first; at most `limit`.
+    function search(query, limit) {
+        const words = String(query || "").toLowerCase().split(/\s+/).filter(w => w !== "");
+        const out = [];
+        if (words.length === 0) return out;
+        for (let i = 0; i < root.archive.count && out.length < (limit || 200); i++) {
+            const it = root.archive.get(i);
+            const hay = (it.appName + "\n" + it.summary + "\n" + it.body).toLowerCase();
+            if (words.every(w => hay.indexOf(w) >= 0)) out.push(root._stored(it));
+        }
+        return out;
+    }
+    function clearArchive() {
+        root.archive.clear();
+        root.archiveStamp++;
+        root._saveArchive();
+    }
+
+    property bool _archiveLoaded: false
+    property bool _archiveSaveWanted: false
+    property string _archivePending: ""
+    function _applyArchive(raw) {
+        if (root._archiveLoaded) return;
+        try {
+            const list = JSON.parse((raw || "").trim() || "[]");
+            // Appended: anything that arrived while the read was in flight
+            // is newer and already at the top.
+            if (Array.isArray(list))
+                for (const entry of list)
+                    if (entry && entry.summary !== undefined) root.archive.append(entry);
+        } catch (e) {
+            console.log("Notification archive load error:", e);
+        }
+        root._archiveLoaded = true;
+        root._pruneArchive();
+        if (root._archiveSaveWanted) root._saveArchive();
+    }
+    function _saveArchive() {
+        if (!root._archiveLoaded) { root._archiveSaveWanted = true; return; }
+        const arr = [];
+        for (let i = 0; i < root.archive.count; i++) arr.push(root._stored(root.archive.get(i)));
+        // The store takes a megabyte a secret: past that the oldest go, or
+        // the whole week would fail to save. Counted in characters, and
+        // Cyrillic is two bytes each, so half of it.
+        let json = JSON.stringify(arr);
+        while (json.length > 450000 && arr.length > 0) {
+            arr.splice(Math.floor(arr.length * 0.9));
+            json = JSON.stringify(arr);
+        }
+        while (root.archive.count > arr.length) root.archive.remove(root.archive.count - 1);
+        root._archivePending = json;
+        archiveDebounce.restart();
+    }
+    Process {
+        running: true
+        command: ["b1air-secret-service", "get", "notification-archive"]
+        stdout: StdioCollector { onStreamFinished: root._applyArchive(this.text) }
+    }
+    Timer {
+        interval: 4000
+        running: !root._archiveLoaded
+        onTriggered: root._applyArchive("")
+    }
+    Process {
+        id: archiveSaver
+        stdinEnabled: true
+        command: ["b1air-secret-service", "set", "notification-archive"]
+        onStarted: { write(root._archivePending); stdinEnabled = false; }
+    }
+    // Longer than the list's: a burst writes the whole week once.
+    Timer {
+        id: archiveDebounce
+        interval: 1500
+        onTriggered: {
+            archiveSaver.running = false;
+            archiveSaver.stdinEnabled = true;
+            archiveSaver.running = true;
+        }
+    }
+    // What turns a week old drops off by the hour, not only when something new comes.
+    Timer {
+        interval: 3600000
+        running: root._archiveLoaded
+        repeat: true
+        onTriggered: {
+            const n = root.archive.count;
+            root._pruneArchive();
+            if (root.archive.count !== n) root._saveArchive();
+        }
+    }
+
+    // ── Meetings ─────────────────────────────────────────────────────────────
+    //
+    // With "During meetings" on (Settings → Notifications), the calendars in
+    // Settings.calendarSources are read by the daemon (b1air-daemon
+    // calendar: .ics files, vdir folders, links) every five minutes, and the
+    // Meeting mode is on while one marked busy is under way. All-day events
+    // and ones marked free do not count.
+    property var events: []
+    property var calendarErrors: []
+    readonly property bool calendarOn: Settings.focusDuringMeetings === true
+                                       && (Settings.calendarSources || []).length > 0
+    readonly property var meetingNow: {
+        const t = root.now;
+        if (!root.calendarOn) return null;
+        return root.events.find(e => e.busy && !e.allDay && e.start <= t && t < e.end) || null;
+    }
+    // The next one in the coming day, for the page to show.
+    readonly property var nextMeeting: {
+        const t = root.now;
+        return root.events.find(e => e.busy && !e.allDay && e.start > t) || null;
+    }
+    function refreshCalendar() {
+        if (!root.calendarOn) { root.events = []; root.calendarErrors = []; return; }
+        calendarProc.command = ["b1air-daemon", "calendar", "--hours", "24"].concat(Settings.calendarSources);
+        calendarProc.running = false;
+        calendarProc.running = true;
+    }
+    Process {
+        id: calendarProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const d = JSON.parse(this.text);
+                    root.events = d.events || [];
+                    root.calendarErrors = d.errors || [];
+                } catch (e) {}
+            }
+        }
+    }
+    Timer {
+        interval: 300000
+        running: root.calendarOn
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.refreshCalendar()
+    }
+    Connections {
+        target: Settings
+        function onCalendarSourcesChanged() { root.refreshCalendar(); }
+        function onFocusDuringMeetingsChanged() { root.refreshCalendar(); }
     }
 
     // The tile's switch: the last mode picked by hand, or off.
