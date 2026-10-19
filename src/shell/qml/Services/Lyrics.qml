@@ -40,7 +40,10 @@ Singleton {
     readonly property real length: root.player ? root.player.length : 0
     readonly property string trackUrl: root.player && root.player.metadata
         ? String(root.player.metadata["xesam:url"] || "") : ""
-    readonly property string key: root.artist + "\n" + root.title
+    // What is looked up again when it changes. The address is in it: a
+    // player sends the title before the rest of a track's details, and a
+    // look made then went past the .lrc beside a file it had no address for.
+    readonly property string key: root.artist + "\n" + root.title + "\n" + root.trackUrl
 
     // [{ t: seconds (-1 unsynced), text }]
     property var lines: []
@@ -78,8 +81,11 @@ Singleton {
         return i;
     }
 
-    onKeyChanged: root._lookUp()
-    onWantedChanged: root._lookUp()
+    // Once the player's change has all come in (title, artist and address
+    // arrive as separate updates), and from the values, not from bindings
+    // on them that may not have caught up yet.
+    onKeyChanged: Qt.callLater(root._lookUp)
+    onWantedChanged: Qt.callLater(root._lookUp)
     Connections {
         target: Settings
         function onLyricsOnlineChanged() { if (root.state === "ask") { root._loadedKey = ""; root._lookUp(); } }
@@ -135,8 +141,9 @@ Singleton {
 
     readonly property string cacheDir: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache"))
                                        + "/b1air/lyrics"
-    readonly property string cacheFile: root.cacheDir + "/" + Qt.md5(root.key) + ".lrc"
-    readonly property string besideFile: {
+    // By song, not by where it is played from.
+    function _cacheFile() { return root.cacheDir + "/" + Qt.md5(root.artist + "\n" + root.title) + ".lrc"; }
+    function _besideFile() {
         const u = root.trackUrl;
         if (!u.startsWith("file://")) return "";
         const path = decodeURIComponent(u.slice(7));
@@ -153,7 +160,7 @@ Singleton {
         root.state = "loading";
         // Beside the track, then the cache: one `cat` each, the first that
         // has something wins.
-        reader.candidates = [[root.besideFile, "file"], [root.cacheFile, "cache"]].filter(c => c[0] !== "");
+        reader.candidates = [[root._besideFile(), "file"], [root._cacheFile(), "cache"]].filter(c => c[0] !== "");
         reader.next();
     }
 
@@ -166,6 +173,11 @@ Singleton {
             if (reader.candidates.length === 0) { root._online(); return; }
             const c = reader.candidates[0];
             reader.candidates = reader.candidates.slice(1);
+            // Stopped first: a look for the track before may still be running,
+            // and setting `running` on a running process starts nothing. What
+            // it read as it stops is not this track's.
+            reader.forKey = "";
+            reader.running = false;
             reader.from = c[1];
             reader.forKey = root.key;
             reader.command = ["cat", c[0]];
@@ -211,7 +223,7 @@ Singleton {
         if (!text || !root._found(text, "lrclib")) return false;
         // Kept, so the track is not asked for again.
         writer.text = text;
-        writer.command = ["sh", "-c", 'mkdir -p "$1" && cat > "$2"', "sh", root.cacheDir, root.cacheFile];
+        writer.command = ["sh", "-c", 'mkdir -p "$1" && cat > "$2"', "sh", root.cacheDir, root._cacheFile()];
         writer.running = true;
         return true;
     }
