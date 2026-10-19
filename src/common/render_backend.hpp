@@ -27,6 +27,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QTimer>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QStringList>
@@ -55,7 +56,8 @@ inline void choose_renderer() {
 // QT_QPA_PLATFORM=offscreen (tools/app-shots.sh) — the same picture the
 // window would show. B1AIR_GRAB_DELAY (ms, default 2000) waits for content
 // loaded after the window, a folder's listing or a repository's log; with no
-// compositor to size the window, B1AIR_GRAB_SIZE (default 1300x800) does.
+// compositor to size the window, B1AIR_GRAB_SIZE (default 1300x800, "none"
+// where a compositor sizes it) does.
 inline void grab_if_asked() {
     const QString out = qEnvironmentVariable("B1AIR_GRAB");
     if (out.isEmpty()) return;
@@ -73,6 +75,29 @@ inline void grab_if_asked() {
         const QStringList wh = qEnvironmentVariable("B1AIR_GRAB_SIZE", QStringLiteral("1300x800"))
                                    .split(QLatin1Char('x'));
         if (wh.size() == 2) win->resize(wh[0].toInt(), wh[1].toInt());
+        // B1AIR_GRAB_SCROLL=<px>: the largest visible scrolling view moved
+        // down that far first, to see what lies under a toolbar's glass.
+        if (const int by = qEnvironmentVariableIntValue("B1AIR_GRAB_SCROLL")) {
+            QQuickItem* best = nullptr;
+            qreal most = 0;
+            // Through the item tree (childItems), which is not the QObject one.
+            QList<QQuickItem*> todo{win->contentItem()};
+            while (!todo.isEmpty()) {
+                QQuickItem* it = todo.takeLast();
+                if (!it->isVisible()) continue;
+                todo += it->childItems();
+                if (!it->inherits("QQuickFlickable") || it->width() < 200) continue;
+                const qreal over = it->property("contentHeight").toReal() - it->height();
+                if (over > most) { most = over; best = it; }
+            }
+            if (best) {
+                best->setProperty("contentY", best->property("contentY").toReal() + by);
+                qWarning("B1AIR_GRAB_SCROLL: %s scrolled to %g", best->metaObject()->className(),
+                         best->property("contentY").toReal());
+            } else {
+                qWarning("B1AIR_GRAB_SCROLL: nothing to scroll");
+            }
+        }
         QTimer::singleShot(600, win, [win, out] {
             QCoreApplication::exit(win->grabWindow().save(out) ? 0 : 1);
         });

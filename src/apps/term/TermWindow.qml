@@ -133,12 +133,14 @@ Window {
                         onCloseRequested: window.closeTab(index)
                     }
                 }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.newTabHere() }
-                Button {
-                    id: termMoreBtn
-                    variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
-                    tip: I18n.tr("More")
-                    onClicked: termMenu.popup(termMoreBtn, 0, termMoreBtn.height)
+                ToolbarGroup {
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+Shift+T)"); onClicked: window.newTabHere() }
+                    Button {
+                        id: termMoreBtn
+                        variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
+                        tip: I18n.tr("More")
+                        onClicked: termMenu.popup(termMoreBtn, 0, termMoreBtn.height)
+                    }
                 }
                 AppMenu {
                     id: termMenu

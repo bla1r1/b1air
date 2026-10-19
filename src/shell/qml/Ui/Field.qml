@@ -54,11 +54,26 @@ Rectangle {
     implicitWidth: Design.s(Design.width.field)
 
     // Its container's corner rule (Shape, Design.corner), else its own.
-    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+    radius: root.onGlass ? height / 2 : Design.corner(Shape.radius, Design.s(Design.radius.ctl))
     // On glass a field is a lighter pane of it, not a black well cut in.
-    color: Design.well
+    color: root.onGlass ? "transparent" : Design.well
     border.width: Design.border
-    border.color: input.activeFocus ? Design.accent : (area.containsMouse ? Design.veilStrong : Design.line)
+    border.color: input.activeFocus ? Design.accent
+                : root.onGlass ? "transparent"
+                : (area.containsMouse ? Design.veilStrong : Design.line)
+
+    // On a toolbar: a capsule of the toolbar's glass (Ui/ToolbarGlass) under
+    // it instead of a fill of its own, as a Mac's toolbar has its search
+    // field and its view switch. `backdrop` is what scrolls under the
+    // toolbar, for the glass to bend; without one the capsule is plain.
+    property bool onGlass: false
+    property Item backdrop: null
+    Loader {
+        active: root.onGlass
+        anchors.fill: parent
+        z: -1
+        sourceComponent: ToolbarGlass { backdrop: root.backdrop }
+    }
 
     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
 

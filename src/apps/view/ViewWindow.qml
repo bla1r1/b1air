@@ -87,7 +87,7 @@ ApplicationWindow {
     // The box a picture is fitted into at 100%: the canvas, or the picture's
     // own size when that is smaller — a small picture is not blown up.
     readonly property size fitSize: {
-        const w = imageFlick.width, h = imageFlick.height, dpr = Screen.devicePixelRatio || 1;
+        const w = imageFlick.width, h = imageFlick.height - imageFlick.topMargin, dpr = Screen.devicePixelRatio || 1;
         const iw = ViewBackend.imageSize.width / dpr, ih = ViewBackend.imageSize.height / dpr;
         if (!(iw > 0 && ih > 0)) return Qt.size(w, h);
         const k = Math.min(1, w / iw, h / ih);
@@ -164,53 +164,6 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 0
 
-            // ── Top Header Toolbar (40px) ────────────────────────────────────
-            AppToolbar {
-                Layout.fillWidth: true
-                z: 10
-
-                AppTitle {
-                    title: ViewBackend.fileName || I18n.tr("No image open")
-                    subtitle: !window.hasImage ? "" : [window.kind === "video" && video.sourceRect.width > 0
-                                   ? video.sourceRect.width + " × " + video.sourceRect.height : ViewBackend.imageResolution,
-                               ViewBackend.fileSize,
-                               ViewBackend.totalFiles > 1 ? I18n.tr("%1 of %2", ViewBackend.fileIndex + 1, ViewBackend.totalFiles) : ""]
-                              .filter(x => x).join("  ·  ")
-                }
-                RowLayout {
-                    spacing: Design.s(Design.space.xxs)
-                    visible: !window.isMedia
-                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
-                    Label {
-                        Layout.preferredWidth: Design.s(Design.size.art)
-                        horizontalAlignment: Text.AlignHCenter
-                        text: Math.round(window.zoomFactor * 100) + "%"
-                        tabular: true
-                        role: "caption"
-                        dim: true
-                    }
-                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
-                }
-                Button { variant: "ghost"; iconOnly: true; visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); checked: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0293}"; tip: I18n.tr("Full screen (F)"); checked: window.visibility === Window.FullScreen; onClicked: window.toggleFullScreen() }
-                // Reset, rotate and wallpaper: what is used now and then, in
-                // the menu. The toolbar keeps what is used all the time.
-                Button {
-                    id: moreBtn
-                    variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
-                    visible: !window.isMedia
-                    tip: I18n.tr("More")
-                    onClicked: moreMenu.popup(moreBtn, 0, moreBtn.height)
-                }
-                AppMenu {
-                    id: moreMenu
-                    AppMenuItem { text: I18n.tr("Reset view"); keys: "0"; glyph: "\u{f0450}"; onTriggered: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
-                    AppMenuItem { text: I18n.tr("Rotate 90°"); keys: "R"; glyph: "\u{f0467}"; onTriggered: window.rotationAngle = (window.rotationAngle + 90) % 360 }
-                    AppMenuSeparator {}
-                    AppMenuItem { text: I18n.tr("Set as wallpaper"); glyph: "\u{f0e09}"; onTriggered: ViewBackend.setWallpaper() }
-                }
-            }
-
             // ── Main Image Canvas ────────────────────────────────────────────
             Item {
                 id: controlsArea
@@ -222,8 +175,10 @@ ApplicationWindow {
                     id: imageFlick
                     anchors.fill: parent
                     visible: !window.isMedia
+                    // Under the toolbar only when zoomed in and scrolled.
+                    topMargin: viewBar.height
                     contentWidth: width * Math.max(1, window.zoomFactor)
-                    contentHeight: height * Math.max(1, window.zoomFactor)
+                    contentHeight: (height - topMargin) * Math.max(1, window.zoomFactor)
                     boundsBehavior: Flickable.StopAtBounds
 
                     Item {
@@ -321,6 +276,7 @@ ApplicationWindow {
 
                 Box {
                     anchors.fill: parent
+                    anchors.topMargin: viewBar.height
                     visible: window.showsVideo && !window.openFailed
                     color: "black"
                     VideoView {
@@ -642,6 +598,74 @@ ApplicationWindow {
                 }
             }
         }
+
+            // The toolbar over the picture, as a Mac's: its controls on
+            // glass groups that bend the picture under them, the edge effect
+            // behind the title so it reads on any photo. The picture at rest
+            // sits below it (imageFlick's topMargin); zoomed in, it scrolls
+            // under the glass.
+            ScrollEdge {
+                id: scrollEdge
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                backdrop: controlsArea
+                barHeight: viewBar.height
+                flick: window.isMedia ? null : imageFlick
+            }
+            AppToolbar {
+                id: viewBar
+                over: scrollEdge.scrolledUnder
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                z: 10
+                rule: false
+
+                AppTitle {
+                    title: ViewBackend.fileName || I18n.tr("No image open")
+                    subtitle: !window.hasImage ? "" : [window.kind === "video" && video.sourceRect.width > 0
+                                   ? video.sourceRect.width + " × " + video.sourceRect.height : ViewBackend.imageResolution,
+                               ViewBackend.fileSize,
+                               ViewBackend.totalFiles > 1 ? I18n.tr("%1 of %2", ViewBackend.fileIndex + 1, ViewBackend.totalFiles) : ""]
+                              .filter(x => x).join("  ·  ")
+                }
+                ToolbarGroup {
+                    backdrop: controlsArea
+                    visible: !window.isMedia
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; tip: I18n.tr("Zoom out (−)"); onClicked: window.zoomFactor = Math.max(0.2, window.zoomFactor - 0.25) }
+                    Label {
+                        Layout.preferredWidth: Design.s(Design.size.art)
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Math.round(window.zoomFactor * 100) + "%"
+                        tabular: true
+                        role: "caption"
+                        dim: true
+                    }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("Zoom in (+)"); onClicked: window.zoomFactor = Math.min(5.0, window.zoomFactor + 0.25) }
+                }
+                ToolbarGroup {
+                    backdrop: controlsArea
+                    Button { variant: "ghost"; iconOnly: true; visible: window.hasSiblings; icon: "\u{f0570}"; tip: I18n.tr("Filmstrip"); checked: window.showFilmstrip; onClicked: window.showFilmstrip = !window.showFilmstrip }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0293}"; tip: I18n.tr("Full screen (F)"); checked: window.visibility === Window.FullScreen; onClicked: window.toggleFullScreen() }
+                    // Reset, rotate and wallpaper: what is used now and then, in
+                    // the menu. The toolbar keeps what is used all the time.
+                    Button {
+                        id: moreBtn
+                        variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"
+                        visible: !window.isMedia
+                        tip: I18n.tr("More")
+                        onClicked: moreMenu.popup(moreBtn, 0, moreBtn.height)
+                    }
+                }
+                AppMenu {
+                    id: moreMenu
+                    AppMenuItem { text: I18n.tr("Reset view"); keys: "0"; glyph: "\u{f0450}"; onTriggered: { window.zoomFactor = 1.0; window.rotationAngle = 0; } }
+                    AppMenuItem { text: I18n.tr("Rotate 90°"); keys: "R"; glyph: "\u{f0467}"; onTriggered: window.rotationAngle = (window.rotationAngle + 90) % 360 }
+                    AppMenuSeparator {}
+                    AppMenuItem { text: I18n.tr("Set as wallpaper"); glyph: "\u{f0e09}"; onTriggered: ViewBackend.setWallpaper() }
+                }
+            }
     }
 
     // A track by what its tags say: its title and language, else its number.

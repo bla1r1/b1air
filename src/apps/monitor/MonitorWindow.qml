@@ -124,6 +124,7 @@ Window {
                 // field, on the view it filters.
                 SegmentedControl {
                     size: "sm"
+                    onGlass: true
                     model: [
                         { id: "overview",  label: I18n.tr("Overview"),  icon: "\u{f0128}" },
                         { id: "processes", label: I18n.tr("Processes"), icon: "\u{f0279}" }
@@ -136,13 +137,16 @@ Window {
                     id: searchInput
                     visible: window.currentTab === "processes"
                     Layout.preferredWidth: Design.s(Design.width.control)
+                    onGlass: true
                     placeholder: I18n.tr("Filter processes (Ctrl+F)")
                     onEdited: value => {
                         window.procSearchQuery = value;
                         if (isNative) MonitorBackend.setProcessFilter(value);
                     }
                 }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
+                ToolbarGroup {
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0450}"; tip: I18n.tr("Refresh now (F5)"); onClicked: if (isNative) MonitorBackend.refresh() }
+                }
             }
 
         // ═════════════════════════════════════════════════════════════════════

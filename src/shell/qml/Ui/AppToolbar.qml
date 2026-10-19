@@ -9,6 +9,11 @@ import QtQuick.Layouts
 Item {
     id: root
     default property alias content: row.data
+    // Content is scrolled under it (bind to its Ui/ScrollEdge's
+    // scrolledUnder): the glass on it takes a body then — bends what is
+    // under, casts a shadow — and is a light film of the window otherwise.
+    property bool over: false
+    readonly property bool isAppToolbar: true
     property alias spacing: row.spacing
     implicitHeight: Design.s(Design.size.rowTall)
 

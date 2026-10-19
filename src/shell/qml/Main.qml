@@ -37,10 +37,11 @@ Scope {
         else Quickshell.reload(true);
     }
 
-    readonly property bool compositorBlurs: Sway.swayfx
+    // What the settings allow; whether the compositor blurs is Design's own
+    // (Design.compositorBlurs), so the apps get the same answer.
     Binding {
         target: Design
-        property: "translucent"
+        property: "glassAllowed"
         value: !Settings.loaded || (Settings.blurEnabled && !Settings.reduceTransparency)
     }
     Binding { target: Design; property: "reduceMotion"; value: Settings.loaded && Settings.reduceMotion }

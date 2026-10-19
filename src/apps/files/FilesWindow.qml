@@ -1494,11 +1494,13 @@ C.ApplicationWindow {
             }
 
             ScrollEdge {
+                id: scrollEdge
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
                 backdrop: contentArea
                 barHeight: chrome.height
+                flick: window.currentView()
             }
 
             ColumnLayout {
@@ -1535,6 +1537,7 @@ C.ApplicationWindow {
                 // ── Toolbar ──────────────────────────────────────────────────────
                 AppToolbar {
                     id: toolbar
+                over: scrollEdge.scrolledUnder
                     Layout.fillWidth: true
                     // Ui/ScrollEdge under it ends it, line and all.
                     rule: false
@@ -1748,9 +1751,8 @@ C.ApplicationWindow {
                             Layout.maximumWidth: Design.s(Design.width.menuMin)
                             Layout.minimumWidth: Design.s(Design.size.thumb)
                             Layout.preferredHeight: Design.s(Design.size.knob)
-                            radius: height / 2
-                            color: "transparent"
-                            ToolbarGlass { anchors.fill: parent; z: -1; backdrop: contentArea }
+                            onGlass: true
+                            backdrop: contentArea
                             placeholder: I18n.tr("Search (Ctrl+F)")
                             onEdited: value => FilesBackend.filterQuery = value
                             onAccepted: window.currentView().forceActiveFocus()
@@ -1781,10 +1783,8 @@ C.ApplicationWindow {
                             // A capsule on the toolbar's glass; its selection is
                             // concentric with it (radius less the inset).
                             Layout.preferredHeight: Design.s(Design.size.knob)
-                            radius: height / 2
-                            color: "transparent"
-                            border.width: 0
-                            ToolbarGlass { anchors.fill: parent; z: -1; backdrop: contentArea }
+                            onGlass: true
+                            backdrop: contentArea
                             model: [
                                 { id: "grid",    label: "", icon: "\u{f0570}", tip: I18n.tr("Icons (Ctrl+1)") },
                                 { id: "list",    label: "", icon: "\u{f0279}", tip: I18n.tr("List (Ctrl+2)") },

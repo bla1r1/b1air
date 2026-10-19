@@ -2450,27 +2450,29 @@ Item {
                                             dim: true
                                         }
 
-                                        Button {
-                                            variant: "ghost"; size: "sm"; iconOnly: true
-                                            icon: "\u{f0bdd}"
-                                            checked: GitBackend.ignoreWhitespace
-                                            tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes")
-                                                                             : I18n.tr("Hide whitespace changes (lines can't be staged one by one then)")
-                                            onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
-                                        }
-                                        Button {
-                                            variant: "ghost"; size: "sm"; iconOnly: true
-                                            icon: "\u{f0219}"
-                                            checked: GitBackend.fullFile
-                                            tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
-                                            onClicked: GitBackend.fullFile = !GitBackend.fullFile
-                                        }
-                                        Button {
-                                            variant: "ghost"; size: "sm"; iconOnly: true
-                                            icon: "\u{f0db}"
-                                            checked: window.splitDiff
-                                            tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
-                                            onClicked: window.splitDiff = !window.splitDiff
+                                        ToolbarGroup {
+                                            Button {
+                                                variant: "ghost"; size: "sm"; iconOnly: true
+                                                icon: "\u{f0bdd}"
+                                                checked: GitBackend.ignoreWhitespace
+                                                tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes")
+                                                                                 : I18n.tr("Hide whitespace changes (lines can't be staged one by one then)")
+                                                onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
+                                            }
+                                            Button {
+                                                variant: "ghost"; size: "sm"; iconOnly: true
+                                                icon: "\u{f0219}"
+                                                checked: GitBackend.fullFile
+                                                tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
+                                                onClicked: GitBackend.fullFile = !GitBackend.fullFile
+                                            }
+                                            Button {
+                                                variant: "ghost"; size: "sm"; iconOnly: true
+                                                icon: "\u{f0db}"
+                                                checked: window.splitDiff
+                                                tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
+                                                onClicked: window.splitDiff = !window.splitDiff
+                                            }
                                         }
                                     }
                                 }
@@ -2845,26 +2847,28 @@ Item {
                                                     color: Design.text
                                                     elide: Text.ElideMiddle
                                                 }
-                                                Button {
-                                                    variant: "ghost"; size: "sm"; iconOnly: true
-                                                    icon: "\u{f0bdd}"
-                                                    checked: GitBackend.ignoreWhitespace
-                                                    tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes") : I18n.tr("Hide whitespace changes")
-                                                    onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
-                                                }
-                                                Button {
-                                                    variant: "ghost"; size: "sm"; iconOnly: true
-                                                    icon: "\u{f0219}"
-                                                    checked: GitBackend.fullFile
-                                                    tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
-                                                    onClicked: GitBackend.fullFile = !GitBackend.fullFile
-                                                }
-                                                Button {
-                                                    variant: "ghost"; size: "sm"; iconOnly: true
-                                                    icon: "\u{f0db}"
-                                                    checked: window.splitDiff
-                                                    tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
-                                                    onClicked: window.splitDiff = !window.splitDiff
+                                                ToolbarGroup {
+                                                    Button {
+                                                        variant: "ghost"; size: "sm"; iconOnly: true
+                                                        icon: "\u{f0bdd}"
+                                                        checked: GitBackend.ignoreWhitespace
+                                                        tip: GitBackend.ignoreWhitespace ? I18n.tr("Show whitespace changes") : I18n.tr("Hide whitespace changes")
+                                                        onClicked: GitBackend.ignoreWhitespace = !GitBackend.ignoreWhitespace
+                                                    }
+                                                    Button {
+                                                        variant: "ghost"; size: "sm"; iconOnly: true
+                                                        icon: "\u{f0219}"
+                                                        checked: GitBackend.fullFile
+                                                        tip: GitBackend.fullFile ? I18n.tr("Show only the changes") : I18n.tr("Show the whole file")
+                                                        onClicked: GitBackend.fullFile = !GitBackend.fullFile
+                                                    }
+                                                    Button {
+                                                        variant: "ghost"; size: "sm"; iconOnly: true
+                                                        icon: "\u{f0db}"
+                                                        checked: window.splitDiff
+                                                        tip: window.splitDiff ? I18n.tr("Unified view") : I18n.tr("Side by side")
+                                                        onClicked: window.splitDiff = !window.splitDiff
+                                                    }
                                                 }
                                             }
                                         }

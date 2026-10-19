@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import B1air.Daemon
 import QtCore
 import "../WindowRegistry.js" as LayoutMath
 
@@ -371,9 +372,18 @@ QtObject {
     // Whether surfaces may let the wallpaper through. Only with a compositor
     // that blurs what is behind them (swayFX, blur on): on plain sway, or with
     // blur off, a translucent panel shows the wallpaper sharp through every
-    // card, and text over a busy picture turned to mush. The shell sets it;
-    // the standalone apps leave it true, where these sit on their own window.
-    property bool translucent: true
+    // card, and text over a busy picture turned to mush. Then every surface is
+    // solid, as a Mac's with Reduce Transparency.
+    //
+    // Two halves. What the settings allow (blur on, Reduce Transparency off):
+    // the shell binds it from Settings, an app reads it from settings.json.
+    property bool glassAllowed: true
+    // Whether the compositor blurs at all: swayFX, which needs a GPU to run
+    // (scenefx draws with GLES), so this is "a GPU" too. Assumed until sway
+    // answers, so that a swayFX desktop does not flash solid as it starts.
+    // The shell computed this and never used it; the apps never asked.
+    readonly property bool compositorBlurs: Sway.compositorName === "" || Sway.swayfx
+    readonly property bool translucent: glassAllowed && compositorBlurs
     // Popup panels cast a soft shadow (PanelShadow). Main.qml sets it where
     // the compositor keeps the blur off a shadow (swayfx 0009's
     // blur_ignore_alpha): elsewhere the blur would show through it as a
@@ -392,16 +402,40 @@ QtObject {
     readonly property color glassCard: translucent ? tint(raised, 0.36) : raised
     readonly property color glassTile: translucent ? tint(raised, 0.32) : raised
     readonly property color glassBorder: tint(text, increaseContrast ? 0.32 : 0.12)
+    // One light over the whole desktop, from above. Air, a flat sheet, takes
+    // it on its top edge (glassEdge); glass has a body, so it takes it on its
+    // rim and gathers it inside the edge facing away, as a drop of water
+    // does (glassRim, LiquidGlass.caustic). One amount for both, so a pane
+    // and a capsule on it are lit by the same sun: the capsules' rim was
+    // 0.3 in either theme while the panes' edge was 0.1 in the dark one.
+    readonly property real light: translucent ? (darkTheme ? 0.10 : 0.55) : 0
     // The lit top edge of a pane of glass: a hairline lighter than the border.
-    readonly property color glassEdge: translucent ? tint("#ffffff", darkTheme ? 0.10 : 0.55) : "transparent"
+    readonly property color glassEdge: translucent ? tint("#ffffff", light) : "transparent"
+    readonly property real glassRim: 0.15 + 0.45 * light
+    // Light passes through: the dark theme's glass is lit at its foot
+    // nearly as the light one's, though its panes' edge is dimmer.
+    readonly property real glassCaustic: translucent ? 0.5 + 0.5 * light : 0
     // An app's sidebar: the desktop through it, blurred, as a desktop's own
     // sidebars are. The rest of an app window is glassBg, the same pane as
     // the shell's popups: a window and the Control Center are one material.
     // A recess in a glass panel — a search field, an icon well, a day of the
     // calendar: a lighter pane of the glass. Design.sunken there was a black
     // hole cut through it.
-    readonly property color well: translucent ? tint(text, 0.07) : sunken
-    readonly property color glassSidebar: translucent ? tint(sunken, darkTheme ? 0.62 : 0.58) : sunken
+    // Solid (no blur, Reduce Transparency), the same lighter step on the
+    // card it is mostly set in, made opaque: sunken there was the darkest
+    // colour of the palette, a black hole in every card where a field sat.
+    readonly property color well: translucent ? tint(text, 0.07) : Qt.tint(raised, tint(text, 0.06))
+    // A lighter film on the window's glass, as a Mac's sidebar is the more
+    // see-through of the two: a darker layer here made every sidebar a
+    // slab beside a lighter page.
+    readonly property color glassSidebar: translucent ? tint(raised, 0.30) : raised
+    // A toolbar's glass at rest, over the bare window: the same film as the
+    // sidebar a step lighter — the Air the window is made of, not a darker
+    // pill laid on it. Over content it takes a body (Ui/ToolbarGlass).
+    // Lighter than the window in either theme: in the dark one a film of
+    // its cards' colour was still a darker, denser pill over the wallpaper
+    // (more of a dark material), so there it is a veil of light instead.
+    readonly property color glassFilm: !translucent ? raised : darkTheme ? tint(text, 0.08) : tint(raised, 0.42)
     // Hover/active variant. ClipboardPopup has referenced this since it was
     // written; undeclared, it evaluated to an invalid colour, so hovering a
     // clipboard card swapped its border for black instead of brightening it.
@@ -735,7 +769,7 @@ QtObject {
             xhr.send();
             if (xhr.responseText) {
                 const s = JSON.parse(xhr.responseText);
-                if (s.blurEnabled === false || s.reduceTransparency === true) root.translucent = false;
+                root.glassAllowed = !(s.blurEnabled === false || s.reduceTransparency === true);
                 root.reduceMotion = s.reduceMotion === true;
                 root.increaseContrast = s.increaseContrast === true;
             }

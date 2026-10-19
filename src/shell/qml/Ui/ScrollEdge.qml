@@ -21,6 +21,15 @@ Item {
 
     property Item backdrop
     property real barHeight: 0
+    // What scrolls under it, if it is one view: the edge (or, without
+    // effects, the bar's fill) then shows only once something is scrolled
+    // beneath it, as a Mac's toolbar shows its material only over content.
+    // An item that is not a Flickable (a fixed layout) is never scrolled
+    // under it.
+    property Item flick: null
+    readonly property bool scrolledUnder: !root.flick ? true
+                                        : root.flick.atYBeginning === undefined ? false
+                                        : !root.flick.atYBeginning
     readonly property bool effects: GraphicsInfo.api !== GraphicsInfo.Software
                                     && Design.translucent && root.backdrop !== null
 
@@ -71,8 +80,8 @@ Item {
         blurEnabled: true
         blur: 1.0
         blurMax: 48
-        saturation: 0.3
-        brightness: Design.darkTheme ? -0.12 : 0.1
+        saturation: 0.6
+        brightness: Design.darkTheme ? -0.05 : 0.1
     }
     ShaderEffectSource {
         id: blurredTex
@@ -83,22 +92,33 @@ Item {
     ShaderEffect {
         anchors.fill: parent
         visible: root.effects
+        // Only over something: with nothing scrolled under the toolbar it
+        // was a dark band across the top of an empty window.
+        opacity: root.scrolledUnder ? 1 : 0
+        Behavior on opacity { enabled: !Design.reduceMotion; NumberAnimation { duration: Design.duration.fast } }
         property var source: blurredTex
         property size size: Qt.size(width, height)
         property real pad: root.pad
         property real full: root.barHeight * 0.7
-        // Under the blurred copy, mostly hiding the sharp content there.
-        property color base: Design.tint(Design.surface, 0.85)
+        // Under the blurred copy, hiding the sharp content there enough for
+        // the toolbar's labels to read, and no more: what is under it still
+        // shows, as through Air. At 0.85 with a darker blur it was a black
+        // band across the top of every scrolled window.
+        property color base: Design.tint(Design.surface, 0.65)
         fragmentShader: "shaders/edge.frag.qsb"
     }
 
-    // Without effects: an opaque bar and its hairline.
-    Rectangle {
+    // Without effects: the window's own glass and a hairline — a pane of the
+    // same material as the window, not a darker slab across it (opaque
+    // where the window is, with Reduce Transparency or the blur off).
+    Box {
         visible: !root.effects
         width: parent.width
         height: root.barHeight
-        color: Design.surface
-        Rectangle {
+        color: Design.glassBg
+        opacity: root.scrolledUnder ? 1 : 0
+        Behavior on opacity { enabled: !Design.reduceMotion; NumberAnimation { duration: Design.duration.fast } }
+        Box {
             anchors.bottom: parent.bottom
             width: parent.width
             height: Design.border

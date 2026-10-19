@@ -128,12 +128,60 @@ Window {
             spacing: 0
 
             // ═════════════════════════════════════════════════════════════════
-            // TOP HEADER BAR (COMPACT TILED TOOLBAR)
+            // THE EDITORS — one per tab, each with its own undo and place
             // ═════════════════════════════════════════════════════════════════
-            // What is open on the left, as in every app; the commands on the right,
-            // Save the one primary while there is something to save.
-            AppToolbar {
+            StackLayout {
+                id: editors
                 Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: TextBackend.currentIndex
+
+                Repeater {
+                    id: tabRepeater
+                    model: TextBackend.tabs
+                    delegate: EditorPane {}
+                }
+            }
+
+            // ═════════════════════════════════════════════════════════════════
+            // BOTTOM STATUS BAR
+            // ═════════════════════════════════════════════════════════════════
+            AppStatusBar {
+                Layout.fillWidth: true
+                Label { text: I18n.tr("Ln %1, Col %2", window.pane ? window.pane.currentLine : 1, window.pane ? window.pane.currentCol : 1); role: "caption"; isMono: true; dim: true }
+                Label { text: I18n.trn("%1 line", "%1 lines", TextBackend.lineCount) + "  ·  " + I18n.trn("%1 word", "%1 words", TextBackend.wordCount); role: "caption"; dim: true }
+                // A save or open that failed says so, where the eye already is.
+                Label {
+                    Layout.fillWidth: true
+                    text: TextBackend.lastError
+                    elide: Text.ElideRight
+                    role: "caption"
+                    color: Design.danger
+                }
+                Label { text: TextBackend.fileType + "  ·  UTF-8"; role: "caption"; color: Design.textFaint }
+            }
+        }
+
+            // The toolbar over the text, as a Mac's: the text starts below it
+            // (the editor's top padding) and scrolls under its glass, the
+            // edge effect behind the tabs and the title so they read over it.
+            ScrollEdge {
+                id: scrollEdge
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                backdrop: editors
+                barHeight: textBar.height
+                flick: window.pane ? window.pane.flick : null
+            }
+            AppToolbar {
+                id: textBar
+                over: scrollEdge.scrolledUnder
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                z: 10
+                rule: false
 
                 // One file: its name and folder, as every app's title. More:
                 // the tabs in the title's place, as Terminal has them — a
@@ -174,53 +222,21 @@ Window {
                         onCloseRequested: window.closeTab(index)
                     }
                 }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
-                // Changes kept from before (the session) or made now,
-                // let go: the file as it is on disk.
-                Button {
-                    visible: TextBackend.isModified && TextBackend.filePath !== ""
-                    variant: "ghost"; iconOnly: true; icon: "\u{f054c}"
-                    tip: I18n.tr("Back to the saved file")
-                    onClicked: revertDialog.open()
+                ToolbarGroup {
+                    backdrop: editors
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
+                    // Changes kept from before (the session) or made now,
+                    // let go: the file as it is on disk.
+                    Button {
+                        visible: TextBackend.isModified && TextBackend.filePath !== ""
+                        variant: "ghost"; iconOnly: true; icon: "\u{f054c}"
+                        tip: I18n.tr("Back to the saved file")
+                        onClicked: revertDialog.open()
+                    }
+                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
                 }
-                Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
                 Button { variant: TextBackend.isModified ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save"); tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
             }
-
-            // ═════════════════════════════════════════════════════════════════
-            // THE EDITORS — one per tab, each with its own undo and place
-            // ═════════════════════════════════════════════════════════════════
-            StackLayout {
-                id: editors
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                currentIndex: TextBackend.currentIndex
-
-                Repeater {
-                    id: tabRepeater
-                    model: TextBackend.tabs
-                    delegate: EditorPane {}
-                }
-            }
-
-            // ═════════════════════════════════════════════════════════════════
-            // BOTTOM STATUS BAR
-            // ═════════════════════════════════════════════════════════════════
-            AppStatusBar {
-                Layout.fillWidth: true
-                Label { text: I18n.tr("Ln %1, Col %2", window.pane ? window.pane.currentLine : 1, window.pane ? window.pane.currentCol : 1); role: "caption"; isMono: true; dim: true }
-                Label { text: I18n.trn("%1 line", "%1 lines", TextBackend.lineCount) + "  ·  " + I18n.trn("%1 word", "%1 words", TextBackend.wordCount); role: "caption"; dim: true }
-                // A save or open that failed says so, where the eye already is.
-                Label {
-                    Layout.fillWidth: true
-                    text: TextBackend.lastError
-                    elide: Text.ElideRight
-                    role: "caption"
-                    color: Design.danger
-                }
-                Label { text: TextBackend.fileType + "  ·  UTF-8"; role: "caption"; color: Design.textFaint }
-            }
-        }
     }
 
     // Above everything: files dragged in from Files open here, each in a tab
@@ -301,6 +317,8 @@ Window {
     // ═════════════════════════════════════════════════════════════════════════
     component EditorPane: Box {
         id: pane
+        // What scrolls, for the toolbar's edge effect.
+        readonly property Flickable flick: editorFlickable
         required property int index
         required property string docId
         required property string path
@@ -313,6 +331,15 @@ Window {
 
         readonly property bool isCurrent: StackLayout.isCurrentItem
         onIsCurrentChanged: if (isCurrent) { window.pane = pane; editorArea.forceActiveFocus(); }
+
+        // The first line below the toolbar once the text is in, unless the
+        // caret it reopens at is further down: TextArea keeps its caret in
+        // view and knows nothing of the view's top margin.
+        function settleTop() {
+            if (editorArea.cursorRectangle.y + editorArea.cursorRectangle.height
+                    < editorFlickable.height - editorFlickable.topMargin)
+                editorFlickable.contentY = -editorFlickable.topMargin;
+        }
 
         function recomputeLineStarts(t) {
             const starts = [0];
@@ -346,11 +373,11 @@ Window {
                 ListView {
                     id: lineNumbersView
                     anchors.fill: parent
-                    anchors.topMargin: editorArea.topPadding
+                    anchors.topMargin: editorArea.topPadding + editorFlickable.topMargin
                     anchors.bottomMargin: editorArea.bottomPadding
                     clip: true
                     interactive: false
-                    contentY: editorFlickable.contentY
+                    contentY: editorFlickable.contentY + editorFlickable.topMargin
 
                     // One number per logical line, each as tall as that
                     // line is in the editor and placed where it is. They
@@ -399,9 +426,18 @@ Window {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
+                // Below the toolbar at rest, under its glass when scrolled:
+                // a margin of the view, not the text's own padding — a text
+                // does not draw the lines that scroll into its padding.
+                topMargin: textBar.height
+                // A plain Flickable starts at 0 whatever its margin (a list
+                // starts above it): put the first line below the toolbar,
+                // and keep it there while the toolbar finds its height.
+                Component.onCompleted: contentY = -topMargin
+                onTopMarginChanged: if (contentY <= 0) contentY = -topMargin
 
                 ScrollBar.vertical: OverflowBar {}
-                ScrollBar.horizontal: ScrollBar { policy: window.wordWrapEnabled ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded }
+                ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal; enabled: !window.wordWrapEnabled; visible: !window.wordWrapEnabled }
 
                 TextArea.flickable: TextBox {
                     id: editorArea
@@ -411,7 +447,7 @@ Window {
                     font.family: Design.font.mono
                     font.pixelSize: Design.s(Design.font.body)
                     color: Design.text
-                    selectionColor: Design.tint(Design.accent, 0.35)
+                    selectionColor: Design.stateSelectedStrong
                     selectedTextColor: Design.text
                     tabStopDistance: 32
                     wrapMode: window.wordWrapEnabled ? TextEdit.Wrap : TextEdit.NoWrap
@@ -429,6 +465,7 @@ Window {
                         pane.recomputeLineStarts(text);
                         pane.calculateCursorPos();
                         if (pane.isCurrent) { window.pane = pane; forceActiveFocus(); }
+                        Qt.callLater(pane.settleTop);
                     }
 
                     onTextChanged: {

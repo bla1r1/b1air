@@ -64,14 +64,20 @@ ScrollBar {
     padding: Design.s(Design.space.xxs)
     minimumSize: 0.08
 
+    // Shown a moment after the scroll stops, and when the view first comes
+    // up, to say there is more.
+    Timer { id: linger; interval: 1200; running: true }
+    onFlickingChanged: linger.restart()
+
     contentItem: Rectangle {
         implicitWidth: root.hovered || root.pressed ? Design.s(Design.space.sm) : Design.s(Design.space.xs)
         implicitHeight: implicitWidth
         radius: width / 2
         color: root.pressed ? Design.textDim : Design.textFaint
-        // Quiet while nothing moves — there, but not a line drawn down the
-        // panel — and plain while scrolling or under the pointer.
-        opacity: root.hovered || root.pressed ? 1.0 : root.flicking ? 0.85 : 0.45
+        // As a Mac's overlay bars: gone while nothing moves, there while it
+        // scrolls and a moment after, plain under the pointer. At rest it
+        // was a rail drawn down every long pane.
+        opacity: root.hovered || root.pressed ? 1.0 : root.flicking || linger.running ? 0.85 : 0.0
         Behavior on opacity { NumberAnimation { duration: Design.duration.base } }
         Behavior on implicitWidth { NumberAnimation { duration: Design.duration.fast } }
     }

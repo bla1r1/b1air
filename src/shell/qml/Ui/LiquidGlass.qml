@@ -28,16 +28,24 @@ Item {
     id: g
 
     property Item backdrop
-    property bool effects: GraphicsInfo.api !== GraphicsInfo.Software && Design.translucent
+    // With nothing under it to bend (no backdrop), the plain capsule: the
+    // shader drew from an empty source there.
+    property bool effects: GraphicsInfo.api !== GraphicsInfo.Software && Design.translucent && backdrop !== null
     property string variant: "regular"
     property bool standard: false
     property real radius: height / 2
     property real refraction: standard ? 0 : Design.s(Design.space.md + Design.space.xxs)
     property real bevel: Math.min(Design.s(Design.space.md + Design.space.xxs), height / 2)
     property real rim: standard ? 0.12 : 0.5
+    // The light gathered at its foot (shaders/liquid.frag): glass has a body.
+    property real caustic: standard ? 0 : Design.glassCaustic
     property real dispersion: 0.08
     property real blur: variant === "regular" ? 0.55 : 0.1
     property real vibrancy: 0.4
+    // How far the luminosity of what is behind is held in a range (the
+    // regular variant's): a glass at rest over the window's own Air holds
+    // nothing, or it is a darker pill on it (Ui/ToolbarGlass).
+    property real hold: variant === "regular" || standard ? 1 : 0
     property color tint: Design.tint(Design.text, 0.03)
     property real shadow: standard ? 0 : 0.25
     property bool adaptiveLabels: true
@@ -168,9 +176,10 @@ Item {
         property real rim: g.rim
         property real dispersion: g.dispersion
         property real pad: g.pad
-        property real regular: g.variant === "regular" || g.standard ? 1 : 0
+        property real regular: g.hold
         property real solid: 0
         property real contrast: Design.increaseContrast ? 1 : 0
+        property real caustic: g.caustic
         property real glow: g.glow
         property point glowPos: g.pressPoint
         property color tint: g.tint

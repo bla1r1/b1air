@@ -102,10 +102,23 @@ Rectangle {
     Layout.preferredWidth: implicitWidth
 
     // Its container's corner rule (Shape, Design.corner), else its own.
-    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
-    color: Design.well
-    border.width: 1
+    radius: root.onGlass ? height / 2 : Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+    color: root.onGlass ? "transparent" : Design.well
+    border.width: root.onGlass ? 0 : 1
     border.color: Design.glassBorder
+
+    // On a toolbar: a capsule of the toolbar's glass (Ui/ToolbarGlass) under
+    // it instead of a fill of its own, as a Mac's toolbar has its search
+    // field and its view switch. `backdrop` is what scrolls under the
+    // toolbar, for the glass to bend; without one the capsule is plain.
+    property bool onGlass: false
+    property Item backdrop: null
+    Loader {
+        active: root.onGlass
+        anchors.fill: parent
+        z: -1
+        sourceComponent: ToolbarGlass { backdrop: root.backdrop }
+    }
     opacity: enabled ? 1.0 : Design.opacity.disabled
 
     readonly property real _pad: Design.s(Design.space.xxs)
@@ -120,9 +133,12 @@ Rectangle {
         width: root._segWidth
         x: root._pad + root.currentIndex * root._segWidth
         radius: Math.max(2, root.radius - root._pad)
-        color: Design.translucent ? Design.veilBold : Design.raised
+        // On a toolbar's glass the chosen segment is the glass tinted with
+        // the accent, not a grey pane set in it.
+        readonly property bool _tinted: root.onGlass && Design.translucent
+        color: _tinted ? Design.stateSelected : Design.translucent ? Design.veilBold : Design.raised
         border.width: 1
-        border.color: Design.glassBorder
+        border.color: _tinted ? Design.accentLine : Design.glassBorder
 
         Behavior on x {
             NumberAnimation { duration: Design.duration.fast; easing.type: Design.easing }

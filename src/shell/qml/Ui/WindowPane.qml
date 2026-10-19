@@ -54,6 +54,20 @@ Item {
         border.width: Design.border
         border.color: Design.glassBorder
 
+        // The lit top edge of the Air, as the shell's panels have: the
+        // light the toolbar's glass takes on its rim (Design.light).
+        Box {
+            visible: Design.translucent
+            anchors.top: parent.top
+            anchors.topMargin: Design.border
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: parent.radius
+            anchors.rightMargin: parent.radius
+            height: 1
+            color: Design.glassEdge
+        }
+
         Item {
             id: body
             anchors.fill: parent

@@ -34,7 +34,8 @@ layout(std140, binding = 0) uniform buf {
     float regular;    // 1 regular, 0 clear
     float solid;      // 0..1 towards an opaque `base`
     float contrast;   // Increase Contrast, 0..1
-    float glow;       // pressed: light from within, 0..1
+    float caustic;    // light gathered inside the edge facing away, 0..1
+    float glow;      // pressed: light from within, 0..1
     vec2 glowPos;     // where it was pressed, in pixels
     vec4 tint;        // a colour over it, alpha the amount
     vec4 base;        // the opaque colour `solid` blends to
@@ -104,6 +105,14 @@ void main() {
     float glowRim = (1.0 - smoothstep(0.0, 6.0, -d)) * 0.25;
     float h = rim * along * (line + glowRim) + contrast * 0.35 * line;
     c += vec4(vec3(h), h);
+
+    // What makes it glass rather than a sheet of Air: the light that came in
+    // through the lit edge, gathered along the edge facing away from it, as
+    // a drop of water is brightest at its foot. A soft band inside the rim,
+    // never on the line itself.
+    float band = smoothstep(1.0, 3.0, -d) * (1.0 - smoothstep(3.0, bevel * 1.6, -d));
+    float gathered = caustic * 0.3 * max(-facing, 0.0) * band;
+    c += vec4(vec3(gathered), gathered);
 
     // Pressed: lit from within, from under the pointer outward.
     float spread = length(px - glowPos) / max(size.x, size.y);
