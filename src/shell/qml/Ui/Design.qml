@@ -95,6 +95,14 @@ QtObject {
         return px * (-0.0223 + 0.185 * Math.exp(-0.1745 * px));
     }
 
+    // The radius the corner rule gives an element (Shape.radius, from the
+    // B1air.Daemon plugin: what its container leaves it), or its own where
+    // the rule has none (-1: it sits as far in as the corner is round).
+    //   radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+    function corner(shapeRadius, own) {
+        return shapeRadius >= 0 ? shapeRadius : own;
+    }
+
     function concentric(outer, inset) {
         return Math.max(root.radius.sm, outer - inset);
     }
@@ -164,6 +172,9 @@ QtObject {
         readonly property int fast: 150   // pointer response: hover, press
         readonly property int base: 250   // state change: toggle, selection
         readonly property int slow: 400   // window enter / exit
+        // One turn of a busy glyph: every spinner at one speed (they ran
+        // at 900, 1000 and 1200).
+        readonly property int spin: 900
     }
 
     // Springs, for what moves as if it had weight: a selection sliding to
@@ -270,6 +281,29 @@ QtObject {
         default:          return _p.primary;
         }
     }
+    // A colour named by its role, for what comes from outside QML (the
+    // daemon's weather says "yellow" for a clear sky): the current theme's,
+    // so it follows a light theme and a theme of one's own. `fallback` for
+    // a name it does not know.
+    function tone(name, fallback) {
+        switch (String(name || "")) {
+        case "text":      return root.text;
+        case "textDim":   return root.textDim;
+        case "accent":    return root.accent;
+        case "blue":      return _p.blue;
+        case "sapphire":  return _p.sapphire;
+        case "mauve":     return _p.mauve;
+        case "lavender":  return _p.lavender;
+        case "teal":      return _p.teal;
+        case "green":     return _p.green;
+        case "yellow":    return _p.yellow;
+        case "peach":     return _p.peach;
+        case "red":       return _p.red;
+        case "pink":      return _p.pink;
+        default:          return fallback !== undefined ? fallback : root.accent;
+        }
+    }
+
     // The theme's own primary, whatever accent is picked over it.
     readonly property color themePrimary: _p.primary
     // Text that reads on a fill: dark on a light one, white on a dark one.
@@ -372,8 +406,8 @@ QtObject {
     // written; undeclared, it evaluated to an invalid colour, so hovering a
     // clipboard card swapped its border for black instead of brightening it.
     readonly property color glassBorderStrong: tint(text, 0.22)
-    readonly property color glassHover: tint(text, 0.08)
-    readonly property color glassActive: tint(accent, 0.20)
+    readonly property color glassHover: stateHover
+    readonly property color glassActive: stateSelected
 
     readonly property color veil: tint(text, 0.05)
     readonly property color veilStrong: tint(text, 0.10)
@@ -386,9 +420,37 @@ QtObject {
     // Behind a modal: the window dimmed, not blacked out. One value for every
     // dialog; AppDialog had 0.25 and Git's own 0.45.
     readonly property color scrim: Qt.rgba(0, 0, 0, 0.25)
-    readonly property color stateHover: veil
-    readonly property color statePressed: veilStrong
+    // The states of anything that can be pointed at, pressed or chosen — a
+    // row, a tile, a button without a fill of its own. These and nothing
+    // else: written by hand, a selection came in fifteen strengths of the
+    // accent and a hover in nine of the text, so two lists side by side
+    // looked like two systems (tools/check-design.sh holds the line).
+    // See-through fills, so a hover on glass is glass a shade lighter, not a
+    // slab laid on it.
+    readonly property color stateHover: tint(text, 0.07)
+    readonly property color statePressed: tint(text, 0.12)
+    // Chosen, quietly: a drop target, a hover over something chosen nearby,
+    // a day with something in it.
+    readonly property color stateSelectedSoft: tint(accent, 0.14)
     readonly property color stateSelected: selection
+    // Chosen and pointed at, or chosen and focused.
+    readonly property color stateSelectedStrong: tint(accent, 0.32)
+    // The edge of something chosen, or of a place to drop.
+    readonly property color accentLine: tint(accent, 0.45)
+    // A control with a fill of its own (a secondary button, a stepper, a
+    // toolbar cell): at rest, under the pointer, pressed. On glass a lighter
+    // pane of it; on a solid window the raised surface and its steps.
+    readonly property color controlFill: translucent ? well : raised
+    readonly property color controlHover: translucent ? veilBold : hover
+    readonly property color controlPressed: translucent ? tint(text, 0.20) : active
+    // The same for what cannot be undone: under the pointer, pressed, its
+    // edge. Five strengths of red were mixed by hand for these.
+    readonly property color stateDanger: tint(danger, 0.20)
+    readonly property color stateDangerPressed: tint(danger, 0.30)
+    readonly property color dangerLine: tint(danger, 0.40)
+    // Behind a line that reports a failure or a warning, a strip or a card.
+    readonly property color dangerSoft: tint(danger, 0.14)
+    readonly property color warnSoft: tint(warn, 0.14)
     readonly property real disabledOpacity: opacity.disabled
 
     // =========================================================================

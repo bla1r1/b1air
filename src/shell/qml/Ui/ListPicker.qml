@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
 
@@ -98,9 +99,9 @@ ColumnLayout {
 
             width: ListView.view.width
             height: Design.s(Design.size.md)
-            radius: Design.s(Design.radius.ctl)
-            color: row.isHighlighted ? Design.hover
-                 : (row.isCurrent ? Design.selection : "transparent")
+            radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+            color: row.isHighlighted ? Design.stateHover
+                 : (row.isCurrent ? Design.stateSelected : "transparent")
 
             RowLayout {
                 anchors.fill: parent

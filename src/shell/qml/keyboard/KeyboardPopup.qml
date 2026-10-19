@@ -125,7 +125,7 @@ PopupShell {
         }
 
         // Divider
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Design.veilStrong
@@ -139,31 +139,29 @@ PopupShell {
             Repeater {
                 model: window.configuredLanguages
 
-                delegate: Rectangle {
+                delegate: ListRow {
+                    selected: row.isActive
+                    handlesMouse: false
+                    hovered: rowMa.containsMouse
                     id: row
                     required property string modelData
                     required property int index
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.size.md)
-                    radius: Design.s(Design.radius.ctl)
 
                     readonly property bool isActive: window.activeIndex === row.index
                     readonly property var info: window.getLangInfo(row.modelData)
 
-                    color: rowMa.containsMouse ? Design.glassHover : (row.isActive ? Design.tint(Design.accent, 0.12) : "transparent")
 
-                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Design.s(Design.space.sm)
-                        anchors.rightMargin: Design.s(Design.space.sm)
                         spacing: Design.s(Design.space.sm)
 
                         // macOS-style Layout Badge
-                        Rectangle {
-                            width: Design.s(Design.size.md); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
+                        Box {
+                            implicitWidth: Design.s(Design.size.md); implicitHeight: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
                             color: row.isActive ? Design.accent : Design.sunken
                             border.color: row.isActive ? Design.accent : Design.glassBorder
                             border.width: 1
@@ -196,7 +194,7 @@ PopupShell {
                         }
                     }
 
-                    Clickable {
+                    overlay: Clickable {
                         id: rowMa
                         hoverEnabled: true
                         onClicked: window.switchLayout(row.index)
@@ -206,25 +204,22 @@ PopupShell {
         }
 
         // Bottom Divider
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Design.veilStrong
         }
 
         // "Keyboard Settings..." Action Row
-        Rectangle {
+        ListRow {
+            handlesMouse: false
+            hovered: settMa.containsMouse
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.md)
-            radius: Design.s(Design.radius.ctl)
-            color: settMa.containsMouse ? Design.glassHover : "transparent"
 
-            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.sm)
-                anchors.rightMargin: Design.s(Design.space.sm)
                 spacing: Design.s(Design.space.sm)
 
                 Icon {
@@ -241,7 +236,7 @@ PopupShell {
                 }
             }
 
-            Clickable {
+            overlay: Clickable {
                 id: settMa
                 hoverEnabled: true
                 onClicked: window.openKeyboardSettings()

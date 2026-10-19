@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 
 // =============================================================================
 // A Control Center tile: rounded raised block, optionally openable.
@@ -23,10 +24,10 @@ Rectangle {
     property bool fillWhenOn: true
     signal activated()
 
-    radius: Design.s(Design.radius.card)
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.card))
     color: root.on && root.fillWhenOn ? root.activeColor
                    : (root.interactive && ma.pressed ? Design.veilBold
-                      : root.interactive && ma.containsMouse ? Design.glassHover : Design.glassTile)
+                      : root.interactive && ma.containsMouse ? Design.stateHover : Design.glassTile)
 
     border.color: root.on && root.fillWhenOn ? Design.tint(root.activeColor, 0.6)
                           : (root.interactive && ma.containsMouse ? Design.glassBorder : Design.tint(Design.line, 0.45))

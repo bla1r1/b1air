@@ -551,56 +551,44 @@ PopupShell {
                             Layout.preferredWidth: Design.s(Design.size.row)
                             Layout.preferredHeight: Design.s(Design.size.row)
 
-                            // Universal Return Arrow (Back to Daily / App List)
-                            Rectangle {
+                            // Back to the day (or the app list); in its place,
+                            // when there is nowhere to go back to, the week.
+                            IconButton {
                                 anchors.fill: parent
-                                radius: height / 2
-                                color: backMa.containsMouse ? Design.glassHover : "transparent"
+                                diameter: Design.size.row
+                                icon: "󰁍"
+                                label: I18n.tr("Back")
                                 opacity: (window.selectedAppClass !== "" || window.isWeekView) ? 1.0 : 0.0
                                 visible: opacity > 0
                                 Behavior on opacity { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
-                                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                                
-                                Icon { anchors.centerIn: parent; text: "󰁍" }
-                                Clickable {
-                                    id: backMa
-                                    onClicked: { 
-                                        if (window.selectedAppClass !== "") {
-                                            window.selectedAppClass = ""; 
-                                            window.selectedAppName = ""; 
-                                            window.selectedAppIcon = ""; 
-                                            window.requestDataUpdate(); 
-                                        } else if (window.isWeekView) {
-                                            window.isWeekView = false;
-                                        }
+                                onClicked: {
+                                    if (window.selectedAppClass !== "") {
+                                        window.selectedAppClass = "";
+                                        window.selectedAppName = "";
+                                        window.selectedAppIcon = "";
+                                        window.requestDataUpdate();
+                                    } else if (window.isWeekView) {
+                                        window.isWeekView = false;
                                     }
                                 }
                             }
-
-                            // Week View Open Button
-                            Rectangle {
+                            IconButton {
                                 anchors.fill: parent
-                                radius: height / 2
-                                color: weekMa.containsMouse ? Design.glassHover : "transparent"
+                                diameter: Design.size.row
+                                icon: "󰃭"
+                                label: I18n.tr("Week Overview")
                                 opacity: (window.selectedAppClass === "" && !window.isWeekView) ? 1.0 : 0.0
                                 visible: opacity > 0
                                 Behavior on opacity { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
-                                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                                
-                                Icon { anchors.centerIn: parent; text: "󰃭" }
-                                Clickable { id: weekMa; onClicked: window.isWeekView = true }
+                                onClicked: window.isWeekView = true
                             }
                         }
 
-                        // Prev Week/Day Arrow
-                        Rectangle {
-                            Layout.preferredWidth: Design.s(Design.size.row)
-                            Layout.preferredHeight: Design.s(Design.size.row)
-                            radius: height / 2
-                            color: prevWeekMa.containsMouse ? Design.glassHover : "transparent"
-                            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                            Icon { anchors.centerIn: parent; text: "󰅁" }
-                            Clickable { id: prevWeekMa; onClicked: changeDay(window.isWeekView ? -7 : -1) }
+                        IconButton {
+                            diameter: Design.size.row
+                            icon: "󰅁"
+                            label: window.isWeekView ? I18n.tr("Previous week") : I18n.tr("Previous day")
+                            onClicked: changeDay(window.isWeekView ? -7 : -1)
                         }
                     }                   
                     // Title Area
@@ -611,7 +599,7 @@ PopupShell {
                         
                         Item { Layout.fillWidth: true } // Left Spacer
 
-                        Image {
+                        Picture {
                             property bool active: window.selectedAppClass !== "" && window.selectedAppIcon !== "" && !window.isWeekView
                             property real animWidth: active ? Design.s(Design.space.lg) : 0
                             Behavior on animWidth { NumberAnimation { duration: Design.duration.base; easing.type: Easing.OutQuint } }
@@ -639,15 +627,11 @@ PopupShell {
                         Item { Layout.fillWidth: true } // Right Spacer
                     }
 
-                    // Next Week/Day Arrow
-                    Rectangle {
-                        Layout.preferredWidth: Design.s(Design.size.row)
-                        Layout.preferredHeight: Design.s(Design.size.row)
-                        radius: height / 2
-                        color: nextWeekMa.containsMouse ? Design.glassHover : "transparent"
-                        Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                        Icon { anchors.centerIn: parent; text: "󰅂" }
-                        Clickable { id: nextWeekMa; onClicked: changeDay(window.isWeekView ? 7 : 1) }
+                    IconButton {
+                        diameter: Design.size.row
+                        icon: "󰅂"
+                        label: window.isWeekView ? I18n.tr("Next week") : I18n.tr("Next day")
+                        onClicked: changeDay(window.isWeekView ? 7 : 1)
                     }
                 }
 
@@ -686,14 +670,10 @@ PopupShell {
                             transform: Translate { y: Design.s(Design.space.xxl) * (1 - introStats) }
 
                             // LEFT: Daily Average (2/7 weight = 200)
-                            Rectangle {
+                            Surface {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(Design.width.control)
-                                radius: Design.s(Design.radius.card)
-                                color: Design.glassCard
-                                border.color: Qt.alpha(Design.hover, 0.3)
-                                border.width: 1
 
                                 ColumnLayout {
                                     anchors.centerIn: parent
@@ -722,14 +702,10 @@ PopupShell {
                             }
 
                             // CENTER: Usage Time (3/7 weight = 300)
-                            Rectangle {
+                            Surface {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(Design.width.select)
-                                radius: Design.s(Design.radius.card)
-                                color: Design.glassCard
-                                border.color: Qt.alpha(Design.hover, 0.3)
-                                border.width: 1
 
                                 ColumnLayout {
                                     anchors.centerIn: parent
@@ -760,14 +736,10 @@ PopupShell {
                             }
 
                             // RIGHT: vs Yesterday Increase (2/7 weight = 200)
-                            Rectangle {
+                            Surface {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(Design.width.control)
-                                radius: Design.s(Design.radius.card)
-                                color: Design.glassCard
-                                border.color: Qt.alpha(Design.hover, 0.3)
-                                border.width: 1
 
                                 ColumnLayout {
                                     anchors.centerIn: parent
@@ -824,13 +796,10 @@ PopupShell {
                         // for FocusTime timer", with three duration steppers.
                         // There was no timer anywhere to customise. This is it,
                         // in the window those settings name.
-                        Rectangle {
+                        Surface {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.stat)
-                            radius: Design.s(Design.radius.card)
-                            color: Design.glassCard
                             border.color: Qt.alpha(pomoRing.tone, window.focusTimer.active ? 0.45 : 0.2)
-                            border.width: 1
 
                             opacity: introStats
                             transform: Translate { y: Design.s(Design.space.xxl) * (1 - introStats) }
@@ -848,14 +817,14 @@ PopupShell {
                                     Layout.preferredWidth: Design.s(Design.size.row)
                                     Layout.preferredHeight: Design.s(Design.size.row)
 
-                                    Rectangle {
+                                    Box {
                                         anchors.fill: parent
                                         radius: width / 2
                                         color: "transparent"
                                         border.width: Design.s(Design.focusWidth)
                                         border.color: Qt.alpha(pomoRing.tone, 0.18)
                                     }
-                                    Canvas {
+                                    Drawing {
                                         anchors.fill: parent
                                         // Repainting only on the value the arc is
                                         // drawn from: a Canvas that repaints on
@@ -950,14 +919,10 @@ PopupShell {
                             spacing: Design.s(Design.space.lg)
 
                             // LEFT: Weekly Close-Knit Bar Chart
-                            Rectangle {
+                            Surface {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(Design.width.menuMax) 
-                                radius: Design.s(Design.radius.card)
-                                color: Design.glassCard
-                                border.color: Qt.alpha(Design.hover, 0.3)
-                                border.width: 1
 
                                 opacity: introMidLeft
                                 transform: Translate { x: -Design.s(Design.space.xxl) * (1 - introMidLeft) }
@@ -1002,16 +967,16 @@ PopupShell {
                                                     NumberAnimation { duration: window.introDuration; easing.type: Easing.OutQuint } 
                                                 }
 
-                                                Rectangle {
+                                                Surface {
+                                                    border.width: 0
                                                     anchors.fill: parent
                                                     radius: Design.s(Design.radius.sm) 
-                                                    color: Design.glassCard
                                                     visible: !model.isTarget
                                                     opacity: barMa.containsMouse ? 0.7 : 1.0
                                                     Behavior on color { ColorAnimation { duration: Design.duration.slow; easing.type: Easing.OutCubic } }
                                                 }
 
-                                                Rectangle {
+                                                Box {
                                                     anchors.fill: parent
                                                     radius: Design.s(Design.radius.sm) 
                                                     visible: model.isTarget
@@ -1036,7 +1001,7 @@ PopupShell {
                             }
 
                             // RIGHT: Calendar Month Heatmap
-                            Rectangle {
+                            Surface {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredWidth: Design.s(Design.width.select)
@@ -1044,10 +1009,6 @@ PopupShell {
                                 // height the week chart beside it set, and the last
                                 // ones hung below the card.
                                 Layout.minimumHeight: heatCol.implicitHeight + Design.s(Design.space.md) * 2
-                                radius: Design.s(Design.radius.card)
-                                color: Design.glassCard
-                                border.color: Qt.alpha(Design.hover, 0.3)
-                                border.width: 1
 
                                 opacity: introMidRight
                                 transform: Translate { x: Design.s(Design.space.xxl) * (1 - introMidRight) }
@@ -1095,7 +1056,7 @@ PopupShell {
 
                                         Repeater {
                                             model: monthListModel
-                                            delegate: Rectangle {
+                                            delegate: Box {
                                                 width: Design.s(Design.size.micro) 
                                                 height: Design.s(Design.size.micro) 
                                                 radius: Design.s(Design.radius.sm)
@@ -1138,13 +1099,9 @@ PopupShell {
                         // 3. BOTTOM CARD (App List OR Hourly Chart)
                         // Uses appViewFocus to smoothly transition natively
                         // ==========================================
-                        Rectangle {
+                        Surface {
                             Layout.fillWidth: true
                             Layout.fillHeight: true 
-                            radius: Design.s(Design.radius.card)
-                            color: Design.glassCard
-                            border.color: Qt.alpha(Design.hover, 0.3)
-                            border.width: 1
 
                             opacity: introBottom
                             transform: Translate { y: Design.s(Design.space.xxl) * (1 - introBottom) }
@@ -1174,38 +1131,25 @@ PopupShell {
                                     
                                     ScrollBar.vertical: OverflowBar {}
 
-                                    delegate: Rectangle {
-                                        width: ListView.view.width
-                                        height: Design.s(Design.size.tile) 
-                                        color: "transparent"
-                                        radius: Design.s(Design.radius.ctl)
+                                    delegate: ListRow {
+                                        implicitHeight: Design.s(Design.size.tile)
+                                        // Its content where it was, lg in from the row's edge.
+                                        padding: Design.s(Design.space.lg) - inset
 
                                         // Micro-staggering cascading animation inside the list
                                         opacity: introBottom
                                         transform: Translate { y: (index * Design.s(Design.space.md)) * (1 - introBottom) }
 
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: Design.s(Design.radius.ctl)
-                                            color: rowMa.containsMouse ? Design.glassHover : "transparent"
-                                            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                                        }
-
-                                        Clickable {
-                                            id: rowMa
-                                            onClicked: {
-                                                window.selectedAppClass = model.appClass;
-                                                window.selectedAppName = model.name;
-                                                window.selectedAppIcon = model.icon;
-                                                window.appDate = new Date(); // Always start app view on today
-                                                window.requestDataUpdate();
-                                            }
+                                        onClicked: {
+                                            window.selectedAppClass = model.appClass;
+                                            window.selectedAppName = model.name;
+                                            window.selectedAppIcon = model.icon;
+                                            window.appDate = new Date(); // Always start app view on today
+                                            window.requestDataUpdate();
                                         }
 
                                         ColumnLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Design.s(Design.space.lg)
-                                            anchors.rightMargin: Design.s(Design.space.lg)
                                             anchors.topMargin: Design.s(Design.space.sm)
                                             anchors.bottomMargin: Design.s(Design.space.sm)
                                             spacing: Design.s(Design.space.xs)
@@ -1213,7 +1157,7 @@ PopupShell {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 
-                                                Image {
+                                                Picture {
                                                     visible: model.icon !== ""
                                                     source: model.icon.startsWith("/") ? "file://" + model.icon : "image://icon/" + model.icon
                                                     sourceSize: Qt.size(Design.s(Design.space.lg), Design.s(Design.space.lg))
@@ -1240,8 +1184,12 @@ PopupShell {
                                             Item {
                                                 Layout.fillWidth: true
                                                 height: Design.s(Design.space.sm)
-                                                Rectangle { anchors.fill: parent; radius: Design.s(Design.radius.sm); color: Design.ground }
-                                                Rectangle {
+                                                Surface {
+                                                    kind: "well"
+                                                    anchors.fill: parent
+                                                    radius: Design.s(Design.radius.sm)
+                                                }
+                                                Box {
                                                     height: parent.height
                                                     // Tied to the synchronized app bars state
                                                     width: Math.max(Design.s(Design.space.sm), parent.width * (model.percent / 100.0) * window.introAppBars)
@@ -1306,7 +1254,7 @@ PopupShell {
                                                 Layout.fillWidth: true
                                                 Layout.fillHeight: true
 
-                                                Rectangle {
+                                                Box {
                                                     anchors.bottom: parent.bottom
                                                     width: parent.width
                                                     // Actively grow from ground up tied to introAppBars
@@ -1363,13 +1311,9 @@ PopupShell {
                         // ─────────────────────────────────────────
                         // Week Heatmap Card
                         // ─────────────────────────────────────────
-                        Rectangle {
+                        Surface {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.canvas)
-                            radius: Design.s(Design.radius.card)
-                            color: Design.glassCard
-                            border.color: Qt.alpha(Design.hover, 0.3)
-                            border.width: 1
 
                             opacity: introMidLeft
                             transform: Translate { y: Design.s(Design.space.lg) * (1 - introMidLeft) }
@@ -1413,7 +1357,7 @@ PopupShell {
                                                 }
 
                                                 // Clip wrapper for rounded edges on the unified continuous bar
-                                                Rectangle {
+                                                Box {
                                                     Layout.fillWidth: true
                                                     Layout.fillHeight: true
                                                     radius: Design.s(Design.radius.ctl)
@@ -1426,7 +1370,7 @@ PopupShell {
 
                                                         Repeater {
                                                             model: 24
-                                                            delegate: Rectangle {
+                                                            delegate: Box {
                                                                 Layout.fillWidth: true
                                                                 Layout.fillHeight: true
                                                                 radius: 0
@@ -1481,11 +1425,11 @@ PopupShell {
                                     spacing: Design.s(Design.space.md)
 
                                     // Daily Average box
-                                    Rectangle {
+                                    Surface {
+                                        border.width: 0
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Design.s(Design.radius.ctl)
-                                        color: Design.glassCard
 
                                         ColumnLayout {
                                             anchors.centerIn: parent
@@ -1507,11 +1451,11 @@ PopupShell {
                                     }
 
                                     // Peak Hours box
-                                    Rectangle {
+                                    Surface {
+                                        border.width: 0
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Design.s(Design.radius.ctl)
-                                        color: Design.glassCard
 
                                         ColumnLayout {
                                             anchors.centerIn: parent
@@ -1535,13 +1479,9 @@ PopupShell {
                         }
 
                         // Week Top Apps Card
-                        Rectangle {
+                        Surface {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            radius: Design.s(Design.radius.card)
-                            color: Design.glassCard
-                            border.color: Qt.alpha(Design.hover, 0.3)
-                            border.width: 1
 
                             opacity: introBottom
                             transform: Translate { y: Design.s(Design.space.xxl) * (1 - introBottom) }
@@ -1570,38 +1510,25 @@ PopupShell {
                                 
                                 ScrollBar.vertical: OverflowBar {}
                                 
-                                delegate: Rectangle {
-                                    width: ListView.view.width
-                                    height: Design.s(Design.size.tile) 
-                                    color: "transparent"
-                                    radius: Design.s(Design.radius.ctl)
+                                delegate: ListRow {
+                                    implicitHeight: Design.s(Design.size.tile)
+                                    // Its content where it was, lg in from the row's edge.
+                                    padding: Design.s(Design.space.lg) - inset
 
                                     opacity: introBottom
                                     transform: Translate { y: (index * Design.s(Design.space.md)) * (1 - introBottom) }
 
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: Design.s(Design.radius.ctl)
-                                        color: weekRowMa.containsMouse ? Design.glassHover : "transparent"
-                                        Behavior on color { ColorAnimation { duration: Design.duration.fast } }
-                                    }
-
-                                    Clickable {
-                                        id: weekRowMa
-                                        onClicked: {
-                                            window.selectedAppClass = model.appClass;
-                                            window.selectedAppName = model.name;
-                                            window.selectedAppIcon = model.icon;
-                                            window.appDate = new Date(); 
-                                            window.isWeekView = false;
-                                            window.requestDataUpdate();
-                                        }
+                                    onClicked: {
+                                        window.selectedAppClass = model.appClass;
+                                        window.selectedAppName = model.name;
+                                        window.selectedAppIcon = model.icon;
+                                        window.appDate = new Date(); 
+                                        window.isWeekView = false;
+                                        window.requestDataUpdate();
                                     }
 
                                     ColumnLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: Design.s(Design.space.lg)
-                                        anchors.rightMargin: Design.s(Design.space.lg)
                                         anchors.topMargin: Design.s(Design.space.sm)
                                         anchors.bottomMargin: Design.s(Design.space.sm)
                                         spacing: Design.s(Design.space.xs)
@@ -1609,7 +1536,7 @@ PopupShell {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             
-                                            Image {
+                                            Picture {
                                                 visible: model.icon !== ""
                                                 source: model.icon.startsWith("/") ? "file://" + model.icon : "image://icon/" + model.icon
                                                 sourceSize: Qt.size(Design.s(Design.space.lg), Design.s(Design.space.lg))
@@ -1636,8 +1563,12 @@ PopupShell {
                                         Item {
                                             Layout.fillWidth: true
                                             height: Design.s(Design.space.sm)
-                                            Rectangle { anchors.fill: parent; radius: Design.s(Design.radius.sm); color: Design.ground }
-                                            Rectangle {
+                                            Surface {
+                                                kind: "well"
+                                                anchors.fill: parent
+                                                radius: Design.s(Design.radius.sm)
+                                            }
+                                            Box {
                                                 height: parent.height
                                                 width: Math.max(Design.s(Design.space.sm), parent.width * (model.percent / 100.0) * window.introAppBars)
                                                 radius: Design.s(Design.radius.sm)

@@ -115,7 +115,7 @@ PopupShell {
             bottomMargin: Design.s(Design.space.sm)
             ScrollBar.vertical: OverflowBar {}
 
-            delegate: Rectangle {
+            delegate: Box {
                 id: clipCard
                 required property var modelData
                 required property int index
@@ -126,9 +126,9 @@ PopupShell {
                 radius: Design.s(Design.radius.card)
                 // Pinned: a hint of the accent. A full accent frame on every
                 // template made a list of them read as a list of warnings.
-                color: clipCard.pinned ? Design.tint(Design.accent, 0.08)
-                     : (cardHoverMa.containsMouse ? Design.glassHover : Design.glassCard)
-                border.color: clipCard.pinned ? Design.tint(Design.accent, 0.40)
+                color: clipCard.pinned ? Design.stateSelectedSoft
+                     : (cardHoverMa.containsMouse ? Design.stateHover : Design.glassCard)
+                border.color: clipCard.pinned ? Design.accentLine
                             : (cardHoverMa.containsMouse ? Design.glassBorderStrong : Design.glassBorder)
                 border.width: 1
 
@@ -139,7 +139,7 @@ PopupShell {
                     spacing: Design.s(Design.space.sm)
 
                     // Type Icon
-                    Rectangle {
+                    Box {
                         Layout.preferredWidth: Design.s(Design.size.md)
                         Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
@@ -204,7 +204,6 @@ PopupShell {
                             visible: !clipCard.modelData.template
                             icon: clipCard.pinned ? "\u{f0403}" : "\u{f0404}"
                             role: "caption"
-                            hoverTone: Design.accent
                             onClicked: Clipboard.togglePin(clipCard.modelData.id)
                         }
 

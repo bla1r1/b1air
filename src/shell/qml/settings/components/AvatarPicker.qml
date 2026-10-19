@@ -110,11 +110,11 @@ ColumnLayout {
         Layout.preferredWidth: Design.s(Design.size.thumb)
         Layout.preferredHeight: Design.s(Design.size.thumb)
 
-        Rectangle {
+        Box {
             id: face
             anchors.fill: parent
             radius: width / 2
-            color: picker.kind === "" && picker.current === "" ? Design.tint(Design.accent, 0.14) : "transparent"
+            color: picker.kind === "" && picker.current === "" ? Design.stateSelectedSoft : "transparent"
 
             GradientRect {
                 anchors.fill: parent
@@ -124,13 +124,13 @@ ColumnLayout {
                 to: picker.bottomColour
             }
 
-            Text {
+            Label {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: parent.height * 0.02
                 visible: picker.kind === "emoji"
                 text: picker.emoji
-                font.family: "Noto Color Emoji"
-                font.pixelSize: parent.height * 0.56
+                family: "Noto Color Emoji"
+                size: parent.height * 0.56
             }
             RoundImage {
                 id: shown
@@ -151,13 +151,13 @@ ColumnLayout {
                 color: Design.accent
             }
         }
-        Rectangle {   // a fine ring, as on the login screen
+        Box {   // a fine ring, as on the login screen
             anchors.fill: parent
             anchors.margins: -Design.s(Design.space.xs)
             radius: width / 2
             color: "transparent"
             border.width: Design.s(Design.space.xxs)
-            border.color: Design.tint(Design.accent, 0.5)
+            border.color: Design.accentLine
         }
     }
 
@@ -179,7 +179,7 @@ ColumnLayout {
         spacing: Design.s(Design.space.md)
         Repeater {
             model: picker.presets
-            Rectangle {
+            Box {
                 required property var modelData
                 readonly property bool chosen: picker.kind === "emoji" && picker.emoji === modelData.e
                     && Qt.colorEqual(picker.bottomColour, modelData.b)
@@ -197,11 +197,11 @@ ColumnLayout {
                 border.color: Design.accent
                 scale: hit.pressed ? 0.94 : hit.containsMouse ? 1.06 : 1
                 Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
-                Text {
+                Label {
                     anchors.centerIn: parent
                     text: modelData.e
-                    font.family: "Noto Color Emoji"
-                    font.pixelSize: parent.height * 0.52
+                    family: "Noto Color Emoji"
+                    size: parent.height * 0.52
                 }
                 Clickable { id: hit; onClicked: picker.pickPreset(modelData) }
             }
@@ -221,18 +221,18 @@ ColumnLayout {
             spacing: Design.s(Design.size.dot)
             Repeater {
                 model: picker.emojis
-                Rectangle {
+                Box {
                     required property string modelData
                     width: Design.s(Design.size.row)
                     height: width
                     radius: Design.s(Design.radius.ctl)
-                    color: picker.kind === "emoji" && picker.emoji === modelData ? Design.tint(Design.accent, 0.25)
-                         : em.containsMouse ? Design.hover : "transparent"
-                    Text {
+                    color: picker.kind === "emoji" && picker.emoji === modelData ? Design.stateSelected
+                         : em.containsMouse ? Design.stateHover : "transparent"
+                    Label {
                         anchors.centerIn: parent
                         text: modelData
-                        font.family: "Noto Color Emoji"
-                        font.pixelSize: parent.height * 0.6
+                        family: "Noto Color Emoji"
+                        size: parent.height * 0.6
                     }
                     Clickable { id: em; onClicked: picker.pickEmoji(modelData) }
                 }
@@ -260,7 +260,7 @@ ColumnLayout {
             spacing: Design.s(Design.space.sm)
             Repeater {
                 model: picker.colours
-                Rectangle {
+                Box {
                     required property color modelData
                     width: Design.s(Design.size.sm)
                     height: width

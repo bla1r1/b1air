@@ -120,38 +120,39 @@ PanelWindow {
                         clip: true
                         Repeater {
                             model: toast.under
-                            Rectangle {
+                            Surface {
+                                kind: "glass"
+                                border.width: 0
                                 required property int index
                                 x: Design.s(Design.space.md) * (index + 1)
                                 width: card.width - 2 * x
                                 y: -Design.s(Design.size.xs) + Design.s(Design.space.xs) * (index + 1)
                                 height: Design.s(Design.size.xs)
                                 radius: Design.s(Design.radius.panel)
-                                color: Design.glassBg
                                 opacity: 0.8 - index * 0.25
                             }
                         }
                     }
 
                     // ── The banner ───────────────────────────────────────────
-                    Rectangle {
+                    Surface {
+                        kind: "glass"
                         id: card
                         width: parent.width
                         implicitHeight: content.implicitHeight + Design.s(Design.space.md) * 2
                         radius: Design.s(Design.radius.panel)
-                        color: Design.glassBg
                         border.color: toast.critical ? Design.tint(Design.warn, 0.6) : "transparent"
                         border.width: toast.critical ? Design.border : 0
                         // Urgent: the warning colour over the glass, not instead of it.
-                        Rectangle {
+                        Box {
                             anchors.fill: parent
                             visible: toast.critical
                             radius: parent.radius
-                            color: Design.tint(Design.warn, 0.16)
+                            color: Design.warnSoft
                         }
 
                         // A click is the app's own action for it; right click dismisses.
-                        MouseArea {
+                        PointerArea {
                             anchors.fill: parent
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             cursorShape: Qt.PointingHandCursor
@@ -218,7 +219,7 @@ PanelWindow {
                             }
 
                             // A picture sent with it, as a picture.
-                            Image {
+                            Picture {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.min(width * 9 / 16, Design.s(Design.size.thumb) * 1.5)
                                 visible: icon.isPicture
@@ -260,18 +261,16 @@ PanelWindow {
                         }
 
                         // Close, on its corner, while pointed at.
-                        Rectangle {
+                        Surface {
+                            kind: "glass"
                             visible: toast.hovered
                             width: Design.s(Design.size.mini)
                             height: width
                             radius: width / 2
                             x: -width / 3
                             y: -width / 3
-                            color: Design.glassBg
-                            border.color: Design.glassBorder
-                            border.width: Design.border
                             Icon { anchors.centerIn: parent; text: "\u{f0156}"; role: "caption"; color: Design.text }
-                            MouseArea {
+                            PointerArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: toast.dismiss()

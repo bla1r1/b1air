@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Controls as C
 
 // A context menu in the desktop's colours. The apps each drew their own —
@@ -7,6 +8,9 @@ import QtQuick.Controls as C
 C.Menu {
     id: root
     padding: Design.s(Design.space.xs)
+    // Its rows, padding in from the menu's rounded edge.
+    Shape.radius: Design.s(Design.radius.ctl)
+    Shape.inset: padding
     // As wide as the widest row that is showing, so "Delete Permanently…"
     // with its shortcut is not cut to "Delete Permanen…"; 240 at least, so
     // short menus do not shrink to slivers, and capped so a long file name

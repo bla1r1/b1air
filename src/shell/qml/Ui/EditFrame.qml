@@ -79,9 +79,9 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Design.s(Design.radius.card)
-        color: frame.dropTarget ? Design.tint(Design.accent, 0.22)
+        color: frame.dropTarget ? Design.stateSelected
                                 : (frame.dragging ? Design.tint(Design.accent, 0.12) : "transparent")
-        border.color: frame.dropTarget || frame.dragging ? Design.accent : Design.tint(Design.accent, 0.55)
+        border.color: frame.dropTarget || frame.dragging ? Design.accent : Design.accentLine
         border.width: frame.dropTarget ? 2 : 1
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
     }
@@ -122,7 +122,7 @@ Item {
                 visible: frame.sizeLabel !== ""
                 width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                 radius: width / 2
-                color: sizeMa.containsMouse ? Design.tint(Design.accent, 0.35) : Design.tint(Design.accent, 0.18)
+                color: sizeMa.containsMouse ? Design.stateSelectedStrong : Design.stateSelectedSoft
                 Label {
                     anchors.centerIn: parent
                     text: frame.sizeLabel
@@ -143,7 +143,9 @@ Item {
                 visible: frame.removable
                 width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
                 radius: width / 2
-                color: removeMa.containsMouse ? Design.danger : Design.tint(Design.danger, 0.75)
+                // Full red under the pointer, a touch quieter at rest.
+                color: Design.danger
+                opacity: removeMa.containsMouse ? 1.0 : 0.8
                 Icon {
                     anchors.centerIn: parent
                     text: "\u{f0156}"

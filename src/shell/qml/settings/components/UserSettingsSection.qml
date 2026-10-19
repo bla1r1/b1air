@@ -108,11 +108,11 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.lg)
 
-            Rectangle {
+            Box {
                 Layout.preferredWidth: Design.s(Design.size.avatar)
                 Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: width / 2
-                color: section.userInfo.avatar !== "" ? "transparent" : Design.tint(Design.accent, 0.14)
+                color: section.userInfo.avatar !== "" ? "transparent" : Design.stateSelectedSoft
 
                 // Round: `clip` on this Rectangle cut it to a square.
                 RoundImage {
@@ -293,7 +293,7 @@ ColumnLayout {
                 spacing: Design.s(Design.space.xs)
                 Repeater {
                     model: section.fp.stages
-                    Rectangle {
+                    Box {
                         required property int index
                         width: Design.s(Design.space.md); height: width; radius: width / 2
                         color: index < section.fpDone ? Design.accent : Design.hover

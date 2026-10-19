@@ -96,9 +96,9 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
 
-            Rectangle {
-                width: Design.s(Design.size.art)
-                height: width
+            Box {
+                implicitWidth: Design.s(Design.size.art)
+                implicitHeight: implicitWidth
                 radius: width / 2
                 color: Design.tint(Power.charging ? Design.ok : (Power.capacity <= 20 ? Design.danger : Design.accent), 0.15)
 

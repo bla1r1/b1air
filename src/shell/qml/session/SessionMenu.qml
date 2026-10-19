@@ -87,7 +87,7 @@ PopupShell {
             Repeater {
                 model: window.actions
 
-                delegate: Rectangle {
+                delegate: Box {
                     id: tile
                     required property var modelData
                     required property int index
@@ -106,8 +106,8 @@ PopupShell {
                     // and grow on hover; the colour said nothing about the
                     // action and the red one read as an error. The tiles were
                     // Design.sunken, near black: holes in the glass.
-                    color: tile.armed ? Design.tint(Design.danger, 0.22)
-                         : tile.isHovered ? Design.glassHover : Design.well
+                    color: tile.armed ? Design.stateDanger
+                         : tile.isHovered ? Design.stateHover : Design.well
                     border.color: tile.armed ? Design.danger
                                 : tile.isSelected ? Design.focusRing : Design.glassBorder
                     border.width: tile.isSelected || tile.armed ? Design.focusWidth : Design.border
@@ -120,10 +120,11 @@ PopupShell {
                         spacing: Design.s(Design.space.sm)
 
                         // Key Number Badge
-                        Rectangle {
+                        Surface {
+                            kind: "well"
+                            radius: 0
                             Layout.alignment: Qt.AlignHCenter
-                            width: Design.s(Design.size.mini); height: width; radius: width / 2
-                            color: Design.well
+                            implicitWidth: Design.s(Design.size.mini); implicitHeight: implicitWidth; radius: width / 2
 
                             Label {
                                 anchors.centerIn: parent

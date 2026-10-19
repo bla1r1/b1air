@@ -161,7 +161,7 @@ PanelWindow {
     }
 
     // ── OSD Card UI ──────────────────────────────────────────────────────────
-    Rectangle {
+    Box {
         id: osdCard
         opacity: osdWindow.osdOpacity
         scale: osdWindow.osdOpacity > 0 ? 1.0 : 0.92
@@ -185,11 +185,11 @@ PanelWindow {
             spacing: Design.s(Design.space.md)
 
             // Icon circle
-            Rectangle {
+            Surface {
+                border.width: 0
                 Layout.preferredWidth: Design.s(Design.size.knob)
                 Layout.preferredHeight: Design.s(Design.size.knob)
                 radius: Design.s(Design.radius.panel)
-                color: Design.glassCard
 
                 Icon {
                     anchors.centerIn: parent
@@ -244,14 +244,14 @@ PanelWindow {
                 }
 
                 // Progress Level Bar
-                Rectangle {
+                Surface {
+                    kind: "well"
                     visible: osdWindow.osdHasLevel
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.space.xs)
                     radius: Design.s(Design.radius.sm)
-                    color: Design.well
 
-                    Rectangle {
+                    Box {
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom

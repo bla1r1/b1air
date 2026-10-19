@@ -79,13 +79,13 @@ PanelWindow {
 
     // The desktop behind, dimmed. A stray click does not cancel: the code is
     // what someone is pointing a phone at.
-    Rectangle {
+    Box {
         anchors.fill: parent
         color: Qt.alpha(Design.ground, 0.70)
-        MouseArea { anchors.fill: parent }
+        PointerArea { anchors.fill: parent }
     }
 
-    Rectangle {
+    Box {
         id: card
         anchors.centerIn: parent
         implicitWidth: Design.s(Design.width.menuMax)
@@ -122,7 +122,7 @@ PanelWindow {
 
             // The code, dark on white whatever the theme: a phone's camera
             // reads a light code on dark far less reliably.
-            Rectangle {
+            Box {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Design.s(Design.width.menuMin)
                 Layout.preferredHeight: Design.s(Design.width.menuMin)
@@ -130,7 +130,7 @@ PanelWindow {
                 color: "#ffffff"
                 visible: win.problem === ""
 
-                Canvas {
+                Drawing {
                     id: qr
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
@@ -153,7 +153,7 @@ PanelWindow {
 
                 // Over the code once the phone has it: scanning it again
                 // does nothing.
-                Rectangle {
+                Box {
                     anchors.fill: parent
                     radius: parent.radius
                     color: Qt.alpha(Design.surface, 0.9)

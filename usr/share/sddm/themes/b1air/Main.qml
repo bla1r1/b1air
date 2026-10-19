@@ -150,12 +150,12 @@ Rectangle {
             autoPaddingEnabled: false
         }
     }
-    Rectangle { anchors.fill: parent; color: "#29000000" }
+    Rectangle { anchors.fill: parent; color: ThemeColors.wallScrim }
     Rectangle {   // deeper behind the clock
         width: parent.width
         height: parent.height * 0.45
         gradient: Gradient {
-            GradientStop { position: 0; color: "#42000000" }
+            GradientStop { position: 0; color: ThemeColors.wallShade }
             GradientStop { position: 1; color: "#00000000" }
         }
     }
@@ -165,7 +165,7 @@ Rectangle {
         height: parent.height * 0.45
         gradient: Gradient {
             GradientStop { position: 0; color: "#00000000" }
-            GradientStop { position: 1; color: "#38000000" }
+            GradientStop { position: 1; color: ThemeColors.wallShade }
         }
     }
 
@@ -189,16 +189,16 @@ Rectangle {
             font.weight: Font.Bold
             font.pixelSize: 128 * root.u
             style: Text.Raised
-            styleColor: "#38000000"
+            styleColor: ThemeColors.wallShadow
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.locale(root.lang).toString(root.now, root.setting("date-format", "dddd, d MMMM"))
-            color: "#e6ffffff"
+            color: ThemeColors.wallText
             font.family: ThemeColors.sans
             font.pixelSize: 22 * root.u
             style: Text.Raised
-            styleColor: "#38000000"
+            styleColor: ThemeColors.wallShadow
         }
     }
 
@@ -226,7 +226,7 @@ Rectangle {
             font.weight: Font.Bold
             font.pixelSize: 20 * root.u
             style: Text.Raised
-            styleColor: "#38000000"
+            styleColor: ThemeColors.wallShadow
         }
         Item { width: 1; height: 16 * root.u }
 
@@ -270,7 +270,7 @@ Rectangle {
                     Rectangle {
                         anchors.fill: parent
                         radius: width / 2
-                        color: "#29ffffff"
+                        color: ThemeColors.wallGlass
                         visible: eyeMouse.containsMouse
                     }
                     Glyph {
@@ -315,7 +315,7 @@ Rectangle {
                     anchors.centerIn: parent
                     visible: password.text === ""
                     text: root.tr("Enter password")
-                    color: "#9effffff"
+                    color: ThemeColors.wallTextDim
                     font.family: ThemeColors.sans
                     font.pixelSize: 15 * root.u
                 }
@@ -331,7 +331,7 @@ Rectangle {
                     Rectangle {
                         anchors.fill: parent
                         radius: width / 2
-                        color: goMouse.containsMouse ? "#47ffffff" : "#29ffffff"
+                        color: goMouse.containsMouse ? ThemeColors.wallGlassHover : ThemeColors.wallGlass
                     }
                     Glyph {
                         anchors.centerIn: parent
@@ -372,11 +372,11 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: text !== ""
             text: root.failed ? root.tr("Wrong password") : root.busy ? root.tr("Logging in…") : ""
-            color: "#ebffffff"
+            color: ThemeColors.wallText
             font.family: ThemeColors.sans
             font.pixelSize: 15 * root.u
             style: Text.Raised
-            styleColor: "#38000000"
+            styleColor: ThemeColors.wallShadow
         }
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -387,11 +387,11 @@ Rectangle {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.tr("Caps Lock is on")
-                color: "#d9ffffff"
+                color: ThemeColors.wallText
                 font.family: ThemeColors.sans
                 font.pixelSize: 14 * root.u
                 style: Text.Raised
-                styleColor: "#38000000"
+                styleColor: ThemeColors.wallShadow
             }
         }
     }

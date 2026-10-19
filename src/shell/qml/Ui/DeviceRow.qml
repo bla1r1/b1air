@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 
 // =============================================================================
@@ -20,7 +21,8 @@ Rectangle {
     Layout.fillWidth: true
     Layout.preferredHeight: Design.s(Design.size.rowTall)
 
-    radius: Design.s(Design.radius.ctl)
+    // Its container's corner rule (Shape, Design.corner), else its own.
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
     color: Design.well
     border.color: Design.line
     border.width: Design.border

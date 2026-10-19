@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
 
@@ -47,7 +48,7 @@ Item {
     Rectangle {
         id: button
         anchors.fill: parent
-        radius: Design.s(Design.radius.ctl)
+        radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
         color: buttonArea.containsMouse || root.open ? Design.hover : Design.well
         border.color: root.open ? Design.accent : Design.line
         border.width: 1

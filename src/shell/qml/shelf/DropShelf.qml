@@ -87,12 +87,12 @@ PopupShell {
         }
 
         // ── Drop Zone / File List ──────────────────────────────────────────────
-        Rectangle {
+        Box {
             id: dropZone
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Design.s(Design.radius.card)
-            color: dropArea.containsDrag ? Design.tint(Design.accent, 0.15) : Design.sunken
+            color: dropArea.containsDrag ? Design.stateSelectedSoft : Design.sunken
             border.color: dropArea.containsDrag ? Design.accent : Design.glassBorder
             border.width: 1
             clip: true
@@ -122,7 +122,7 @@ PopupShell {
                 model: stagedFiles
                 clip: true
 
-                delegate: Rectangle {
+                delegate: Box {
                     id: fileCard
                     required property string path
                     required property string name
@@ -131,8 +131,8 @@ PopupShell {
                     width: ListView.view ? ListView.view.width : 0
                     height: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.ctl)
-                    color: fileHover.containsMouse ? Design.glassHover : Design.glassCard
-                    border.color: fileHover.containsMouse ? Design.accent : Design.glassBorder
+                    color: fileHover.containsMouse ? Design.stateHover : Design.glassCard
+                    border.color: fileHover.containsMouse ? Design.glassBorderStrong : Design.glassBorder
                     border.width: 1
 
                     RowLayout {
@@ -171,7 +171,6 @@ PopupShell {
                         IconButton {
                             icon: "\u{f08e}" // open in default app
                             role: "caption"
-                            hoverTone: Design.accent
                             onClicked: Quickshell.execDetached(["xdg-open", fileCard.path])
                         }
 
@@ -186,7 +185,7 @@ PopupShell {
                     // Hover only. It took the left button too, by default, and
                     // lying over the card it swallowed every click on the open
                     // and remove buttons.
-                    MouseArea {
+                    PointerArea {
                         id: fileHover
                         anchors.fill: parent
                         hoverEnabled: true

@@ -10,6 +10,7 @@
 #include <qqml.h>
 
 #include "b1airdaemon.hpp"
+#include "shape.hpp"
 #include "sway_client.hpp"
 #include "sys_util.hpp"
 #include "thumbs.hpp"
@@ -20,6 +21,10 @@ class B1airDaemonPlugin : public QQmlExtensionPlugin {
 
 public:
     void registerTypes(const char* uri) override {
+        // The corner rule, as an attached property: Shape.radius, Shape.inset
+        // (shape.hpp). Not a type to make, only to attach.
+        qmlRegisterUncreatableType<Shape>(uri, 1, 0, "Shape",
+            QStringLiteral("Shape is an attached property: Shape.radius, Shape.inset"));
         Q_ASSERT(uri == QLatin1String("B1air.Daemon"));
         qmlRegisterSingletonType<B1airDaemon>(
             uri, 1, 0, "Daemon",

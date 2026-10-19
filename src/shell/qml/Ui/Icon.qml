@@ -23,6 +23,11 @@ Text {
         case "title":    return Design.font.title;
         case "display":  return Design.font.display;
         case "subhead":  return Design.font.subhead;
+        // The icon sizes of the scale: in a button or row, in a small
+        // button or tab, and the one big glyph a popup or empty state is.
+        case "glyph":    return Design.font.glyph;
+        case "glyphSm":  return Design.font.glyphSm;
+        case "hero":     return Design.font.hero;
         default:
             // SessionMenu asked for "hero", which never existed: its icons
             // came out at subhead size and nothing said so.

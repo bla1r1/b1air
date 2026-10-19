@@ -125,13 +125,13 @@ PopupShell {
             Item {
                 Layout.preferredWidth: Design.s(Design.size.stat)
                 Layout.preferredHeight: Design.s(Design.size.stat)
-                IconImage {
+                AppIcon {
                     anchors.fill: parent
                     visible: !!(sheet.info && sheet.info.icon)
                     source: sheet.info && sheet.info.icon ? "file://" + sheet.info.icon : ""
                     mipmap: true
                 }
-                Rectangle {
+                Box {
                     anchors.fill: parent
                     visible: !(sheet.info && sheet.info.icon)
                     radius: Design.s(Design.radius.card)

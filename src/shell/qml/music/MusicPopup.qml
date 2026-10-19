@@ -184,7 +184,7 @@ PopupShell {
         // popup's own frame is the border now, as on every other popup.
 
         // INNER WINDOW BOX
-        Rectangle {
+        Box {
             id: innerBg
             anchors.fill: parent
             // No fill of its own: a glass card inset in the popup's glass
@@ -192,17 +192,19 @@ PopupShell {
             // cover's blur, no more.
             anchors.margins: Design.s(Design.border)
             color: "transparent"
-            radius: Design.s(Design.radius.panel)
+            // Inside the rim, so the rim's radius less the rim: the same
+            // radius a pixel in drew a crescent at each corner.
+            radius: Design.s(Design.radius.panel) - Design.s(Design.border)
 
             // FIX: This forces the entire background to render as a single hardware texture,
             // preventing the UI from dragging and causing "shadow boxes" during the StackView transition!
             layer.enabled: root.canShade
 
             // Provide a perfectly rounded mask for the inner content
-            Rectangle {
+            Box {
                 id: innerBgMask
                 anchors.fill: parent
-                radius: Design.s(Design.radius.panel)
+                radius: innerBg.radius
                 visible: false
                 
                 // FIX: Masks in MultiEffect strictly require layer.enabled to correctly capture the radius during scaling!
@@ -215,13 +217,13 @@ PopupShell {
                 
                 // This correctly clamps the blur and orbit circles to the 10px radius corners
                 layer.enabled: root.canShade
-                layer.effect: MultiEffect {
+                layer.effect: Effect {
                     maskEnabled: true
                     maskSource: innerBgMask
                 }
 
                 // LAYER 1: Background Blur (Smooth fade-in)
-                Image {
+                Picture {
                     anchors.fill: parent
                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                     sourceSize: Qt.size(512, 512)
@@ -234,7 +236,7 @@ PopupShell {
                 }
 
                 // LAYER 1.5: Ambient Accents
-                Rectangle {
+                Box {
                     width: parent.width * 0.8; height: width; radius: width / 2
                     anchors.centerIn: parent
                     
@@ -244,7 +246,7 @@ PopupShell {
                     Behavior on opacity { NumberAnimation { duration: root.introDuration } }
                 }
                 
-                Rectangle {
+                Box {
                     width: parent.width * 0.9; height: width; radius: width / 2
                     anchors.centerIn: parent
                     
@@ -297,7 +299,7 @@ PopupShell {
                         scale: root.musicData.status === "Playing" ? 1.0 : 0.90
                         Behavior on scale { NumberAnimation { duration: root.introDuration; easing.type: Easing.OutElastic; easing.overshoot: 1.2 } }
 
-                        Rectangle {
+                        Box {
                             anchors.fill: parent
                             radius: width / 2
                             color: Design.hover
@@ -306,7 +308,7 @@ PopupShell {
                             Behavior on border.color { ColorAnimation { duration: Design.duration.slow } }
 
                             // Glow Effect surrounding the thumbnail
-                            Rectangle {
+                            Box {
                                 z: -1
                                 anchors.centerIn: parent
                                 width: parent.width + Design.s(Design.space.lg)
@@ -316,7 +318,7 @@ PopupShell {
                                 opacity: root.musicData.status === "Playing" ? 0.5 : 0.0
                                 Behavior on opacity { NumberAnimation { duration: Design.duration.slow } }
                                 layer.enabled: root.canShade
-                                layer.effect: MultiEffect {
+                                layer.effect: Effect {
                                     blurEnabled: true
                                     blurMax: 32
                                     blur: 1.0
@@ -326,7 +328,7 @@ PopupShell {
                             Item {
                                 anchors.fill: parent
                                 anchors.margins: Design.s(Design.space.xs)
-                                Image {
+                                Picture {
                                     id: artImg
                                     anchors.fill: parent
                                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
@@ -335,14 +337,14 @@ PopupShell {
                                     fillMode: Image.PreserveAspectCrop
                                     visible: false 
                                 }
-                                Rectangle {
+                                Box {
                                     id: maskRect
                                     anchors.fill: parent
                                     radius: width / 2
                                     visible: false
                                     layer.enabled: root.canShade 
                                 }
-                                MultiEffect {
+                                Effect {
                                     anchors.fill: parent
                                     source: artImg
                                     maskEnabled: true
@@ -352,7 +354,7 @@ PopupShell {
                                 }
                                 
                                 // NEW: Dimmed slightly by tinting with the primary mauve accent, as requested
-                                Rectangle {
+                                Box {
                                     anchors.fill: parent
                                     radius: width / 2
                                     color: Qt.rgba(Design.accent.r, Design.accent.g, Design.accent.b, 0.2)
@@ -360,7 +362,7 @@ PopupShell {
                                     Behavior on opacity { NumberAnimation { duration: root.introDuration } }
                                 }
 
-                                Rectangle {
+                                Box {
                                     width: Design.s(Design.size.row); height: Design.s(Design.size.row)
                                     radius: width / 2; color: "#000000"
                                     opacity: 0.8; anchors.centerIn: parent
@@ -408,13 +410,12 @@ PopupShell {
 
                                     Row {
                                         spacing: titleClipRect.marqueeSpacing
-                                        Text {
+                                        Label {
                                             id: titleTextMain
                                             text: root.musicData.title
                                             color: root.dynamicTextColor
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(Design.font.title)
-                                            font.weight: Design.weight.semibold
+                                            role: "title"
+                                            weight: Design.weight.semibold
                                             Behavior on color { ColorAnimation { duration: root.tintDuration } }
 
                                             // Only animate if the text is physically wider than our container
@@ -428,13 +429,12 @@ PopupShell {
                                             }
                                         }
                                         // The clone that creates the seamless endless loop
-                                        Text {
+                                        Label {
                                             id: titleTextClone
                                             text: root.musicData.title
                                             color: root.dynamicTextColor
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(Design.font.title)
-                                            font.weight: Design.weight.semibold
+                                            role: "title"
+                                            weight: Design.weight.semibold
                                             visible: titleTextMain.implicitWidth > titleClipRect.width
                                         }
                                     }
@@ -461,12 +461,11 @@ PopupShell {
                                 }
                             }
 
-                            Text {
+                            Label {
                                 text: root.musicData.artist ? I18n.tr("BY %1", root.musicData.artist) : ""
                                 color: Design.textDim // Better matugen match
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(Design.font.glyphSm)
-                                font.weight: Design.weight.semibold
+                                size: Design.s(Design.font.glyphSm)
+                                weight: Design.weight.semibold
                                 elide: Text.ElideRight
                                 maximumLineCount: 1 // Strict 1 line
                                 Layout.fillWidth: true
@@ -474,8 +473,8 @@ PopupShell {
                             }
                             RowLayout {
                                 spacing: Design.s(Design.space.sm)
-                                Rectangle {
-                                    color: Design.glassCard
+                                Surface {
+                                    border.width: 0
                                     radius: Design.s(Design.radius.sm)
                                     Layout.preferredHeight: Design.s(Design.size.xs)
                                     Layout.preferredWidth: pillContent.width + Design.s(Design.space.lg)
@@ -484,15 +483,20 @@ PopupShell {
                                         anchors.centerIn: parent
                                         spacing: Design.s(Design.space.xs)
                                         Icon { role: "body"; text: root.musicData.deviceIcon || "󰓃"; color: Design.accent }
-                                        Text { text: root.musicData.deviceName || I18n.tr("Speaker"); color: Design.textFaint; font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.footnote); font.weight: Design.weight.semibold }
+                                        Label {
+                                            text: root.musicData.deviceName || I18n.tr("Speaker")
+                                            color: Design.textFaint
+                                            role: "footnote"
+                                            weight: Design.weight.semibold
+                                        }
                                     }
                                 }
-                                Text {
+                                Label {
                                     text: I18n.tr("VIA %1", I18n.tr(root.musicData.source || "Offline"))
                                     color: Design.textFaint // Better matugen match
-                                    font.family: Design.font.mono
-                                    font.pixelSize: Design.s(Design.font.footnote)
-                                    font.weight: Design.weight.semibold
+                                    isMono: true
+                                    role: "footnote"
+                                    weight: Design.weight.semibold
                                     font.italic: true
                                 }
                             }
@@ -505,7 +509,7 @@ PopupShell {
                             opacity: root.introControls
                             transform: Translate { x: Design.s(Design.space.lg) * (1 - root.introControls); y: Design.s(Design.space.sm) * (1 - root.introControls) }
 
-                            QQC.Slider {
+                            Scrubber {
                                 id: progBar
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.s(Design.size.mini) 
@@ -543,55 +547,23 @@ PopupShell {
                                         seekDebounceTimer.restart();
                                     }
                                 }
-
-                                background: Item {
-                                    x: progBar.leftPadding
-                                    y: progBar.topPadding + (progBar.availableHeight - Design.s(Design.space.md)) / 2
-                                    width: progBar.availableWidth
-                                    height: Design.s(Design.space.md)
-
-                                    // The track and how far along, in one colour: the
-                                    // fill was a 2000px seven-stop gradient sliding
-                                    // under a mask, the track a shadowed raised bar.
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: height / 2
-                                        color: Design.well
-                                    }
-
-                                    Rectangle {
-                                        width: progBar.handle.x - progBar.leftPadding + (progBar.handle.width / 2)
-                                        height: parent.height
-                                        radius: height / 2
-                                        color: Design.accent
-                                    }
-                                }
-
-                                handle: Rectangle {
-                                    x: progBar.leftPadding + progBar.visualPosition * (progBar.availableWidth - width)
-                                    y: progBar.topPadding + (progBar.availableHeight - height) / 2
-                                    implicitWidth: Design.s(Design.size.micro) 
-                                    implicitHeight: Design.s(Design.size.micro)
-                                    width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
-                                    // A knob on an accent track, not a cream
-                                    // dot: the handles were Design.text, the
-                                    // near-white used for prose, which is the
-                                    // one colour in the palette that says
-                                    // "this is a letter, not a control".
-                                    radius: Design.s(Design.radius.ctl)
-                                    color: Design.glassCard
-                                    border.width: Math.max(1, Design.s(Design.focusWidth))
-                                    border.color: Design.accent
-                                    scale: progBar.pressed ? 1.3 : 1.0
-                                    Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutBack } }
-                                }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: root.musicData.positionStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.body) }
+                                Label {
+                                    text: root.musicData.positionStr || "00:00"
+                                    color: Design.textFaint
+                                    isMono: true
+                                    weight: Design.weight.semibold
+                                }
                                 Item { Layout.fillWidth: true }
-                                Text { text: root.musicData.lengthStr || "00:00"; color: Design.textFaint; font.family: Design.font.mono; font.weight: Design.weight.semibold; font.pixelSize: Design.s(Design.font.body) }
+                                Label {
+                                    text: root.musicData.lengthStr || "00:00"
+                                    color: Design.textFaint
+                                    isMono: true
+                                    weight: Design.weight.semibold
+                                }
                             }
                         }
 
@@ -602,13 +574,13 @@ PopupShell {
                             opacity: root.introControls
                             transform: Translate { y: Design.s(Design.space.lg) * (1 - root.introControls) }
 
-                            MouseArea {
+                            PointerArea {
                                 width: Design.s(Design.size.sm); height: Design.s(Design.size.sm)
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: Media.previous()
                                 Icon { role: "title"; anchors.centerIn: parent; text: ""; color: parent.pressed ? Design.text : Design.textFaint }
                             }
-                            MouseArea {
+                            PointerArea {
                                 id: playPauseBtn
                                 width: Design.s(Design.size.art); height: Design.s(Design.size.art)
                                 cursorShape: Qt.PointingHandCursor
@@ -622,7 +594,7 @@ PopupShell {
                                 }
 
                                 // Fluid Ripple Animation Element
-                                Rectangle {
+                                Box {
                                     id: playPulse
                                     anchors.centerIn: parent
                                     width: parent.width
@@ -655,16 +627,15 @@ PopupShell {
                                     }
                                 }
 
-                                Text { 
+                                Icon { 
                                     anchors.centerIn: parent
                                     text: root.musicData.status === "Playing" ? "" : ""
                                     color: parent.pressed ? Design.accent : Design.accent
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(Design.font.hero) 
+                                    role: "hero"
                                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                                 }
                             }
-                            MouseArea {
+                            PointerArea {
                                 width: Design.s(Design.size.sm); height: Design.s(Design.size.sm)
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: Media.next()

@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls as C
@@ -544,9 +545,11 @@ C.ApplicationWindow {
     // The window's glass, the same as the shell's panels: under the content
     // and round the sidebar, which is a pane of its own set in from the edges
     // (Ui/AppSidebar).
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
+        radius: 0
         anchors.fill: parent
-        color: Design.glassBg
         visible: Design.translucent
     }
 
@@ -803,7 +806,7 @@ C.ApplicationWindow {
 
                     // Clicks on empty space: clear the selection, right-click for
                     // the folder's own menu. Under the views so items get theirs.
-                    MouseArea {
+                    PointerArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: mouse => {
@@ -892,14 +895,14 @@ C.ApplicationWindow {
                                 function onSettledChanged() { tile.wantThumb(); }
                             }
 
-                            Rectangle {
+                            Box {
                                 id: tileBg
                                 anchors.fill: parent
                                 anchors.margins: Design.s(Design.space.xxs)
                                 radius: Design.s(Design.radius.card)
-                                color: tile.selected ? Design.tint(Design.accent, 0.24)
+                                color: tile.selected ? Design.stateSelected
                                      : tileDrop.containsDrag ? Design.tint(Design.accent, 0.16)
-                                     : tileMa.containsMouse ? Design.hover : "transparent"
+                                     : tileMa.containsMouse ? Design.stateHover : "transparent"
                                 border.width: tile.selected || tileDrop.containsDrag ? 1 : 0
                                 border.color: Design.accent
                                 opacity: tile.hidden ? 0.65 : 1.0
@@ -912,7 +915,7 @@ C.ApplicationWindow {
                                     width: Design.s(window.iconSize)
                                     height: Design.s(window.iconSize)
 
-                                    Image {
+                                    Picture {
                                         id: thumb
                                         anchors.fill: parent
                                         // Made and cached in the background (thumbs.cpp), videos too.
@@ -923,25 +926,24 @@ C.ApplicationWindow {
                                         asynchronous: true
                                         smooth: true
                                     }
-                                    Text {
+                                    Label {
                                         anchors.centerIn: parent
                                         visible: !thumb.visible
                                         text: window.glyphFor(tile.category)
-                                        font.family: Design.font.icon
-                                        font.pixelSize: Design.s(window.iconSize * 0.78)
+                                        family: Design.font.icon
+                                        size: Design.s(window.iconSize * 0.78)
                                         color: window.toneFor(tile.category)
                                     }
-                                    Text {
+                                    Icon {
                                         visible: tile.symlink
                                         anchors.right: parent.right
                                         anchors.bottom: parent.bottom
                                         text: "\u{f0339}"
-                                        font.family: Design.font.icon
-                                        font.pixelSize: Design.s(Design.font.glyphSm)
+                                        role: "glyphSm"
                                         color: Design.text
                                     }
                                 }
-                                Text {
+                                Label {
                                     anchors.top: thumbBox.bottom
                                     anchors.topMargin: Design.s(Design.space.xs)
                                     anchors.left: parent.left
@@ -953,8 +955,6 @@ C.ApplicationWindow {
                                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                     maximumLineCount: 2
                                     elide: Text.ElideRight
-                                    font.family: Design.font.sans
-                                    font.pixelSize: Design.s(Design.font.body)
                                     color: Design.text
                                 }
                                 // Its tags, as overlapping dots at the thumbnail's corner.
@@ -965,7 +965,7 @@ C.ApplicationWindow {
                                     spacing: -Design.s(Design.space.xxs)
                                     Repeater {
                                         model: tile.tags
-                                        Rectangle {
+                                        Box {
                                             required property string modelData
                                             width: Design.s(Design.space.md); height: width; radius: width / 2
                                             color: window.tagColor(modelData)
@@ -978,7 +978,7 @@ C.ApplicationWindow {
 
                             DragProxy { id: tileProxy; active: tileMa.drag.active; whole: tile.selected; path: tile.path }
 
-                            MouseArea {
+                            PointerArea {
                                 id: tileMa
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -1007,11 +1007,16 @@ C.ApplicationWindow {
                         visible: window.viewMode === "list"
                         spacing: 0
 
-                        Rectangle {
+                        Box {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.md)
                             color: "transparent"
-                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
+                            Box {
+                                anchors.bottom: parent.bottom
+                                width: parent.width
+                                height: 1
+                                color: Design.line
+                            }
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: Design.s(Design.space.lg)
@@ -1039,46 +1044,41 @@ C.ApplicationWindow {
                             C.ScrollBar.vertical: OverflowBar {}
                             Keys.onPressed: event => window.handleKey(event, 1)
 
-                            delegate: Item {
+                            delegate: ListRow {
                                 id: row
                                 required property int index
                                 required property string name
                                 required property string path
                                 required property bool isDir
-                                required property bool selected
+                                // `selected` is ListRow's own; a required one
+                                // of the same name would hide it.
+                                required property var model
+                                selected: model.selected
                                 required property bool hidden
                                 required property string category
                                 required property string sizeText
                                 required property string kind
                                 required property string modifiedText
                                 required property var tags
-                                width: listView.width
-                                height: Design.s(Design.size.knob)
-
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Design.s(Design.space.sm)
-                                    anchors.rightMargin: Design.s(Design.space.sm)
-                                    radius: Design.s(Design.radius.sm)
-                                    color: row.selected ? Design.tint(Design.accent, 0.24)
-                                         : rowDrop.containsDrag ? Design.tint(Design.accent, 0.16)
-                                         : rowMa.containsMouse ? Design.hover
-                                         : (row.index % 2 ? Design.tint(Design.raised, 0.35) : "transparent")
-                                    opacity: row.hidden ? 0.65 : 1.0
+                                implicitHeight: Design.s(Design.size.knob)
+                                inset: Design.s(Design.space.sm)
+                                striped: row.index % 2 === 1
+                                highlight: rowDrop.containsDrag
+                                handlesMouse: false
+                                hovered: rowMa.containsMouse
+                                pressed: rowMa.pressed
+                                opacity: row.hidden ? 0.65 : 1.0
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: Design.s(Design.space.sm)
-                                        anchors.rightMargin: Design.s(Design.space.sm)
                                         spacing: Design.s(Design.space.md)
                                         RowLayout {
                                             Layout.fillWidth: true
                                             spacing: Design.s(Design.space.sm)
-                                            Text {
+                                            Icon {
                                                 Layout.preferredWidth: Design.s(Design.size.mini)
                                                 text: window.glyphFor(row.category)
-                                                font.family: Design.font.icon
-                                                font.pixelSize: Design.s(Design.font.glyph)
+                                                role: "glyph"
                                                 color: window.toneFor(row.category)
                                                 horizontalAlignment: Text.AlignHCenter
                                             }
@@ -1088,7 +1088,7 @@ C.ApplicationWindow {
                                                 spacing: -Design.s(Design.space.xxs)
                                                 Repeater {
                                                     model: row.tags
-                                                    Rectangle {
+                                                    Box {
                                                         required property string modelData
                                                         width: Design.s(Design.space.sm); height: width; radius: width / 2
                                                         color: window.tagColor(modelData)
@@ -1102,11 +1102,11 @@ C.ApplicationWindow {
                                         Label { Layout.preferredWidth: Design.s(Design.width.label); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
                                         Label { Layout.preferredWidth: Design.s(Design.width.label); text: row.modifiedText; dim: true; elide: Text.ElideRight }
                                     }
-                                }
 
-                                DragProxy { id: rowProxy; active: rowMa.drag.active; whole: row.selected; path: row.path }
+                                overlay: [
+                                DragProxy { id: rowProxy; active: rowMa.drag.active; whole: row.selected; path: row.path },
 
-                                MouseArea {
+                                PointerArea {
                                     id: rowMa
                                     anchors.fill: parent
                                     hoverEnabled: true
@@ -1116,7 +1116,7 @@ C.ApplicationWindow {
                                     onPressed: mouse => window.itemPressed(row.index, mouse)
                                     onReleased: mouse => window.itemReleased(row.index, mouse, drag.active)
                                     onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(row.index); }
-                                }
+                                },
                                 DropArea {
                                     id: rowDrop
                                     anchors.fill: parent
@@ -1124,6 +1124,7 @@ C.ApplicationWindow {
                                     keys: ["text/uri-list"]
                                     onDropped: drop => window.dropInto(drop, row.path)
                                 }
+                                ]
                             }
                         }
                     }
@@ -1199,7 +1200,12 @@ C.ApplicationWindow {
                                 id: folderColumn
                                 Item {
                                     id: folderCol
-                                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+                                    Box {
+                                        anchors.right: parent.right
+                                        width: 1
+                                        height: parent.height
+                                        color: Design.line
+                                    }
                                     FileListModel { id: other }
                                     // The last column shows the window's own listing; one
                                     // that stops being last (a step down) lists its folder.
@@ -1252,7 +1258,7 @@ C.ApplicationWindow {
                                                 window.handleKey(event, 1);
                                             }
                                         }
-                                        delegate: Rectangle {
+                                        delegate: Box {
                                             id: crow
                                             required property int index
                                             required property string name
@@ -1267,7 +1273,7 @@ C.ApplicationWindow {
                                             radius: Design.s(Design.radius.sm)
                                             color: crow.lit ? (col.isLast || col.index === columnsView.dirs.length - 2
                                                                ? Design.accent : Design.tint(Design.text, 0.12))
-                                                 : crowMa.containsMouse ? Design.hover : "transparent"
+                                                 : crowMa.containsMouse ? Design.stateHover : "transparent"
                                             readonly property color ink: crow.lit && (col.isLast || col.index === columnsView.dirs.length - 2)
                                                                          ? Design.accentText : Design.text
                                             RowLayout {
@@ -1275,30 +1281,27 @@ C.ApplicationWindow {
                                                 anchors.leftMargin: Design.s(Design.space.sm)
                                                 anchors.rightMargin: Design.s(Design.space.xs)
                                                 spacing: Design.s(Design.space.sm)
-                                                Text {
+                                                Icon {
                                                     text: window.glyphFor(crow.category)
-                                                    font.family: Design.font.icon
-                                                    font.pixelSize: Design.s(Design.font.subhead)
                                                     color: crow.lit ? crow.ink : window.toneFor(crow.category)
                                                 }
                                                 Label { Layout.fillWidth: true; text: crow.name; color: crow.ink; elide: Text.ElideMiddle }
                                                 Repeater {
                                                     model: crow.tags
-                                                    Rectangle {
+                                                    Box {
                                                         required property string modelData
                                                         width: Design.s(Design.space.sm); height: width; radius: width / 2
                                                         color: window.tagColor(modelData)
                                                     }
                                                 }
-                                                Text {
+                                                Icon {
                                                     visible: crow.isDir
                                                     text: "\u{f0142}"
-                                                    font.family: Design.font.icon
-                                                    font.pixelSize: Design.s(Design.font.body)
+                                                    role: "body"
                                                     color: crow.lit ? crow.ink : Design.textFaint
                                                 }
                                             }
-                                            MouseArea {
+                                            PointerArea {
                                                 id: crowMa
                                                 anchors.fill: parent
                                                 hoverEnabled: true
@@ -1365,7 +1368,11 @@ C.ApplicationWindow {
                             glyph: window.glyphFor(item.category || "file")
                             tone: window.toneFor(item.category || "file")
                         }
-                        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+                        Box {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Design.line
+                        }
                         ListView {
                             id: strip
                             Layout.fillWidth: true
@@ -1395,7 +1402,7 @@ C.ApplicationWindow {
                                     window.handleKey(event, 1);
                                 }
                             }
-                            delegate: Rectangle {
+                            delegate: Box {
                                 id: gthumb
                                 required property int index
                                 required property string path
@@ -1407,10 +1414,10 @@ C.ApplicationWindow {
                                 width: Design.s(Design.size.stat)
                                 height: Design.s(Design.size.stat)
                                 radius: Design.s(Design.radius.sm)
-                                color: gthumb.selected ? Design.tint(Design.accent, 0.2) : Design.well
+                                color: gthumb.selected ? Design.stateSelected : Design.well
                                 border.color: gthumb.selected ? Design.accent : "transparent"
                                 border.width: Design.s(Design.focusWidth)
-                                Image {
+                                Picture {
                                     id: gimg
                                     anchors.fill: parent
                                     anchors.margins: Design.s(Design.space.xs)
@@ -1420,15 +1427,14 @@ C.ApplicationWindow {
                                     fillMode: Image.PreserveAspectCrop
                                     asynchronous: true
                                 }
-                                Text {
+                                Icon {
                                     anchors.centerIn: parent
                                     visible: !gimg.visible
                                     text: window.glyphFor(gthumb.category)
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(Design.font.display)
+                                    role: "display"
                                     color: window.toneFor(gthumb.category)
                                 }
-                                MouseArea {
+                                PointerArea {
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                                     onPressed: mouse => window.itemPressed(gthumb.index, mouse)
@@ -1503,11 +1509,12 @@ C.ApplicationWindow {
                 spacing: 0
 
                 // Folder chooser bar, in --pick-folder mode.
-                Rectangle {
+                Surface {
+                    kind: "well"
+                    radius: 0
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.size.rowTall)
                     visible: FilesBackend.pickMode
-                    color: Design.well
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Design.s(Design.space.lg)
@@ -1547,15 +1554,15 @@ C.ApplicationWindow {
                         // as a Mac's toolbar groups its controls (Ui/ToolbarGroup).
                         ToolbarGroup {
                             backdrop: contentArea
-                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
                         }
 
                         // Path: clickable segments; a click on the empty part of the
                         // bar, or Ctrl+L, turns it into a field to type a path in —
                         // or a server's address, smb://nas/media.
-                        Rectangle {
+                        Box {
                             id: pathBar
                             property bool editing: false
                             function edit() {
@@ -1588,7 +1595,7 @@ C.ApplicationWindow {
                                 onClicked: pathBar.edit()
                             }
 
-                            TextInput {
+                            TextLine {
                                 id: pathInput
                                 visible: pathBar.editing
                                 anchors.fill: parent
@@ -1681,15 +1688,14 @@ C.ApplicationWindow {
                                     required property var modelData
                                     required property int index
                                     height: crumbs.height
-                                    Text {
+                                    Icon {
                                         visible: index > 0
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: "\u{f0142}"
-                                        font.family: Design.font.icon
-                                        font.pixelSize: Design.s(Design.font.footnote)
+                                        role: "footnote"
                                         color: Design.textFaint
                                     }
-                                    Rectangle {
+                                    Box {
                                         readonly property bool last: index === crumbs.count - 1
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: crumbText.width + Design.s(Design.space.lg)
@@ -1697,9 +1703,9 @@ C.ApplicationWindow {
                                         // No capsule of its own inside the bar's: the
                                         // folder you are in is the bold one, and the
                                         // others light up only under the pointer.
-                                        radius: Design.s(Design.radius.ctl) / 2
-                                        color: crumbMa.containsMouse && !last ? Design.hover : "transparent"
-                                        Text {
+                                        radius: Design.s(Design.radius.sm)
+                                        color: crumbMa.containsMouse && !last ? Design.stateHover : "transparent"
+                                        Label {
                                             id: crumbText
                                             anchors.centerIn: parent
                                             // A long name is cut in the middle, so
@@ -1713,9 +1719,7 @@ C.ApplicationWindow {
                                                             pathBar.width - Design.s(crumbs.count > 1 ? 104 : 64))
                                             elide: Text.ElideMiddle
                                             text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
-                                            font.family: Design.font.sans
-                                            font.pixelSize: Design.s(Design.font.body)
-                                            font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
+                                            weight: parent.last ? Design.weight.semibold : Design.weight.regular
                                             color: parent.last ? Design.text : Design.textDim
                                         }
                                         Clickable {
@@ -1803,8 +1807,8 @@ C.ApplicationWindow {
                         }
                         ToolbarGroup {
                             backdrop: contentArea
-                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
                         }
                 }
 
@@ -1843,15 +1847,16 @@ C.ApplicationWindow {
         }
 
         // ── Details panel ────────────────────────────────────────────────────
-        Rectangle {
+        // The sidebar's shape on the right (Ui/WindowPane): it was a band of
+        // the window behind a hairline, beside a sidebar that is a pane.
+        WindowPane {
+            edge: Qt.RightEdge
             Layout.fillHeight: true
-            Layout.preferredWidth: Design.s(Design.size.canvas)
+            Layout.preferredWidth: Design.s(Design.size.canvas) + inset
+            padding: Design.s(Design.space.md)
             // Not beside the column view or the gallery: they preview it themselves.
-            clip: true   // nothing it shows may reach into the folder beside it
             visible: window.showInfo && window.width > 980 && !window.device
                      && window.viewMode !== "columns" && window.viewMode !== "gallery"
-            color: Design.veil
-            Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: Design.line }
 
             // What it describes: the one selected item, or the folder itself.
             readonly property string subject: {
@@ -1885,9 +1890,9 @@ C.ApplicationWindow {
                 }
             }
 
-            C.ScrollView {
+            Scroller {
                 anchors.fill: parent
-                anchors.margins: Design.s(Design.space.lg)
+                clip: true   // nothing it shows may reach past the pane
                 contentWidth: availableWidth
                 C.ScrollBar.horizontal.policy: C.ScrollBar.AlwaysOff
 
@@ -1900,11 +1905,10 @@ C.ApplicationWindow {
                         visible: infoPanel.subject === ""
                         Layout.fillWidth: true
                         spacing: Design.s(Design.space.sm)
-                        Text {
+                        Icon {
                             Layout.alignment: Qt.AlignHCenter
                             text: "\u{f0c51}"
-                            font.family: Design.font.icon
-                            font.pixelSize: Design.s(Design.font.hero)
+                            role: "hero"
                             color: Design.textFaint
                         }
                         Label { Layout.alignment: Qt.AlignHCenter; role: "subhead"; weight: Design.weight.semibold; text: I18n.trn("%1 item", "%1 items", fm.selectionCount) }
@@ -1917,12 +1921,14 @@ C.ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: Design.s(Design.space.md)
 
-                        Rectangle {
+                        Surface {
+                            kind: "well"
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.width.label)
-                            radius: Design.s(Design.radius.card)
-                            color: Design.raised
-                            Image {
+                            // Inside the pane: the corner rule's, a control's
+                            // where it sits further in than the pane is round.
+                            radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+                            Picture {
                                 id: preview
                                 anchors.fill: parent
                                 anchors.margins: Design.s(Design.space.sm)
@@ -1932,12 +1938,11 @@ C.ApplicationWindow {
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                             }
-                            Text {
+                            Icon {
                                 anchors.centerIn: parent
                                 visible: !preview.visible
                                 text: window.glyphFor(infoPanel.info.category || "folder")
-                                font.family: Design.font.icon
-                                font.pixelSize: Design.s(Design.font.hero)
+                                role: "hero"
                                 color: window.toneFor(infoPanel.info.category || "folder")
                             }
                         }
@@ -1952,7 +1957,11 @@ C.ApplicationWindow {
                         }
                         Label { text: I18n.tr(infoPanel.info.kind || ""); dim: true; Layout.topMargin: -Design.s(Design.space.sm) }
 
-                        Rectangle { Layout.fillWidth: true; height: 1; color: Design.line }
+                        Box {
+                            Layout.fillWidth: true
+                            height: 1
+                            color: Design.line
+                        }
 
                         InfoRow { label: I18n.tr("Size"); value: infoPanel.info.isDir ? (infoPanel.folderSize || infoPanel.info.sizeText) : (infoPanel.info.sizeText || "") }
                         InfoRow { label: I18n.tr("Contains"); value: infoPanel.info.isDir && infoPanel.info.items !== undefined ? I18n.trn("%1 item", "%1 items", infoPanel.info.items) : "" }
@@ -2068,7 +2077,7 @@ C.ApplicationWindow {
                 spacing: Design.s(Design.space.sm)
                 Repeater {
                     model: window.tagNames
-                    Rectangle {
+                    Box {
                         id: dot
                         required property string modelData
                         readonly property bool on: tagRow.common.indexOf(modelData) >= 0
@@ -2076,12 +2085,11 @@ C.ApplicationWindow {
                         color: window.tagColor(modelData)
                         border.color: dot.on ? Design.text : "transparent"
                         border.width: Design.s(Design.focusWidth)
-                        Text {
+                        Icon {
                             anchors.centerIn: parent
                             visible: dot.on
                             text: "\u{f012c}"
-                            font.family: Design.font.icon
-                            font.pixelSize: Design.s(Design.font.caption)
+                            role: "caption"
                             color: Design.readableOn(dot.color)
                         }
                         Clickable {
@@ -2483,11 +2491,10 @@ C.ApplicationWindow {
                     }
                 }
                 // What it will do, before it does it.
-                Rectangle {
+                Surface {
+                    kind: "well"
                     Layout.fillWidth: true
                     Layout.preferredHeight: renamePreview.implicitHeight + Design.s(Design.space.sm) * 2
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.well
                     Column {
                         id: renamePreview
                         anchors.fill: parent
@@ -2667,7 +2674,9 @@ C.ApplicationWindow {
         property string field: ""
         sorted: FilesBackend.sortField === field
         ascending: FilesBackend.sortAscending
-        inset: alignRight ? 0 : Design.s(Design.size.sm)
+        // Past the row's icon, for the name only: Kind and Modified were
+        // set in by it too, and sat an icon's width right of their values.
+        inset: field === "name" ? Design.s(Design.size.sm) : 0
         onClicked: {
             if (sorted) FilesBackend.sortAscending = !FilesBackend.sortAscending;
             else { FilesBackend.sortField = field; FilesBackend.sortAscending = field === "name" || field === "type"; }

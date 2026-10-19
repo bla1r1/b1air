@@ -62,14 +62,10 @@ MiniView {
         spacing: Design.s(Design.space.sm)
 
         // ── Summary ──────────────────────────────────────────────────────────
-        Rectangle {
+        Surface {
             visible: Power.hasBattery
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.tile)
-            radius: Design.s(Design.radius.card)
-            color: Design.glassCard
-            border.color: Design.glassBorder
-            border.width: Design.border
 
             RowLayout {
                 anchors.fill: parent
@@ -194,7 +190,7 @@ MiniView {
                 Repeater {
                     model: root.modes
 
-                    Rectangle {
+                    Box {
                         id: modeRow
                         required property var modelData
 
@@ -205,7 +201,7 @@ MiniView {
                         radius: Design.s(Design.radius.ctl)
 
                         color: modeRow.active ? Design.tint(modeRow.modelData.tone, 0.15)
-                                              : (modeMa.containsMouse ? Design.glassHover : "transparent")
+                                              : (modeMa.containsMouse ? Design.stateHover : "transparent")
                         border.color: modeRow.active ? Design.tint(modeRow.modelData.tone, 0.35) : "transparent"
                         border.width: Design.border
 

@@ -24,6 +24,9 @@
 // =============================================================================
 
 #include <QDir>
+#include <QGuiApplication>
+#include <QImage>
+#include <QTimer>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QStringList>
@@ -45,6 +48,35 @@ inline void choose_renderer() {
         QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     else
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
+}
+
+// B1AIR_GRAB=<file.png>: draw the app's window, save it to the file and
+// quit. For looking at the apps without a compositor or a GPU — run with
+// QT_QPA_PLATFORM=offscreen (tools/app-shots.sh) — the same picture the
+// window would show. B1AIR_GRAB_DELAY (ms, default 2000) waits for content
+// loaded after the window, a folder's listing or a repository's log; with no
+// compositor to size the window, B1AIR_GRAB_SIZE (default 1300x800) does.
+inline void grab_if_asked() {
+    const QString out = qEnvironmentVariable("B1AIR_GRAB");
+    if (out.isEmpty()) return;
+    bool ok = false;
+    int delay = qEnvironmentVariableIntValue("B1AIR_GRAB_DELAY", &ok);
+    if (!ok) delay = 2000;
+    QTimer::singleShot(delay, qApp, [out] {
+        // Sized only now: some apps show their window after loading.
+        QQuickWindow* win = nullptr;
+        for (QWindow* w : QGuiApplication::topLevelWindows()) {
+            auto* qw = qobject_cast<QQuickWindow*>(w);
+            if (qw && qw->isVisible()) { win = qw; break; }
+        }
+        if (!win) { QCoreApplication::exit(1); return; }
+        const QStringList wh = qEnvironmentVariable("B1AIR_GRAB_SIZE", QStringLiteral("1300x800"))
+                                   .split(QLatin1Char('x'));
+        if (wh.size() == 2) win->resize(wh[0].toInt(), wh[1].toInt());
+        QTimer::singleShot(600, win, [win, out] {
+            QCoreApplication::exit(win->grabWindow().save(out) ? 0 : 1);
+        });
+    });
 }
 
 } // namespace app

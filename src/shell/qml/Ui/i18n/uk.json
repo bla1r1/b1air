@@ -2839,5 +2839,15 @@
  "That name collides with a built-in theme.": "Таку назву вже має вбудована тема.",
  "Built-in themes cannot be edited — duplicate it first.": "Вбудовані теми не редагуються — спершу зробіть копію.",
  "Drop files here or create a folder.": "Перетягніть сюди файли або створіть теку.",
- "Folder is empty": "Тека порожня"
+ "Folder is empty": "Тека порожня",
+ "%1, staged": "%1, в індексі",
+ "Previous week": "Попередній тиждень",
+ "Previous day": "Попередній день",
+ "Next week": "Наступний тиждень",
+ "Next day": "Наступний день",
+ "Previous month": "Попередній місяць",
+ "Next month": "Наступний місяць",
+ "Remove from list": "Прибрати зі списку",
+ "not pushed": "не надіслано",
+ "Delete branch": "Видалити гілку"
 }

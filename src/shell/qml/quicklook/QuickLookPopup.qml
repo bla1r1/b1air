@@ -180,17 +180,16 @@ PopupShell {
         }
 
         // ── Preview Canvas ────────────────────────────────────────────────────
-        Rectangle {
+        Surface {
+            kind: "well"
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Design.s(Design.radius.card)
-            color: Design.well
-            border.color: Design.glassBorder
             border.width: 1
             clip: true
 
             // 1. Image Preview
-            Image {
+            Picture {
                 id: image
                 visible: root.fileType === "image" && status !== Image.Error
                 anchors.fill: parent
@@ -222,13 +221,13 @@ PopupShell {
             }
 
             // 3. Text / Code / Archive / PDF Metadata Preview
-            ScrollView {
+            Scroller {
                 visible: root.fileType !== "image" && root.filePath !== "" && root.previewState === ""
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.sm)
                 clip: true
 
-                TextArea {
+                TextBox {
                     text: root.fileText
                     readOnly: true
                     selectByMouse: true

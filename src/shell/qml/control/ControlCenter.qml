@@ -379,7 +379,7 @@ PopupShell {
             rowSpacing: Design.s(Design.space.xs)
             columnSpacing: Design.s(Design.space.sm)
 
-            Rectangle {
+            Box {
                 Layout.alignment: tile.tall ? Qt.AlignHCenter | Qt.AlignBottom : Qt.AlignVCenter
                 Layout.preferredWidth: tile.tall ? Design.s(Design.size.knob) * 1.6
                                                  : Design.s(Design.size.knob)
@@ -388,7 +388,7 @@ PopupShell {
                 radius: width / 2
                 // On: the accent, solid. Off: a disc of the glass, a shade
                 // lighter, so it still reads as something to press.
-                color: tile.on ? tile.discColor : Design.tint(Design.text, 0.12)
+                color: tile.on ? tile.discColor : Design.statePressed
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                 Icon {
@@ -534,7 +534,6 @@ PopupShell {
                 visible: !center.editing
                 icon: Notifications.history.count > 0 ? "\u{f009a}" : "\u{f009b}"
                 bordered: true
-                hoverTone: Design.accent
                 onClicked: center.currentView = (center.currentView === "notifications" ? "main" : "notifications")
             }
 
@@ -544,7 +543,6 @@ PopupShell {
             IconButton {
                 icon: center.editing ? "\u{f012c}" : "\u{f03eb}"   // check / tune
                 bordered: true
-                hoverTone: Design.accent
                 onClicked: center.editing = !center.editing
             }
 
@@ -911,11 +909,11 @@ PopupShell {
                     onMoved: pct => Audio.setMasterVolume(pct)
                 }
 
-                Rectangle {
+                Box {
                     Layout.preferredWidth: Design.s(Design.size.md)
                     Layout.preferredHeight: Design.s(Design.size.md)
                     radius: Design.s(Design.radius.ctl)
-                    color: soundBtnMa.containsMouse ? Design.glassHover : Design.glassCard
+                    color: soundBtnMa.containsMouse ? Design.stateHover : Design.glassCard
                     border.color: Design.glassBorder
                     border.width: Design.border
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -924,7 +922,7 @@ PopupShell {
                         anchors.centerIn: parent
                         text: "\u{f0142}"
                         role: "caption"
-                        color: soundBtnMa.containsMouse ? Design.accent : Design.textDim
+                        color: soundBtnMa.containsMouse ? Design.text : Design.textDim
                     }
 
                     Clickable { id: soundBtnMa; onClicked: center.currentView = "sound" }
@@ -937,16 +935,12 @@ PopupShell {
         }
 
         // ── 3.5 Live Weather Card ──────────────────────────────────────────
-        Rectangle {
+        Surface {
             id: weatherCard
             Layout.fillWidth: true
             Layout.row: center.cardRow("weather")
             visible: center.cardShown("weather")
             Layout.preferredHeight: Design.s(Design.size.rowTall)
-            radius: Design.s(Design.radius.card)
-            color: Design.glassCard
-            border.color: Design.glassBorder
-            border.width: Design.border
 
             CardFrame { cardId: "weather" }
 
@@ -992,7 +986,7 @@ PopupShell {
         }
 
         // ── 4. Media ─────────────────────────────────────────────────────────
-        Rectangle {
+        Surface {
             id: mediaCard
             Layout.fillWidth: true
             Layout.row: center.cardRow("media")
@@ -1000,10 +994,6 @@ PopupShell {
             // 76px box saying so. Hidden then, except while arranging.
             visible: center.cardShown("media") && (Media.hasPlayer || center.editing)
             Layout.preferredHeight: Design.s(Design.size.media)
-            radius: Design.s(Design.radius.card)
-            color: Design.glassCard
-            border.color: Design.glassBorder
-            border.width: Design.border
 
             CardFrame { cardId: "media" }
 
@@ -1012,14 +1002,13 @@ PopupShell {
                 anchors.margins: Design.s(Design.space.md)
                 spacing: Design.s(Design.space.md)
 
-                Rectangle {
+                Surface {
+                    kind: "well"
                     Layout.preferredWidth: Design.s(Design.size.art)
                     Layout.preferredHeight: Design.s(Design.size.art)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.well
                     clip: true
 
-                    Image {
+                    Picture {
                         anchors.fill: parent
                         // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
                         sourceSize: Qt.size(256, 256)
@@ -1086,7 +1075,7 @@ PopupShell {
                         onClicked: Media.previous()
                     }
 
-                    Rectangle {
+                    Box {
                         Layout.preferredWidth: Design.s(Design.size.knob)
                         Layout.preferredHeight: Design.s(Design.size.knob)
                         radius: width / 2

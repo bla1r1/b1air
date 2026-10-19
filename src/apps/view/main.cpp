@@ -114,5 +114,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    b1air::app::grab_if_asked();
     return app.exec();
 }

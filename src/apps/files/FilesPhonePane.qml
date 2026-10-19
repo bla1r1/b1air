@@ -126,11 +126,10 @@ Item {
             anchors.centerIn: parent
             width: Math.min(parent.width - Design.s(Design.size.art), Design.s(Design.width.menuMax))
             spacing: Design.s(Design.space.md)
-            Text {
+            Icon {
                 Layout.alignment: Qt.AlignHCenter
                 text: pane.state === "locked" ? "\u{f033e}" : pane.state === "connecting" ? "\u{f0450}" : "\u{f0565}"
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(Design.font.hero)
+                role: "hero"
                 color: Design.textFaint
             }
             Label {
@@ -283,14 +282,11 @@ Item {
                 icon: "\u{f003b}"
                 title: pane.appsLoading ? I18n.tr("Looking…") : I18n.tr("No app on this iPhone shares files.")
             }
-            Rectangle {
+            Surface {
                 Layout.fillWidth: true
                 visible: list.count > 0
                 implicitHeight: listColumn.implicitHeight
-                radius: Design.s(Design.radius.card)
-                color: Design.glassCard
                 border.color: Design.line
-                border.width: Design.border
                 ColumnLayout {
                     id: listColumn
                     width: parent.width
@@ -303,15 +299,15 @@ Item {
                              : (pane.device.storages && pane.device.storages.length
                                 ? pane.device.storages.map(s => ({ id: s, name: s }))
                                 : [{ id: "media", name: I18n.tr("Phone storage") }])
-                        delegate: Rectangle {
+                        delegate: Box {
                             id: appRow
                             required property var modelData
                             required property int index
                             Layout.fillWidth: true
                             implicitHeight: Design.s(Design.size.row)
-                            color: appMa.containsMouse ? Design.hover : "transparent"
+                            color: appMa.containsMouse ? Design.stateHover : "transparent"
                             radius: Design.s(Design.radius.card)
-                            Rectangle {
+                            Box {
                                 visible: appRow.index > 0
                                 anchors.top: parent.top
                                 x: Design.s(Design.size.rowTall); width: parent.width - x; height: 1
@@ -322,10 +318,9 @@ Item {
                                 anchors.leftMargin: Design.s(Design.space.md)
                                 anchors.rightMargin: Design.s(Design.space.md)
                                 spacing: Design.s(Design.space.md)
-                                Rectangle {
+                                Surface {
+                                    kind: "well"
                                     Layout.preferredWidth: Design.s(Design.size.sm); Layout.preferredHeight: Design.s(Design.size.sm)
-                                    radius: Design.s(Design.radius.ctl)
-                                    color: Design.well
                                     Icon { anchors.centerIn: parent; text: pane.iphone ? "\u{f003b}" : "\u{f02ca}"; color: Design.textDim }
                                 }
                                 Label { Layout.fillWidth: true; text: appRow.modelData.name; elide: Text.ElideRight }
@@ -363,5 +358,5 @@ Item {
             spacing: Design.s(Design.space.xl)
         }
     }
-    component Divider: Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+    component Divider: Box { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
 }

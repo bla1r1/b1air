@@ -59,7 +59,7 @@ Scope {
                             implicitWidth: 2
                             implicitHeight: 2
 
-                            MouseArea {
+                            PointerArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 // Held a moment, so passing through the corner on

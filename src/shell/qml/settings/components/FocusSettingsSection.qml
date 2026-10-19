@@ -133,11 +133,11 @@ ColumnLayout {
             spacing: Design.s(Design.space.md)
 
             // Screen time stat box
-            Rectangle {
+            Surface {
+                kind: "well"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
-                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -157,11 +157,11 @@ ColumnLayout {
             }
 
             // Daily goal progress box
-            Rectangle {
+            Surface {
+                kind: "well"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
-                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -182,11 +182,11 @@ ColumnLayout {
             }
 
             // Focus status box
-            Rectangle {
+            Surface {
+                kind: "well"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.stat)
                 radius: Design.s(Design.radius.card)
-                color: Design.well
 
                 ColumnLayout {
                     anchors.centerIn: parent

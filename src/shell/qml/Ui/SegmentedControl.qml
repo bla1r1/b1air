@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 import QtQuick.Controls as C
 
@@ -100,7 +101,8 @@ Rectangle {
         : Math.max(Design.s(Design.width.segment), count * Design.s(size === "sm" ? Design.width.segmentSm : Design.width.segmentMd))
     Layout.preferredWidth: implicitWidth
 
-    radius: Design.s(Design.radius.ctl)
+    // Its container's corner rule (Shape, Design.corner), else its own.
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
     color: Design.well
     border.width: 1
     border.color: Design.glassBorder

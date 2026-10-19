@@ -183,11 +183,10 @@ PopupShell {
         spacing: Design.s(Design.space.sm)
 
         // ── Search Bar ───────────────────────────────────────────────────────
-        Rectangle {
+        Surface {
+            kind: "well"
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.row)
-            radius: Design.s(Design.radius.ctl)
-            color: Design.well
             border.color: searchInput.activeFocus ? Design.accent : Design.veilStrong
             border.width: 1
 
@@ -203,7 +202,7 @@ PopupShell {
                     color: searchInput.activeFocus ? Design.accent : Design.textDim
                 }
 
-                TextInput {
+                TextLine {
                     id: searchInput
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
@@ -258,7 +257,7 @@ PopupShell {
 
             ScrollBar.vertical: OverflowBar {}
 
-            delegate: Rectangle {
+            delegate: Box {
                 id: emojiCell
                 required property var modelData
                 required property int index
@@ -266,17 +265,17 @@ PopupShell {
                 width: Design.s(Design.size.row)
                 height: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
-                color: cellHover.containsMouse ? Design.tint(Design.accent, 0.2) : "transparent"
-                border.color: cellHover.containsMouse ? Design.accent : "transparent"
+                color: cellHover.containsMouse ? Design.stateHover : "transparent"
+                border.color: "transparent"
                 border.width: 1
 
                 scale: cellHover.containsMouse ? 1.15 : 1.0
                 Behavior on scale { NumberAnimation { duration: Design.duration.fast; easing.type: Easing.OutQuad } }
 
-                Text {
+                Label {
                     anchors.centerIn: parent
                     text: emojiCell.modelData.e
-                    font.pixelSize: Design.s(Design.font.title)
+                    role: "title"
                 }
 
                 Clickable {

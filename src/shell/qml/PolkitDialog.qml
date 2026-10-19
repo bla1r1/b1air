@@ -52,7 +52,7 @@ PanelWindow {
     }
 
     // Backdrop dimmer
-    Rectangle {
+    Box {
         anchors.fill: parent
         color: Qt.alpha(Design.ground, 0.70)
 
@@ -73,7 +73,7 @@ PanelWindow {
     }
 
     // Modal Card
-    Rectangle {
+    Box {
         id: dialogCard
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: polkitWin.shakeOffset
@@ -97,11 +97,11 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.md)
 
-                Rectangle {
+                Surface {
+                    kind: "well"
                     Layout.preferredWidth: Design.s(Design.size.row)
                     Layout.preferredHeight: Design.s(Design.size.row)
                     radius: Design.s(Design.radius.panel)
-                    color: Design.well
 
                     Icon {
                         anchors.centerIn: parent
@@ -140,12 +140,10 @@ PanelWindow {
             }
 
             // ── User Identity Pill ───────────────────────────────────────────
-            Rectangle {
+            Surface {
+                kind: "well"
                 Layout.fillWidth: true
                 implicitHeight: Design.s(Design.size.row)
-                radius: Design.s(Design.radius.ctl)
-                color: Design.ground
-                border.color: Design.glassBorder
                 border.width: 1
 
                 RowLayout {
@@ -153,7 +151,7 @@ PanelWindow {
                     anchors.margins: Design.s(Design.space.sm)
                     spacing: Design.s(Design.space.sm)
 
-                    Image {
+                    Picture {
                         Layout.preferredWidth: Design.s(Design.size.sm)
                         Layout.preferredHeight: Design.s(Design.size.sm)
                         // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
@@ -163,7 +161,7 @@ PanelWindow {
                         mipmap: true
                         visible: status === Image.Ready
 
-                        Rectangle {
+                        Box {
                             anchors.fill: parent
                             color: "transparent"
                             border.color: Design.glassBorder
@@ -197,12 +195,11 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Design.s(Design.space.xs)
 
-                Rectangle {
+                Surface {
+                    kind: "well"
                     id: inputFrame
                     Layout.fillWidth: true
                     implicitHeight: Design.s(Design.size.row)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.ground
                     border.color: pwdInput.activeFocus ? Design.accent : (polkitWin.errorMessage !== "" ? Design.danger : Design.glassBorder)
                     border.width: pwdInput.activeFocus ? 2 : 1
 
@@ -218,7 +215,7 @@ PanelWindow {
                             role: "caption"
                         }
 
-                        TextInput {
+                        TextLine {
                             id: pwdInput
                             Layout.fillWidth: true
                             echoMode: showPwdToggle.checked ? TextInput.Normal : TextInput.Password

@@ -359,7 +359,7 @@ Scope {
         height: masterWindow.barHoleHeight
     }
 
-    MouseArea {
+    PointerArea {
         id: clickCatcher
         anchors.left: parent.left
         anchors.right: parent.right
@@ -557,7 +557,7 @@ Scope {
         opacity: masterWindow.isVisible ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: masterWindow.morphDuration; easing.type: Easing.InOutSine } }
 
-        MouseArea {
+        PointerArea {
             anchors.fill: parent
         }
 

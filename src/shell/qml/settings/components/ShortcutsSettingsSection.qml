@@ -182,11 +182,11 @@ ColumnLayout {
                             Layout.preferredHeight: Design.s(Design.size.header)
                             spacing: Design.s(Design.space.md)
 
-                            Rectangle {
+                            Surface {
+                                kind: "well"
                                 Layout.preferredWidth: Design.s(Design.width.label)
                                 Layout.preferredHeight: Design.s(Design.size.sm)
                                 radius: Design.s(Design.radius.pill)
-                                color: Design.well
                                 border.color: Design.line
                                 border.width: 1
 

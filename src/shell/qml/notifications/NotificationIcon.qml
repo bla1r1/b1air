@@ -28,7 +28,7 @@ Item {
     implicitHeight: root.size
 
     // Only to learn the picture's shape.
-    Image {
+    Picture {
         id: probe
         visible: false
         source: root.image
@@ -37,7 +37,7 @@ Item {
     }
 
     // ── The sender, round ────────────────────────────────────────────────────
-    Image {
+    Picture {
         id: face
         anchors.fill: parent
         visible: false
@@ -46,7 +46,7 @@ Item {
         fillMode: Image.PreserveAspectCrop
         layer.enabled: true
     }
-    Rectangle {
+    Box {
         id: round
         anchors.fill: parent
         radius: width / 2
@@ -56,14 +56,14 @@ Item {
     // Rounded by a shader; where Qt draws without one (the software
     // renderer, in a VM with no GPU), square.
     readonly property bool shaders: root.GraphicsInfo.api !== GraphicsInfo.Software
-    MultiEffect {
+    Effect {
         anchors.fill: parent
         visible: root.hasAvatar && root.shaders
         source: face
         maskEnabled: true
         maskSource: round
     }
-    Image {
+    Picture {
         anchors.fill: parent
         visible: root.hasAvatar && !root.shaders
         source: visible ? root.image : ""
@@ -72,13 +72,13 @@ Item {
     }
 
     // ── Or the app ───────────────────────────────────────────────────────────
-    Rectangle {
+    Box {
         anchors.fill: parent
         visible: !root.hasAvatar
         radius: Design.s(Design.radius.card)
         color: root.critical ? Design.warn : (appImage.status === Image.Ready ? "transparent" : Design.glassTile)
 
-        Image {
+        Picture {
             id: appImage
             anchors.fill: parent
             anchors.margins: root.critical ? root.size * 0.2 : 0
@@ -98,7 +98,9 @@ Item {
     }
 
     // ── The app, as a badge on the sender ────────────────────────────────────
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         visible: root.hasAvatar && root.appIcon !== ""
         width: root.size * 0.42
         height: width
@@ -107,8 +109,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.rightMargin: -width * 0.12
         anchors.bottomMargin: -width * 0.12
-        color: Design.glassBg
-        Image {
+        Picture {
             anchors.fill: parent
             anchors.margins: Design.border
             source: root.hasAvatar ? root.appIcon : ""

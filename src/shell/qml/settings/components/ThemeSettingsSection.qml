@@ -101,25 +101,20 @@ ColumnLayout {
         Repeater {
             model: Services.Theme.available
 
-            Rectangle {
+            ListRow {
+                selected: themeRow.isCurrent
+                handlesMouse: false
+                hovered: themeMa.containsMouse
                 id: themeRow
                 required property var modelData
                 readonly property bool isCurrent: Settings.themeName === themeRow.modelData.id
 
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.rowTall)
-                radius: Design.s(Design.radius.ctl)
-                color: themeRow.isCurrent ? Design.tint(Design.accent, 0.15)
-                                          : (themeMa.containsMouse ? Design.glassHover : "transparent")
-                border.color: themeRow.isCurrent ? Design.tint(Design.accent, 0.35) : "transparent"
-                border.width: Design.border
 
-                Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.sm)
-                    anchors.rightMargin: Design.s(Design.space.sm)
                     spacing: Design.s(Design.space.sm)
 
                     Icon {
@@ -174,7 +169,7 @@ ColumnLayout {
                     }
                 }
 
-                Clickable {
+                overlay: Clickable {
                     id: themeMa
                     z: -1
                     onClicked: Services.Theme.apply(themeRow.modelData.id)
@@ -242,7 +237,7 @@ ColumnLayout {
                         Repeater {
                             model: group.modelData.roles
 
-                            Rectangle {
+                            Box {
                                 id: roleRow
                                 required property var modelData
                                 readonly property string role: modelData[0]
@@ -254,8 +249,8 @@ ColumnLayout {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Design.s(Design.size.row)
                                 radius: Design.s(Design.radius.ctl)
-                                color: isSelected ? Design.tint(Design.accent, 0.15) : Design.glassTile
-                                border.color: isSelected ? Design.tint(Design.accent, 0.4) : "transparent"
+                                color: isSelected ? Design.stateSelectedSoft : Design.glassTile
+                                border.color: isSelected ? Design.accentLine : "transparent"
                                 border.width: Design.border
 
                                 RowLayout {
@@ -264,7 +259,7 @@ ColumnLayout {
                                     anchors.rightMargin: Design.s(Design.space.xs)
                                     spacing: Design.s(Design.space.sm)
 
-                                    Rectangle {
+                                    Box {
                                         Layout.preferredWidth: Design.s(Design.size.sm)
                                         Layout.preferredHeight: Design.s(Design.size.sm)
                                         radius: Design.s(Design.radius.sm)

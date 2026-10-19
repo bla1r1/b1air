@@ -89,21 +89,18 @@ Item {
     // load inside its own standalone window, which never had one), so it
     // never got PopupShell's background Rectangle — the panel rendered fully
     // see-through with just its individual rows drawing anything at all.
-    // In its own window the page is opaque and only the sidebar is glass, as
-    // in the other apps; in the shell the whole panel is glass.
-    Rectangle {
+    // In the shell the whole panel is glass. In its own window the page is
+    // the window's glass (SettingsWindow), as the other apps' content is:
+    // an opaque page here was the one solid window on the desktop.
+    Surface {
+        kind: "glass"
         // The setup draws its own: the screen dimmed, a card on it — and in
         // a window of its own, the window's glass behind the card, not this
         // opaque page.
-        visible: !app.setupMode
+        visible: !app.setupMode && !app.standalone
         anchors.fill: parent
-        // In its own window the sidebar is the glass to the left of this —
-        // but the setup has no sidebar, and that strip was left see-through.
-        anchors.leftMargin: app.standalone && Design.translucent && !app.setupMode ? Design.s(Design.width.sidebar) + Design.border : 0
-        radius: app.standalone ? 0 : Design.s(Design.radius.panel)
-        color: app.standalone ? Design.surface : Design.glassBg
+        radius: Design.s(Design.radius.panel)
         border.color: app.standalone ? "transparent" : Design.glassBorder
-        border.width: Design.border
     }
 
     // The current page's entry, for the header.
@@ -164,7 +161,7 @@ Item {
         spacing: 0
 
         // ── Sidebar ──────────────────────────────────────────────────────────
-        Rectangle {
+        Box {
             Layout.fillHeight: true
             Layout.preferredWidth: Design.s(Design.width.sidebar)
             // In the shell the whole panel is already glass, and a second,
@@ -185,7 +182,7 @@ Item {
 
             // In the shell, square the right-hand corners — only the panel's
             // outer corners are round — and set the rail apart by a hairline.
-            Rectangle {
+            Box {
                 visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -193,7 +190,7 @@ Item {
                 width: parent.radius
                 color: parent.color
             }
-            Rectangle {
+            Box {
                 visible: !app.standalone
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -274,7 +271,7 @@ Item {
                 hint: I18n.tr("Try a shorter word, or clear the search to get the full list back.")
             }
 
-            ScrollView {
+            Scroller {
                 id: pageScroll
                 visible: !app.noResults
                 Layout.fillWidth: true

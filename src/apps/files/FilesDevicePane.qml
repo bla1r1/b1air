@@ -245,7 +245,11 @@ Item {
                         text: I18n.tr("The iPod's own software is not updated from here; its music, playlists and covers are.")
                     }
                 }
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+                Box {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Design.line
+                }
                 FilesDeviceRow {
                     label: I18n.tr("Library")
                     Label {
@@ -260,7 +264,11 @@ Item {
                         text: I18n.tr("Drop songs or whole albums anywhere on this page, or on the iPod in the sidebar. FLAC, Ogg and Opus are converted for it on the way; tags and covers come along.")
                     }
                 }
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+                Box {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Design.line
+                }
                 FilesDeviceRow {
                     label: I18n.tr("About")
                     GridLayout {
@@ -287,12 +295,17 @@ Item {
             spacing: 0
 
             // Playlists, in that tab.
-            Rectangle {
+            Box {
                 visible: pane.tab === "playlists"
                 Layout.fillHeight: true
                 Layout.preferredWidth: Design.s(Design.width.control)
                 color: Design.veil
-                Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+                Box {
+                    anchors.right: parent.right
+                    width: 1
+                    height: parent.height
+                    color: Design.line
+                }
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.sm)
@@ -425,34 +438,32 @@ Item {
                         width: songs.width
                         height: Design.s(Design.size.row)
 
-                        Rectangle {
+                        Box {
                             anchors.fill: parent
                             anchors.leftMargin: Design.s(Design.space.sm)
                             anchors.rightMargin: Design.s(Design.space.sm)
                             radius: Design.s(Design.radius.sm)
-                            color: song.picked ? Design.tint(Design.accent, 0.24)
-                                 : songMa.containsMouse ? Design.hover
+                            color: song.picked ? Design.stateSelected
+                                 : songMa.containsMouse ? Design.stateHover
                                  : (song.index % 2 ? Design.tint(Design.raised, 0.35) : "transparent")
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: Design.s(Design.space.sm)
                                 anchors.rightMargin: Design.s(Design.space.sm)
                                 spacing: Design.s(Design.space.md)
-                                Rectangle {
+                                Surface {
+                                    kind: "well"
                                     Layout.preferredWidth: Design.s(Design.size.sm)
                                     Layout.preferredHeight: Design.s(Design.size.sm)
                                     radius: Design.s(Design.radius.sm)
-                                    color: Design.well
                                     clip: true
-                                    Text {
+                                    Icon {
                                         anchors.centerIn: parent
                                         visible: art.status !== Image.Ready
                                         text: song.modelData.video ? "\u{f0567}" : "\u{f075a}"
-                                        font.family: Design.font.icon
-                                        font.pixelSize: Design.s(Design.font.subhead)
                                         color: Design.textDim
                                     }
-                                    Image {
+                                    Picture {
                                         id: art
                                         anchors.fill: parent
                                         source: pane.cover(song.modelData)
@@ -478,7 +489,7 @@ Item {
                             Drag.dragType: Drag.Automatic
                             Drag.supportedActions: Qt.CopyAction
                         }
-                        MouseArea {
+                        PointerArea {
                             id: songMa
                             anchors.fill: parent
                             hoverEnabled: true
@@ -543,12 +554,12 @@ Item {
         anchors.fill: parent
         keys: ["text/uri-list"]
         onDropped: drop => { pane.addPaths(pane.pathsOf(drop)); drop.accept(Qt.CopyAction); }
-        Rectangle {
+        Box {
             anchors.fill: parent
             anchors.margins: Design.s(Design.space.sm)
             visible: dropAll.containsDrag
             radius: Design.s(Design.radius.card)
-            color: Design.tint(Design.accent, 0.08)
+            color: Design.stateSelectedSoft
             border.color: Design.accent
             border.width: Design.s(Design.focusWidth)
             Label {

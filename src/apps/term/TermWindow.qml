@@ -77,7 +77,9 @@ Window {
 
     onClosing: Qt.quit()
 
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         id: windowFrame
         anchors.fill: parent
         // No corners or outline of our own: sway draws both, and only sway
@@ -86,7 +88,6 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.glassBg
         clip: true
 
         ColumnLayout {

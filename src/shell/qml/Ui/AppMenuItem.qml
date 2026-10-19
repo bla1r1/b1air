@@ -49,6 +49,6 @@ C.MenuItem {
     indicator: null
     background: Rectangle {
         radius: Math.max(0, Design.s(Design.radius.ctl) - Design.s(Design.space.xs))
-        color: root.highlighted ? Design.selection : "transparent"
+        color: root.highlighted ? Design.stateSelected : "transparent"
     }
 }

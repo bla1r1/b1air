@@ -43,7 +43,7 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml QmlModels Quick WaylandClient DBus Network Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml QmlModels Quick QuickControls2 WaylandClient DBus Network Multimedia)
 find_package(LayerShellQt REQUIRED)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)

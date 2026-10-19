@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 
 // =============================================================================
@@ -31,6 +32,9 @@ Rectangle {
     Layout.preferredHeight: implicitHeight
 
     radius: Design.s(Design.radius.card)
+    // The corner rule for what is in it: its rows sit rowPaddingX in.
+    Shape.radius: radius
+    Shape.inset: Design.s(Design.space.rowPaddingX)
     color: Design.translucent ? Design.glassCard : Design.raised
     border.width: 1
     border.color: Design.glassBorder

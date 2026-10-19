@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 
 // =============================================================================
 // The glass of a Mac's toolbar controls (HIG: Toolbars): LiquidGlass tuned
@@ -13,6 +14,8 @@ import QtQuick
 
 LiquidGlass {
     radius: height / 2
+    // What lies on it is concentric with it (Ui/ToolbarGroup sets the inset).
+    Shape.radius: radius
     variant: "regular"
     refraction: Design.s(Design.space.sm)
     bevel: Math.min(Design.s(Design.space.sm + Design.space.xxs), height / 2)

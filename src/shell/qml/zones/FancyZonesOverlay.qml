@@ -83,14 +83,14 @@ PopupShell {
             Repeater {
                 model: parent.zones
 
-                delegate: Rectangle {
+                delegate: Box {
                     id: zoneTile
                     required property var modelData
 
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Design.s(Design.radius.card)
-                    color: tileHover.containsMouse ? Design.tint(Design.accent, 0.18) : Design.sunken
+                    color: tileHover.containsMouse ? Design.stateSelectedSoft : Design.sunken
                     border.color: tileHover.containsMouse ? Design.accent : Design.glassBorder
                     border.width: 1
 

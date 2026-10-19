@@ -231,7 +231,7 @@ ColumnLayout {
                 Item {
                     Layout.preferredWidth: Design.s(Design.size.md)
                     Layout.preferredHeight: Design.s(Design.size.md)
-                    IconImage {
+                    AppIcon {
                         anchors.fill: parent
                         readonly property string icon: group.app.launchers.length > 0 ? (group.app.launchers[0].icon || "") : ""
                         visible: icon !== ""

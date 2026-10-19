@@ -69,7 +69,7 @@ PopupShell {
         }
 
         // ── Interactive Measurement Canvas ────────────────────────────────────
-        Rectangle {
+        Box {
             id: canvas
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -82,7 +82,7 @@ PopupShell {
             // Grid Lines Pattern
             Repeater {
                 model: Math.floor(canvas.width / 50)
-                Rectangle {
+                Box {
                     x: index * 50
                     y: 0
                     width: 1
@@ -92,7 +92,7 @@ PopupShell {
             }
             Repeater {
                 model: Math.floor(canvas.height / 50)
-                Rectangle {
+                Box {
                     x: 0
                     y: index * 50
                     width: canvas.width
@@ -102,13 +102,13 @@ PopupShell {
             }
 
             // Drawn Measurement Box
-            Rectangle {
+            Box {
                 visible: root.measureW > 0 && root.measureH > 0
                 x: root.measureX
                 y: root.measureY
                 width: root.measureW
                 height: root.measureH
-                color: Design.tint(Design.accent, 0.25)
+                color: Design.stateSelected
                 border.color: Design.accent
                 border.width: 2
 
@@ -121,7 +121,7 @@ PopupShell {
                 }
             }
 
-            MouseArea {
+            PointerArea {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.CrossCursor

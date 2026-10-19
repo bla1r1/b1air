@@ -134,12 +134,12 @@ MiniView {
                         }
 
                         // Folded: the apps' icons and how many.
-                        Rectangle {
+                        Box {
                             Layout.fillWidth: true
                             visible: !section.open
                             implicitHeight: Design.s(Design.size.row)
                             radius: Design.s(Design.radius.card)
-                            color: foldArea.containsMouse ? Design.glassHover : Design.glassCard
+                            color: foldArea.containsMouse ? Design.stateHover : Design.glassCard
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: Design.s(Design.space.md)
@@ -147,7 +147,7 @@ MiniView {
                                 spacing: Design.s(Design.space.xs)
                                 Repeater {
                                     model: section.modelData.apps.slice(0, 3)
-                                    delegate: Image {
+                                    delegate: Picture {
                                         required property string modelData
                                         Layout.preferredWidth: Design.s(Design.size.xs)
                                         Layout.preferredHeight: Design.s(Design.size.xs)
@@ -176,7 +176,7 @@ MiniView {
 
                         Repeater {
                             model: section.open ? section.modelData.cards : []
-                            delegate: Rectangle {
+                            delegate: Box {
                                 id: card
                                 required property var modelData
                                 readonly property var item: Notifications.history.get(card.modelData.newest)
@@ -186,16 +186,16 @@ MiniView {
                                 Layout.fillWidth: true
                                 implicitHeight: body.implicitHeight + Design.s(Design.space.md) * 2
                                 radius: Design.s(Design.radius.card)
-                                color: cardHover.hovered ? Design.glassHover : Design.glassCard
-                                Rectangle {
+                                color: cardHover.hovered ? Design.stateHover : Design.glassCard
+                                Box {
                                     anchors.fill: parent
                                     visible: !!(card.item && card.item.critical)
                                     radius: parent.radius
-                                    color: Design.tint(Design.warn, 0.16)
+                                    color: Design.warnSoft
                                 }
 
                                 HoverHandler { id: cardHover }
-                                MouseArea {
+                                PointerArea {
                                     anchors.fill: parent
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: mouse => {
@@ -273,7 +273,7 @@ MiniView {
                                             role: "caption"
                                             color: Design.textFaint
                                         }
-                                        Image {
+                                        Picture {
                                             visible: icon.isPicture
                                             Layout.topMargin: Design.s(Design.space.xxs)
                                             Layout.preferredWidth: Math.min(parent.width, Design.s(Design.size.thumb) * 1.5)
@@ -337,14 +337,10 @@ MiniView {
             Layout.fillWidth: true
             spacing: Design.s(Design.space.sm)
 
-            Rectangle {
+            Surface {
                 visible: Weather.loaded
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.avatar)
-                radius: Design.s(Design.radius.card)
-                color: Design.glassCard
-                border.color: Design.glassBorder
-                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)
@@ -359,13 +355,9 @@ MiniView {
                 }
             }
 
-            Rectangle {
+            Surface {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.avatar)
-                radius: Design.s(Design.radius.card)
-                color: Design.glassCard
-                border.color: Design.glassBorder
-                border.width: Design.border
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Design.s(Design.space.md)

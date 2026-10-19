@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Window
 import Quickshell
 import "../Services"
@@ -35,6 +36,9 @@ Item {
     property color background: Design.glassBg
     property color borderColor: Design.glassBorder
     property int cornerRadius: Design.radius.panel
+    // The corner rule for what is in it, padding in from its rounded edge.
+    Shape.radius: root.framed ? Design.s(root.cornerRadius) : -1
+    Shape.inset: root.framed ? Design.s(root.padding) : 0
 
     readonly property string configDir: Quickshell.env("QS_CONFIG_DIR")
         || (Quickshell.env("HOME") + "/.config/quickshell")

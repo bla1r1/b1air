@@ -264,7 +264,8 @@ ColumnLayout {
             Repeater {
                 model: section.shownWallpapers
 
-                Rectangle {
+                Surface {
+                    kind: "well"
                     id: wallCard
                     required property var modelData
                     required property int index
@@ -272,16 +273,15 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.size.thumb)
                     radius: Design.s(Design.radius.card)
-                    color: Design.well
                     clip: true
 
                     readonly property bool isSelected: section.activeWallpaper === wallCard.modelData.path
-                    border.color: wallCard.isSelected ? Design.accent : (wallMa.containsMouse ? Design.hover : Design.line)
+                    border.color: wallCard.isSelected ? Design.accent : (wallMa.containsMouse ? Design.stateHover : Design.line)
                     border.width: wallCard.isSelected ? 2 : 1
 
                     Behavior on border.color { ColorAnimation { duration: Design.duration.fast } }
 
-                    Image {
+                    Picture {
                         anchors.fill: parent
                         anchors.margins: wallCard.isSelected ? 2 : 1
                         // A cached thumbnail: the picture itself is a 4K file
@@ -295,7 +295,7 @@ ColumnLayout {
                     }
 
                     // Scrim gradient overlay for title legibility
-                    Rectangle {
+                    Box {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -318,7 +318,7 @@ ColumnLayout {
                     }
 
                     // Active Selection Badge
-                    Rectangle {
+                    Box {
                         visible: wallCard.isSelected
                         anchors.top: parent.top
                         anchors.right: parent.right

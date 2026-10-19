@@ -355,7 +355,7 @@ PopupShell {
         // ═════════════════════════════════════════════════════════════════════
         // LEFT: CALENDAR CARD (310px)
         // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
+        Surface {
             // Small, medium, large: a tighter month, the shipped one, or one
             // with room for the day numbers to breathe. The dashboard beside it
             // fills whatever is left, so this one number sets both.
@@ -364,10 +364,6 @@ PopupShell {
             Layout.column: window.monthFirst ? 0 : 1
             visible: window.calShown("calendar")
             Layout.fillHeight: true
-            radius: Design.s(Design.radius.card)
-            color: Design.glassCard
-            border.color: Design.glassBorder
-            border.width: 1
 
             PartFrame {
                 anchors.fill: parent
@@ -405,64 +401,33 @@ PopupShell {
                     }
 
 
-                    Rectangle {
+                    // Back a month, to today, on a month: borderless, as a
+                    // Mac's calendar has its arrows.
+                    IconButton {
                         visible: !window.editing
-                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
-                        radius: Design.s(Design.radius.ctl)
-                        color: prevMa.containsMouse ? Design.glassHover : Design.glassCard
-                        border.color: Design.line; border.width: 1
-
-                        Icon {
-                            anchors.centerIn: parent
-                            text: "\u{f053}"
-                            role: "caption"
-                            color: Design.text
-                        }
-                        Clickable {
-                            id: prevMa
-                            hoverEnabled: true
-                            onClicked: window.prevMonth()
-                        }
+                        diameter: Design.size.xs
+                        role: "caption"
+                        icon: "\u{f053}"
+                        label: I18n.tr("Previous month")
+                        onClicked: window.prevMonth()
                     }
-
-                    Rectangle {
+                    IconButton {
                         visible: !window.editing
-                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
-                        radius: Design.s(Design.radius.ctl)
-                        color: todayMa.containsMouse ? Design.glassHover : Design.glassCard
-                        border.color: Design.line; border.width: 1
-
-                        Icon {
-                            anchors.centerIn: parent
-                            text: "\u{f017}"
-                            role: "caption"
-                            color: Design.accent
-                        }
-                        Clickable {
-                            id: todayMa
-                            hoverEnabled: true
-                            onClicked: window.resetToToday()
-                        }
+                        diameter: Design.size.xs
+                        role: "caption"
+                        icon: "\u{f017}"
+                        tone: Design.accent
+                        hoverTone: Design.accent
+                        label: I18n.tr("Today")
+                        onClicked: window.resetToToday()
                     }
-
-                    Rectangle {
+                    IconButton {
                         visible: !window.editing
-                        width: Design.s(Design.size.xs); height: Design.s(Design.size.xs)
-                        radius: Design.s(Design.radius.ctl)
-                        color: nextMa.containsMouse ? Design.glassHover : Design.glassCard
-                        border.color: Design.line; border.width: 1
-
-                        Icon {
-                            anchors.centerIn: parent
-                            text: "\u{f054}"
-                            role: "caption"
-                            color: Design.text
-                        }
-                        Clickable {
-                            id: nextMa
-                            hoverEnabled: true
-                            onClicked: window.nextMonth()
-                        }
+                        diameter: Design.size.xs
+                        role: "caption"
+                        icon: "\u{f054}"
+                        label: I18n.tr("Next month")
+                        onClicked: window.nextMonth()
                     }
 
                     // Room for the arrange toggle, which is not in this row:
@@ -500,7 +465,7 @@ PopupShell {
                     Repeater {
                         model: window.calendarGrid
 
-                        Rectangle {
+                        Box {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             // A floor for the row. The cells asked for no
@@ -515,7 +480,7 @@ PopupShell {
                             readonly property bool isSel: modelData.isCurrentMonth && (modelData.day === window.selectedDay)
                             readonly property bool isTod: modelData.isToday
 
-                            color: isTod ? Design.accent : (isSel ? Design.tint(Design.accent, 0.2) : (cellMa.containsMouse ? Design.glassHover : "transparent"))
+                            color: isTod ? Design.accent : (isSel ? Design.stateSelected : (cellMa.containsMouse ? Design.stateHover : "transparent"))
                             border.color: isSel && !isTod ? Design.accent : "transparent"
                             border.width: 1
 
@@ -547,11 +512,10 @@ PopupShell {
                 }
 
                 // Bottom Date Stamp
-                Rectangle {
+                Surface {
+                    kind: "well"
                     Layout.fillWidth: true
                     Layout.preferredHeight: Design.s(Design.size.sm)
-                    radius: Design.s(Design.radius.ctl)
-                    color: Design.well
 
                     RowLayout {
                         anchors.fill: parent
@@ -581,16 +545,12 @@ PopupShell {
         // ═════════════════════════════════════════════════════════════════════
         // RIGHT: WEATHER & TIME DASHBOARD (Fill remaining width)
         // ═════════════════════════════════════════════════════════════════════
-        Rectangle {
+        Surface {
             id: dashCard
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.column: window.monthFirst ? 1 : 0
             visible: window.dashShown
-            radius: Design.s(Design.radius.card)
-            color: Design.glassCard
-            border.color: Design.glassBorder
-            border.width: 1
 
             // The arrange toggle's second home, for when the month is hidden.
             EditToggle {
@@ -655,11 +615,10 @@ PopupShell {
                     Item { Layout.fillWidth: true }
 
                     // Weather Hero Card
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.preferredWidth: Design.s(Design.width.menuMin)
                         Layout.preferredHeight: Design.s(Design.size.stat)
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         border.color: Design.glassBorder; border.width: 1
 
                         RowLayout {
@@ -668,16 +627,16 @@ PopupShell {
                             spacing: Design.s(Design.space.sm)
 
                             // Weather Icon
-                            Rectangle {
-                                width: Design.s(Design.size.row); height: Design.s(Design.size.row)
+                            Surface {
+                                border.width: 0
+                                implicitWidth: Design.s(Design.size.row); implicitHeight: Design.s(Design.size.row)
                                 radius: Design.s(Design.radius.ctl)
-                                color: Design.glassCard
 
                                 Icon {
                                     anchors.centerIn: parent
                                     text: window.todayForecast ? (window.todayForecast.icon || "\u{f0c2}") : "\u{f0c2}"
                                     font.pixelSize: Design.s(Design.font.title)
-                                    color: window.todayForecast ? (window.todayForecast.hex || Design.accent) : Design.accent
+                                    color: window.todayForecast ? Design.tone(window.todayForecast.tone) : Design.accent
                                 }
                             }
 
@@ -764,12 +723,11 @@ PopupShell {
                     columnSpacing: Design.s(Design.space.xs)
 
                     // Wind
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(Design.space.xs)
@@ -784,12 +742,11 @@ PopupShell {
                     }
 
                     // Humidity
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(Design.space.xs)
@@ -804,13 +761,12 @@ PopupShell {
                     }
 
                     // Rain / Precip
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.fillWidth: true
                         visible: window.calSize("metrics") !== "small"
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(Design.space.xs)
@@ -825,13 +781,12 @@ PopupShell {
                     }
 
                     // Range Min/Max
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.fillWidth: true
                         visible: window.calSize("metrics") !== "small"
                         Layout.preferredHeight: Design.s(window.calSize("metrics") === "small" ? 30
                                               : (window.calSize("metrics") === "large" ? 54 : 40))
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: Design.s(Design.space.xs)
@@ -875,11 +830,10 @@ PopupShell {
                                                               : (window.calSize("forecast") === "large" ? 7 : 5))
                             : []
 
-                        Rectangle {
+                        Surface {
+                            kind: "well"
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.size.stat)
-                            radius: Design.s(Design.radius.ctl)
-                            color: Design.well
                             border.color: Design.glassBorder; border.width: 1
 
                             ColumnLayout {
@@ -899,7 +853,7 @@ PopupShell {
                                     Layout.alignment: Qt.AlignHCenter
                                     text: modelData.icon || "\u{f0c2}"
                                     role: "caption"
-                                    color: modelData.hex || Design.accent
+                                    color: Design.tone(modelData.tone)
                                 }
 
                                 Label {

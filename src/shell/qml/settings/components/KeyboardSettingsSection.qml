@@ -193,7 +193,7 @@ ColumnLayout {
             Repeater {
                 model: section.layouts
 
-                Rectangle {
+                Box {
                     id: chip
                     required property string modelData
                     required property int index
@@ -202,8 +202,8 @@ ColumnLayout {
                     width: chipRow.implicitWidth + Design.s(Design.space.md) * 2
                     height: Design.s(Design.size.header)
                     radius: Design.s(Design.radius.ctl)
-                    color: chip.first ? Design.tint(Design.accent, 0.14) : Design.well
-                    border.color: chip.first ? Design.tint(Design.accent, 0.5) : Design.line
+                    color: chip.first ? Design.stateSelectedSoft : Design.well
+                    border.color: chip.first ? Design.accentLine : Design.line
                     border.width: 1
 
                     RowLayout {
@@ -276,14 +276,13 @@ ColumnLayout {
         // Shown while the field has focus, with every layout not yet added
         // when nothing is typed: the old list stayed shut until you guessed a
         // name, so there was no way to see what could be added.
-        Rectangle {
+        Surface {
+            kind: "well"
             Layout.fillWidth: true
             Layout.preferredHeight: visible
                 ? Math.min(Design.s(Design.width.list), section.layoutResults.length * Design.s(Design.size.md) + Design.s(Design.space.sm))
                 : 0
             visible: (layoutField.focused || section.layoutQuery !== "") && section.layoutResults.length > 0
-            radius: Design.s(Design.radius.ctl)
-            color: Design.well
             border.color: Design.line
             border.width: 1
             clip: true
@@ -295,17 +294,14 @@ ColumnLayout {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: OverflowBar {}
 
-                delegate: Rectangle {
+                delegate: ListRow {
+                    handlesMouse: false
+                    hovered: resultArea.containsMouse
                     required property var modelData
-                    width: ListView.view.width
-                    height: Design.s(Design.size.md)
-                    radius: Design.s(Design.radius.ctl)
-                    color: resultArea.containsMouse ? Design.hover : "transparent"
+                    implicitHeight: Design.s(Design.size.md)
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Design.s(Design.space.sm)
-                        anchors.rightMargin: Design.s(Design.space.sm)
                         spacing: Design.s(Design.space.sm)
 
                         Label {
@@ -323,7 +319,7 @@ ColumnLayout {
                         Icon { text: "\u{f0415}"; role: "caption"; color: Design.textDim } // plus
                     }
 
-                    Clickable {
+                    overlay: Clickable {
                         id: resultArea
                         anchors.fill: parent
                         hoverEnabled: true
@@ -560,7 +556,7 @@ ColumnLayout {
 
             // A row of the list like any other: flat, a hairline above it,
             // filled only while its key is being changed.
-            Rectangle {
+            Box {
                 id: bindRow
                 required property var modelData
                 required property int index
@@ -572,7 +568,7 @@ ColumnLayout {
                 radius: Design.s(Design.radius.ctl)
                 color: bindRow.editing ? Design.well : "transparent"
 
-                Rectangle {
+                Box {
                     visible: bindRow.index > 0 && !bindRow.editing
                     anchors.top: parent.top
                     anchors.left: parent.left

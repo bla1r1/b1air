@@ -72,23 +72,18 @@ Item {
         }
 
         // ── Footer ───────────────────────────────────────────────────────────
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.border
             color: Design.glassBorder
         }
 
-        Rectangle {
+        ListRow {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.row)
-            radius: Design.s(Design.radius.ctl)
-            color: setMa.containsMouse ? Design.glassHover : "transparent"
-            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.sm)
-                anchors.rightMargin: Design.s(Design.space.sm)
                 spacing: Design.s(Design.space.sm)
 
                 Label {
@@ -97,19 +92,16 @@ Item {
                     weight: Design.weight.medium
                     Layout.fillWidth: true
                     elide: Text.ElideRight
-                    color: setMa.containsMouse ? Design.accent : Design.text
-                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 }
 
                 Icon {
                     text: "\u{f0142}"      // right chevron
                     role: "caption"
-                    color: setMa.containsMouse ? Design.accent : Design.textDim
-                    Behavior on color { ColorAnimation { duration: Design.duration.fast } }
+                    color: Design.textDim
                 }
             }
 
-            Clickable { id: setMa; onClicked: root.openFullSettings() }
+            onClicked: root.openFullSettings()
         }
     }
 }

@@ -9,52 +9,34 @@ import QtQuick.Controls
 // square column, which beside the round rows, fields and buttons was the one
 // square thing in the window — on a solid window (no blur) most of all.
 //
-// With blur it is the sidebar glass; without, a solid card one step up from
-// the window, with the same hairline rim, so the shape is the same either
-// way.
-Item {
+// The pane itself is Ui/WindowPane, the shape an inspector on the right has too.
+WindowPane {
     id: root
     default property alias content: col.data
     property alias spacing: col.spacing
-    // How far the pane sits in from the window's edges.
-    readonly property real inset: Design.s(Design.space.sm)
+    edge: Qt.LeftEdge
     implicitWidth: Design.s(Design.width.sidebar) + inset
 
-    Rectangle {
-        id: pane
+    // Scrolls when what it holds is taller than the window (Files' places,
+    // devices, bookmarks and tags), with the same bar as the rest.
+    paneContent: Flickable {
+        id: flick
         anchors.fill: parent
-        anchors.leftMargin: root.inset
-        anchors.topMargin: root.inset
-        anchors.bottomMargin: root.inset
-        // Concentric with the window it is set into.
-        radius: Design.s(Design.concentric(Design.radius.window, Design.space.sm))
-        color: Design.translucent ? Design.glassSidebar : Design.raised
-        border.width: Design.border
-        border.color: Design.glassBorder
+        anchors.topMargin: Design.s(Design.space.xs)
+        anchors.bottomMargin: Design.s(Design.space.xs)
+        contentWidth: width
+        contentHeight: col.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        ScrollBar.vertical: OverflowBar { id: bar }
 
-        // Scrolls when what it holds is taller than the window (Files' places,
-        // devices, bookmarks and tags), with the same bar as the rest.
-        Flickable {
-            id: flick
-            anchors.fill: parent
-            anchors.topMargin: Design.s(Design.space.sm)
-            anchors.bottomMargin: Design.s(Design.space.sm)
-            anchors.leftMargin: Design.s(Design.space.xs)
-            anchors.rightMargin: Design.s(Design.space.xs)
-            contentWidth: width
-            contentHeight: col.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            interactive: contentHeight > height
-            ScrollBar.vertical: OverflowBar { id: bar }
-
-            // Narrower by the bar when there is one, so it runs beside the
-            // rows rather than over them.
-            ColumnLayout {
-                id: col
-                width: flick.width - (bar.visible ? bar.width + Design.s(Design.space.xxs) : 0)
-                spacing: Design.s(Design.space.xxs)
-            }
+        // Narrower by the bar when there is one, so it runs beside the
+        // rows rather than over them.
+        ColumnLayout {
+            id: col
+            width: flick.width - (bar.visible ? bar.width + Design.s(Design.space.xxs) : 0)
+            spacing: Design.s(Design.space.xxs)
         }
     }
 }

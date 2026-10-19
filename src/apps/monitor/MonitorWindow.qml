@@ -96,7 +96,9 @@ Window {
 
     Shortcut { sequence: "F5"; onActivated: if (isNative) MonitorBackend.refresh() }
 
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         id: windowFrame
         anchors.fill: parent
         // No corners or outline of our own: sway draws both, and only sway
@@ -105,7 +107,6 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -147,7 +148,7 @@ Window {
         // ═════════════════════════════════════════════════════════════════════
         // TAB 1: OVERVIEW (METRICS, DIALS & LIVE HISTORY GRAPH)
         // ═════════════════════════════════════════════════════════════════════
-        ScrollView {
+        Scroller {
             id: overviewScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -216,14 +217,10 @@ Window {
 
 
                 // ── 2. Live Performance History Graph ────────────────────────
-                Rectangle {
+                Surface {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.minimumHeight: Design.s(Design.width.control)
-                    radius: Design.s(Design.radius.card)
-                    color: Design.glassCard
-                    border.color: Design.glassBorder
-                    border.width: Design.border
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -233,16 +230,14 @@ Window {
                         RowLayout {
                             Layout.fillWidth: true
 
-                            Text {
+                            Label {
                                 // Says so while the minute is still filling,
                                 // rather than letting a short trace look like
                                 // a machine that was idle and then spiked.
                                 text: window.historyFull
                                       ? I18n.tr("Activity, last 60 seconds")
                                       : I18n.tr("Activity (collecting…)")
-                                font.family: Design.font.sans
-                                font.weight: Design.weight.semibold
-                                font.pixelSize: Design.s(Design.font.body)
+                                weight: Design.weight.semibold
                                 color: Design.text
                             }
 
@@ -254,19 +249,37 @@ Window {
 
                                 RowLayout {
                                     spacing: Design.s(Design.space.xs)
-                                    Rectangle { width: Design.s(Design.space.sm); height: Design.s(Design.space.sm); radius: 2; color: Design.sapphire }
-                                    Text { text: I18n.tr("CPU"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+                                    Box {
+                                        width: Design.s(Design.space.sm)
+                                        height: Design.s(Design.space.sm)
+                                        radius: 2
+                                        color: Design.sapphire
+                                    }
+                                    Label {
+                                        text: I18n.tr("CPU")
+                                        role: "caption"
+                                        dim: true
+                                    }
                                 }
 
                                 RowLayout {
                                     spacing: Design.s(Design.space.xs)
-                                    Rectangle { width: Design.s(Design.space.sm); height: Design.s(Design.space.sm); radius: 2; color: Design.mauve }
-                                    Text { text: I18n.tr("Memory"); font.family: Design.font.sans; font.pixelSize: Design.s(Design.font.caption); color: Design.textDim }
+                                    Box {
+                                        width: Design.s(Design.space.sm)
+                                        height: Design.s(Design.space.sm)
+                                        radius: 2
+                                        color: Design.mauve
+                                    }
+                                    Label {
+                                        text: I18n.tr("Memory")
+                                        role: "caption"
+                                        dim: true
+                                    }
                                 }
                             }
                         }
 
-                        Canvas {
+                        Drawing {
                             id: historyChart
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -383,15 +396,19 @@ Window {
 
             // Table Header: sorted by a click on CPU or Memory, the way a
             // list header works, instead of a "Sort by CPU | RAM" pair.
-            Rectangle {
+            // A header as a Mac's tables have it: no band of its own, a
+            // hairline under it, its columns where the rows' content is
+            // (Ui/ListRow: inset, then padding).
+            Item {
                 Layout.fillWidth: true
                 implicitHeight: Design.s(Design.size.md)
-                color: Design.veil
+
+                Separator { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.md)
-                    anchors.rightMargin: Design.s(Design.space.md)
+                    anchors.leftMargin: Design.s(Design.space.xs) + Design.s(Design.space.sm)
+                    anchors.rightMargin: Design.s(Design.space.xs) + Design.s(Design.space.sm)
                     spacing: Design.s(Design.space.sm)
 
                     ColumnHead { label: I18n.tr("PID"); sortable: false; Layout.preferredWidth: Design.s(Design.size.tile) }
@@ -444,22 +461,20 @@ Window {
                                                          : I18n.tr("Reading the process list…")
                 }
 
-                delegate: Rectangle {
-                    width: procList.width
-                    height: Design.s(Design.size.knob)
-                    color: rowHover.containsMouse ? Design.tint(Design.text, 0.05) : (index % 2 === 0 ? "transparent" : Design.tint(Design.surface, 0.3))
+                delegate: ListRow {
+                    id: procRow
+                    implicitHeight: Design.s(Design.size.knob)
+                    striped: index % 2 === 1
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Design.s(Design.space.md)
-                        anchors.rightMargin: Design.s(Design.space.md)
                         spacing: Design.s(Design.space.sm)
 
-                        Text {
+                        Label {
                             text: String(model.pid)
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(Design.font.caption)
-                            color: Design.textDim
+                            isMono: true
+                            role: "caption"
+                            dim: true
                             Layout.preferredWidth: Design.s(Design.size.tile)
                         }
 
@@ -473,18 +488,15 @@ Window {
                             Layout.preferredWidth: Design.s(Design.width.select)
                             spacing: Design.s(Design.space.sm)
 
-                            Text {
+                            Icon {
                                 text: "\u{f108}" // binary icon
-                                font.family: Design.font.icon
                                 color: Design.textDim
-                                font.pixelSize: Design.s(Design.font.footnote)
+                                role: "footnote"
                             }
 
-                            Text {
+                            Label {
                                 text: model.name
-                                font.family: Design.font.sans
-                                font.weight: Design.weight.semibold
-                                font.pixelSize: Design.s(Design.font.body)
+                                weight: Design.weight.semibold
                                 color: Design.text
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
@@ -502,7 +514,7 @@ Window {
                             Layout.fillWidth: true
                             Layout.preferredHeight: Design.s(Design.space.sm)
 
-                            Rectangle {
+                            Box {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
                                 height: Design.s(Design.space.xs)
@@ -510,7 +522,7 @@ Window {
                                 color: Design.tint(Design.text, 0.06)
                             }
 
-                            Rectangle {
+                            Box {
                                 anchors.verticalCenter: parent.verticalCenter
                                 // Clamped: a multi-core machine reports well
                                 // over 100% for one process, and a bar wider
@@ -523,7 +535,7 @@ Window {
                                 border.width: Design.border
                             }
 
-                            Rectangle {
+                            Box {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width * Math.min(1, model.cpu / 100)
                                 height: Design.s(Design.space.xs)
@@ -533,84 +545,56 @@ Window {
                             }
                         }
 
-                        Text {
+                        Label {
                             text: model.user
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(Design.font.caption)
-                            color: Design.textDim
+                            role: "caption"
+                            dim: true
                             Layout.preferredWidth: Design.s(Design.size.stat)
                         }
 
-                        Text {
+                        Label {
                             text: model.cpu.toFixed(1) + "%"
-                            font.family: Design.font.mono
-                            font.weight: model.cpu > 5.0 ? Design.weight.semibold : Design.weight.regular
-                            font.pixelSize: Design.s(Design.font.caption)
+                            isMono: true
+                            weight: model.cpu > 5.0 ? Design.weight.semibold : Design.weight.regular
+                            role: "caption"
                             color: model.cpu > 15.0 ? Design.danger : (model.cpu > 5.0 ? Design.warn : Design.text)
                             Layout.preferredWidth: Design.s(Design.size.stat)
                             horizontalAlignment: Text.AlignRight
                         }
 
-                        Text {
+                        Label {
                             text: model.mem.toFixed(1) + "%"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(Design.font.caption)
-                            color: Design.textDim
+                            isMono: true
+                            role: "caption"
+                            dim: true
                             Layout.preferredWidth: Design.s(Design.size.stat)
                             horizontalAlignment: Text.AlignRight
                         }
 
-                        // Kill Action Buttons
+                        // End it, or force it to end.
                         RowLayout {
                             Layout.preferredWidth: Design.s(Design.size.stat)
                             Layout.alignment: Qt.AlignHCenter
                             spacing: Design.s(Design.space.xs)
 
-                            Rectangle {
-                                width: Design.s(Design.size.xs)
-                                height: Design.s(Design.size.xs)
-                                radius: width / 2
-                                color: killHover.containsMouse ? Design.tint(Design.danger, 0.25) : "transparent"
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "\u{f00d}" // cross
-                                    font.family: Design.font.icon
-                                    color: killHover.containsMouse ? Design.danger : Design.textDim
-                                    font.pixelSize: Design.s(Design.font.caption)
-                                }
-
-                                HoverHandler { id: killHover }
-                                Clickable {
-                                    anchors.fill: parent
-                                    onClicked: if (isNative) killConfirm.ask(model.pid, model.name, false)
-                                }
+                            IconButton {
+                                icon: "\u{f00d}"
+                                label: I18n.tr("End Process")
+                                role: "caption"
+                                diameter: Design.size.xs
+                                hoverTone: Design.danger
+                                onClicked: if (isNative) killConfirm.ask(model.pid, model.name, false)
                             }
-
-                            Rectangle {
-                                width: Design.s(Design.size.xs)
-                                height: Design.s(Design.size.xs)
-                                radius: width / 2
-                                color: forceHover.containsMouse ? Design.danger : "transparent"
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "\u{f057}" // skull / force kill
-                                    font.family: Design.font.icon
-                                    color: forceHover.containsMouse ? Design.ground : Design.textDim
-                                    font.pixelSize: Design.s(Design.font.caption)
-                                }
-
-                                HoverHandler { id: forceHover }
-                                Clickable {
-                                    anchors.fill: parent
-                                    onClicked: if (isNative) killConfirm.ask(model.pid, model.name, true)
-                                }
+                            IconButton {
+                                icon: "\u{f057}"
+                                label: I18n.tr("Force Quit")
+                                role: "caption"
+                                diameter: Design.size.xs
+                                hoverTone: Design.danger
+                                onClicked: if (isNative) killConfirm.ask(model.pid, model.name, true)
                             }
                         }
                     }
-
-                    HoverHandler { id: rowHover }
                 }
             }
         }
@@ -666,7 +650,7 @@ Window {
         }
     }
     Timer { id: killErrorTimer; interval: 4000; onTriggered: killError.text = "" }
-    Rectangle {
+    Box {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Design.s(Design.size.row)

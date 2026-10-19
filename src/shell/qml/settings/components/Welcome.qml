@@ -130,7 +130,7 @@ Item {
                 Repeater {
                     model: welcome.cards.filter(c => c.shown)
 
-                    Rectangle {
+                    Box {
                         id: card
                         required property var modelData
                         Layout.fillWidth: true
@@ -138,7 +138,7 @@ Item {
                         // One height for all: the heading and two lines of hint.
                         Layout.preferredHeight: Design.s(Design.size.stat) + Design.s(Design.size.knob)
                         radius: Design.s(Design.radius.card)
-                        color: cardArea.containsMouse ? Design.glassHover : Design.glassCard
+                        color: cardArea.containsMouse ? Design.stateHover : Design.glassCard
                         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
                         ColumnLayout {
@@ -152,7 +152,7 @@ Item {
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: Design.s(Design.space.sm)
-                                Rectangle {
+                                Box {
                                     Layout.preferredWidth: Design.s(Design.size.knob)
                                     Layout.preferredHeight: Design.s(Design.size.knob)
                                     radius: width / 2

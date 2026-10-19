@@ -3254,7 +3254,7 @@ static std::string get_dummy_weather_json() {
         std::strftime(day_full, sizeof(day_full), "%A", tm);
         std::strftime(date_str, sizeof(date_str), "%d %b", tm);
 
-        json += "{\"id\":\"" + std::to_string(i) + "\",\"day\":\"" + day_short + "\",\"day_full\":\"" + day_full + "\",\"date\":\"" + date_str + "\",\"max\":\"0.0\",\"min\":\"0.0\",\"feels_like\":\"0.0\",\"wind\":\"0\",\"humidity\":\"0\",\"pop\":\"0\",\"icon\":\"\",\"hex\":\"#cdd6f4\",\"desc\":\"Weather unavailable\",\"hourly\":[{\"time\":\"00:00\",\"temp\":\"0.0\",\"icon\":\"\",\"hex\":\"#cdd6f4\"}]}";
+        json += "{\"id\":\"" + std::to_string(i) + "\",\"day\":\"" + day_short + "\",\"day_full\":\"" + day_full + "\",\"date\":\"" + date_str + "\",\"max\":\"0.0\",\"min\":\"0.0\",\"feels_like\":\"0.0\",\"wind\":\"0\",\"humidity\":\"0\",\"pop\":\"0\",\"icon\":\"\",\"tone\":\"textDim\",\"desc\":\"Weather unavailable\",\"hourly\":[{\"time\":\"00:00\",\"temp\":\"0.0\",\"icon\":\"\",\"tone\":\"textDim\"}]}";
         if (i + 1 < 5) json += ",";
     }
     json += "]}";
@@ -3271,14 +3271,17 @@ static std::string weather_icon_from_desc(const std::string& d_in) {
     return "\uf0c2";
 }
 
-static std::string weather_hex_from_desc(const std::string& d_in) {
+// The weather's colour as a role of the palette ("yellow"), not a colour:
+// the shell resolves it in the current theme (Design.tone). These were
+// Catppuccin Mocha's hex values, the same on a light theme as on a dark.
+static std::string weather_tone_from_desc(const std::string& d_in) {
     std::string d = d_in;
     std::transform(d.begin(), d.end(), d.begin(), ::tolower);
-    if (d.find("sun") != std::string::npos || d.find("clear") != std::string::npos) return "#f9e2af";
-    if (d.find("rain") != std::string::npos || d.find("drizzle") != std::string::npos) return "#74c7ec";
-    if (d.find("snow") != std::string::npos || d.find("ice") != std::string::npos) return "#cdd6f4";
-    if (d.find("thunder") != std::string::npos || d.find("storm") != std::string::npos) return "#f9e2af";
-    return "#bac2de";
+    if (d.find("sun") != std::string::npos || d.find("clear") != std::string::npos) return "yellow";
+    if (d.find("rain") != std::string::npos || d.find("drizzle") != std::string::npos) return "sapphire";
+    if (d.find("snow") != std::string::npos || d.find("ice") != std::string::npos) return "text";
+    if (d.find("thunder") != std::string::npos || d.find("storm") != std::string::npos) return "yellow";
+    return "textDim";
 }
 
 // The language the weather is described in: the desktop's own
@@ -3428,7 +3431,7 @@ std::string SystemControl::weather_get_json(bool force) {
                                     {"time", t_str},
                                     {"temp", h.value(imperial ? "tempF" : "tempC", "0")},
                                     {"icon", weather_icon_from_desc(hdesc)},
-                                    {"hex", weather_hex_from_desc(hdesc)}
+                                    {"tone", weather_tone_from_desc(hdesc)}
                                 });
                             }
                         }
@@ -3445,7 +3448,7 @@ std::string SystemControl::weather_get_json(bool force) {
                             {"humidity", humid},
                             {"pop", pop},
                             {"icon", weather_icon_from_desc(day_desc)},
-                            {"hex", weather_hex_from_desc(day_desc)},
+                            {"tone", weather_tone_from_desc(day_desc)},
                             {"desc", day_text.empty() ? day_desc : day_text},
                             {"hourly", hourly_arr}
                         });
@@ -3502,14 +3505,15 @@ std::string SystemControl::weather_get_json(bool force) {
         if (code == "13d" || code == "13n") return "";
         return "";
     };
-    auto hex_of = [](const std::string& code) -> std::string {
-        if (code == "50d" || code == "50n") return "#84afdb";
-        if (code == "01d") return "#f9e2af";
-        if (code == "01n") return "#cba6f7";
-        if (std::regex_match(code, std::regex("^(02|03|04)[dn]$"))) return "#bac2de";
-        if (std::regex_match(code, std::regex("^(09|10)[dn]$"))) return "#74c7ec";
-        if (code == "11d") return "#f9e2af";
-        return "#cdd6f4";
+    // A role of the palette, as weather_tone_from_desc.
+    auto tone_of = [](const std::string& code) -> std::string {
+        if (code == "50d" || code == "50n") return "blue";
+        if (code == "01d") return "yellow";
+        if (code == "01n") return "mauve";
+        if (std::regex_match(code, std::regex("^(02|03|04)[dn]$"))) return "textDim";
+        if (std::regex_match(code, std::regex("^(09|10)[dn]$"))) return "sapphire";
+        if (code == "11d") return "yellow";
+        return "text";
     };
     // jq's tostring of a number rounded to a tenth: "12.3", or "12" when whole.
     auto one_decimal = [](double v) {
@@ -3580,7 +3584,7 @@ std::string SystemControl::weather_get_json(bool force) {
                 {"time", utc(it->value("dt", 0LL), "%H:%M")},
                 {"temp", one_decimal(num(*it, "main", "temp"))},
                 {"icon", icon_of(hcode)},
-                {"hex", hex_of(hcode)},
+                {"tone", tone_of(hcode)},
             });
         }
         std::string desc = "Unknown";
@@ -3598,7 +3602,7 @@ std::string SystemControl::weather_get_json(bool force) {
             {"humidity", std::to_string(std::lround(hum / day.size()))},
             {"pop", std::to_string(static_cast<long>(std::floor(pop * 100)))},
             {"icon", icon_of(code)},
-            {"hex", hex_of(code)},
+            {"tone", tone_of(code)},
             {"desc", titlecase(desc)},
             {"hourly", hourly},
         });
@@ -3661,7 +3665,9 @@ std::string SystemControl::weather_current_from(const std::string& json, const s
     const std::string temp = hour->value("temp", std::string()) + "°" + unit;
     if (field == "icon" || field == "--current-icon") return icon + "\n";
     if (field == "temp" || field == "--current-temp") return temp + "\n";
-    if (field == "hex" || field == "--current-hex") return hour->value("hex", std::string()) + "\n";
+    // A role of the palette now ("yellow"), as the forecast carries it.
+    if (field == "tone" || field == "--current-tone" || field == "hex" || field == "--current-hex")
+        return hour->value("tone", std::string()) + "\n";
     return icon + "\n" + temp + "\n";
 }
 
@@ -4436,13 +4442,18 @@ std::string SystemControl::media_get_info_json() {
     std::string metadata = run_line({"playerctl", "metadata", "--format",
         "{{status}}\x1f{{mpris:artUrl}}\x1f{{xesam:title}}\x1f{{xesam:artist}}\x1f{{mpris:length}}\x1f{{position}}\x1f{{playerName}}"}, 5);
 
-    std::string placeholder = tmp_dir + "/placeholder_blank.png";
+    // Nothing to show: a clear picture, so the popup's own glass shows
+    // through. It was Catppuccin's surface, a dark square on any theme.
+    std::string placeholder = tmp_dir + "/placeholder_clear.png";
     if (access(placeholder.c_str(), R_OK) != 0) {
-        (void)run_argv_status(imagemagick({"-size", "500x500", "xc:#313244", placeholder}));
+        (void)run_argv_status(imagemagick({"-size", "500x500", "xc:none", placeholder}));
     }
 
-    std::string default_grad = "linear-gradient(45deg, #cba6f7, #89b4fa, #f38ba8, #cba6f7)";
-    std::string default_text = "#cdd6f4";
+    // No colours of our own: the shell's theme gives the text its colour,
+    // and a gradient only comes from a cover. These were Catppuccin Mocha's
+    // text and accents, the text light on a light theme too.
+    std::string default_grad;
+    std::string default_text;
 
     if (metadata.empty()) {
         return "{\"title\":\"Not Playing\",\"artist\":\"\",\"status\":\"Stopped\",\"length\":1,\"position\":0,\"lengthStr\":\"00:01\",\"positionStr\":\"00:00\",\"timeStr\":\"00:00 / 00:01\",\"percent\":0,\"source\":\"Offline\",\"playerName\":\"\",\"blur\":\"" + placeholder + "\",\"grad\":\"" + default_grad + "\",\"textColor\":\"" + default_text + "\",\"deviceIcon\":\"󰓃\",\"deviceName\":\"Speaker\",\"artUrl\":\"" + placeholder + "\"}";
@@ -4514,11 +4525,8 @@ std::string SystemControl::media_get_info_json() {
             while (!g.empty() && (g.back() == '\n' || g.back() == '\r')) g.pop_back();
             display_grad = g;
         }
-        std::string txt = read_file_string(text_path);
-        if (!txt.empty()) {
-            while (!txt.empty() && (txt.back() == '\n' || txt.back() == '\r')) txt.pop_back();
-            display_text = txt;
-        }
+        // Not the text colour cached beside it: those hold Catppuccin's
+        // text from before, and the theme gives the text its colour now.
     } else if (!raw_url.empty()) {
         // Spawn async processor
         std::thread([=]() {
@@ -4559,14 +4567,14 @@ std::string SystemControl::media_get_info_json() {
             std::stringstream css(colors);
             std::string c1, c2, c3;
             css >> c1 >> c2 >> c3;
-            if (c1.empty()) c1 = "#cba6f7";
             if (c2.empty()) c2 = c1;
             if (c3.empty()) c3 = c1;
             std::ofstream gout(color_path);
-            gout << "linear-gradient(45deg, " << c1 << ", " << c2 << ", " << c3 << ", " << c1 << ")\n";
+            if (!c1.empty())
+                gout << "linear-gradient(45deg, " << c1 << ", " << c2 << ", " << c3 << ", " << c1 << ")\n";
             gout.close();
+            // The theme's text, not a colour of ours (see default_text).
             std::ofstream tout(text_path);
-            tout << "#cdd6f4\n";
             tout.close();
         }).detach();
     }

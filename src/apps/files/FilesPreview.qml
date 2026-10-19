@@ -28,7 +28,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: root.large
             Layout.preferredHeight: root.large ? -1 : Math.min(width, Design.s(Design.width.control))
-            Image {
+            Picture {
                 id: pic
                 anchors.fill: parent
                 // A video by a frame from it (the thumbnail the grid made).
@@ -42,12 +42,12 @@ Item {
                 asynchronous: true
                 smooth: true
             }
-            Text {
+            Label {
                 anchors.centerIn: parent
                 visible: !pic.visible
                 text: root.glyph
-                font.family: Design.font.icon
-                font.pixelSize: Design.s(root.large ? 120 : 96)
+                family: Design.font.icon
+                size: Design.s(root.large ? 120 : 96)
                 color: root.tone
             }
         }

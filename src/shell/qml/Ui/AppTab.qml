@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // One tab in an app's tab strip: Term's shells, Files' folders. The same
 // height as a toolbar Button, lit with the accent tint when it is the one shown;
@@ -18,14 +19,19 @@ Rectangle {
     property string glyph: ""
     property bool active: false
     property bool closable: true
+    // Unsaved changes: a dot where the close button is, until the tab is
+    // pointed at, as a Mac's tabs and windows say it.
+    property bool modified: false
+    // Shown when the pointer rests on it: a file's whole path, say.
+    property string tip: ""
     signal clicked()
     signal closeRequested()
 
     implicitHeight: Design.s(Design.size.md)
     implicitWidth: Math.min(Design.s(Design.width.tab), row.implicitWidth + Design.s(Design.space.md) * 2)
     radius: height / 2
-    color: active ? Design.tint(Design.accent, 0.22)
-         : area.containsMouse ? Design.hover : "transparent"
+    color: active ? Design.stateSelected
+         : area.containsMouse ? Design.stateHover : "transparent"
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
     // Under the close button, so the × gets its own clicks.
@@ -69,12 +75,20 @@ Rectangle {
             Layout.preferredWidth: Design.s(Design.size.mini)
             Layout.preferredHeight: Design.s(Design.size.mini)
             radius: width / 2
-            color: closeArea.containsMouse ? Design.tint(Design.danger, 0.22) : "transparent"
+            color: closeArea.containsMouse ? Design.stateDanger : "transparent"
             // Faint until the tab is pointed at, so a row of tabs is a row
             // of names and not a row of ×.
-            opacity: area.containsMouse || closeArea.containsMouse || root.active ? 1 : 0.0
+            readonly property bool pointed: area.containsMouse || closeArea.containsMouse
+            opacity: pointed || root.active || root.modified ? 1 : 0.0
+            Rectangle {
+                anchors.centerIn: parent
+                visible: root.modified && !parent.pointed
+                width: Design.s(Design.size.dot); height: width; radius: width / 2
+                color: Design.accent
+            }
             Text {
                 anchors.centerIn: parent
+                visible: !root.modified || parent.pointed
                 text: "\u{f0156}"
                 font.family: Design.font.icon
                 font.pixelSize: Design.s(Design.font.footnote)
@@ -96,5 +110,8 @@ Rectangle {
     Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
     Accessible.role: Accessible.PageTab
     Accessible.name: root.label
+    ToolTip.visible: root.tip !== "" && area.containsMouse
+    ToolTip.delay: 600
+    ToolTip.text: root.tip
     FocusRing { target: root }
 }

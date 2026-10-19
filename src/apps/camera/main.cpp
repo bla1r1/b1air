@@ -12,6 +12,7 @@
 #include <QDir>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 
 int main(int argc, char* argv[]) {
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
@@ -75,5 +76,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "[b1air-camera] Error: Failed to load CameraWindow.qml\n";
         return 1;
     }
+    b1air::app::grab_if_asked();
     return app.exec();
 }

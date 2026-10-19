@@ -110,7 +110,9 @@ Window {
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: window.step(-1) }
     Shortcut { sequence: "Escape"; onActivated: window.close() }
 
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         id: windowFrame
         anchors.fill: parent
         // No corners or outline of our own: sway draws both, and only sway
@@ -119,7 +121,6 @@ Window {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.glassBg
         clip: true
 
         ColumnLayout {
@@ -134,10 +135,44 @@ Window {
             AppToolbar {
                 Layout.fillWidth: true
 
+                // One file: its name and folder, as every app's title. More:
+                // the tabs in the title's place, as Terminal has them — a
+                // strip of their own under the toolbar was a browser's.
                 AppTitle {
+                    visible: tabStrip.count < 2
                     title: TextBackend.fileName || I18n.tr("Untitled")
                     subtitle: TextBackend.filePath ? TextBackend.filePath.replace(/\/[^\/]*$/, "") : ""
                     modified: TextBackend.isModified
+                }
+                ListView {
+                    id: tabStrip
+                    visible: count > 1
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: Design.s(Design.size.md)
+                    orientation: ListView.Horizontal
+                    spacing: Design.s(Design.space.xs)
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: TextBackend.tabs
+                    currentIndex: TextBackend.currentIndex
+                    highlightFollowsCurrentItem: false
+                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                    delegate: AppTab {
+                        required property int index
+                        required property string docId
+                        required property string name
+                        required property string path
+                        // Not `required property bool modified`: AppTab has
+                        // its own, which a second would hide.
+                        required property var model
+                        modified: model.modified
+                        label: name
+                        tip: path
+                        active: index === TextBackend.currentIndex
+                        onClicked: TextBackend.currentIndex = index
+                        onCloseRequested: window.closeTab(index)
+                    }
                 }
                 Button { variant: "ghost"; iconOnly: true; icon: "\u{f05b6}"; tip: I18n.tr("Wrap long lines"); checked: window.wordWrapEnabled; onClicked: window.wordWrapEnabled = !window.wordWrapEnabled }
                 // Changes kept from before (the session) or made now,
@@ -150,121 +185,6 @@ Window {
                 }
                 Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: TextBackend.newFile() }
                 Button { variant: TextBackend.isModified ? "primary" : "secondary"; icon: "\u{f0193}"; label: I18n.tr("Save"); tip: I18n.tr("Save (Ctrl+S) · Save as (Ctrl+Shift+S)"); onClicked: window.save() }
-            }
-
-            // ═════════════════════════════════════════════════════════════════
-            // TABS — one file each
-            // ═════════════════════════════════════════════════════════════════
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.md)
-                color: Design.veil
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.glassBorder }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.xs)
-                    anchors.rightMargin: Design.s(Design.space.xs)
-                    spacing: Design.s(Design.space.xxs)
-
-                    ListView {
-                        id: tabStrip
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.maximumWidth: contentWidth
-                        orientation: ListView.Horizontal
-                        clip: true
-                        spacing: Design.s(Design.space.xxs)
-                        boundsBehavior: Flickable.StopAtBounds
-                        model: TextBackend.tabs
-                        currentIndex: TextBackend.currentIndex
-                        onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
-
-                        delegate: Rectangle {
-                            id: tab
-                            required property int index
-                            required property string docId
-                            required property string name
-                            required property string path
-                            required property bool modified
-                            readonly property bool current: index === TextBackend.currentIndex
-                            height: tabStrip.height
-                            width: Math.min(Design.s(Design.width.tab), tabRow.implicitWidth + Design.s(Design.space.lg))
-                            color: current ? Design.veilStrong : (tabMa.containsMouse ? Design.stateHover : "transparent")
-
-                            Rectangle {
-                                visible: tab.current
-                                anchors.top: parent.top
-                                width: parent.width; height: Design.s(Design.space.xxs)
-                                color: Design.accent
-                            }
-
-                            MouseArea {
-                                id: tabMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                                onClicked: mouse => {
-                                    if (mouse.button === Qt.MiddleButton) window.closeTab(tab.index);
-                                    else TextBackend.currentIndex = tab.index;
-                                }
-                            }
-
-                            RowLayout {
-                                id: tabRow
-                                anchors.fill: parent
-                                anchors.leftMargin: Design.s(Design.space.md)
-                                anchors.rightMargin: Design.s(Design.space.xs)
-                                spacing: Design.s(Design.space.xs)
-                                Label {
-                                    Layout.fillWidth: true
-                                    Layout.maximumWidth: Design.s(Design.width.label)
-                                    text: tab.name
-                                    elide: Text.ElideMiddle
-                                    role: "caption"
-                                    weight: tab.current ? Design.weight.semibold : Design.weight.regular
-                                    color: tab.current ? Design.text : Design.textDim
-                                }
-                                // The dot for changes; the cross under the pointer.
-                                Item {
-                                    Layout.preferredWidth: Design.s(Design.size.micro)
-                                    Layout.preferredHeight: Design.s(Design.size.micro)
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        visible: tab.modified && !tabMa.containsMouse && !closeMa.containsMouse
-                                        width: Design.s(Design.size.dot); height: width; radius: width / 2
-                                        color: Design.accent
-                                    }
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        visible: tabMa.containsMouse || closeMa.containsMouse || (tab.current && !tab.modified)
-                                        text: "\u{f0156}"
-                                        role: "caption"
-                                        color: closeMa.containsMouse ? Design.text : Design.textFaint
-                                    }
-                                    MouseArea {
-                                        id: closeMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: window.closeTab(tab.index)
-                                    }
-                                }
-                            }
-                            ToolTip.visible: tabMa.containsMouse && tab.path !== ""
-                            ToolTip.delay: 600
-                            ToolTip.text: tab.path
-                        }
-                    }
-                    Button {
-                        Layout.alignment: Qt.AlignVCenter
-                        variant: "ghost"; iconOnly: true; size: "sm"
-                        icon: "\u{f0415}"
-                        tip: I18n.tr("New tab (Ctrl+T)")
-                        onClicked: TextBackend.newFile()
-                    }
-                    Item { Layout.fillWidth: true }
-                }
             }
 
             // ═════════════════════════════════════════════════════════════════
@@ -379,7 +299,7 @@ Window {
     // ═════════════════════════════════════════════════════════════════════════
     // One tab's editor: line numbers and the text
     // ═════════════════════════════════════════════════════════════════════════
-    component EditorPane: Rectangle {
+    component EditorPane: Box {
         id: pane
         required property int index
         required property string docId
@@ -418,7 +338,7 @@ Window {
             spacing: 0
 
             // ── Line Numbers Gutter ──────────────────────────────────────────
-            Rectangle {
+            Box {
                 Layout.fillHeight: true
                 Layout.preferredWidth: Design.s(Design.size.rowTall)
                 color: Design.veil
@@ -451,12 +371,11 @@ Window {
                         width: lineNumbersView.width - Design.s(Design.space.md)
                         height: Math.max(1, _next - _here.y)
 
-                        Text {
+                        Label {
                             width: parent.width
                             height: parent._here.height
                             text: String(index + 1)
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(Design.font.body)
+                            isMono: true
                             color: (index + 1 === pane.currentLine) ? Design.accent : Design.textFaint
                             horizontalAlignment: Text.AlignRight
                             verticalAlignment: Text.AlignVCenter
@@ -465,7 +384,7 @@ Window {
                 }
 
                 // Gutter Right Divider
-                Rectangle {
+                Box {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
@@ -484,7 +403,7 @@ Window {
                 ScrollBar.vertical: OverflowBar {}
                 ScrollBar.horizontal: ScrollBar { policy: window.wordWrapEnabled ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded }
 
-                TextArea.flickable: TextArea {
+                TextArea.flickable: TextBox {
                     id: editorArea
                     // The style's own frame drew an accent outline round the
                     // whole page whenever it had the caret, i.e. always.
@@ -544,7 +463,7 @@ Window {
                 // the empty space below the last line landed on nothing
                 // and the editor never took the caret. This takes it there
                 // and puts the caret at the end.
-                MouseArea {
+                PointerArea {
                     x: 0
                     y: editorArea.height
                     width: editorFlickable.width

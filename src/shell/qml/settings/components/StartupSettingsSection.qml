@@ -132,13 +132,12 @@ ColumnLayout {
             }
 
             // ── Installed Apps Search & Picker Grid (Expanded on demand) ──────
-            Rectangle {
+            Surface {
+                kind: "well"
                 visible: section.showAppPicker
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.width.list)
                 radius: Design.s(Design.radius.card)
-                color: Design.ground
-                border.color: Design.glassBorder
                 border.width: 1
 
                 ColumnLayout {
@@ -147,7 +146,7 @@ ColumnLayout {
                     spacing: Design.s(Design.space.xs)
 
                     // Search input
-                    Rectangle {
+                    Box {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(Design.size.md)
                         radius: Design.s(Design.radius.ctl)
@@ -162,7 +161,7 @@ ColumnLayout {
 
                             Icon { text: "󰍉"; role: "caption"; color: Design.textDim }
 
-                            TextInput {
+                            TextLine {
                                 id: appSearchInput
                                 Layout.fillWidth: true
                                 color: Design.text
@@ -170,7 +169,7 @@ ColumnLayout {
                                 clip: true
                                 selectByMouse: true
                                 onTextChanged: section.appSearchQuery = text.toLowerCase()
-                                Text {
+                                Label {
                                     text: I18n.tr("Search installed applications...")
                                     color: Design.textDim
                                     visible: !appSearchInput.text && !appSearchInput.activeFocus
@@ -189,7 +188,9 @@ ColumnLayout {
                         spacing: Design.s(Design.space.xs)
                         model: section.allInstalledApps
 
-                        delegate: Rectangle {
+                        delegate: ListRow {
+                            handlesMouse: false
+                            hovered: pickerMa.containsMouse
                             id: appPickerItem
                             required property var model
                             required property int index
@@ -199,16 +200,14 @@ ColumnLayout {
                                      appPickerItem.model.exec.toLowerCase().includes(section.appSearchQuery)
 
                             width: ListView.view ? ListView.view.width : 0
-                            height: visible ? Design.s(Design.size.header) : 0
-                            radius: Design.s(Design.radius.ctl)
-                            color: pickerMa.containsMouse ? Design.glassHover : "transparent"
+                            implicitHeight: visible ? Design.s(Design.size.header) : 0
 
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: Design.s(Design.space.xs)
                                 spacing: Design.s(Design.space.sm)
 
-                                Image {
+                                Picture {
                                     Layout.preferredWidth: Design.s(Design.size.mini)
                                     Layout.preferredHeight: Design.s(Design.size.mini)
                                     // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
@@ -249,7 +248,7 @@ ColumnLayout {
                                 }
                             }
 
-                            Clickable {
+                            overlay: Clickable {
                                 id: pickerMa
                                 anchors.fill: parent
                                 hoverEnabled: true

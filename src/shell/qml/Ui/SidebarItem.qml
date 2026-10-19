@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 
 // One row of a sidebar: icon, label, optional detail line and badge, and a
@@ -25,10 +26,11 @@ Rectangle {
 
     Layout.fillWidth: true
     implicitHeight: Design.s(detail !== "" ? Design.size.row + Design.space.xxs : Design.size.md + Design.space.xs)
-    radius: Design.s(Design.radius.ctl)
-    color: active ? Design.tint(Design.accent, 0.22)
-         : highlight ? Design.tint(Design.accent, 0.14)
-         : ma.containsMouse ? Design.hover : "transparent"
+    // Its container's corner rule (Shape, Design.corner), else its own.
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
+    color: active ? Design.stateSelected
+         : highlight ? Design.stateSelectedSoft
+         : ma.containsMouse ? Design.stateHover : "transparent"
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
     MouseArea {

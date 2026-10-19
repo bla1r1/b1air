@@ -97,7 +97,9 @@ ApplicationWindow {
     property int rotationAngle: 0
     property bool showFilmstrip: true
 
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         id: windowFrame
         anchors.fill: parent
         // No corners or outline of our own: sway draws both, and only sway
@@ -106,7 +108,6 @@ ApplicationWindow {
         // desktop that did not light up when focused. SwayFX's corner_radius
         // rounds the surface; a 14px radius inside its 10px one left slivers.
         radius: 0
-        color: Design.glassBg
         clip: true
 
         // Keyboard Shortcuts
@@ -233,7 +234,7 @@ ApplicationWindow {
                         // the item used to take the size it was decoded at —
                         // the screen's — and a window smaller than the screen
                         // showed the middle of the picture.
-                        Image {
+                        Picture {
                             id: mainImage
                             anchors.centerIn: parent
                             width: window.fitSize.width
@@ -268,7 +269,7 @@ ApplicationWindow {
                         }
                         // A GIF or an animated WebP, played; Image showed the
                         // first frame and stopped there.
-                        AnimatedImage {
+                        AnimatedPicture {
                             id: animImage
                             anchors.centerIn: parent
                             width: window.fitSize.width
@@ -286,7 +287,7 @@ ApplicationWindow {
                     }
 
                     // Mouse Wheel Zoom
-                    MouseArea {
+                    PointerArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.NoButton
                         onWheel: (wheel) => {
@@ -318,16 +319,16 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle {
+                Box {
                     anchors.fill: parent
                     visible: window.showsVideo && !window.openFailed
                     color: "black"
-                    VideoOutput {
+                    VideoView {
                         id: video
                         anchors.fill: parent
                         fillMode: VideoOutput.PreserveAspectFit
                     }
-                    MouseArea {
+                    PointerArea {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: window.togglePlay()
@@ -342,7 +343,7 @@ ApplicationWindow {
                     width: Math.min(parent.width - Design.s(Design.size.art), Design.s(Design.width.menuMax))
                     visible: window.isMedia && !window.showsVideo && !window.openFailed
                     spacing: Design.s(Design.space.md)
-                    Rectangle {
+                    Box {
                         Layout.alignment: Qt.AlignHCenter
                         readonly property real side: Math.min(Design.s(Design.width.select), parent.width, controlsArea.height - Design.s(Design.width.label))
                         Layout.preferredWidth: side
@@ -357,7 +358,7 @@ ApplicationWindow {
                             font.pixelSize: parent.side / 3
                             color: Design.textFaint
                         }
-                        Image {
+                        Picture {
                             id: cover
                             anchors.fill: parent
                             source: window.isMedia && !window.showsVideo ? "image://thumb/" + encodeURIComponent(ViewBackend.currentPath) : ""
@@ -402,7 +403,7 @@ ApplicationWindow {
                 }
 
                 // Left Arrow Overlay (Prev)
-                Rectangle {
+                Box {
                     anchors.left: parent.left
                     anchors.leftMargin: Design.s(Design.space.lg)
                     anchors.verticalCenter: parent.verticalCenter
@@ -411,12 +412,18 @@ ApplicationWindow {
                     border.color: Design.glassBorder
                     border.width: 1
                     visible: window.hasImage && window.hasSiblings
-                    Text { anchors.centerIn: parent; text: "󰁍"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.glyphSm); color: Design.text }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "󰁍"
+                        isMono: true
+                        size: Design.s(Design.font.glyphSm)
+                        color: Design.text
+                    }
                     Clickable { id: prevArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.previous() }
                 }
 
                 // Right Arrow Overlay (Next)
-                Rectangle {
+                Box {
                     anchors.right: parent.right
                     anchors.rightMargin: Design.s(Design.space.lg)
                     anchors.verticalCenter: parent.verticalCenter
@@ -425,13 +432,19 @@ ApplicationWindow {
                     color: nextArrArea.containsMouse ? Design.tint(Design.ground, 0.85) : Design.tint(Design.ground, 0.45)
                     border.color: Design.glassBorder
                     border.width: 1
-                    Text { anchors.centerIn: parent; text: "󰁔"; font.family: Design.font.mono; font.pixelSize: Design.s(Design.font.glyphSm); color: Design.text }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "󰁔"
+                        isMono: true
+                        size: Design.s(Design.font.glyphSm)
+                        color: Design.text
+                    }
                     Clickable { id: nextArrArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ViewBackend.next() }
                 }
             }
 
             // ── Transport: play, seek, volume ────────────────────────────────
-            Rectangle {
+            Box {
                 id: controls
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.rowTall)
@@ -446,7 +459,12 @@ ApplicationWindow {
                                      && player.playbackState === MediaPlayer.PlayingState) controls.awake = false
                 }
                 visible: window.isMedia && (controls.awake || window.visibility !== Window.FullScreen || !window.showsVideo)
-                Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.glassBorder }
+                Box {
+                    anchors.top: parent.top
+                    width: parent.width
+                    height: 1
+                    color: Design.glassBorder
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -481,28 +499,28 @@ ApplicationWindow {
                         property real dragPosition: 0
                         readonly property real ratio: player.duration > 0
                             ? (dragging ? dragPosition : player.position) / player.duration : 0
-                        Rectangle {
+                        Box {
                             id: groove
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width
                             height: seekArea.containsMouse || seek.dragging ? Design.s(Design.space.xs) : Design.s(Design.space.xs)
                             radius: height / 2
                             color: Design.tint(Design.text, 0.14)
-                            Rectangle {
+                            Box {
                                 width: parent.width * seek.ratio
                                 height: parent.height
                                 radius: parent.radius
                                 color: Design.accent
                             }
                         }
-                        Rectangle {
+                        Box {
                             visible: seekArea.containsMouse || seek.dragging
                             x: Math.round(seek.width * seek.ratio - width / 2)
                             anchors.verticalCenter: parent.verticalCenter
                             width: Design.s(Design.space.md); height: width; radius: width / 2
                             color: Design.text
                         }
-                        MouseArea {
+                        PointerArea {
                             id: seekArea
                             anchors.fill: parent
                             hoverEnabled: true
@@ -547,7 +565,7 @@ ApplicationWindow {
             }
 
             // ── Bottom Filmstrip Thumbnail Strip (Optional, 70px) ─────────────
-            Rectangle {
+            Box {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.stat)
                 color: Design.veil
@@ -556,7 +574,7 @@ ApplicationWindow {
                 // One rule where the strip meets the picture, not a box: a full
                 // border on a bar this wide draws its side edges on top of the
                 // window frame's own.
-                Rectangle {
+                Box {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
@@ -580,9 +598,9 @@ ApplicationWindow {
                     highlightFollowsCurrentItem: false
                     onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
 
-                    delegate: Rectangle {
+                    delegate: Box {
                         width: Design.s(Design.size.tile); height: Design.s(Design.size.tile); radius: Design.s(Design.radius.sm)
-                        color: isCur ? Design.tint(Design.accent, 0.25) : (thumbArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent")
+                        color: isCur ? Design.stateSelected : (thumbArea.containsMouse ? Design.stateHover : "transparent")
                         border.color: isCur ? Design.accent : "transparent"
                         border.width: 1
 
@@ -595,7 +613,7 @@ ApplicationWindow {
                         // fills, made off this thread. Each picture of the
                         // folder used to be read whole for its 60px square,
                         // again every time.
-                        Image {
+                        Picture {
                             id: stripThumb
                             anchors.fill: parent
                             anchors.margins: Design.s(Design.space.xxs)

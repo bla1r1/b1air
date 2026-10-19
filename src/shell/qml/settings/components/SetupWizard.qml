@@ -191,7 +191,7 @@ Item {
     // Dimmed a little, as a sheet dims what is under it: light enough to stay
     // under qs-master's blur threshold (0.4), so the desktop shows through
     // sharp and only the card is frosted.
-    Rectangle {
+    Box {
         anchors.fill: parent
         visible: wizard.backdrop
         color: Qt.rgba(0, 0, 0, Design.darkTheme ? 0.34 : 0.22)
@@ -209,7 +209,8 @@ Item {
     }
 
     // The card: the desktop's glass, as every panel of it.
-    Rectangle {
+    Surface {
+        kind: "glass"
         id: card
         anchors.centerIn: parent
         width: Math.min(parent.width - Design.s(Design.space.xl) * 2, Design.s(Design.width.dash + Design.width.control))
@@ -217,13 +218,10 @@ Item {
         // Larger than a panel's, as a Mac's setup card is; written from the
         // window radius so a change to the panels' does not swell it.
         radius: Design.s(Design.radius.window + Design.space.sm)
-        color: Design.glassBg
-        border.width: Design.border
-        border.color: Design.glassBorder
         clip: true
 
         // Light along the top edge, as on glass.
-        Rectangle {
+        Box {
             anchors.fill: parent
             anchors.margins: Design.border
             radius: parent.radius - Design.border
@@ -258,14 +256,13 @@ Item {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: -Design.s(Design.size.row)
                 spacing: Design.s(Design.space.lg)
-                Text {
+                Label {
                     id: word
                     Layout.alignment: Qt.AlignHCenter
                     text: hello.words[hello.at]
                     color: Design.text
-                    font.family: Design.font.sans
-                    font.pixelSize: Design.s(Design.font.jumbo * 0.8)
-                    font.weight: Font.Light
+                    size: Design.s(Design.font.jumbo * 0.8)
+                    weight: Font.Light
                     font.letterSpacing: -Design.s(Design.space.xxs)
                 }
                 Label {
@@ -277,7 +274,7 @@ Item {
             }
 
             // The round arrow under it, as on a Mac.
-            Rectangle {
+            Box {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Design.s(Design.size.stat)
@@ -313,7 +310,7 @@ Item {
             spacing: Design.s(Design.space.lg)
 
             // The question, large, in the middle at the top.
-            Rectangle {
+            Box {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: Design.s(Design.size.tile + Design.space.sm)
                 Layout.preferredHeight: Design.s(Design.size.tile + Design.space.sm)
@@ -354,7 +351,7 @@ Item {
                 }
             }
 
-            ScrollView {
+            Scroller {
                 id: scroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -476,7 +473,7 @@ Item {
                     visible: wizard.steps.length > 1
                     Repeater {
                         model: wizard.steps.length
-                        Rectangle {
+                        Box {
                             required property int index
                             width: index === wizard.index ? Design.s(Design.size.mini) : Design.s(Design.space.sm)
                             height: Design.s(Design.space.sm)
@@ -520,7 +517,7 @@ Item {
                 width: Math.min(parent.width - Design.s(Design.space.xl) * 2, Design.s(Design.width.dash - Design.size.row))
                 spacing: Design.s(Design.space.lg)
 
-                Rectangle {
+                Box {
                     id: tick
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredWidth: Design.s(Design.size.avatar)

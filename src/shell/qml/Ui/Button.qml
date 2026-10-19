@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 import QtQuick.Controls as C
 
@@ -22,7 +23,10 @@ Rectangle {
 
     // Style variants
     property string variant: "secondary" // "primary" | "secondary" | "ghost" | "danger"
-    property string size: "md"           // "sm" (28) | "md" (32)
+    property string size: "md"           // "sm" (28) | "md" (32) | "lg" (36): the one big action of a pane
+    // Working on what it started (a commit, a push): a turning glyph where
+    // its icon is, and not to be pressed again until done.
+    property bool busy: false
     property bool checked: false
     property bool destructive: false
     property string confirmText: I18n.tr("Sure?")
@@ -42,13 +46,14 @@ Rectangle {
     readonly property string _effectiveText: _armed ? confirmText : (text !== "" ? text : label)
 
     // Sizing
-    readonly property real _targetHeight: size === "sm" ? Design.s(Design.size.sm) : Design.s(Design.size.md)
+    readonly property real _targetHeight: Design.s(size === "sm" ? Design.size.sm : size === "lg" ? Design.size.knob : Design.size.md)
     implicitHeight: _targetHeight
     Layout.preferredHeight: _targetHeight
 
     readonly property real _pad: Design.s(snug ? Design.space.sm : (size === "sm" ? Design.space.sm : Design.space.md))
-    readonly property real _contentWidth: (icon !== "" ? glyphText.implicitWidth : 0)
-        + (_effectiveText !== "" && !iconOnly ? labelText.implicitWidth + (icon !== "" ? Design.s(Design.space.xs + 2) : 0) : 0)
+    readonly property bool _hasGlyph: icon !== "" || busy
+    readonly property real _contentWidth: (_hasGlyph ? glyphText.implicitWidth : 0)
+        + (_effectiveText !== "" && !iconOnly ? labelText.implicitWidth + (_hasGlyph ? Design.s(Design.space.xs + 2) : 0) : 0)
     implicitWidth: iconOnly ? implicitHeight : (_contentWidth + _pad * 2)
     // The width with its label, whatever iconOnly says, at the normal and at
     // the narrow padding: for a row to decide whether its labels fit (the
@@ -58,7 +63,8 @@ Rectangle {
     readonly property real fullWidth: _contentFull + Design.s(Design.space.md) * 2
     readonly property real snugWidth: _contentFull + Design.s(Design.space.sm) * 2
 
-    radius: Design.s(Design.radius.ctl)
+    // Its container's corner rule (Shape, Design.corner), else its own.
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
     opacity: enabled ? 1.0 : Design.opacity.disabled
 
     // Accessibility
@@ -79,26 +85,24 @@ Rectangle {
                            : (hovered ? Qt.lighter(Design.accent, 1.08) : Design.accent);
         }
         if (_isDanger) {
-            return pressed ? Design.tint(Design.danger, 0.28)
-                           : (hovered ? Design.tint(Design.danger, 0.18) : "transparent");
+            return pressed ? Design.stateDangerPressed
+                           : (hovered ? Design.stateDanger : "transparent");
         }
         if (_isGhost) {
-            return pressed ? Design.veilStrong
-                           : (hovered ? Design.veil : (checked ? Design.selection : "transparent"));
+            return pressed ? Design.statePressed
+                           : (hovered ? Design.stateHover : (checked ? Design.stateSelected : "transparent"));
         }
         // secondary: a lighter pane on glass (raised there was a near-black
         // slab on every glass card), the raised surface on an opaque one.
-        if (checked) return Design.selection;
-        if (Design.translucent)
-            return pressed ? Design.tint(Design.text, 0.20) : (hovered ? Design.veilBold : Design.well);
-        return pressed ? Design.active : (hovered ? Design.hover : Design.raised);
+        if (checked) return Design.stateSelected;
+        return pressed ? Design.controlPressed : (hovered ? Design.controlHover : Design.controlFill);
     }
 
     border.width: (_isPrimary || (_armed && destructive)) ? 0 : 1
     border.color: {
-        if (_isDanger) return Design.tint(Design.danger, 0.35);
-        if (_isGhost) return (checked ? Design.tint(Design.accent, 0.35) : "transparent");
-        return checked ? Design.tint(Design.accent, 0.35) : Design.glassBorder;
+        if (_isDanger) return Design.dangerLine;
+        if (_isGhost) return (checked ? Design.accentLine : "transparent");
+        return checked ? Design.accentLine : Design.glassBorder;
     }
 
     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -111,7 +115,7 @@ Rectangle {
     }
 
     function trigger() {
-        if (!root.enabled) return;
+        if (!root.enabled || root.busy) return;
         if (root.destructive && !root._armed) {
             root._armed = true;
             disarmTimer.restart();
@@ -130,9 +134,14 @@ Rectangle {
 
         Text {
             id: glyphText
-            visible: root.icon !== ""
+            visible: root._hasGlyph
             anchors.verticalCenter: parent.verticalCenter
-            text: root.icon
+            text: root.busy ? "\u{f0772}" : root.icon
+            RotationAnimator on rotation {
+                running: root.busy && !Design.reduceMotion
+                from: 0; to: 360; duration: Design.duration.spin; loops: Animation.Infinite
+                onRunningChanged: if (!running) glyphText.rotation = 0
+            }
             font.family: Design.font.icon
             font.pixelSize: Design.s(root.size === "sm" ? Design.font.glyphSm : Design.font.glyph)
             color: {
@@ -172,7 +181,7 @@ Rectangle {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        cursorShape: root.enabled && !root.busy ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
             root.forceActiveFocus(Qt.MouseFocusReason);
             root.trigger();

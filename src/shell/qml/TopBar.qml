@@ -15,7 +15,7 @@ import "./Services"
 PanelWindow {
     // A bar island under the pointer: a faint wash over the same glass and
     // rim, not a lighter pane with a bright rim of its own colour.
-    component HoverWash: Rectangle {
+    component HoverWash: Box {
         property bool shown: false
         anchors.fill: parent
         radius: parent.radius
@@ -486,7 +486,8 @@ PanelWindow {
             spacing: Design.s(Design.space.xs)
 
             // 1. APPS Island (Launchpad on Left Click, Spotlight on Right Click)
-            Rectangle {
+            Surface {
+                kind: "glass"
                 id: appMenuBtn
                 visible: Settings.barShowApps
                 width: appRow.implicitWidth + Design.s(Design.space.md * 2)
@@ -497,36 +498,32 @@ PanelWindow {
                 // of the rest of the bar has, and the pointer rests in this
                 // corner often (the hot corner), so it looked so most of the
                 // time. Now a faint wash (HoverWash), as every island has.
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 HoverWash { shown: appMenuArea.containsMouse }
 
                 Row {
                     id: appRow
                     anchors.centerIn: parent
                     spacing: Design.s(Design.space.xs)
-                    Text {
+                    Label {
                         text: "󰍜"
-                        font.family: Design.font.mono
-                        font.pixelSize: Design.s(Design.font.body)
+                        isMono: true
                         color: Design.text
                         anchors.verticalCenter: parent.verticalCenter
                     }
-                    Text {
+                    Label {
                         // Sentence case and the medium cut, as every other
                         // label on the bar: it was the one word in capitals
                         // and bold, the loudest thing on the left.
                         text: I18n.tr("Apps")
-                        font.family: topBar.fontMain
-                        font.pixelSize: Design.s(Design.font.body)
-                        font.weight: Design.weight.medium
+                        family: topBar.fontMain
+                        size: Design.s(Design.font.body)
+                        weight: Design.weight.medium
                         color: Design.text
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
-                MouseArea {
+                PointerArea {
                     id: appMenuArea
                     anchors.fill: parent
                     hoverEnabled: true
@@ -543,13 +540,11 @@ PanelWindow {
             }
 
             // 2. User-Configured Pinned Apps Island
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: pinnedRow.implicitWidth + Design.s(Design.space.sm * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 visible: Settings.barShowPinned && PinnedApps.pinnedList.length > 0
 
                 Row {
@@ -559,12 +554,12 @@ PanelWindow {
 
                     Repeater {
                         model: PinnedApps.pinnedList
-                        delegate: Rectangle {
+                        delegate: Box {
                             id: pinPill
                             width: Design.s(Design.size.xs)
                             height: Design.s(Design.size.xs)
                             radius: Design.s(Design.radius.sm)
-                            color: pinArea.containsMouse ? Design.tint(Design.accent, 0.22) : "transparent"
+                            color: pinArea.containsMouse ? Design.stateHover : "transparent"
 
                             // The app's own icon, from its desktop entry, the
                             // way running windows already get theirs. Pins
@@ -572,7 +567,7 @@ PanelWindow {
                             // AdwaitaLegacy "web-browser" globe — so the pinned
                             // row never looked like the apps it launches.
                             // The stored icon is kept for pins no entry answers.
-                            IconImage {
+                            AppIcon {
                                 anchors.centerIn: parent
                                 width: Design.s(Design.size.micro)
                                 height: Design.s(Design.size.micro)
@@ -582,7 +577,7 @@ PanelWindow {
                                 mipmap: true
                             }
 
-                            MouseArea {
+                            PointerArea {
                                 id: pinArea
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -608,22 +603,22 @@ PanelWindow {
                     }
 
                     // Add Pinned App '+' Button
-                    Rectangle {
+                    Box {
                         width: Design.s(Design.size.mini)
                         height: Design.s(Design.size.mini)
                         radius: Design.s(Design.radius.sm)
-                        color: addPinArea.containsMouse ? Design.tint(Design.accent, 0.25) : "transparent"
+                        color: addPinArea.containsMouse ? Design.stateHover : "transparent"
                         anchors.verticalCenter: parent.verticalCenter
 
-                        Text {
+                        Label {
                             anchors.centerIn: parent
                             text: "󰐕"
-                            font.family: Design.font.mono
-                            font.pixelSize: Design.s(Design.font.caption)
+                            isMono: true
+                            role: "caption"
                             color: addPinArea.containsMouse ? Design.text : Design.textDim
                         }
 
-                        MouseArea {
+                        PointerArea {
                             id: addPinArea
                             anchors.fill: parent
                             hoverEnabled: true
@@ -635,15 +630,13 @@ PanelWindow {
             }
 
             // 3. Workspaces Island
-            Rectangle {
+            Surface {
+                kind: "glass"
                 id: workspacesIsland
                 visible: Settings.barShowWorkspaces
                 height: Design.s(Design.size.island)
                 width: workspacesRow.implicitWidth + Design.s(Design.space.md)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 Row {
                     id: workspacesRow
                     anchors.centerIn: parent
@@ -651,7 +644,7 @@ PanelWindow {
 
                     Repeater {
                         model: topBar.workspaceSlots
-                        delegate: Rectangle {
+                        delegate: Box {
                             id: wsPill
                             required property var modelData
 
@@ -659,7 +652,7 @@ PanelWindow {
                             height: Design.s(Design.size.xs)
                             radius: Design.s(Design.radius.sm)
                             color: wsPill.modelData.focused ? Design.accent
-                                 : (wsMouseArea.containsMouse ? Design.tint(Design.accent, 0.20) : Design.glassTile)
+                                 : (wsMouseArea.containsMouse ? Design.stateSelected : Design.glassTile)
                             border.color: wsPill.modelData.focused ? "transparent" : Design.line
                             border.width: Design.border
                             // An empty slot is a place you can go, not a place
@@ -667,18 +660,18 @@ PanelWindow {
                             // by being missing.
                             opacity: wsPill.modelData.exists || wsPill.modelData.focused ? 1.0 : 0.45
 
-                            Text {
+                            Label {
                                 id: wsText
                                 anchors.centerIn: parent
                                 text: wsPill.modelData.name
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.caption)
-                                font.weight: Design.weight.semibold
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.caption)
+                                weight: Design.weight.semibold
                                 color: wsPill.modelData.focused ? Design.accentText
                                      : (wsMouseArea.containsMouse ? Design.text : Design.textDim)
                             }
 
-                            MouseArea {
+                            PointerArea {
                                 id: wsMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
@@ -692,7 +685,7 @@ PanelWindow {
                     }
                 }
 
-                MouseArea {
+                PointerArea {
                     anchors.fill: parent
                     z: -1
                     onWheel: (wheel) => {
@@ -715,14 +708,14 @@ PanelWindow {
 
                 Repeater {
                     model: topBar.runningApps
-                    delegate: Rectangle {
+                    delegate: Box {
                         width: Design.s(Design.size.sm)
                         height: Design.s(Design.size.sm)
                         radius: Design.s(Design.radius.ctl)
-                        color: modelData.focused ? Design.tint(Design.accent, 0.22) : Design.glassBg
+                        color: modelData.focused ? Design.stateSelected : Design.glassBg
                         border.color: modelData.focused ? Design.accent : Design.glassBorder
                         border.width: Design.border
-                        IconImage {
+                        AppIcon {
                             anchors.centerIn: parent
                             width: Design.s(Design.size.micro)
                             height: Design.s(Design.size.micro)
@@ -730,7 +723,7 @@ PanelWindow {
                             mipmap: true
                         }
 
-                        MouseArea {
+                        PointerArea {
                             id: runningArea
                             anchors.fill: parent
                             hoverEnabled: true
@@ -750,7 +743,8 @@ PanelWindow {
         // ══════════════════════════════════════════════════════════════════════
         // CENTER ISLAND: Floating Clock Pill (Calendar, Focus Time, Updater)
         // ══════════════════════════════════════════════════════════════════════
-        Rectangle {
+        Surface {
+            kind: "glass"
             id: clockPill
             anchors.centerIn: parent
             width: clockText.implicitWidth + Design.s(Design.space.xl + Design.space.md)
@@ -758,24 +752,21 @@ PanelWindow {
             radius: Design.s(Design.radius.pill)
             // Glass like the islands beside it: a solid accent pill was the
             // loudest thing on the screen, for the one thing glanced at most.
-            color: Design.glassBg
-            border.color: Design.glassBorder
-            border.width: Design.border
             HoverWash { shown: clockArea.containsMouse }
             Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
-            Text {
+            Label {
                 id: clockText
                 anchors.centerIn: parent
                 text: topBar.clockTime
                 font.features: Design.tabular
-                font.family: topBar.fontMain
-                font.pixelSize: Design.s(Design.font.body)
-                font.weight: Design.weight.semibold
+                family: topBar.fontMain
+                size: Design.s(Design.font.body)
+                weight: Design.weight.semibold
                 color: Design.text
             }
 
-            MouseArea {
+            PointerArea {
                 id: clockArea
                 anchors.fill: parent
                 hoverEnabled: true
@@ -801,7 +792,7 @@ PanelWindow {
         // a full screen-time dashboard. Left of the clock, present only when
         // there is something to show; click to pause or resume, middle-click
         // for the dashboard.
-        Rectangle {
+        Box {
             id: focusPill
             visible: Focus.active
             anchors.right: clockPill.left
@@ -822,27 +813,26 @@ PanelWindow {
                 anchors.centerIn: parent
                 spacing: Design.s(Design.space.xs)
 
-                Text {
+                Icon {
                     anchors.verticalCenter: parent.verticalCenter
                     // Paused shows the play glyph: it is what the click does.
                     text: Focus.running ? "\u{f0520}" : "\u{f040a}"
-                    font.family: Design.font.icon
-                    font.pixelSize: Design.s(Design.font.footnote)
+                    role: "footnote"
                     color: focusPill.tone
                 }
 
-                Text {
+                Label {
                     anchors.verticalCenter: parent.verticalCenter
                     text: Focus.remainingText
-                    font.family: topBar.fontMain
-                    font.pixelSize: Design.s(Design.font.footnote)
-                    font.weight: Design.weight.semibold
+                    family: topBar.fontMain
+                    size: Design.s(Design.font.footnote)
+                    weight: Design.weight.semibold
                     color: focusPill.tone
                     opacity: Focus.running ? 1.0 : 0.65
                 }
             }
 
-            MouseArea {
+            PointerArea {
                 id: focusArea
                 anchors.fill: parent
                 hoverEnabled: true
@@ -874,13 +864,11 @@ PanelWindow {
             // stored a value nothing read. Both services already exist and are
             // used by the Control Center, so this is wiring, not new plumbing.
 
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: mediaRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 HoverWash { shown: mediaArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -893,29 +881,28 @@ PanelWindow {
                     anchors.centerIn: parent
                     spacing: Design.s(Design.space.xs)
 
-                    Text {
+                    Icon {
                         text: Media.playing ? "\u{f040a}" : "\u{f03e4}"
-                        font.family: Design.font.icon
-                        font.pixelSize: Design.s(Design.font.footnote)
+                        role: "footnote"
                         color: Design.textDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    Text {
+                    Label {
                         // Elided rather than allowed to push the clock off
                         // centre: a track title is arbitrarily long.
                         width: Math.min(implicitWidth, Design.s(Design.width.control))
                         elide: Text.ElideRight
                         text: (Media.track.artist ? Media.track.artist + " — " : "")
                               + (Media.track.title || "")
-                        font.family: topBar.fontMain
-                        font.pixelSize: Design.s(Design.font.caption)
+                        family: topBar.fontMain
+                        size: Design.s(Design.font.caption)
                         color: Design.textDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
-                MouseArea {
+                PointerArea {
                     id: mediaArea
                     anchors.fill: parent
                     hoverEnabled: true
@@ -924,13 +911,11 @@ PanelWindow {
                 }
             }
 
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: weatherRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 HoverWash { shown: weatherArea.containsMouse }
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -941,25 +926,24 @@ PanelWindow {
                     anchors.centerIn: parent
                     spacing: Design.s(Design.space.xs)
 
-                    Text {
+                    Icon {
                         text: Weather.icon
-                        font.family: Design.font.icon
-                        font.pixelSize: Design.s(Design.font.footnote)
+                        role: "footnote"
                         color: Design.textDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    Text {
+                    Label {
                         text: Weather.temp
-                        font.family: topBar.fontMain
-                        font.pixelSize: Design.s(Design.font.caption)
-                        font.weight: Design.weight.semibold
+                        family: topBar.fontMain
+                        size: Design.s(Design.font.caption)
+                        weight: Design.weight.semibold
                         color: Design.textDim
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
-                MouseArea {
+                PointerArea {
                     id: weatherArea
                     anchors.fill: parent
                     hoverEnabled: true
@@ -974,13 +958,11 @@ PanelWindow {
             // ships the StatusNotifierItem host; the bar simply never used it,
             // so background applets — Telegram, Steam, the ones the setting
             // names — had nowhere to appear on this desktop at all.
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: trayRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 anchors.verticalCenter: parent.verticalCenter
 
                 // No applets means no empty pill sitting in the bar.
@@ -1013,22 +995,22 @@ PanelWindow {
                             readonly property bool missing: String(modelData.icon || "") === ""
                                 || (iconName !== "" && !iconName.startsWith("/") && Quickshell.iconPath(iconName, true) === "")
 
-                            IconImage {
+                            AppIcon {
                                 anchors.fill: parent
                                 visible: !trayItem.missing
                                 source: trayItem.missing ? "" : trayItem.modelData.icon
                                 asynchronous: true
                             }
-                            Text {
+                            Label {
                                 anchors.centerIn: parent
                                 visible: trayItem.missing
                                 text: "\u{f003b}"   // apps
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.glyphSm)
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.glyphSm)
                                 color: Design.textDim
                             }
 
-                            MouseArea {
+                            PointerArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
@@ -1051,14 +1033,12 @@ PanelWindow {
             }
 
             // 1. Stats Island (CPU + memory)
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: statsRow.implicitWidth + Design.s(Design.space.md * 2)
                 visible: Settings.barShowStats && !topBar.reduced
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 HoverWash { shown: statsArea.containsMouse }
                 Row {
                     id: statsRow
@@ -1067,18 +1047,46 @@ PanelWindow {
 
                     Row {
                         spacing: Design.s(Design.space.xs)
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: ""; font.family: topBar.fontMain; font.pixelSize: Design.s(Design.font.footnote); color: Design.textDim }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.cpuUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(Design.font.caption); font.weight: Design.weight.semibold; color: Design.text }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: ""
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.footnote)
+                            color: Design.textDim
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: topBar.cpuUsage
+                            font.features: Design.tabular
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.caption)
+                            weight: Design.weight.semibold
+                            color: Design.text
+                        }
                     }
 
                     Row {
                         spacing: Design.s(Design.space.xs)
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍛"; font.family: topBar.fontMain; font.pixelSize: Design.s(Design.font.footnote); color: Design.textDim }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: topBar.memUsage; font.features: Design.tabular; font.family: topBar.fontMain; font.pixelSize: Design.s(Design.font.caption); font.weight: Design.weight.semibold; color: Design.text }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "󰍛"
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.footnote)
+                            color: Design.textDim
+                        }
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: topBar.memUsage
+                            font.features: Design.tabular
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.caption)
+                            weight: Design.weight.semibold
+                            color: Design.text
+                        }
                     }
                 }
 
-                MouseArea {
+                PointerArea {
                     id: statsArea
                     anchors.fill: parent
                     hoverEnabled: true
@@ -1088,13 +1096,11 @@ PanelWindow {
             }
 
             // 2. System Status Island (Layout, Volume, Battery, Bell, Power)
-            Rectangle {
+            Surface {
+                kind: "glass"
                 height: Design.s(Design.size.island)
                 width: systemRow.implicitWidth + Design.s(Design.space.md * 2)
                 radius: Design.s(Design.radius.ctl)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: Design.border
                 Row {
                     id: systemRow
                     anchors.centerIn: parent
@@ -1106,7 +1112,7 @@ PanelWindow {
                     // No ToolTips on them, for the reason at the Control Center
                     // button below: a ToolTip in a bar-high window lands on top
                     // of the bar and takes the clicks meant for its neighbours.
-                    Rectangle {
+                    Box {
                         visible: topBar.micInUse
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
@@ -1120,7 +1126,7 @@ PanelWindow {
                         }
                     }
 
-                    Rectangle {
+                    Box {
                         visible: topBar.cameraInUse
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.micro); height: Design.s(Design.size.micro)
@@ -1139,7 +1145,7 @@ PanelWindow {
                     // service listens always, so only a session shows) — red
                     // then. A click ends it: the VNC server stops, which drops
                     // every viewer, and a RustDesk session is let go.
-                    Rectangle {
+                    Box {
                         visible: Remote.running || Remote.rustdeskSession
                         readonly property bool watched: Remote.viewers > 0
                         readonly property color tone: watched ? Design.danger : Design.accent
@@ -1153,7 +1159,7 @@ PanelWindow {
                             role: "caption"
                             color: parent.tone
                         }
-                        MouseArea {
+                        PointerArea {
                             id: remoteDotHover
                             anchors.fill: parent
                             hoverEnabled: true
@@ -1167,41 +1173,41 @@ PanelWindow {
 
                     // Caps Lock, shown only while it is on — which is the only
                     // time anyone wants to know.
-                    Rectangle {
+                    Box {
                         visible: topBar.capsOn
                         anchors.verticalCenter: parent.verticalCenter
                         width: capsText.implicitWidth + Design.s(Design.space.md)
                         height: Design.s(Design.size.mini)
                         radius: Design.s(Design.radius.sm)
                         color: Design.tint(Design.warn, 0.20)
-                        Text {
+                        Label {
                             id: capsText
                             anchors.centerIn: parent
                             text: I18n.tr("CAPS")
-                            font.family: topBar.fontMain
-                            font.pixelSize: Design.s(Design.font.caption)
-                            font.weight: Design.weight.semibold
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.caption)
+                            weight: Design.weight.semibold
                             color: Design.warn
                         }
                     }
 
                     // Keyboard Layout Pill
-                    Rectangle {
+                    Box {
                         anchors.verticalCenter: parent.verticalCenter
                         width: kbdText.implicitWidth + Design.s(Design.space.md)
                         height: Design.s(Design.size.mini)
                         radius: Design.s(Design.radius.sm)
-                        color: kbdArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
-                        Text {
+                        color: kbdArea.containsMouse ? Design.stateHover : "transparent"
+                        Label {
                             id: kbdText
                             anchors.centerIn: parent
                             text: topBar.kbdLayout
-                            font.family: topBar.fontMain
-                            font.pixelSize: Design.s(Design.font.caption)
-                            font.weight: Design.weight.semibold
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.caption)
+                            weight: Design.weight.semibold
                             color: Design.text
                         }
-                        MouseArea {
+                        PointerArea {
                             id: kbdArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 Sway.command("input type:keyboard xkb_switch_layout next");
@@ -1224,28 +1230,28 @@ PanelWindow {
                             id: netRow
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s(Design.space.xs)
-                            Text {
+                            Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Network.wiredUp ? "\u{f0200}"
                                     : Network.activeWifi ? Network._wifiIcon(Network.activeWifiSignal)
                                     : netPill.wifiOn ? "\u{f092e}" : "\u{f05aa}"
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.body)
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.body)
                                 color: (Network.wiredUp || Network.activeWifi) ? Design.textDim : Design.warn
                             }
-                            Text {
+                            Label {
                                 visible: !Network.wiredUp && Network.activeWifi !== null
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.min(implicitWidth, Design.s(Design.width.segmentSm))
                                 elide: Text.ElideRight
                                 text: Network.activeWifi ? Network.activeWifi.name : ""
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.caption)
-                                font.weight: Design.weight.semibold
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.caption)
+                                weight: Design.weight.semibold
                                 color: Design.text
                             }
                         }
-                        MouseArea {
+                        PointerArea {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
@@ -1262,23 +1268,23 @@ PanelWindow {
                             id: volRow
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s(Design.space.xs)
-                            Text {
+                            Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: (Audio.defaultSink && Audio.defaultSink.audio && Audio.defaultSink.audio.muted) ? "󰖁" : "󰕾"
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.body)
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.body)
                                 color: (Audio.defaultSink && Audio.defaultSink.audio && Audio.defaultSink.audio.muted) ? Design.textFaint : Design.textDim
                             }
-                            Text {
+                            Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: (Audio.defaultSink && Audio.defaultSink.audio) ? Math.round(Audio.defaultSink.audio.volume * 100) + "%" : "65%"
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.caption)
-                                font.weight: Design.weight.semibold
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.caption)
+                                weight: Design.weight.semibold
                                 color: Design.text
                             }
                         }
-                        MouseArea {
+                        PointerArea {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
@@ -1307,23 +1313,23 @@ PanelWindow {
                             id: batRow
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Design.s(Design.space.xs)
-                            Text {
+                            Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Power.charging ? "󰂄" : "󰁹"
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.body)
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.body)
                                 color: Power.charging ? Design.ok : Design.textDim
                             }
-                            Text {
+                            Label {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Power.capacity + "%"
-                                font.family: topBar.fontMain
-                                font.pixelSize: Design.s(Design.font.caption)
-                                font.weight: Design.weight.semibold
+                                family: topBar.fontMain
+                                size: Design.s(Design.font.caption)
+                                weight: Design.weight.semibold
                                 color: Design.text
                             }
                         }
-                        MouseArea {
+                        PointerArea {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
@@ -1334,18 +1340,18 @@ PanelWindow {
                     // Control Center. It had no button: the only way in from
                     // the bar was clicking the volume percentage, which is not
                     // somewhere anyone looks for a panel of switches.
-                    Rectangle {
+                    Box {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.mini); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
-                        color: ccArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
-                        Text {
+                        color: ccArea.containsMouse ? Design.stateHover : "transparent"
+                        Label {
                             anchors.centerIn: parent
                             text: "\u{f062e}"   // sliders — the same glyph as the panel's own header
-                            font.family: topBar.fontMain
-                            font.pixelSize: Design.s(Design.font.body)
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.body)
                             color: ccArea.containsMouse ? Design.text : Design.textDim
                         }
-                        MouseArea {
+                        PointerArea {
                             id: ccArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: topBar.requestCommand("toggle:control:", true)
                         }
@@ -1367,17 +1373,16 @@ PanelWindow {
                     // It also carried no count, while the service has always
                     // published one — so the only sign that anything had
                     // arrived was a toast you had to catch before it faded.
-                    Rectangle {
+                    Box {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.mini); height: Design.s(Design.size.mini); radius: Design.s(Design.radius.sm)
-                        color: bellArea.containsMouse ? Design.tint(Design.accent, 0.20) : "transparent"
-                        Text {
+                        color: bellArea.containsMouse ? Design.stateHover : "transparent"
+                        Icon {
                             anchors.centerIn: parent
                             // A focus mode on: its own glyph (the moon, the bed…).
                             text: Notifications.modeInfo ? Notifications.modeInfo.glyph
                                 : (Notifications.unreadCount > 0 ? "󰂞" : "󰂚")
-                            font.family: Design.font.icon
-                            font.pixelSize: Design.s(Design.font.body)
+                            role: "body"
                             color: Notifications.dnd ? Design.textDim
                                  : (Notifications.unreadCount > 0 ? Design.accent : Design.textDim)
                         }
@@ -1385,7 +1390,7 @@ PanelWindow {
                         // A dot rather than a number: at this size a count of
                         // more than one digit is unreadable, and "something is
                         // waiting" is all the bar needs to say.
-                        Rectangle {
+                        Box {
                             visible: Notifications.unreadCount > 0 && !Notifications.dnd
                             width: Design.s(Design.size.dot); height: Design.s(Design.size.dot)
                             radius: width / 2
@@ -1398,7 +1403,7 @@ PanelWindow {
                             border.color: Design.glassBg
                         }
 
-                        MouseArea {
+                        PointerArea {
                             id: bellArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onClicked: (mouse) => {
@@ -1411,25 +1416,25 @@ PanelWindow {
                     }
 
                     // Power Button (opens Session Menu)
-                    Rectangle {
+                    Box {
                         id: powerBtn
                         anchors.verticalCenter: parent.verticalCenter
                         width: Design.s(Design.size.xs); height: Design.s(Design.size.xs); radius: Design.s(Design.radius.sm)
                         // Opening a menu is not a danger: the glyph in the
                         // bar's own colour. Red is kept for the menu's armed
                         // Reboot and Shut Down, where it means something.
-                        color: powerArea.containsMouse ? Design.glassHover : "transparent"
+                        color: powerArea.containsMouse ? Design.stateHover : "transparent"
 
-                        Text {
+                        Label {
                             anchors.centerIn: parent
                             text: "⏻"
-                            font.family: topBar.fontMain
-                            font.pixelSize: Design.s(Design.font.body)
-                            font.weight: Design.weight.semibold
+                            family: topBar.fontMain
+                            size: Design.s(Design.font.body)
+                            weight: Design.weight.semibold
                             color: powerArea.containsMouse ? Design.text : Design.textDim
                         }
 
-                        MouseArea {
+                        PointerArea {
                             id: powerArea
                             anchors.fill: parent
                             hoverEnabled: true

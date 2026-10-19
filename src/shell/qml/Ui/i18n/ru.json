@@ -2839,5 +2839,15 @@
  "That name collides with a built-in theme.": "Такое название уже у встроенной темы.",
  "Built-in themes cannot be edited — duplicate it first.": "Встроенные темы не редактируются — сначала сделайте копию.",
  "Drop files here or create a folder.": "Перетащите сюда файлы или создайте папку.",
- "Folder is empty": "Папка пуста"
+ "Folder is empty": "Папка пуста",
+ "%1, staged": "%1, в индексе",
+ "Previous week": "Предыдущая неделя",
+ "Previous day": "Предыдущий день",
+ "Next week": "Следующая неделя",
+ "Next day": "Следующий день",
+ "Previous month": "Предыдущий месяц",
+ "Next month": "Следующий месяц",
+ "Remove from list": "Убрать из списка",
+ "not pushed": "не отправлен",
+ "Delete branch": "Удалить ветку"
 }

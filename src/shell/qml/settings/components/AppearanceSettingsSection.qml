@@ -95,7 +95,7 @@ ColumnLayout {
                         { name: "Red",      color: Design.red }
                     ]
 
-                    Rectangle {
+                    Box {
                         id: accentDot
                         required property var modelData
                         width: Design.s(Design.size.md)

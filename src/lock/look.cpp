@@ -22,6 +22,17 @@ struct Ink {
     double r, g, b, a;
 };
 Ink white(double a) { return {1, 1, 1, a}; }
+
+// What sits on the picture: white and glass over a darkened photo, the same
+// strengths as the login screen's (sddm theme, ThemeColors' wall* set), so
+// locking and logging in look alike. Typed out a dozen ways before: text at
+// 0.6 to 0.98, glass at 0.16 to 0.30.
+constexpr double kText = 0.92;       // the clock, the name, a message
+constexpr double kTextDim = 0.65;    // a placeholder, a hint
+constexpr double kGlass = 0.16;      // a field or a button on the picture
+constexpr double kGlassHover = 0.28; // ... under the pointer, open, typed into
+constexpr double kRim = 0.28;        // the lit edge of a pane of glass
+constexpr double kScrim = 0.16;      // black over the whole picture
 Ink tint(const Colour& c, double a) { return {c.r, c.g, c.b, a}; }
 void use(cairo_t* cr, const Ink& i) { cairo_set_source_rgba(cr, i.r, i.g, i.b, i.a); }
 
@@ -112,7 +123,7 @@ Rect pill(cairo_t* cr, double x, double y, double h, double u, const std::string
     const Rect r{x, y, pill_width(cr, u, icon, text), h};
     cairo_new_path(cr);
     rounded(cr, r.x, r.y, r.w, r.h, h / 2);
-    glass(cr, u, fill, 0.28);
+    glass(cr, u, fill, kRim);
     font(cr, 16 * u, false, true);
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
@@ -122,7 +133,7 @@ Rect pill(cairo_t* cr, double x, double y, double h, double u, const std::string
     cairo_show_text(cr, icon.c_str());
     font(cr, 14 * u, false);
     cairo_font_extents(cr, &fe);
-    use(cr, white(0.95));
+    use(cr, white(kText));
     cairo_move_to(cr, x + 14 * u + iw + (icon.empty() ? 0 : 7 * u), y + (h + fe.ascent - fe.descent) / 2);
     cairo_show_text(cr, text.c_str());
     cairo_new_path(cr);
@@ -159,7 +170,7 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
         cairo_paint(cr);
         cairo_restore(cr);
     }
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.16);
+    cairo_set_source_rgba(cr, 0, 0, 0, kScrim);
     cairo_paint(cr);
     shade(cr, 0, 0.26, H * 0.45, 0);
     shade(cr, H * 0.55, 0, H, 0.22);
@@ -168,8 +179,8 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
     const double cx = W / 2, cy = H / 2;
 
     // The time and, under it, the date.
-    centred(cr, v.clock, cx, 206 * u, 128 * u, true, u, white(0.98));
-    centred(cr, v.date, cx, 250 * u, 22 * u, false, u, white(0.9));
+    centred(cr, v.clock, cx, 206 * u, 128 * u, true, u, white(kText));
+    centred(cr, v.date, cx, 250 * u, 22 * u, false, u, white(kText));
 
     // The account: the picture in a fine white ring, or the initial on glass.
     const double ar = 42 * u, ay = cy + 96 * u;
@@ -183,7 +194,7 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
         cairo_pattern_destroy(halo);
     }
     cairo_arc(cr, cx, ay, ar + 2 * u, 0, 2 * M_PI);
-    use(cr, white(0.6));
+    use(cr, white(kTextDim));
     cairo_fill(cr);
     cairo_save(cr);
     cairo_arc(cr, cx, ay, ar, 0, 2 * M_PI);
@@ -198,7 +209,7 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
     } else {
         use(cr, tint(p.ground, 0.55));
         cairo_paint(cr);
-        use(cr, white(0.16));
+        use(cr, white(kGlass));
         cairo_paint(cr);
         std::string initial;
         if (!v.name.empty()) {   // the first code point, upper-cased if ASCII
@@ -208,11 +219,11 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
             if (n == 1) initial[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(initial[0])));
         }
         font(cr, 36 * u, true);
-        use(cr, white(0.95));
+        use(cr, white(kText));
         boxed(cr, initial, {cx - ar, ay - ar, 2 * ar, 2 * ar});
     }
     cairo_restore(cr);
-    centred(cr, v.name, cx, ay + ar + 34 * u, 20 * u, true, u, white(0.98));
+    centred(cr, v.name, cx, ay + ar + 34 * u, 20 * u, true, u, white(kText));
 
     // The field, a glass pill: the placeholder, then a dot a character; the
     // eye at its left end once something is typed, the layout at its right.
@@ -221,18 +232,18 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
     cairo_new_path(cr);
     rounded(cr, fx, fy, fw, fh, fh / 2);
     if (denied) glass(cr, u, 0.30, 0.85, &p.error);
-    else if (v.status == Status::Checking) glass(cr, u, 0.16, 0.7);
-    else if (v.password.empty()) glass(cr, u, 0.16, 0.28);
-    else glass(cr, u, 0.20, 0.42);
+    else if (v.status == Status::Checking) glass(cr, u, kGlass, 0.7);
+    else if (v.password.empty()) glass(cr, u, kGlass, kRim);
+    else glass(cr, u, kGlassHover, 0.42);
 
     double layout_w = 0;
     if (!v.layout.empty()) {
         const Rect lr{fx + fw - 50 * u, fy + 9 * u, 40 * u, fh - 18 * u};
         rounded(cr, lr.x, lr.y, lr.w, lr.h, lr.h / 2);
-        use(cr, white(0.16));
+        use(cr, white(kGlass));
         cairo_fill(cr);
         font(cr, 12 * u, true);
-        use(cr, white(0.9));
+        use(cr, white(kText));
         boxed(cr, v.layout, lr);
         layout_w = 46 * u;
     }
@@ -246,18 +257,18 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
         eye_w = fh - 6 * u;
         if (over(hits.eye)) {
             cairo_arc(cr, hits.eye.x + hits.eye.w / 2, hits.eye.y + hits.eye.h / 2, hits.eye.w / 2, 0, 2 * M_PI);
-            use(cr, white(0.16));
+            use(cr, white(kGlass));
             cairo_fill(cr);
         }
         font(cr, 18 * u, false, true);
-        use(cr, white(v.reveal ? 0.95 : 0.7));
+        use(cr, white(v.reveal ? kText : kTextDim));
         boxed(cr, v.reveal ? "\U000F0209" : "\U000F0208", hits.eye);   // eye-off / eye
     }
 
     const double inner_l = fx + 20 * u + eye_w, inner_r = fx + fw - 20 * u - layout_w;
     if (v.password.empty()) {
         font(cr, 15 * u, false);
-        use(cr, white(0.62));
+        use(cr, white(kTextDim));
         boxed(cr, v.placeholder, {fx, fy, fw, fh});
     } else if (v.reveal) {
         // As text, its end in view when it is wider than the field.
@@ -269,7 +280,7 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
         cairo_font_extents(cr, &fe);
         const double tw = text_width(cr, v.password);
         const double tx = tw <= inner_r - inner_l ? (inner_l + inner_r - tw) / 2 : inner_r - tw;
-        use(cr, white(0.95));
+        use(cr, white(kText));
         cairo_move_to(cr, tx, fy + (fh + fe.ascent - fe.descent) / 2);
         cairo_show_text(cr, v.password.c_str());
         cairo_new_path(cr);
@@ -283,7 +294,7 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
         const size_t fit = static_cast<size_t>(std::max(1.0, (inner_r - inner_l) / gap));
         const size_t shown = std::min(chars, fit);
         double x = (inner_l + inner_r) / 2 - (static_cast<double>(shown) - 1) * gap / 2;
-        use(cr, white(0.95));
+        use(cr, white(kText));
         for (size_t i = 0; i < shown; ++i, x += gap) {
             cairo_arc(cr, x, fy + fh / 2, r, 0, 2 * M_PI);
             cairo_fill(cr);
@@ -293,23 +304,23 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
     // Under it: what is happening, Caps Lock, the reader.
     double below = fy + fh + 30 * u;
     if (!v.message.empty()) {
-        centred(cr, v.message, cx, below, 15 * u, false, u, white(0.92));
+        centred(cr, v.message, cx, below, 15 * u, false, u, white(kText));
         below += 26 * u;
     }
     if (!v.caps.empty()) {
-        centred_line(cr, "󰪛", tint(p.warn, 0.95), v.caps, white(0.85), cx, below, 14 * u, u);
+        centred_line(cr, "󰪛", tint(p.warn, 0.95), v.caps, white(kText), cx, below, 14 * u, u);
         below += 24 * u;
     }
     if (!v.finger.empty())
-        centred_line(cr, "󰈷", v.finger_miss ? tint(p.error, 0.95) : white(0.85), v.finger, white(0.85), cx, below,
+        centred_line(cr, "󰈷", v.finger_miss ? tint(p.error, 0.95) : white(kText), v.finger, white(kText), cx, below,
                      14 * u, u);
 
     // The corners: weather at the top left, the battery at the top right.
     const double ph = 34 * u, m = 24 * u;
-    if (!v.weather_temp.empty()) pill(cr, m, m, ph, u, v.weather_icon, v.weather_temp, white(0.95), 0.16);
+    if (!v.weather_temp.empty()) pill(cr, m, m, ph, u, v.weather_icon, v.weather_temp, white(kText), kGlass);
     if (!v.battery.empty()) {
         const double bw = pill_width(cr, u, v.battery_icon, v.battery);
-        pill(cr, W - m - bw, m, ph, u, v.battery_icon, v.battery, v.battery_low ? tint(p.error, 1) : white(0.95), 0.16);
+        pill(cr, W - m - bw, m, ph, u, v.battery_icon, v.battery, v.battery_low ? tint(p.error, 1) : white(kText), kGlass);
     }
 
     // The power menu, bottom right: a glass button, and when it is open, the
@@ -318,19 +329,19 @@ void paint(cairo_t* cr, const View& v, Hits& hits) {
     hits.power = {W - m - bs, H - m - bs, bs, bs};
     cairo_new_path(cr);
     cairo_arc(cr, hits.power.x + bs / 2, hits.power.y + bs / 2, bs / 2, 0, 2 * M_PI);
-    glass(cr, u, v.menu_open || over(hits.power) ? 0.30 : 0.16, 0.28);
+    glass(cr, u, v.menu_open || over(hits.power) ? kGlassHover : kGlass, kRim);
     font(cr, 20 * u, false, true);
-    use(cr, white(0.95));
+    use(cr, white(kText));
     boxed(cr, "󰐥", hits.power);
     for (auto& it : hits.items) it = {};
     if (v.menu_open) {
         const char* icons[3] = {"󰜉", "󰒲", "󰐥"};
-        const Ink inks[3] = {white(0.95), white(0.95), tint(p.error, 1)};
+        const Ink inks[3] = {white(kText), white(kText), tint(p.error, 1)};
         double right = hits.power.x - 10 * u;
         for (int i = 2; i >= 0; --i) {
             const double w = pill_width(cr, u, icons[i], v.items[i]);
             const Rect r{right - w, hits.power.y + 4 * u, w, bs - 8 * u};
-            hits.items[i] = pill(cr, r.x, r.y, r.h, u, icons[i], v.items[i], inks[i], over(r) ? 0.30 : 0.16);
+            hits.items[i] = pill(cr, r.x, r.y, r.h, u, icons[i], v.items[i], inks[i], over(r) ? kGlassHover : kGlass);
             right -= w + 8 * u;
         }
     }

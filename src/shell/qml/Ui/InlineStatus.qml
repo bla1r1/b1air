@@ -29,8 +29,8 @@ RowLayout {
     // Spinner for loading status
     Item {
         visible: root.status === "loading"
-        width: Design.s(Design.size.micro)
-        height: Design.s(Design.size.micro)
+        implicitWidth: Design.s(Design.size.micro)
+        implicitHeight: Design.s(Design.size.micro)
         Layout.alignment: Qt.AlignVCenter
 
         Text {
@@ -44,7 +44,7 @@ RowLayout {
             RotationAnimation on rotation {
                 from: 0
                 to: 360
-                duration: 1000
+                duration: Design.duration.spin
                 loops: Animation.Infinite
                 running: root.status === "loading" && root.visible
             }

@@ -300,7 +300,8 @@ PopupShell {
     onVisibleChanged: if (visible) Qt.callLater(() => searchInput.forceActiveFocus())
 
     // ═════════════════════════════════════════════════════════════════════════
-    Rectangle {
+    Surface {
+        kind: "glass"
         id: card
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
@@ -311,14 +312,11 @@ PopupShell {
             ? Math.min(parent.height, Design.s(Design.size.tile) + Math.max(Design.s(Design.width.text), list.contentHeight + Design.s(Design.space.sm) * 2))
             : Design.s(Design.size.tile)
         radius: Design.s(Design.radius.panel)
-        color: Design.glassBg
-        border.color: Design.glassBorder
-        border.width: 1
         clip: true
         Behavior on height { NumberAnimation { duration: Design.duration.fast + 50; easing.type: Easing.OutCubic } }
 
         // The lit top edge of the glass.
-        Rectangle {
+        Box {
             visible: Design.translucent
             anchors.top: parent.top; anchors.topMargin: 1
             anchors.left: parent.left; anchors.right: parent.right
@@ -341,7 +339,7 @@ PopupShell {
 
                 Icon { text: "\u{f002}"; role: "subhead"; color: Design.textDim }
 
-                TextInput {
+                TextLine {
                     id: searchInput
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
@@ -369,7 +367,7 @@ PopupShell {
                         }
                     }
 
-                    Text {
+                    Label {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Spotlight Search")
                         color: Design.textFaint
@@ -379,7 +377,12 @@ PopupShell {
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.glassBorder; visible: window.hasQuery }
+            Box {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Design.glassBorder
+                visible: window.hasQuery
+            }
 
             AppState {
                 Layout.fillWidth: true
@@ -426,7 +429,7 @@ PopupShell {
                         color: Design.textFaint
                     }
 
-                    delegate: Rectangle {
+                    delegate: Box {
                         id: row
                         required property var modelData
                         required property int index
@@ -434,7 +437,7 @@ PopupShell {
                         width: list.width
                         height: Design.s(Design.size.knob)
                         radius: Design.s(Design.radius.ctl)
-                        color: row.on ? Design.accent : (rowMa.containsMouse ? Design.glassHover : "transparent")
+                        color: row.on ? Design.accent : (rowMa.containsMouse ? Design.stateHover : "transparent")
 
                         RowLayout {
                             anchors.fill: parent
@@ -444,7 +447,7 @@ PopupShell {
                             Item {
                                 Layout.preferredWidth: Design.s(Design.size.mini)
                                 Layout.preferredHeight: Design.s(Design.size.mini)
-                                IconImage {
+                                AppIcon {
                                     anchors.fill: parent
                                     visible: !!row.modelData.image
                                     source: row.modelData.image || ""
@@ -476,7 +479,7 @@ PopupShell {
                                 elide: Text.ElideMiddle
                             }
                         }
-                        MouseArea {
+                        PointerArea {
                             id: rowMa
                             anchors.fill: parent
                             hoverEnabled: true
@@ -486,7 +489,11 @@ PopupShell {
                     }
                 }
 
-                Rectangle { Layout.fillHeight: true; Layout.preferredWidth: 1; color: Design.glassBorder }
+                Box {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 1
+                    color: Design.glassBorder
+                }
 
                 // The preview of what is selected.
                 Item {
@@ -506,7 +513,7 @@ PopupShell {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: preview.picture ? parent.width : Design.s(Design.size.avatar)
                             Layout.preferredHeight: preview.picture ? Design.s(Design.width.label) : Design.s(Design.size.avatar)
-                            Image {
+                            Picture {
                                 anchors.fill: parent
                                 visible: preview.picture
                                 // The picture itself; a video by a frame of it.
@@ -517,22 +524,21 @@ PopupShell {
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                             }
-                            IconImage {
+                            AppIcon {
                                 anchors.fill: parent
                                 visible: !preview.picture && !!preview.it && !!preview.it.image
                                 source: preview.it ? (preview.it.image || "") : ""
                                 mipmap: true
                             }
-                            Rectangle {
+                            Box {
                                 anchors.fill: parent
                                 visible: !preview.picture && !!preview.it && !preview.it.image
                                 radius: Design.s(Design.radius.panel)
-                                color: Design.tint(Design.accent, 0.16)
-                                Text {
+                                color: Design.stateSelectedSoft
+                                Icon {
                                     anchors.centerIn: parent
                                     text: preview.it ? (preview.it.glyph || "") : ""
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(Design.font.hero)
+                                    role: "hero"
                                     color: Design.accent
                                 }
                             }

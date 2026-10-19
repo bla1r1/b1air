@@ -224,11 +224,11 @@ ColumnLayout {
             : I18n.tr("Select a screen to change its settings.")
         icon: "\u{f0379}"
 
-        Rectangle {
+        Surface {
+            kind: "well"
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.canvas)
             radius: Design.s(Design.radius.card)
-            color: Design.well
             border.color: Design.tint(Design.line, 0.5)
             border.width: Design.border
             clip: true
@@ -240,7 +240,12 @@ ColumnLayout {
                 spacing: Design.s(Design.space.lg)
                 Repeater {
                     model: 1000
-                    Rectangle { width: Design.s(Design.space.xxs); height: Design.s(Design.space.xxs); radius: Design.s(Design.border); color: Design.tint(Design.text, 0.08) }
+                    Box {
+                        width: Design.s(Design.space.xxs)
+                        height: Design.s(Design.space.xxs)
+                        radius: Design.s(Design.border)
+                        color: Design.tint(Design.text, 0.08)
+                    }
                 }
             }
 
@@ -330,7 +335,7 @@ ColumnLayout {
                             readonly property bool dragging: dragArea.drag.active
                             property var spot: null
 
-                            Rectangle {
+                            Box {
                                 id: monitorCard
                                 x: monitorNode.dragging ? ghostDrag.x : monitorNode.uiX
                                 y: monitorNode.dragging ? ghostDrag.y : monitorNode.uiY
@@ -367,36 +372,36 @@ ColumnLayout {
                                         anchors.centerIn: parent
                                         spacing: 1
 
-                                        Text {
+                                        Label {
                                             Layout.alignment: Qt.AlignHCenter
-                                            font.family: Design.font.mono
-                                            font.weight: Font.Bold
-                                            font.pixelSize: Design.font.display
+                                            isMono: true
+                                            weight: Font.Bold
+                                            size: Design.font.display
                                             color: monitorNode.isActive ? section.selectedResAccent : Design.textDim
                                             text: monitorNode.index + 1
                                             Behavior on color { ColorAnimation { duration: Design.duration.base } }
                                         }
-                                        Text {
+                                        Label {
                                             Layout.alignment: Qt.AlignHCenter
-                                            font.family: Design.font.mono
-                                            font.weight: Font.DemiBold
-                                            font.pixelSize: Design.font.footnote
+                                            isMono: true
+                                            weight: Font.DemiBold
+                                            size: Design.font.footnote
                                             color: Design.text
                                             text: monitorNode.name
                                         }
-                                        Text {
+                                        Label {
                                             Layout.alignment: Qt.AlignHCenter
-                                            font.family: Design.font.mono
-                                            font.pixelSize: Design.font.caption
+                                            isMono: true
+                                            size: Design.font.caption
                                             color: Design.textDim
                                             text: monitorNode.resW + "×" + monitorNode.resH
                                                 + " @ " + monitorNode.rate + "Hz"
                                         }
-                                        Text {
+                                        Label {
                                             Layout.alignment: Qt.AlignHCenter
                                             visible: monitorsModel.count > 1 && Screens.primaryName === monitorNode.name
-                                            font.pixelSize: Design.font.caption
-                                            font.weight: Font.DemiBold
+                                            size: Design.font.caption
+                                            weight: Font.DemiBold
                                             color: section.selectedResAccent
                                             text: I18n.tr("★ Main")
                                         }
@@ -405,7 +410,7 @@ ColumnLayout {
                             }
 
                             // Where it lands on release.
-                            Rectangle {
+                            Box {
                                 visible: monitorNode.dragging && monitorNode.spot !== null
                                 x: monitorNode.spot ? monitorNode.spot.x : 0
                                 y: monitorNode.spot ? monitorNode.spot.y : 0
@@ -428,7 +433,7 @@ ColumnLayout {
                                 height: monitorCard.height
                                 z: monitorNode.isActive ? 10 : 1
 
-                                MouseArea {
+                                PointerArea {
                                     id: dragArea
                                     anchors.fill: parent
                                     hoverEnabled: true
@@ -695,7 +700,7 @@ ColumnLayout {
                     { resW: 800,  resH: 600,  label: I18n.tr("SVGA") }
                 ]
 
-                Rectangle {
+                Box {
                     id: resCard
                     required property var modelData
 
@@ -710,7 +715,7 @@ ColumnLayout {
 
                     // Selected the way a Pill is: an accent tint, no outline.
                     color: resCard.isSel ? Design.tint(resCard.accentColor, 0.24)
-                                         : (resMa.containsMouse ? Design.glassHover : Design.glassCard)
+                                         : (resMa.containsMouse ? Design.stateHover : Design.glassCard)
 
                     Behavior on color { ColorAnimation { duration: Design.duration.base } }
 
@@ -781,7 +786,8 @@ ColumnLayout {
             property real visualPct: currentIndex / (rates.length - 1)
             onCurrentIndexChanged: if (!sliderMa.pressed) visualPct = currentIndex / (rates.length - 1)
 
-            Rectangle {
+            Surface {
+                kind: "well"
                 id: track
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -789,11 +795,10 @@ ColumnLayout {
                 anchors.topMargin: Design.s(Design.space.sm)
                 height: Design.s(Design.space.md)
                 radius: Design.s(Design.space.xs)
-                color: Design.well
                 border.color: Design.ground
                 border.width: Design.border
 
-                Rectangle {
+                Box {
                     width: Math.max(knob.width, knob.x + knob.width / 2)
                     height: parent.height
                     radius: parent.radius
@@ -822,7 +827,7 @@ ColumnLayout {
                 }
             }
 
-            Rectangle {
+            Box {
                 id: knob
                 width: Design.s(Design.size.xs)
                 height: Design.s(Design.size.xs)

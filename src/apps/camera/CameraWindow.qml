@@ -150,13 +150,14 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+O"; onActivated: Qt.openUrlExternally("file://" + window.shotsDir) }
     Shortcut { sequence: "Escape"; onActivated: window.close() }
 
-    Rectangle {
+    Surface {
+        kind: "glass"
+        border.width: 0
         id: windowFrame
         anchors.fill: parent
         // No corners or outline of our own: sway draws both (see the app
         // windows' frames elsewhere in this suite).
         radius: 0
-        color: Design.glassBg
 
         ColumnLayout {
             anchors.fill: parent
@@ -220,7 +221,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                VideoOutput {
+                VideoView {
                     id: preview
                     anchors.fill: parent
                     fillMode: VideoOutput.PreserveAspectFit
@@ -249,7 +250,7 @@ ApplicationWindow {
                     visible: window.showGrid
                     Repeater {
                         model: 2
-                        Rectangle {
+                        Box {
                             width: 1
                             height: parent.height
                             x: parent.width * (index + 1) / 3
@@ -258,7 +259,7 @@ ApplicationWindow {
                     }
                     Repeater {
                         model: 2
-                        Rectangle {
+                        Box {
                             height: 1
                             width: parent.width
                             y: parent.height * (index + 1) / 3
@@ -268,7 +269,7 @@ ApplicationWindow {
                 }
 
                 // Recording badge.
-                Rectangle {
+                Box {
                     visible: window.recording
                     anchors.top: parent.top
                     anchors.right: parent.right
@@ -282,8 +283,8 @@ ApplicationWindow {
                         id: recRow
                         anchors.centerIn: parent
                         spacing: Design.s(Design.space.xs)
-                        Rectangle {
-                            width: Design.s(Design.space.sm); height: Design.s(Design.space.sm); radius: width / 2
+                        Box {
+                            implicitWidth: Design.s(Design.space.sm); implicitHeight: Design.s(Design.space.sm); radius: width / 2
                             color: Design.accentText
                             SequentialAnimation on opacity {
                                 running: window.recording
@@ -308,7 +309,7 @@ ApplicationWindow {
             }
 
             // ── Controls ─────────────────────────────────────────────────────
-            Rectangle {
+            Box {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.media)
                 color: "transparent"
@@ -320,16 +321,15 @@ ApplicationWindow {
                     spacing: Design.s(Design.space.md)
 
                     // The last shot, and the way back to it.
-                    Rectangle {
+                    Surface {
+                        kind: "well"
                         Layout.preferredWidth: Design.s(Design.size.rowTall)
                         Layout.preferredHeight: Design.s(Design.size.rowTall)
-                        radius: Design.s(Design.radius.ctl)
-                        color: Design.well
                         border.color: Design.line
                         border.width: Design.border
                         clip: true
 
-                        Image {
+                        Picture {
                             anchors.fill: parent
                             source: window.lastShot !== "" && window.lastShot.endsWith(".jpg") ? "file://" + window.lastShot : ""
                             fillMode: Image.PreserveAspectCrop
@@ -354,7 +354,7 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     // Shutter.
-                    Rectangle {
+                    Box {
                         visible: window.captureMode === "photo"
                         Layout.preferredWidth: Design.s(Design.size.tile)
                         Layout.preferredHeight: Design.s(Design.size.tile)
@@ -366,7 +366,7 @@ ApplicationWindow {
                         opacity: window.hasCamera ? 1.0 : Design.opacity.disabled
                         Behavior on scale { NumberAnimation { duration: Design.duration.fast } }
 
-                        Rectangle {
+                        Box {
                             anchors.centerIn: parent
                             width: parent.width - Design.s(Design.space.md)
                             height: width
@@ -384,7 +384,7 @@ ApplicationWindow {
                     }
 
                     // Record: the shutter in video mode, as large.
-                    Rectangle {
+                    Box {
                         visible: window.captureMode === "video"
                         Layout.preferredWidth: Design.s(Design.size.tile)
                         Layout.preferredHeight: Design.s(Design.size.tile)
@@ -394,7 +394,7 @@ ApplicationWindow {
                         border.color: window.recording ? Design.danger : Design.line
                         border.width: Design.border
 
-                        Rectangle {
+                        Box {
                             anchors.centerIn: parent
                             width: window.recording ? Design.s(Design.size.micro) : Design.s(Design.space.lg)
                             height: width

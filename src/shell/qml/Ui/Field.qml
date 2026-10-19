@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 
 // =============================================================================
 // Single-line text field.
@@ -52,7 +53,8 @@ Rectangle {
     implicitHeight: Design.s(Design.size.md)
     implicitWidth: Design.s(Design.width.field)
 
-    radius: Design.s(Design.radius.ctl)
+    // Its container's corner rule (Shape, Design.corner), else its own.
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
     // On glass a field is a lighter pane of it, not a black well cut in.
     color: Design.well
     border.width: Design.border
@@ -106,7 +108,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         width: Design.s(Design.size.sm); height: width
         radius: Design.s(Design.radius.ctl)
-        color: eyeArea.containsMouse ? Design.tint(Design.text, 0.08) : "transparent"
+        color: eyeArea.containsMouse ? Design.stateHover : "transparent"
         Icon {
             anchors.centerIn: parent
             // eye / eye-off

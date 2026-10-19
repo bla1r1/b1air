@@ -32,7 +32,7 @@ Item {
         font.family: ThemeColors.sans
         font.pixelSize: 12 * button.u
         style: Text.Raised
-        styleColor: "#40000000"
+        styleColor: ThemeColors.wallShadow
     }
     MouseArea {
         id: mouse

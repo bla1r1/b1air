@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 
 // =============================================================================
@@ -23,14 +24,14 @@ Control {
 
     Layout.fillWidth: true
     implicitHeight: Design.s(Design.size.md)
-    radius: Design.s(Design.radius.sm)
+    radius: Design.corner(Shape.radius, Design.s(Design.radius.sm))
     accessibleName: root.text
 
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: root.pressed ? Design.tint(Design.accent, 0.30)
-             : (root.hovered || root.activeFocus) ? Design.selection : "transparent"
+        color: root.pressed ? Design.stateSelectedStrong
+             : (root.hovered || root.activeFocus) ? Design.stateSelected : "transparent"
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }
     }
 

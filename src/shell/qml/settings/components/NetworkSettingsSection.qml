@@ -132,12 +132,12 @@ ColumnLayout {
         }
 
         // ── Ethernet Advanced IP Configuration Panel ──
-        Rectangle {
+        Surface {
+            kind: "well"
             visible: section.showEthConfig
             Layout.fillWidth: true
             Layout.preferredHeight: ethConfigCol.implicitHeight + Design.s(Design.space.lg)
             radius: Design.s(Design.radius.card)
-            color: Design.well
             border.color: Design.line
             border.width: 1
 

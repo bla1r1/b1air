@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 import QtQuick.Controls as QQC
 
@@ -21,6 +22,8 @@ QQC.Popup {
 
     parent: anchorItem || undefined
     padding: Design.s(Design.space.sm)
+    Shape.radius: root.cornerRadius
+    Shape.inset: padding
     margins: Design.s(Design.space.sm)
 
     closePolicy: QQC.Popup.CloseOnEscape | QQC.Popup.CloseOnPressOutsideParent

@@ -276,11 +276,10 @@ PopupShell {
         spacing: Design.s(Design.space.md)
 
         // ── Search ───────────────────────────────────────────────────────────
-        Rectangle {
+        Surface {
+            kind: "well"
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.row)
-            radius: Design.s(Design.radius.ctl)
-            color: Design.well
             border.color: launchSearchInput.activeFocus ? Design.accent : Design.glassBorder
             border.width: Design.border
 
@@ -299,7 +298,7 @@ PopupShell {
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }
                 }
 
-                TextInput {
+                TextLine {
                     id: launchSearchInput
                     Layout.fillWidth: true
                     verticalAlignment: TextInput.AlignVCenter
@@ -339,7 +338,7 @@ PopupShell {
                     Keys.onReturnPressed: event => { event.accepted = true; if (window.selectedApp) window.launchApp(window.selectedApp); }
                     Keys.onEnterPressed: event => { event.accepted = true; if (window.selectedApp) window.launchApp(window.selectedApp); }
 
-                    Text {
+                    Label {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Search applications")
                         color: Design.textDim
@@ -384,7 +383,7 @@ PopupShell {
             }
         }
 
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Design.tint(Design.line, 0.4)
@@ -436,7 +435,7 @@ PopupShell {
                     readonly property bool selected: window.selectedIndex === index
                     readonly property bool lit: itemHover.containsMouse || gridCell.selected
 
-                    Rectangle {
+                    Box {
                         id: cardBox
                         anchors.centerIn: parent
                         width: parent.width - Design.s(Design.space.sm)
@@ -461,7 +460,7 @@ PopupShell {
                                 implicitWidth: Design.s(Design.size.row)
                                 implicitHeight: Design.s(Design.size.row)
 
-                                IconImage {
+                                AppIcon {
                                     anchors.fill: parent
                                     source: window.iconSource(modelData.icon)
                                     mipmap: true
@@ -473,7 +472,7 @@ PopupShell {
                                 // used to float in the gap between two rows and
                                 // read as a stray artifact rather than as
                                 // belonging to anything.
-                                Rectangle {
+                                Box {
                                     anchors.right: parent.right
                                     anchors.bottom: parent.bottom
                                     anchors.margins: -Design.s(Design.space.xxs)
@@ -508,7 +507,7 @@ PopupShell {
 
                         // The pin toggle, shown only under the pointer — the
                         // pinned *state* is the badge on the icon above.
-                        Rectangle {
+                        Box {
                             anchors.top: parent.top
                             anchors.right: parent.right
                             anchors.margins: Design.s(Design.space.xs)
@@ -516,7 +515,7 @@ PopupShell {
                             height: Design.s(Design.size.mini)
                             radius: Design.s(Design.radius.sm)
                             visible: itemHover.containsMouse
-                            color: pinArea.containsMouse ? Design.tint(Design.accent, 0.30) : Design.tint(Design.text, 0.10)
+                            color: pinArea.containsMouse ? Design.stateSelectedStrong : Design.statePressed
                             z: 10
 
                             Icon {
@@ -539,7 +538,7 @@ PopupShell {
                             }
                         }
 
-                        MouseArea {
+                        PointerArea {
                             id: itemHover
                             anchors.fill: parent
                             hoverEnabled: true

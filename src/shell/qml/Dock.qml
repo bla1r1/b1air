@@ -170,7 +170,8 @@ Scope {
                 }
             }
 
-            Rectangle {
+            Surface {
+                kind: "glass"
                 id: plate
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: dock.shown ? parent.height - height - Design.s(Design.space.sm) : parent.height + Design.s(Design.space.xs)
@@ -178,11 +179,8 @@ Scope {
                 width: row.width + Design.s(Design.space.lg)
                 height: dock.bar
                 radius: Design.s(Design.radius.panel)
-                color: Design.glassBg
-                border.color: Design.glassBorder
-                border.width: 1
                 // The lit top edge of the glass.
-                Rectangle {
+                Box {
                     visible: Design.translucent
                     anchors.top: parent.top; anchors.topMargin: 1
                     anchors.left: parent.left; anchors.right: parent.right
@@ -229,7 +227,7 @@ Scope {
                             height: width
                             Behavior on width { enabled: !hover.hovered; NumberAnimation { duration: Design.duration.fast } }
 
-                            IconImage {
+                            AppIcon {
                                 anchors.fill: parent
                                 source: root.iconFor(cell.modelData)
                                 mipmap: true
@@ -251,7 +249,7 @@ Scope {
                                 }
                             }
                             // Running.
-                            Rectangle {
+                            Box {
                                 visible: cell.modelData.wins.length > 0
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.top: parent.bottom
@@ -261,7 +259,8 @@ Scope {
                                 opacity: 0.8
                             }
                             // Its name above it while pointed at.
-                            Rectangle {
+                            Surface {
+                                kind: "glass"
                                 visible: tipArea.containsMouse
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.bottom: parent.top
@@ -269,12 +268,9 @@ Scope {
                                 width: tipText.implicitWidth + Design.s(Design.space.lg)
                                 height: tipText.implicitHeight + Design.s(Design.space.sm)
                                 radius: height / 2
-                                color: Design.glassBg
-                                border.color: Design.glassBorder
-                                border.width: 1
                                 Label { id: tipText; anchors.centerIn: parent; text: cell.modelData.name; role: "caption" }
                             }
-                            MouseArea {
+                            PointerArea {
                                 id: tipArea
                                 anchors.fill: parent
                                 hoverEnabled: true

@@ -109,13 +109,13 @@ MiniView {
                 visible: root.connectedNet !== null
             }
 
-            Rectangle {
+            Box {
                 visible: root.connectedNet !== null
                 Layout.fillWidth: true
                 Layout.preferredHeight: Design.s(Design.size.row)
                 radius: Design.s(Design.radius.ctl)
-                color: connMa.containsMouse ? Design.tint(Design.accent, 0.22) : Design.tint(Design.accent, 0.15)
-                border.color: Design.tint(Design.accent, 0.35)
+                color: connMa.containsMouse ? Design.stateSelected : Design.stateSelectedSoft
+                border.color: Design.accentLine
                 border.width: Design.border
 
                 Behavior on color { ColorAnimation { duration: Design.duration.fast } }
@@ -179,21 +179,17 @@ MiniView {
             }
         }
 
-        delegate: Rectangle {
+        delegate: ListRow {
+            handlesMouse: false
+            hovered: rowMa.containsMouse
             id: rowItem
             required property var modelData
 
-            width: netList.width
-            height: Design.s(Design.size.row)
-            radius: Design.s(Design.radius.ctl)
-            color: rowMa.containsMouse ? Design.glassHover : "transparent"
+            implicitHeight: Design.s(Design.size.row)
 
-            Behavior on color { ColorAnimation { duration: Design.duration.fast } }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Design.s(Design.space.sm)
-                anchors.rightMargin: Design.s(Design.space.sm)
                 spacing: Design.s(Design.space.sm)
 
                 Icon {
@@ -226,7 +222,7 @@ MiniView {
                 }
             }
 
-            Clickable {
+            overlay: Clickable {
                 id: rowMa
                 onClicked: {
                     const n = rowItem.modelData;
@@ -242,14 +238,14 @@ MiniView {
     }
 
     // ── Password sheet ───────────────────────────────────────────────────────
-    Rectangle {
+    Box {
         anchors.fill: parent
         visible: root.askingFor !== ""
         color: Design.tint(Design.surface, 0.96)
         radius: Design.s(Design.radius.card)
 
         // Swallows clicks so the list underneath cannot be used while asking.
-        MouseArea { anchors.fill: parent }
+        PointerArea { anchors.fill: parent }
 
         ColumnLayout {
             anchors.left: parent.left

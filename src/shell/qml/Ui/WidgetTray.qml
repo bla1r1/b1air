@@ -22,8 +22,8 @@ Rectangle {
     visible: tray.active
     implicitHeight: col.implicitHeight + Design.s(Design.space.sm) * 2
     radius: Design.s(Design.radius.card)
-    color: Design.tint(Design.accent, 0.08)
-    border.color: Design.tint(Design.accent, 0.45)
+    color: Design.stateSelectedSoft
+    border.color: Design.accentLine
     border.width: 1
 
     ColumnLayout {
@@ -54,8 +54,8 @@ Rectangle {
                     height: Design.s(Design.size.xs)
                     width: chipRow.implicitWidth + Design.s(Design.space.lg)
                     radius: height / 2
-                    color: chipMa.containsMouse ? Design.tint(Design.accent, 0.30) : Design.well
-                    border.color: Design.tint(Design.accent, 0.5)
+                    color: chipMa.containsMouse ? Design.stateSelectedStrong : Design.well
+                    border.color: Design.accentLine
                     border.width: 1
 
                     Row {

@@ -16,6 +16,9 @@ Item {
     id: root
 
     property bool checked: false
+    // Some of it and not the rest (a file with some lines staged): a dash
+    // in the box, as a Mac's mixed state.
+    property bool mixed: false
     property string text: ""
     signal toggled()
 
@@ -26,6 +29,9 @@ Item {
     activeFocusOnTab: true
     Keys.onSpacePressed: root.toggled()
     Keys.onReturnPressed: root.toggled()
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: root.text
+    Accessible.checked: root.checked
 
     RowLayout {
         id: row
@@ -44,13 +50,14 @@ Item {
             Icon {
                 anchors.centerIn: parent
                 visible: root.checked
-                text: "\u{f012c}"
+                text: root.mixed ? "\u{f0374}" : "\u{f012c}"
                 role: "caption"
                 color: Design.accentText
             }
         }
 
         Label {
+            visible: root.text !== ""
             text: root.text
             role: "body"
         }

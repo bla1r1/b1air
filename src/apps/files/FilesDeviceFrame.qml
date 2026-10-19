@@ -129,7 +129,11 @@ Item {
             }
         }
 
-        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+        Box {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+            color: Design.line
+        }
 
         // ── The tab ─────────────────────────────────────────────────────────
         Item {
@@ -139,12 +143,17 @@ Item {
         }
 
         // ── Something running ───────────────────────────────────────────────
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.row)
             visible: frame.progressText !== ""
-            color: Design.tint(Design.accent, 0.08)
-            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
+            color: Design.stateSelectedSoft
+            Box {
+                anchors.top: parent.top
+                width: parent.width
+                height: 1
+                color: Design.line
+            }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Design.s(Design.space.xl)
@@ -153,16 +162,16 @@ Item {
                 Icon {
                     text: "\u{f0450}"
                     color: Design.accent
-                    RotationAnimator on rotation { from: 0; to: 360; duration: 1200; loops: Animation.Infinite; running: frame.progressText !== "" }
+                    RotationAnimator on rotation { from: 0; to: 360; duration: Design.duration.spin; loops: Animation.Infinite; running: frame.progressText !== "" }
                 }
                 Label { Layout.fillWidth: true; text: frame.progressText; elide: Text.ElideMiddle }
-                Rectangle {
+                Box {
                     visible: frame.progress >= 0
                     Layout.preferredWidth: Design.s(Design.width.control)
                     Layout.preferredHeight: Design.s(Design.space.xs)
                     radius: height / 2
                     color: Design.tint(Design.text, 0.1)
-                    Rectangle {
+                    Box {
                         width: parent.width * Math.max(0.02, Math.min(1, frame.progress))
                         height: parent.height; radius: height / 2; color: Design.accent
                         Behavior on width { NumberAnimation { duration: Design.duration.fast } }
@@ -179,11 +188,16 @@ Item {
         }
 
         // ── Storage and the page's buttons ──────────────────────────────────
-        Rectangle {
+        Box {
             Layout.fillWidth: true
             Layout.preferredHeight: Design.s(Design.size.stat)
             color: Design.veil
-            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Design.line }
+            Box {
+                anchors.top: parent.top
+                width: parent.width
+                height: 1
+                color: Design.line
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -198,7 +212,7 @@ Item {
 
                     // The bar: one block per kind, labelled inside when the
                     // block is wide enough, then what is free.
-                    Rectangle {
+                    Box {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Design.s(Design.size.mini)
                         radius: Design.s(Design.radius.sm)
@@ -212,19 +226,18 @@ Item {
                             spacing: 1
                             Repeater {
                                 model: frame.segments.filter(s => s.bytes > 0)
-                                delegate: Rectangle {
+                                delegate: Box {
                                     id: block
                                     required property var modelData
                                     width: Math.max(Design.s(Design.space.xxs), (parent.width) * modelData.bytes / Math.max(1, frame.totalBytes))
                                     height: parent.height
                                     color: modelData.color
-                                    Text {
+                                    Label {
                                         anchors.centerIn: parent
                                         visible: implicitWidth + Design.s(Design.space.md) < block.width
                                         text: block.modelData.label
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.caption)
-                                        font.weight: Design.weight.semibold
+                                        role: "caption"
+                                        weight: Design.weight.semibold
                                         color: Design.readableOn(block.modelData.color)
                                     }
                                 }
@@ -247,7 +260,12 @@ Item {
                             delegate: RowLayout {
                                 required property var modelData
                                 spacing: Design.s(Design.space.xs)
-                                Rectangle { width: Design.s(Design.space.sm); height: width; radius: width / 2; color: modelData.color }
+                                Box {
+                                    width: Design.s(Design.space.sm)
+                                    height: width
+                                    radius: width / 2
+                                    color: modelData.color
+                                }
                                 Label { text: modelData.label + "  " + frame.size(modelData.bytes); role: "caption"; dim: true }
                             }
                         }
@@ -288,49 +306,49 @@ Item {
             ? Design.tint(Design.text, pic.light ? 0.30 : 0.10)
             : Design.tint(Design.text, 0.14)
 
-        Rectangle {
+        Box {
             id: shell
             anchors.centerIn: parent
             width: pic.kind === "ipod" ? parent.width : parent.width * 0.86
             height: parent.height
             radius: pic.kind === "ipod" ? Design.s(Design.radius.ctl) : Design.s(Design.space.md)
             color: pic.body
-            border.color: Design.tint(Design.text, 0.22)
+            border.color: Design.glassBorderStrong
             border.width: Design.border
 
             // iPod: the screen and the wheel.
-            Rectangle {
+            Box {
                 visible: pic.kind === "ipod"
                 x: Design.s(Design.space.xs); y: Design.s(Design.space.sm)
                 width: parent.width - Design.s(Design.space.md); height: parent.height * 0.42
                 radius: Design.s(Design.radius.sm)
                 color: Design.tint(Design.accent, 0.55)
             }
-            Rectangle {
+            Box {
                 visible: pic.kind === "ipod"
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height * 0.52
                 width: parent.width * 0.68; height: width; radius: width / 2
                 color: Design.tint(Design.text, pic.light ? 0.45 : 0.20)
-                border.color: Design.tint(Design.text, 0.18)
+                border.color: Design.glassBorderStrong
                 border.width: Design.border
-                Rectangle {
+                Box {
                     anchors.centerIn: parent
                     width: parent.width * 0.36; height: width; radius: width / 2
                     color: pic.body
-                    border.color: Design.tint(Design.text, 0.12)
+                    border.color: Design.glassBorder
                     border.width: Design.border
                 }
             }
 
             // Phone: the screen, and its notch or camera.
-            Rectangle {
+            Box {
                 visible: pic.kind !== "ipod"
                 anchors.fill: parent
                 anchors.margins: Design.s(Design.space.xxs)
                 radius: Design.s(Design.radius.ctl)
                 color: Design.tint(pic.kind === "iphone" ? Design.blue : Design.green, 0.55)
-                Rectangle {
+                Box {
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: Design.s(Design.space.xs)
                     width: pic.kind === "iphone" ? parent.width * 0.38 : Design.s(Design.space.xs)

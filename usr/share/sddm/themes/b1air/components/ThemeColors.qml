@@ -88,6 +88,19 @@ QtObject {
     readonly property color warning: pick("yellow", "#fdbc4b")
     readonly property color ok: pick("green", "#2ecc71")
 
+    // ── Over the wallpaper ───────────────────────────────────────────────────
+    // The clock, the field and the buttons sit on the picture, not on the
+    // palette: white and glass over a darkened photo, as a Mac's login has
+    // them, whatever the theme. One set, used everywhere on the screen; the
+    // values were typed out a dozen times in four strengths of white.
+    readonly property color wallText: "#ebffffff"       // the clock, the name, a message
+    readonly property color wallTextDim: "#a6ffffff"    // a placeholder, a hint
+    readonly property color wallGlass: "#29ffffff"      // a field or a button on the picture
+    readonly property color wallGlassHover: "#47ffffff"
+    readonly property color wallShadow: "#38000000"     // under white text, so it reads on a bright photo
+    readonly property color wallScrim: "#29000000"      // over the whole picture
+    readonly property color wallShade: "#42000000"      // the top and bottom fades, at their darkest
+
     // Whether the session resolved to a dark face. Kept for components that
     // need to choose a shadow or an overlay rather than a palette colour.
     // The lock screen's language (Settings → language), "" for the system's.

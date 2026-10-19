@@ -1,4 +1,5 @@
 import QtQuick
+import B1air.Daemon
 import QtQuick.Layouts
 
 // =============================================================================
@@ -35,12 +36,12 @@ RowLayout {
 
         Layout.preferredWidth: Design.s(Design.size.md)
         Layout.preferredHeight: Design.s(Design.size.md)
-        radius: Design.s(Design.radius.ctl)
+        radius: Design.corner(Shape.radius, Design.s(Design.radius.ctl))
 
-        color: Design.translucent
-               ? (stepArea.pressed ? Design.tint(Design.text, 0.20) : (stepArea.containsMouse ? Design.veilBold : Design.well))
-               : (stepArea.pressed ? Design.active : Design.raised)
-        border.color: stepArea.containsMouse ? Design.accent : "transparent"
+        color: stepArea.pressed ? Design.controlPressed
+             : stepArea.containsMouse ? Design.controlHover : Design.controlFill
+        // The rim of a secondary Button, as its fill is.
+        border.color: Design.glassBorder
         border.width: Design.border
 
         Behavior on color { ColorAnimation { duration: Design.duration.fast } }

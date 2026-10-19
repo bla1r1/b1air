@@ -76,7 +76,7 @@ MiniView {
                 spacing: Design.s(Design.space.xs)
                 model: Audio.outputs
 
-                delegate: Rectangle {
+                delegate: Box {
                     id: dev
                     required property var model
 
@@ -86,9 +86,9 @@ MiniView {
 
                     readonly property bool isDefault: dev.model.is_default
 
-                    color: isDefault ? Design.tint(Design.accent, 0.15)
-                                     : (rowMa.containsMouse ? Design.glassHover : "transparent")
-                    border.color: isDefault ? Design.tint(Design.accent, 0.35) : "transparent"
+                    color: isDefault ? Design.stateSelectedSoft
+                                     : (rowMa.containsMouse ? Design.stateHover : "transparent")
+                    border.color: isDefault ? Design.accentLine : "transparent"
                     border.width: Design.border
 
                     Behavior on color { ColorAnimation { duration: Design.duration.fast } }

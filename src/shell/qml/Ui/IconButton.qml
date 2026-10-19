@@ -19,10 +19,16 @@ Item {
     property real diameter: Design.size.sm
 
     property color tone: Design.textDim
-    property color hoverTone: Design.accent
-    property color fill: Design.hover
+    // Brighter under the pointer, not another colour: a hover is not a
+    // choice, and the accent is kept for what is chosen.
+    property color hoverTone: Design.text
+    property color fill: Design.stateHover
+    // What it does, for a screen reader and the tooltip-less: the glyph says
+    // nothing aloud.
+    property string label: ""
     property bool bordered: false
 
+    readonly property bool hovered: ma.containsMouse
     signal clicked()
 
     implicitWidth: Design.s(root.diameter)
@@ -31,7 +37,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: ma.pressed ? Design.veilBold : ma.containsMouse ? root.fill : "transparent"
+        color: ma.pressed ? Design.statePressed : ma.containsMouse ? root.fill : "transparent"
         border.color: (root.bordered && ma.containsMouse) ? Design.glassBorder : "transparent"
         border.width: Design.border
 
@@ -54,6 +60,6 @@ Item {
     Keys.onReturnPressed: event => { root.clicked(); event.accepted = true; }
     Keys.onSpacePressed: event => { root.clicked(); event.accepted = true; }
     Accessible.role: Accessible.Button
-    Accessible.name: root.icon
+    Accessible.name: root.label !== "" ? root.label : root.icon
     FocusRing { target: root; cornerRadius: root.width / 2 + Design.s(Design.space.xxs) }
 }

@@ -24,7 +24,7 @@ Item {
     implicitHeight: Design.s(Design.size.sm)   // same height as the gear beside it
     implicitWidth: pill.implicitWidth
 
-    Rectangle {
+    Box {
         id: pill
         anchors.fill: parent
         radius: height / 2

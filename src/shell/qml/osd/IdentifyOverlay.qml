@@ -75,7 +75,7 @@ Scope {
             implicitWidth: box.implicitWidth
             implicitHeight: box.implicitHeight
 
-            Rectangle {
+            Box {
                 id: box
                 implicitWidth: Math.max(Design.s(Design.width.control), column.implicitWidth + Design.s(Design.size.tile))
                 implicitHeight: column.implicitHeight + Design.s(Design.size.art)
@@ -89,12 +89,12 @@ Scope {
                     anchors.centerIn: parent
                     spacing: Design.s(Design.space.xxs)
 
-                    Text {
+                    Label {
                         Layout.alignment: Qt.AlignHCenter
                         text: card.label ? card.label.number : ""
-                        font.family: Design.font.mono
-                        font.weight: Font.Bold
-                        font.pixelSize: Design.s(Design.font.jumbo)
+                        isMono: true
+                        weight: Font.Bold
+                        size: Design.s(Design.font.jumbo)
                         color: Screens.primaryName === card.modelData.name ? Design.accent : Design.text
                     }
                     Label {

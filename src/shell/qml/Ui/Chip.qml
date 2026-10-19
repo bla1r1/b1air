@@ -36,7 +36,7 @@ Rectangle {
 
     color: root.active ? Design.tint(root.activeColor, mouseArea.containsMouse ? 0.30 : 0.22)
                        : (mouseArea.pressed ? Design.veilBold
-                          : mouseArea.containsMouse ? Design.glassHover : Design.glassCard)
+                          : mouseArea.containsMouse ? Design.stateHover : Design.glassCard)
 
     border.width: 1
     border.color: root.active ? Design.tint(root.activeColor, 0.40) : Design.glassBorder
