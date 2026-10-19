@@ -12,6 +12,7 @@
 #include <QUrl>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "backend.hpp"
 #include "devices.hpp"
 #include "thumbs.hpp"
@@ -29,13 +30,8 @@ int main(int argc, char* argv[]) {
             return 0;
         }
     }
-    // The software renderer unless the environment names another. Nothing in
-    // this window needs the GPU — no shader effects, no layers — and OpenGL
-    // cost a large share of its memory: measured on this machine's Intel
-    // GPU, 53 MB PSS with OpenGL against 34 MB without, same window.
-    // The image viewer and the camera keep the GPU; they scale images and
-    // video.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
 
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
@@ -45,10 +41,13 @@ int main(int argc, char* argv[]) {
     qputenv("QSG_RENDER_LOOP", "basic");
     qputenv("QML_DISABLE_DISK_CACHE", "0");
 
+    // Before the application: Qt registers the app ID with the desktop
+    // portal as it starts, and one set afterwards was refused as a second
+    // registration (see b1air-term).
+    QGuiApplication::setDesktopFileName("b1air-files");
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-files");
     app.setApplicationDisplayName("Files");
-    app.setDesktopFileName("b1air-files");
     app.setOrganizationName("bla1r1");
 
     // Before the engine, so it outlives it. Declared after, it was destroyed

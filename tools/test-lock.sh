@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     for (const Scene& s : scenes) {
         cairo_surface_t* wp = cairo_image_surface_create(CAIRO_FORMAT_RGB24, s.w / 12, s.h / 12);
         cairo_surface_flush(wp);
-        const bool ok = decode_cover(wall, s.w / 12, s.h / 12, 0x1a1b26,
+        const bool ok = decode_cover(wall, s.w / 12, s.h / 12, 0x202326,
                                      reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(wp)),
                                      cairo_image_surface_get_stride(wp));
         cairo_surface_mark_dirty(wp);

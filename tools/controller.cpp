@@ -67,8 +67,8 @@ bool constant_time_equal(const std::string& a, const std::string& b) {
 std::string html(const std::string& token) {
     std::ostringstream h;
     h << "<!doctype html><meta charset=utf-8><title>b1air controller</title>"
-      << "<style>body{font:16px sans-serif;background:#1a1b26;color:#c0caf5;padding:2em}";
-    h << "button{margin:.3em;padding:.7em;background:#24283b;color:#c0caf5;border:1px solid #414868;border-radius:6px}";
+      << "<style>body{font:16px sans-serif;background:#202326;color:#fcfcfc;padding:2em}";
+    h << "button{margin:.3em;padding:.7em;background:#292c30;color:#fcfcfc;border:1px solid #3a3f44;border-radius:6px}";
     h << "</style><h1>b1air OS controller</h1><p>Local debug controller; token protected.</p><div id=x>";
     for (const auto& [name, _] : actions) h << "<button onclick=call('" << name << "')>" << name << "</button>";
     h << "</div><pre id=o></pre><script>const token='" << token << "';"

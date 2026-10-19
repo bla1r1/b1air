@@ -37,9 +37,18 @@ Singleton {
     /** Emitted with nmcli's or tailscale's own words when something failed. */
     signal failed(string message)
 
+    // Polled while something shows it (the Control Center: acquire on
+    // creation, release on destruction, as Network). It ran `sh`, nmcli and
+    // tailscale every five seconds for the whole session, for a tile seen
+    // now and then. Read once at start, so the tile knows whether to show.
+    property int _users: 0
+    function acquire() { root._users++; }
+    function release() { if (root._users > 0) root._users--; }
+    Component.onCompleted: reader.running = true
+
     Timer {
         interval: 5000
-        running: true
+        running: root._users > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: if (!reader.running) reader.running = true

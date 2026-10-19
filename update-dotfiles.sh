@@ -419,9 +419,17 @@ reload_environment() {
     # the shell was never reloaded after an update. The waybar branch that sat
     # above this went with it — this desktop has a native top bar and ships no
     # waybar config.
-    if pgrep -x b1air-shell >/dev/null 2>&1; then
-        b1air-shell reload 2>/dev/null || true
-    fi
+    #
+    # Then it was `pgrep -x b1air-shell`: the shell runs as `quickshell`, so
+    # that never matched either, and after a package install (which does not
+    # go through src/Makefile's restart) the old shell went on with the new
+    # files — a page that used a component added by the update could not be
+    # built ("GradientRect is not a type"), and opening it left the panel
+    # before it on screen. By name, as src/Makefile does it.
+    local p
+    for p in $(pgrep -u "$(id -u)" -x quickshell); do
+        quickshell ipc --pid "$p" call main forceReload >/dev/null 2>&1 || true
+    done
 
     ok "Environment reloaded successfully."
 }

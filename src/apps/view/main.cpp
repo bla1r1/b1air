@@ -7,6 +7,7 @@
 #include <csignal>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "view_backend.hpp"
 #include "thumbs.hpp"
 
@@ -72,7 +73,12 @@ int main(int argc, char* argv[]) {
     // Qt's video node crashed in it here (Intel UHD 620, Mesa).
     // The renderer cannot change once the window exists, so a folder with any
     // film in it — one the arrows may reach — gets the GPU from the start.
-    if (viewBackend.folderHasVideo()) {
+    // Pictures get it too where there is a GPU (render_backend.hpp): the
+    // memory above was llvmpipe's, and a real GPU draws the round corners and
+    // the glass the software renderer cannot. Only a session that chose
+    // software (a VM) keeps pictures on the CPU.
+    const bool gpuPictures = b1air::app::has_gpu() && !qEnvironmentVariableIsSet("QT_QUICK_BACKEND");
+    if (viewBackend.folderHasVideo() || gpuPictures) {
         if (qEnvironmentVariable("QT_QUICK_BACKEND") == QLatin1String("software")) unsetenv("QT_QUICK_BACKEND");
         setenv("QSG_RHI_BACKEND", "opengl", 1);
         // The threaded loop: frames are drawn off the GUI thread, so a busy

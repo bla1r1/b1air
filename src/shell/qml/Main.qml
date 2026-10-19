@@ -41,8 +41,10 @@ Scope {
     Binding {
         target: Design
         property: "translucent"
-        value: !Settings.loaded || Settings.blurEnabled
+        value: !Settings.loaded || (Settings.blurEnabled && !Settings.reduceTransparency)
     }
+    Binding { target: Design; property: "reduceMotion"; value: Settings.loaded && Settings.reduceMotion }
+    Binding { target: Design; property: "increaseContrast"; value: Settings.loaded && Settings.increaseContrast }
 
     // Ui/Design cannot read Services/Settings itself — the standalone apps load
     // Ui without a Quickshell runtime — so the shell is what joins the two. The
@@ -343,20 +345,26 @@ Scope {
         item: masterWindow.isVisible ? clickCatcher : null
     }
 
+    // The bar's own strip, left to it: the bar's exclusive zone, as TopBar
+    // reserves it, on the edge the bar is on. It was 42 px at the top
+    // whatever the scale or the bar's place — with the bar at the bottom,
+    // or scaled up, clicks meant for the bar closed the open panel instead.
+    readonly property bool barAtBottom: Settings.barPosition === "bottom"
+    readonly property real barHoleHeight: Design.s(Design.size.barZone) + Design.border * 2
     Item {
         id: topBarHole
-        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 42
+        y: masterWindow.barAtBottom ? parent.height - height : 0
+        height: masterWindow.barHoleHeight
     }
 
     MouseArea {
         id: clickCatcher
-        anchors.top: topBarHole.bottom
-        anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
+        y: masterWindow.barAtBottom ? 0 : topBarHole.height
+        height: parent.height - topBarHole.height
         enabled: masterWindow.isVisible
         onClicked: masterWindow.switchWidget("hidden", "")
     }
@@ -666,8 +674,9 @@ Scope {
                 masterWindow.targetW = t.w;
                 masterWindow.targetH = t.h;
 
-                executeSwitch(newWidget, arg, true);
-                masterWindow.isVisible = true;
+                // Not when it could not be built: executeSwitch has closed it.
+                if (executeSwitch(newWidget, arg, true))
+                    masterWindow.isVisible = true;
             } else {
                 // Morphing directly between widgets
                 masterWindow.morphDuration = 120;
@@ -705,6 +714,8 @@ Scope {
         // each opening it, and the keys; the full keybinding sheet is one card
         // away. Not the About page, which it once opened.
         if (w === "guide") return "welcome";
+        // "setup" or "setup.keyboard.theme…" (b1air-settings --first-run).
+        if (w === "setup") return a.indexOf("setup") === 0 ? a : "setup";
         if (w === "focus") return "focus";
         // Registry entries that open the Settings window on one page. None of
         // these were listed here, so every one of them opened Settings on
@@ -732,7 +743,7 @@ Scope {
         
         let t = getLayout(newWidget);
         if (!t) {
-            return;
+            return false;
         }
         masterWindow.animX = t.rx;
         masterWindow.animY = t.ry;
@@ -757,7 +768,7 @@ Scope {
             masterWindow.firstOpen = false;
             masterWindow.disableMorph = false;
             widgetStack.currentItem.forceActiveFocus();
-            return;
+            return true;
         }
         
         let props = {};
@@ -773,16 +784,27 @@ Scope {
         if (newWidget === "settings" && arg && !page)
             props["searchQuery"] = arg;
 
+        let made = null;
         if (immediate || masterWindow.firstOpen) {
-            widgetStack.replace(t.comp, props, StackView.Immediate);
+            made = widgetStack.replace(t.comp, props, StackView.Immediate);
             masterWindow.firstOpen = false;
             masterWindow.disableMorph = false;
         } else {
-            widgetStack.replace(t.comp, props);
+            made = widgetStack.replace(t.comp, props);
+        }
+        // A panel that cannot be built (a QML error in it, a component it
+        // uses missing): StackView keeps the one before, and that panel
+        // opened in its place as if it were the one asked for. Nothing
+        // opens instead, and the log says why (the error is above it).
+        if (!made) {
+            console.warn("Shell: could not open", newWidget, "(" + t.comp + ")");
+            masterWindow.switchWidget("hidden", "");
+            return false;
         }
         masterWindow.loadedWidget = newWidget;
         
         masterWindow.isVisible = true;
+        return true;
     }
 
     // =========================================================

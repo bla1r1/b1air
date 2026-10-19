@@ -24,8 +24,8 @@ Window {
     palette.toolTipBase: Design.raised
     palette.toolTipText: Design.text
     palette.placeholderText: Design.textFaint
-    palette.light: Design.highest
-    palette.midlight: Design.high
+    palette.light: Design.active
+    palette.midlight: Design.hover
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground

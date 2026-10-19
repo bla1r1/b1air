@@ -142,7 +142,7 @@ while true; do
     confirm_msg+="  Edition: ${EDITION}\n\n"
     [[ "$SKIP_PACKAGES" -eq 0 ]] && confirm_msg+="  ✔ Distribution Packages & Fonts\n" || confirm_msg+="  ✘ Skip Distribution Packages\n"
     [[ "$NO_AUR"        -eq 0 ]] && confirm_msg+="  ✔ ${EXTRAS_SHORT}\n"  || confirm_msg+="  ✘ Skip ${EXTRAS_SHORT}\n"
-    [[ "$SKIP_DOTFILES" -eq 0 ]] && confirm_msg+="  ✔ Dotfiles & Tokyo Night SDDM Theme\n" || confirm_msg+="  ✘ Skip Dotfiles\n"
+    [[ "$SKIP_DOTFILES" -eq 0 ]] && confirm_msg+="  ✔ Dotfiles & the b1air login screen\n" || confirm_msg+="  ✘ Skip Dotfiles\n"
     [[ "$SKIP_SERVICES" -eq 0 ]] && confirm_msg+="  ✔ Core Services (NM, Bluetooth, SDDM)\n" || confirm_msg+="  ✘ Skip Services\n"
     confirm_msg+="\nReady to start installation?"
 

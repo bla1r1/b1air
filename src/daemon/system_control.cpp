@@ -2,6 +2,7 @@
 #include "system_control.hpp"
 #include "sway_ipc.hpp"
 #include "proc_scan.hpp"
+#include "palette.hpp"
 #include "remote_display.hpp"
 #include "notify.hpp"
 #include "backlight.hpp"
@@ -5913,8 +5914,13 @@ std::string SystemControl::pip_status() {
 }
 
 bool SystemControl::force_quit() {
-    // slurp -p selects a single pixel/point
-    const std::string point = slurp({"-p", "-b", "#f7768e66", "-c", "#f7768e"});
+    // slurp -p selects a single pixel/point, in the theme's red: ending a
+    // program is the destructive kind of thing it marks (Tokyo Night's
+    // red, fixed, before).
+    const b1air::Colour red = b1air::Palette::load().error;
+    char hex[8];
+    std::snprintf(hex, sizeof hex, "#%02x%02x%02x", int(red.r * 255 + 0.5), int(red.g * 255 + 0.5), int(red.b * 255 + 0.5));
+    const std::string point = slurp({"-p", "-b", std::string(hex) + "66", "-c", hex});
     if (point.empty()) return false;
 
     int click_x = 0, click_y = 0;

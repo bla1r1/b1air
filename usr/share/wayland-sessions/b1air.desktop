@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=b1air Desktop
-Comment=Modern Tokyo Night Tiling Desktop Environment
+Comment=A desktop of its own on sway: glass, a top bar, a dock and its apps
 Exec=b1air-session
 Type=Application
 DesktopNames=b1air;sway

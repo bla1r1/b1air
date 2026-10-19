@@ -890,10 +890,10 @@ ColumnLayout {
 
             Repeater {
                 model: [
-                    { id: "normal", label: "0°", tip: "Landscape" },
-                    { id: "90",     label: "90°", tip: "Portrait" },
-                    { id: "180",    label: "180°", tip: "Flipped" },
-                    { id: "270",    label: "270°", tip: "Portrait (Flipped)" }
+                    { id: "normal", label: "0°", tip: I18n.tr("Landscape") },
+                    { id: "90",     label: "90°", tip: I18n.tr("Portrait") },
+                    { id: "180",    label: "180°", tip: I18n.tr("Flipped") },
+                    { id: "270",    label: "270°", tip: I18n.tr("Portrait (Flipped)") }
                 ]
 
                 Chip {

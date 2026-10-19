@@ -28,8 +28,8 @@ ColumnLayout {
         if (on === section._held)
             return;
         section._held = on;
-        if (on) Network.acquire();
-        else Network.release();
+        if (on) { Network.acquire(); Vpn.acquire(); }
+        else { Network.release(); Vpn.release(); }
     }
     Component.onCompleted: section._hold(visible)
     onVisibleChanged: section._hold(visible)

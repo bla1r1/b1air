@@ -46,6 +46,7 @@
 #include <unistd.h>
 
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "qs_compat.hpp"
 #include "qs_services.hpp"
 
@@ -160,13 +161,8 @@ int write_baseline() {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    // The software renderer unless the environment names another. Nothing in
-    // this window needs the GPU — no shader effects, no layers — and OpenGL
-    // cost a large share of its memory: measured on this machine's Intel
-    // GPU, 103 MB PSS with OpenGL against 75 MB without, same window.
-    // The image viewer and the camera keep the GPU; they scale images and
-    // video.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
     // Ui/Design reads ~/.config/b1air/theme.json over XMLHttpRequest, which
     // Qt 6 refuses on file:// unless this is set. The other apps set it
     // themselves; this one relied on b1air-session, so started from anywhere
@@ -207,7 +203,11 @@ int main(int argc, char* argv[]) {
 
     const bool shellRunning = b1air::proc::running("quickshell");
     if (forceShell || (shellRunning && !forceStandalone)) {
-        if (std::strlen(page) > 0)
+        // The setup is a full-screen panel of its own, the rest of Settings
+        // the usual one.
+        if (std::strncmp(page, "setup", 5) == 0 && (page[5] == '\0' || page[5] == '.'))
+            execlp("b1air-shell", "b1air-shell", "open", "setup", page, (char*)nullptr);
+        else if (std::strlen(page) > 0)
             execlp("b1air-shell", "b1air-shell", "open", "settings", page, (char*)nullptr);
         else
             execlp("b1air-shell", "b1air-shell", "toggle", "settings", (char*)nullptr);
@@ -216,9 +216,12 @@ int main(int argc, char* argv[]) {
         std::cerr << "[b1air-settings] b1air-shell would not run; opening a window instead\n";
     }
 
+    // Before the application: Qt registers the app ID with the desktop
+    // portal as it starts, and one set afterwards was refused as a second
+    // registration (see b1air-term).
+    QGuiApplication::setDesktopFileName("b1air-settings");
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-settings");
-    app.setDesktopFileName("b1air-settings");
 
     qscompat::registerCoreTypes();
     qscompat::registerServiceTypes();

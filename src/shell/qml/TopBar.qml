@@ -10,7 +10,6 @@ import Quickshell.Widgets
 import "./Ui"
 import B1air.Daemon
 import Quickshell.Services.Pipewire
-import Qt.labs.folderlistmodel
 import "./Services"
 
 PanelWindow {
@@ -281,7 +280,9 @@ PanelWindow {
     }
 
     function iconSource(icon) {
-        const value = (icon || "application-x-executable").trim();
+        // A string or a url (an entry's icon may come back resolved already):
+        // a url has no trim(), and our own apps' icons failed on it.
+        const value = String(icon || "application-x-executable").trim();
         if (value.startsWith("/") || value.startsWith("file://")) return Paths.fileUrl(value);
         // The suite's own icons, by file, from the copy `make install` puts
         // beside this QML. They used to be read from ~/.local/share/icons,
@@ -388,10 +389,12 @@ PanelWindow {
         }
     }
 
+    // Only while the bar shows the figures (the stats tile's own condition):
+    // /proc was read every two seconds with the tile turned off.
     Timer {
         interval: 2000
         repeat: true
-        running: true
+        running: Settings.barShowStats && !topBar.reduced
         triggeredOnStart: true
         onTriggered: {
             procStat.reload();
@@ -447,6 +450,8 @@ PanelWindow {
             if (e && e.change === "xkb_layout")
                 layoutCoalesce.restart();
         }
+        // Which order sway has the layouts in depends on it (Sway.keysFromUs).
+        function onVersionChanged() { layoutCoalesce.restart(); }
         // A restarted sway is a new session's worth of state.
         function onReconnected() {
             topBar.refreshRunningApps();

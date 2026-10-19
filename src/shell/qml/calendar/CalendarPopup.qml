@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtCore
@@ -37,10 +38,14 @@ PopupShell {
     property int viewMonth: currentMonth
     property int selectedDay: currentTime.getDate()
 
+    // Only while the calendar is on screen, and at once when it comes back:
+    // it ticked every second while closed (the shell hides a panel's window,
+    // Main.qml), recomputing the month around the date for nobody.
     Timer {
         interval: 1000
-        running: true
+        running: window.visible && window.Window.visibility !== Window.Hidden
         repeat: true
+        triggeredOnStart: true
         onTriggered: window.currentTime = new Date()
     }
 

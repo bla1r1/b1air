@@ -10,16 +10,12 @@
 #include <QFile>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "backend.hpp"
 
 int main(int argc, char* argv[]) {
-    // The software renderer unless the environment names another. Nothing in
-    // this window needs the GPU — no shader effects, no layers — and OpenGL
-    // cost a large share of its memory: measured on this machine's Intel
-    // GPU, 62 MB PSS with OpenGL against 37 MB without, same window.
-    // The image viewer and the camera keep the GPU; they scale images and
-    // video.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
 
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
@@ -29,11 +25,19 @@ int main(int argc, char* argv[]) {
     qputenv("QSG_RENDER_LOOP", "basic");
     qputenv("QML_DISABLE_DISK_CACHE", "0");
 
+    // Before the application: Qt registers the app ID with the desktop
+    // portal as it starts, and one set afterwards was refused as a second
+    // registration (see b1air-term).
+    QGuiApplication::setDesktopFileName("b1air-monitor");
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-monitor");
     app.setApplicationDisplayName("System Monitor");
-    app.setDesktopFileName("b1air-monitor");
     app.setOrganizationName("bla1r1");
+
+    // Before the engine, so it outlives it: locals go in reverse order, and
+    // made after it the backend went first at exit, leaving the window's
+    // bindings to read it as null on the way out.
+    b1air::MonitorBackend backend;
 
     QQmlApplicationEngine engine;
     b1air::app::add_import_paths(engine, "monitor");
@@ -44,7 +48,6 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    b1air::MonitorBackend backend;
     engine.rootContext()->setContextProperty("MonitorBackend", &backend);
 
     QString qmlPath = b1air::app::find_window_qml("MonitorWindow.qml", "monitor");

@@ -14,16 +14,12 @@
 #include <memory>
 #include <unistd.h>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "backend.hpp"
 
 int main(int argc, char* argv[]) {
-    // The software renderer unless the environment names another. Nothing in
-    // this window needs the GPU — no shader effects, no layers — and OpenGL
-    // cost a large share of its memory: measured on this machine's Intel
-    // GPU, 49 MB PSS with OpenGL against 31 MB without, same window.
-    // The image viewer and the camera keep the GPU; they scale images and
-    // video.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
 
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
@@ -33,10 +29,13 @@ int main(int argc, char* argv[]) {
     qputenv("QSG_RENDER_LOOP", "basic");
     qputenv("QML_DISABLE_DISK_CACHE", "0");
 
+    // Before the application: Qt registers the app ID with the desktop
+    // portal as it starts, and one set afterwards was refused as a second
+    // registration (see b1air-term).
+    QGuiApplication::setDesktopFileName("b1air-text");
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-text");
     app.setApplicationDisplayName("Text Editor");
-    app.setDesktopFileName("b1air-text");
     app.setOrganizationName("bla1r1");
 
     // The files named on the command line, as absolute paths.
@@ -62,6 +61,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Before the engine, so it outlives it: locals go in reverse order, and
+    // with the backend made second it went first at exit — every binding on
+    // TextBackend in the still-living window read it as null on the way out
+    // (TypeError … of null, a dozen a quit).
+    b1air::TextBackend backend;
+    // The tabs left open last time, unsaved changes included; then these.
+    backend.restoreSession();
+    for (const QString& f : files) backend.openFile(f);
+
     QQmlApplicationEngine engine;
     b1air::app::add_import_paths(engine, "text");
 
@@ -70,11 +78,6 @@ int main(int argc, char* argv[]) {
             std::cerr << "[b1air-text QML] " << w.toString().toStdString() << "\n";
         }
     });
-
-    b1air::TextBackend backend;
-    // The tabs left open last time, unsaved changes included; then these.
-    backend.restoreSession();
-    for (const QString& f : files) backend.openFile(f);
 
     QLocalServer server;
     QLocalServer::removeServer(socketName);   // one left by a crash

@@ -627,12 +627,23 @@ void TerminalItem::paint(QPainter *painter) {
                                                             : toQColor(cell.fg, m_foreground);
             QColor bg = VTERM_COLOR_IS_DEFAULT_BG(&cell.bg) ? m_background
                                                             : toQColor(cell.bg, m_background);
-            if (cell.attrs.reverse)
+            if (cell.attrs.reverse) {
                 std::swap(fg, bg);
+                // The default background is clear (the window's glass shows
+                // through), and swapped into the text it drew every reversed
+                // letter in no colour at all: nano's ^G Help and ^X Exit,
+                // its title bar, came out as blank white blocks. The text
+                // takes the background's colour, opaque.
+                if (fg.alpha() < 255) fg.setAlpha(255);
+            }
 
             // Cell background
             if (isSelected) {
-                painter->fillRect(cellRect, QColor(137, 180, 250, 80));
+                // The theme's blue (ANSI 4, from the desktop palette in
+                // TermWindow), see-through: it was Catppuccin's, fixed.
+                QColor sel = m_ansi[4].isValid() ? m_ansi[4] : QColor(0x3d, 0xae, 0xe9);
+                sel.setAlpha(80);
+                painter->fillRect(cellRect, sel);
             } else if (bg != m_background) {
                 painter->fillRect(cellRect, bg);
             }

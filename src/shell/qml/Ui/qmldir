@@ -65,3 +65,5 @@ GradientRect  1.0 GradientRect.qml
 RoundImage    1.0 RoundImage.qml
 LiquidGlass   1.0 LiquidGlass.qml
 ScrollEdge    1.0 ScrollEdge.qml
+ToolbarGroup  1.0 ToolbarGroup.qml
+ToolbarGlass  1.0 ToolbarGlass.qml

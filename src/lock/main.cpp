@@ -212,6 +212,13 @@ void write_state(const char* state) {
 
 // ── What the screen shows besides the password ──────────────────────────────
 
+// A palette colour as the 0xRRGGBB decode_cover fills the rest of a frame
+// with.
+uint32_t rgb(const Colour& c) {
+    const auto to = [](double v) { return static_cast<uint32_t>(std::clamp(v, 0.0, 1.0) * 255.0 + 0.5); };
+    return (to(c.r) << 16) | (to(c.g) << 8) | to(c.b);
+}
+
 bool parse_colour(const nlohmann::json& j, const char* key, Colour& out) {
     if (!j.contains(key) || !j[key].is_string()) return false;
     const std::string v = j[key].get<std::string>();
@@ -251,7 +258,9 @@ void load_account() {
     constexpr int kSide = 256;
     cairo_surface_t* s = cairo_image_surface_create(CAIRO_FORMAT_RGB24, kSide, kSide);
     cairo_surface_flush(s);
-    if (decode_cover(face, kSide, kSide, 0x313244, reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(s)),
+    // Round a picture with see-through corners: the theme's card colour,
+    // not the Catppuccin grey it was.
+    if (decode_cover(face, kSide, kSide, rgb(g.pal.mid), reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(s)),
                      cairo_image_surface_get_stride(s))) {
         cairo_surface_mark_dirty(s);
         g.avatar = s;
@@ -381,7 +390,8 @@ void load_wallpaper(Output* o) {
     cairo_surface_t* s = cairo_image_surface_create(CAIRO_FORMAT_RGB24, w, h);
     cairo_surface_flush(s);
     auto* pixels = reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(s));
-    if (!decode_cover(path, w, h, 0x1a1b26, pixels, cairo_image_surface_get_stride(s))) {
+    // What a picture does not cover: the theme's ground, not Tokyo Night's.
+    if (!decode_cover(path, w, h, rgb(g.pal.ground), pixels, cairo_image_surface_get_stride(s))) {
         cairo_surface_destroy(s);
         return;
     }
@@ -851,8 +861,9 @@ const struct wl_registry_listener kRegistry = {registry_global, registry_global_
 } // namespace
 
 int main() {
-    load_account();
+    // The palette first: the account's picture is laid on its colours.
     load_palette();
+    load_account();
     read_battery();
     read_weather();
     g.lang = b1air::SettingsManager::get_json_string("uiLanguage");

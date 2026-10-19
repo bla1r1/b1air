@@ -467,8 +467,10 @@ ColumnLayout {
 
         Label {
             visible: Services.Theme.lastError !== "" || Services.Theme.lastExportPath !== ""
+            // Services/Theme keeps its errors in English, as the rest of the
+            // strings are kept; translated here, where they are shown.
             text: Services.Theme.lastError !== ""
-                ? Services.Theme.lastError
+                ? I18n.tr(Services.Theme.lastError)
                 : I18n.tr("Exported to %1", Services.Theme.lastExportPath)
             role: "caption"
             color: Services.Theme.lastError !== "" ? Design.danger : Design.ok

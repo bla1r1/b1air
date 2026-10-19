@@ -28,7 +28,6 @@ class FileManagerBackend : public QObject {
     Q_PROPERTY(QString sortField READ sortField WRITE setSortField NOTIFY sortChanged)
     Q_PROPERTY(bool sortAscending READ sortAscending WRITE setSortAscending NOTIFY sortChanged)
     Q_PROPERTY(QVariantList breadcrumbs READ breadcrumbs NOTIFY currentPathChanged)
-    Q_PROPERTY(QVariantList places READ places CONSTANT)
     Q_PROPERTY(QString diskFreeSpace READ diskFreeSpace NOTIFY diskInfoChanged)
     Q_PROPERTY(QString diskTotalSpace READ diskTotalSpace NOTIFY diskInfoChanged)
     // Folder-chooser mode: `b1air-files --pick-folder <file> [start]`. Another
@@ -95,7 +94,6 @@ public:
     void setSortAscending(bool asc);
 
     QVariantList breadcrumbs() const;
-    QVariantList places() const;
     QString diskFreeSpace() const;
     QString diskTotalSpace() const;
     // Free space of the disk `path` is on, for a row that names its own.

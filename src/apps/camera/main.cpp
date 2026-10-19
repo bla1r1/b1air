@@ -39,10 +39,13 @@ int main(int argc, char* argv[]) {
         qputenv("QSG_RHI_BACKEND", "opengl");
     }
 
+    // Before the application: Qt registers the app ID with the desktop
+    // portal as it starts, and one set afterwards was refused as a second
+    // registration (see b1air-term).
+    QGuiApplication::setDesktopFileName("b1air-camera");
     QGuiApplication app(argc, argv);
     app.setApplicationName("b1air-camera");
     app.setApplicationDisplayName("Camera");
-    app.setDesktopFileName("b1air-camera");
     app.setOrganizationName("bla1r1");
 
     // Where the shots go. XDG's Pictures, with our own folder inside it, made

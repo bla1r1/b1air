@@ -370,7 +370,12 @@ PopupShell {
                             NumberAnimation on rotation {
                                 from: 0; to: 360; duration: root.introDuration
                                 loops: Animation.Infinite
-                                running: true
+                                // Only while the player is on screen: closed with
+                                // music playing, it kept the shell ticking for a
+                                // record nobody could see. The shell closes a
+                                // panel by hiding its window (Main.qml), which
+                                // leaves the item itself "visible".
+                                running: root.visible && root.Window.visibility !== Window.Hidden
                                 paused: root.musicData.status !== "Playing"
                             }
                         }

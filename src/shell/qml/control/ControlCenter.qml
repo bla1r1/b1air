@@ -1252,9 +1252,9 @@ PopupShell {
     }
 
     Component.onCompleted: {
-        Audio.acquire(); Power.acquire(); Media.acquire(); Network.acquire();
+        Audio.acquire(); Power.acquire(); Media.acquire(); Network.acquire(); Vpn.acquire();
     }
     Component.onDestruction: {
-        Audio.release(); Power.release(); Media.release(); Network.release();
+        Audio.release(); Power.release(); Media.release(); Network.release(); Vpn.release();
     }
 }

@@ -11,19 +11,12 @@
 #include <QFile>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "terminal_item.hpp"
 
 int main(int argc, char* argv[]) {
-    // The software renderer unless the environment names another. Nothing in
-    // this window needs the GPU — no shader effects, no layers — and OpenGL
-    // cost a large share of its memory: measured on this machine's Intel
-    // GPU, 47 MB PSS with OpenGL against 33 MB without, same window.
-    // It draws with QQuickPaintedItem, which paints into an image on the
-    // CPU either way; OpenGL only added a texture copy of that image, and
-    // 300,000 lines of output cost the same CPU time in both.
-    // The image viewer and the camera keep the GPU; they scale images and
-    // video.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
 
     qputenv("QT_QPA_PLATFORM", "wayland;xcb");
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
@@ -33,9 +26,6 @@ int main(int argc, char* argv[]) {
     qputenv("QSG_RENDER_LOOP", "basic");
     qputenv("QML_DISABLE_DISK_CACHE", "0");
 
-    QGuiApplication app(argc, argv);
-    app.setApplicationName("b1air-term");
-    app.setApplicationDisplayName("Terminal");
     // --dropdown: the same terminal under its own app_id, which the sway
     // window rule turns into the panel that slides down from the top.
     // --hold: the window stays when the command given with -e ends, with its
@@ -48,7 +38,15 @@ int main(int argc, char* argv[]) {
         if (a == QLatin1String("--dropdown")) dropdown = true;
         if (a == QLatin1String("--hold")) hold = true;
     }
-    app.setDesktopFileName(dropdown ? "b1air-dropdown" : "b1air-term");
+    // Before the application exists: Qt registers the app ID with the
+    // desktop portal as it starts, and a name set afterwards was a second
+    // registration the portal refuses ("Connection already associated with
+    // an application ID") — once for every terminal opened.
+    QGuiApplication::setDesktopFileName(dropdown ? "b1air-dropdown" : "b1air-term");
+
+    QGuiApplication app(argc, argv);
+    app.setApplicationName("b1air-term");
+    app.setApplicationDisplayName("Terminal");
     app.setOrganizationName("bla1r1");
 
     qmlRegisterType<b1air::TerminalItem>("B1Air.Term", 1, 0, "TerminalView");

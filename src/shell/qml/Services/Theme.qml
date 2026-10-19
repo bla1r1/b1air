@@ -327,7 +327,10 @@ Singleton {
                 Design.applyPalette(obj);
                 root._publish(obj, root._applyByUser);
             } catch (e) {
-                root.lastError = "Not a valid theme file: " + e;
+                // The reason in the log; on screen a sentence Settings can
+                // translate (it translates lastError where it shows it).
+                console.warn("Theme: not a valid theme file:", e);
+                root.lastError = "Not a valid theme file.";
                 Design.resetPalette();
             }
         }

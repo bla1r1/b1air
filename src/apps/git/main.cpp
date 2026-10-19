@@ -5,18 +5,15 @@
 #include <QFile>
 #include <iostream>
 #include "qml_search.hpp"
+#include "render_backend.hpp"
 #include "avatar_cache.hpp"
 #include "git_backend.hpp"
 
 int main(int argc, char* argv[]) {
     // Force Wayland, high performance rendering & basic render loop (0% idle CPU)
     setenv("QT_QPA_PLATFORM", "wayland;xcb", 1);
-    // The software renderer, unless the environment asks for another. This
-    // window is text, lines and flat rectangles — nothing the GPU draws better
-    // — and bringing up OpenGL cost about 20 MB of the process's memory for the
-    // driver and its buffers: measured on this machine's Intel GPU, 54 MB PSS
-    // with OpenGL against 34 MB without, same repository, same window.
-    setenv("QT_QUICK_BACKEND", "software", 0);
+    // The GPU where there is one (render_backend.hpp).
+    b1air::app::choose_renderer();
     setenv("QSG_RHI_BACKEND", "opengl", 1);
     setenv("QSG_RENDER_LOOP", "basic", 1);
     setenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1", 1);

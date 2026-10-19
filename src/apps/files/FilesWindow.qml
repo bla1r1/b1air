@@ -1543,11 +1543,13 @@ C.ApplicationWindow {
                         Qt.callLater(searchField.focusInput);
                     }
 
-                        RowLayout {
-                            spacing: Design.s(Design.space.xxs)
-                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                        // Back, forward and up together on a capsule of glass,
+                        // as a Mac's toolbar groups its controls (Ui/ToolbarGroup).
+                        ToolbarGroup {
+                            backdrop: contentArea
+                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
                         }
 
                         // Path: clickable segments; a click on the empty part of the
@@ -1571,9 +1573,12 @@ C.ApplicationWindow {
                             Layout.horizontalStretchFactor: 3
                             Layout.preferredHeight: Design.s(Design.size.knob)
                             radius: height / 2
-                            color: Design.raised
-                            border.color: editing ? Design.accent : Design.tint(Design.text, 0.06)
+                            // On the toolbar's glass, as the groups beside it;
+                            // the accent ring while a path is typed.
+                            color: "transparent"
+                            border.color: editing ? Design.accent : "transparent"
                             border.width: Design.border
+                            ToolbarGlass { anchors.fill: parent; z: -1; backdrop: contentArea }
                             clip: true
 
                             Clickable {
@@ -1740,7 +1745,8 @@ C.ApplicationWindow {
                             Layout.minimumWidth: Design.s(Design.size.thumb)
                             Layout.preferredHeight: Design.s(Design.size.knob)
                             radius: height / 2
-                            color: Design.raised
+                            color: "transparent"
+                            ToolbarGlass { anchors.fill: parent; z: -1; backdrop: contentArea }
                             placeholder: I18n.tr("Search (Ctrl+F)")
                             onEdited: value => FilesBackend.filterQuery = value
                             onAccepted: window.currentView().forceActiveFocus()
@@ -1768,6 +1774,13 @@ C.ApplicationWindow {
                         SegmentedControl {
                             visible: !toolbar.compactViews
                             size: "sm"
+                            // A capsule on the toolbar's glass; its selection is
+                            // concentric with it (radius less the inset).
+                            Layout.preferredHeight: Design.s(Design.size.knob)
+                            radius: height / 2
+                            color: "transparent"
+                            border.width: 0
+                            ToolbarGlass { anchors.fill: parent; z: -1; backdrop: contentArea }
                             model: [
                                 { id: "grid",    label: "", icon: "\u{f0570}", tip: I18n.tr("Icons (Ctrl+1)") },
                                 { id: "list",    label: "", icon: "\u{f0279}", tip: I18n.tr("List (Ctrl+2)") },
@@ -1788,10 +1801,10 @@ C.ApplicationWindow {
                                 onClicked: viewModeMenu.popup()
                             }
                         }
-                        RowLayout {
-                            spacing: Design.s(Design.space.xxs)
-                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
+                        ToolbarGroup {
+                            backdrop: contentArea
+                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                            Button { variant: "ghost"; iconOnly: true; radius: height / 2; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
                         }
                 }
 

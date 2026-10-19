@@ -254,33 +254,6 @@ QVariantList FileManagerBackend::breadcrumbs() const {
     return crumbs;
 }
 
-QVariantList FileManagerBackend::places() const {
-    QVariantList list;
-    QString home = QDir::homePath();
-
-    auto addPlace = [&](const QString& name, const QString& path, const QString& glyph, const QString& color) {
-        if (QDir(path).exists()) {
-            QVariantMap p;
-            p["name"] = name;
-            p["path"] = path;
-            p["glyph"] = glyph;
-            p["color"] = color;
-            list.append(p);
-        }
-    };
-
-    addPlace("Home", home, "\u{f015}", "#7aa2f7");
-    addPlace("Desktop", home + "/Desktop", "\u{f108}", "#7dcfff");
-    addPlace("Documents", home + "/Documents", "\u{f02d}", "#bb9af7");
-    addPlace("Downloads", home + "/Downloads", "\u{f019}", "#73daca");
-    addPlace("Pictures", home + "/Pictures", "\u{f03e}", "#f7768e");
-    addPlace("Music", home + "/Music", "\u{f001}", "#e0af68");
-    addPlace("Videos", home + "/Videos", "\u{f008}", "#ff9e64");
-    addPlace("File System", "/", "\u{f0a0}", "#c0caf5");
-
-    return list;
-}
-
 QString FileManagerBackend::freeSpaceOf(const QString& path) const {
     QStorageInfo storage(path);
     return storage.isValid() ? formatSize(storage.bytesAvailable()) : QStringLiteral("0 B");
