@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import B1air.Daemon
 
 // =============================================================================
 // The settings store. Schema, typed reads, one writer.
@@ -39,11 +40,13 @@ Singleton {
     readonly property alias guideShortcut: data.guideShortcut
     readonly property alias language: data.language
     // The layouts in the order sway has them: us first, for the shortcuts,
-    // whatever the order chosen (settings_manager.cpp, layouts_for_bindings).
+    // whatever the order chosen (settings_manager.cpp, layouts_for_bindings)
+    // — but as chosen on our swayfx, which needs no us for them (Sway.keysFromUs).
     // An index from sway means a place in this list, not in `language`.
     readonly property var swayLayouts: {
         const list = String(data.language || "us").split(",").map(x => x.trim()).filter(x => x !== "");
-        if (list.length === 0 || list[0] === "us") return list.length ? list : ["us"];
+        if (list.length === 0) return ["us"];
+        if (list[0] === "us" || Sway.keysFromUs) return list;
         return ["us"].concat(list.filter(x => x !== "us"));
     }
     readonly property alias kbOptions: data.kbOptions
@@ -153,6 +156,9 @@ Singleton {
     readonly property alias accentName: data.accentName
     readonly property alias cornerRadius: data.cornerRadius
     readonly property alias blurEnabled: data.blurEnabled
+    readonly property alias reduceMotion: data.reduceMotion
+    readonly property alias reduceTransparency: data.reduceTransparency
+    readonly property alias increaseContrast: data.increaseContrast
     readonly property alias shadowsEnabled: data.shadowsEnabled
     readonly property alias dimInactive: data.dimInactive
 
@@ -577,7 +583,7 @@ Singleton {
         windowAnimation: "popin",
         popinPercent: 80,
         animationDuration: 200,
-        inactiveOpacityPercent: 50,
+        inactiveOpacityPercent: 100,
         specialWorkspace: true,
         workspaceOverview: true,
         windowSnap: true,
@@ -595,10 +601,13 @@ Singleton {
         themeNight: "breeze-dark",
         appColorScheme: "auto",
         accentName: "",
-        cornerRadius: 10,
+        cornerRadius: 20,
         blurEnabled: true,
+        reduceMotion: false,
+        reduceTransparency: false,
+        increaseContrast: false,
         shadowsEnabled: true,
-        dimInactive: true,
+        dimInactive: false,
         screenshotDir: Quickshell.env("HOME") + "/Pictures/Screenshots",
         screenshotFormat: "png",
         screenshotCopyToClipboard: true,
@@ -745,7 +754,7 @@ Singleton {
             property string windowAnimation: "popin"
             property int popinPercent: 80
             property int animationDuration: 200
-            property int inactiveOpacityPercent: 50
+            property int inactiveOpacityPercent: 100
             property bool specialWorkspace: true
             property bool workspaceOverview: true
             property bool windowSnap: true
@@ -763,10 +772,13 @@ Singleton {
             property string themeNight: "breeze-dark"
             property string appColorScheme: "auto"
             property string accentName: ""
-            property int cornerRadius: 10
+            property int cornerRadius: 20
             property bool blurEnabled: true
+            property bool reduceMotion: false
+            property bool reduceTransparency: false
+            property bool increaseContrast: false
             property bool shadowsEnabled: true
-            property bool dimInactive: true
+            property bool dimInactive: false
 
             property string screenshotDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
             property string screenshotFormat: "png"

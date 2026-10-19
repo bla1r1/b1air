@@ -49,5 +49,14 @@ Text {
     font.features: root.tabular ? Design.tabular : ({})
     font.family: root.isMono ? Design.font.mono : Design.font.sans
     font.pixelSize: Design.s(root._size)
+    // Inter's tracking for the size; none for the mono face.
+    // From the size, not from font.pixelSize: that is the same font group,
+    // and Qt took reading it here for a binding loop.
+    font.letterSpacing: root.isMono ? 0 : Design.tracking(Design.s(root._size))
+    // Apple's line height for the style, where the text wraps; a single
+    // line keeps the font's own, so nothing laid out around it moves.
+    readonly property int _line: Design.font.lineHeight[root._size] || 0
+    lineHeightMode: root.wrapMode !== Text.NoWrap && root._line > 0 ? Text.FixedHeight : Text.ProportionalHeight
+    lineHeight: root.wrapMode !== Text.NoWrap && root._line > 0 ? Design.s(root._line) : 1.0
     color: root.dim ? Design.textDim : Design.text
 }

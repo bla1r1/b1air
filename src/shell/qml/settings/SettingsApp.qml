@@ -92,8 +92,14 @@ Item {
     // In its own window the page is opaque and only the sidebar is glass, as
     // in the other apps; in the shell the whole panel is glass.
     Rectangle {
+        // The setup draws its own: the screen dimmed, a card on it — and in
+        // a window of its own, the window's glass behind the card, not this
+        // opaque page.
+        visible: !app.setupMode
         anchors.fill: parent
-        anchors.leftMargin: app.standalone && Design.translucent ? Design.s(Design.width.sidebar) + Design.border : 0
+        // In its own window the sidebar is the glass to the left of this —
+        // but the setup has no sidebar, and that strip was left see-through.
+        anchors.leftMargin: app.standalone && Design.translucent && !app.setupMode ? Design.s(Design.width.sidebar) + Design.border : 0
         radius: app.standalone ? 0 : Design.s(Design.radius.panel)
         color: app.standalone ? Design.surface : Design.glassBg
         border.color: app.standalone ? "transparent" : Design.glassBorder
@@ -124,8 +130,16 @@ Item {
         sourceComponent: Component {
             Sections.SetupWizard {
                 page: app.page
+                backdrop: !app.standalone
                 onFinished: app.close()
-                onOpenPage: id => { app.returnPage = "setup.news"; app.open(id); }
+                // In the shell the setup is full-screen: the page opens in
+                // the usual panel, which is this same item resized, so the
+                // way back to the news is kept.
+                onOpenPage: id => {
+                    app.returnPage = "setup.news";
+                    if (app.standalone) app.open(id);
+                    else Quickshell.execDetached(["b1air-shell", "open", "settings", id]);
+                }
                 onRestarting: if (app.standalone) app.closeRequested()
             }
         }

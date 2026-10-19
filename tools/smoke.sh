@@ -22,6 +22,7 @@
 #                   in the copy nobody runs, which happened.
 #   ipc-targets     A toggle: command naming a widget WindowRegistry does not
 #                   know opens nothing at all.
+#   shaders         Every src/shell/qml/**/shaders/*.frag has its .qsb, up to date
 #   i18n            Every translation in src/shell/qml/Ui/i18n/*.json parses
 #                   and keeps the %1, %2… of its English key: one that drops a
 #                   placeholder shows text with a hole in it. Strings with no
@@ -532,6 +533,19 @@ PY_I18N
 }
 
 # ── sddm-theme ───────────────────────────────────────────────────────────────
+check_shaders() {
+    head_ "shaders"
+    local out
+    if out="$("$REPO/tools/build-shaders.sh" --check 2>&1)"; then
+        pass "every shader's .qsb is built from its .frag as it is now"
+    elif [[ $? -eq 2 ]]; then
+        skip "no qsb (Qt Shader Tools) to compile with"
+    else
+        printf '%s\n' "$out" | sed 's/^/      /'
+        fail "a .qsb is missing or older than its .frag: run tools/build-shaders.sh"
+    fi
+}
+
 check_sddm_theme() {
     head_ "sddm-theme"
     [[ -d "$SDDM_THEME" ]] || { skip "no theme in the repo"; return; }
@@ -596,7 +610,7 @@ check_design() {
 }
 
 # ── driver ───────────────────────────────────────────────────────────────────
-ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n design sddm_theme daemon_cli shell_boot)
+ALL=(qml_syntax singletons imports settings_schema window_copies ipc_targets i18n design shaders sddm_theme daemon_cli shell_boot)
 
 to_run=()
 if (( $# == 0 )); then

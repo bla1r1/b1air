@@ -204,6 +204,7 @@ void SwayClient::readQuery() {
             const QString human = v.value("human_readable").toString();
             const QString original = v.value("sway_original_version").toString();
             m_swayfx = v.contains("sway_original_version");
+            m_keysFromUs = v.value("b1air_keys_from_us").toBool();
             // swayFX's human_readable is "0.6-fd71a6bd (date, branch)"; the
             // number is the part before the first '-' or ' '.
             const QString number = human.section(QRegularExpression("[- ]"), 0, 0);

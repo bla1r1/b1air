@@ -1,0 +1,149 @@
+From 1c32e9855decb7b262e0ca325e54545625b4c7b4 Mon Sep 17 00:00:00 2001
+From: b1air <dimazzzzz342@gmail.com>
+Date: Sun, 18 Oct 2026 19:55:41 +0200
+Subject: [PATCH] bindsym --to-code: keys from us, not from the first layout
+
+--to-code looked a shortcut's keysym up in the keyboard's first layout.
+With a Cyrillic layout first ("ru,ua"), q, t and e are not there and
+every such binding was left as a keysym that layout never produces: the
+shortcuts did nothing. The way round it was to keep us first in the
+list, an English layout in the switcher nobody chose.
+
+Now the key is the one with that keysym on a US keyboard, the same in
+every layout, whatever the list and its order. The first Latin layout of
+the list was tried and is not used: its keys and us's together put two
+shortcuts on one key (de's minus is where us has slash). A keysym us
+does not have (Cyrillic_ya) is still looked up in the first layout.
+
+get_version says so (b1air_keys_from_us), for b1air-daemon, which keeps
+putting us first on a sway without this.
+---
+ sway/commands/bind.c | 75 ++++++++++++++++++++++++++++++++++----------
+ sway/ipc-json.c      |  3 ++
+ 2 files changed, 62 insertions(+), 16 deletions(-)
+
+diff --git a/sway/commands/bind.c b/sway/commands/bind.c
+index 627d994..dc05cc1 100644
+--- a/sway/commands/bind.c
++++ b/sway/commands/bind.c
+@@ -659,44 +659,87 @@ struct keycode_matches {
+ 	xkb_keysym_t keysym;
+ 	xkb_keycode_t keycode;
+ 	int count;
++	xkb_layout_index_t layout;
+ };
+ 
+ /**
+  * Iterate through keycodes in the keymap to find ones matching
+- * the specified keysym.
++ * the specified keysym in matches->layout, unshifted.
+  */
+ static void find_keycode(struct xkb_keymap *keymap,
+ 		xkb_keycode_t keycode, void *data) {
+-	xkb_keysym_t keysym = xkb_state_key_get_one_sym(
+-			config->keysym_translation_state, keycode);
+-
+-	if (keysym == XKB_KEY_NoSymbol) {
++	struct keycode_matches *matches = data;
++	// A key with fewer layouts (Space, Return, the F keys) has its first
++	// one in every layout, as xkb wraps it.
++	xkb_layout_index_t layout = matches->layout;
++	if (layout >= xkb_keymap_num_layouts_for_key(keymap, keycode)) {
++		layout = 0;
++	}
++	const xkb_keysym_t *syms = NULL;
++	if (xkb_keymap_key_get_syms_by_level(keymap, keycode, layout, 0, &syms) != 1) {
+ 		return;
+ 	}
+-
+-	struct keycode_matches *matches = data;
+-	if (matches->keysym == keysym) {
++	if (matches->keysym == syms[0]) {
+ 		matches->keycode = keycode;
+ 		matches->count++;
+ 	}
+ }
+ 
+-/**
+- * Return the keycode for the specified keysym.
+- */
+-static struct keycode_matches get_keycode_for_keysym(xkb_keysym_t keysym) {
++static struct keycode_matches find_in_layout(struct xkb_keymap *keymap,
++		xkb_layout_index_t layout, xkb_keysym_t keysym) {
+ 	struct keycode_matches matches = {
+ 		.keysym = keysym,
+ 		.keycode = XKB_KEYCODE_INVALID,
+ 		.count = 0,
++		.layout = layout,
+ 	};
+-
+-	xkb_keymap_key_for_each(
+-			xkb_state_get_keymap(config->keysym_translation_state),
+-			find_keycode, &matches);
++	xkb_keymap_key_for_each(keymap, find_keycode, &matches);
+ 	return matches;
+ }
+ 
++/**
++ * b1air: us, compiled once: where a shortcut's key is.
++ */
++static struct xkb_keymap *us_keymap(void) {
++	static struct xkb_keymap *us = NULL;
++	if (us == NULL) {
++		struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_SECURE_GETENV);
++		if (context == NULL) {
++			return NULL;
++		}
++		struct xkb_rule_names rules = { .layout = "us" };
++		us = xkb_keymap_new_from_names(context, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
++		xkb_context_unref(context);
++	}
++	return us;
++}
++
++/**
++ * Return the keycode for the specified keysym.
++ *
++ * b1air: looked up in us, not in the keyboard's first layout. Upstream used
++ * the first, so with "ru,ua" — whatever was put first — every
++ * `bindsym --to-code $mod+q` found no q and was left as a keysym, which a
++ * Cyrillic layout never produces: the shortcuts stopped working, and the way
++ * round it was to keep us first in the list, an English layout in the
++ * switcher nobody chose. Now the list is the user's, and a shortcut is on
++ * the key that has its letter on a US keyboard, in every layout alike. Not
++ * the first Latin layout of the list instead: its keys and us's together
++ * put two shortcuts on one key (de's minus is where us has slash). The
++ * keyboard's first layout only for a keysym us does not have
++ * (bindsym --to-code Cyrillic_ya).
++ */
++static struct keycode_matches get_keycode_for_keysym(xkb_keysym_t keysym) {
++	if (us_keymap() != NULL) {
++		struct keycode_matches matches = find_in_layout(us_keymap(), 0, keysym);
++		if (matches.count > 0) {
++			return matches;
++		}
++	}
++	return find_in_layout(
++		xkb_state_get_keymap(config->keysym_translation_state), 0, keysym);
++}
++
+ bool translate_binding(struct sway_binding *binding) {
+ 	if ((binding->flags & BINDING_CODE) == 0) {
+ 		return true;
+diff --git a/sway/ipc-json.c b/sway/ipc-json.c
+index d021a8a..759c1e9 100644
+--- a/sway/ipc-json.c
++++ b/sway/ipc-json.c
+@@ -241,6 +241,9 @@ json_object *ipc_json_get_version(void) {
+ 	json_object_object_add(version, "minor", json_object_new_int(minor));
+ 	json_object_object_add(version, "patch", json_object_new_int(patch));
+ 	json_object_object_add(version, "loaded_config_file_name", json_object_new_string(config->current_config_path));
++	// b1air: bindsym --to-code takes its keys from us (commands/bind.c), so
++	// the layouts need no us first for the shortcuts; b1air-daemon asks.
++	json_object_object_add(version, "b1air_keys_from_us", json_object_new_boolean(true));
+ 
+ 	return version;
+ }
+-- 
+2.56.0
+

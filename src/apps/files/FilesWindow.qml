@@ -30,8 +30,8 @@ C.ApplicationWindow {
     palette.toolTipBase: Design.raised
     palette.toolTipText: Design.text
     palette.placeholderText: Design.textFaint
-    palette.light: Design.highest
-    palette.midlight: Design.high
+    palette.light: Design.active
+    palette.midlight: Design.hover
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
@@ -775,1019 +775,1057 @@ C.ApplicationWindow {
             }
         }
         // ── Main column ──────────────────────────────────────────────────────
-        ColumnLayout {
+        // The folder fills it from the top edge; the chrome — the folder
+        // chooser bar, the toolbar, the tabs — floats over it on Ui/ScrollEdge,
+        // so what scrolls up goes under the toolbar, blurred, as on a Mac
+        // (HIG: Toolbars). Without a GPU the edge is an opaque bar.
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !window.device
-            spacing: 0
 
-            // Folder chooser bar, in --pick-folder mode.
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.rowTall)
-                visible: FilesBackend.pickMode
-                color: Design.well
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Design.s(Design.space.lg)
-                    anchors.rightMargin: Design.s(Design.space.lg)
-                    spacing: Design.s(Design.space.md)
-                    Icon { text: "\u{f024b}"; color: Design.textDim }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-                        Label { text: I18n.tr("Choose a folder"); role: "caption"; dim: true }
-                        Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
-                    }
-                    Button { variant: "secondary"; label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
-                    Button { variant: "primary"; label: I18n.tr("Choose this folder");  onClicked: FilesBackend.confirmPick() }
-                }
-            }
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
 
-            // ── Toolbar ──────────────────────────────────────────────────────
-            AppToolbar {
-                id: toolbar
-                Layout.fillWidth: true
-                // Smart about its width: the search field becomes a button
-                // that opens it, and the four views one button with a menu,
-                // before the path is squeezed.
-                readonly property bool compactSearch: width < Design.s(Design.width.menuMax)
-                readonly property bool compactViews: width < Design.s(Design.width.menuMax)
-                property bool searchOpen: false
-                readonly property bool searchShown: !compactSearch || searchOpen || FilesBackend.filterQuery !== ""
-                function openSearch() {
-                    searchOpen = true;
-                    Qt.callLater(searchField.focusInput);
-                }
+                // ── Content ──────────────────────────────────────────────────────
+                Item {
+                    id: contentArea
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
-                    RowLayout {
-                        spacing: Design.s(Design.space.xxs)
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                    // Drops on empty space land in this folder.
+                    DropArea {
+                        anchors.fill: parent
+                        keys: ["text/uri-list"]
+                        onDropped: drop => window.dropInto(drop, window.currentPath)
                     }
 
-                    // Path: clickable segments; a click on the empty part of the
-                    // bar, or Ctrl+L, turns it into a field to type a path in —
-                    // or a server's address, smb://nas/media.
-                    Rectangle {
-                        id: pathBar
-                        property bool editing: false
-                        function edit() {
-                            pathInput.text = window.addressOf(window.currentPath);
-                            editing = true;
-                            pathInput.forceActiveFocus();
-                            pathInput.selectAll();
-                        }
-                        function done() {
-                            editing = false;
+                    // Clicks on empty space: clear the selection, right-click for
+                    // the folder's own menu. Under the views so items get theirs.
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: mouse => {
                             window.currentView().forceActiveFocus();
+                            if (!(mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))) fm.clearSelection();
+                            if (mouse.button === Qt.RightButton) bgMenu.popup();
                         }
-                        Layout.fillWidth: true
-                        Layout.minimumWidth: Design.s(Design.size.thumb)
-                        Layout.horizontalStretchFactor: 3
-                        Layout.preferredHeight: Design.s(Design.size.knob)
-                        radius: height / 2
-                        color: Design.raised
-                        border.color: editing ? Design.accent : Design.tint(Design.text, 0.06)
-                        border.width: Design.border
+                    }
+
+                    // ── Icons ────────────────────────────────────────────────────
+                    GridView {
+                        id: gridView
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(Design.space.md)
+                        anchors.rightMargin: Design.s(Design.space.md)
+                        anchors.bottomMargin: Design.s(Design.space.md)
+                        // From the window's top, the first row below the
+                        // chrome: what scrolls up goes under it.
+                        topMargin: chrome.height + Design.s(Design.space.md)
+                        visible: window.viewMode === "grid"
+                        model: window.viewMode === "grid" ? fm : null
                         clip: true
-
-                        Clickable {
-                            anchors.fill: parent
-                            visible: !pathBar.editing
-                            cursorShape: Qt.IBeamCursor
-                            onClicked: pathBar.edit()
-                        }
-
-                        TextInput {
-                            id: pathInput
-                            visible: pathBar.editing
-                            anchors.fill: parent
-                            anchors.leftMargin: Design.s(Design.space.md)
-                            anchors.rightMargin: Design.s(Design.space.md)
-                            verticalAlignment: TextInput.AlignVCenter
-                            font.family: Design.font.sans
-                            font.pixelSize: Design.s(Design.font.body)
-                            color: Design.text
-                            selectionColor: Design.tint(Design.accent, 0.35)
-                            selectedTextColor: Design.text
-                            clip: true
-                            onAccepted: { const v = text; pathBar.done(); window.goToAddress(v); }
-                            Keys.onEscapePressed: pathBar.done()
-                            onActiveFocusChanged: if (!activeFocus && pathBar.editing) pathBar.editing = false
-                        }
-
-                        // Where the path starts — home, a share, a phone, the
-                        // trash, the disk — at the head of the bar, so a short
-                        // path is not a lone word adrift in it.
-                        Icon {
-                            id: placeIcon
-                            visible: !pathBar.editing
-                            anchors.left: parent.left
-                            anchors.leftMargin: Design.s(Design.space.md)
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: Design.textDim
-                            text: FilesBackend.inTrash ? "\u{f0a79}"
-                                : window.shareAt(window.currentPath) ? "\u{f0200}"
-                                : window.currentPath.indexOf("/b1air-devices/") >= 0 ? "\u{f011c}"
-                                : window.currentPath.startsWith(window.homeDir) ? "\u{f02dc}"
-                                : "\u{f02ca}"
-                        }
-
-                        // The start of a path too long for the bar: one button
-                        // in place of the folders cut off, listing them.
-                        Button {
-                            variant: "secondary"
-                            id: crumbMore
-                            visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(Design.size.tile) + 1
-                            anchors.left: placeIcon.right
-                            anchors.leftMargin: Design.s(Design.space.xs)
-                            anchors.verticalCenter: parent.verticalCenter
-                            size: "sm"
-                            label: "…"
-                            tip: I18n.tr("Whole path")
-                            onClicked: crumbMenu.popup()
-                        }
-                        AppMenu {
-                            id: crumbMenu
-                            Instantiator {
-                                model: crumbs.model
-                                delegate: AppMenuItem {
-                                    required property var modelData
-                                    text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
-                                    onTriggered: window.navigateTo(modelData.path)
-                                }
-                                onObjectAdded: (i, o) => crumbMenu.insertItem(i, o)
-                                onObjectRemoved: (i, o) => crumbMenu.removeItem(o)
-                            }
-                        }
-
-                        ListView {
-                            id: crumbs
-                            visible: !pathBar.editing
-                            anchors.fill: parent
-                            anchors.leftMargin: (crumbMore.visible ? crumbMore.x + crumbMore.width : placeIcon.x + placeIcon.width)
-                                                + Design.s(Design.space.xs)
-                            anchors.rightMargin: Design.s(Design.space.sm)
-                            orientation: ListView.Horizontal
-                            interactive: false
-                            clip: true
-                            spacing: 0
-                            model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : window.shareCrumbs(window.deviceCrumbs(FilesBackend.breadcrumbs))
-                            // Always the end of the path in view: the folder
-                            // you are in, not the root you came from — and
-                            // starting at a whole folder, not the tail of one
-                            // cut off under the "…".
-                            function showEnd() {
-                                positionViewAtEnd();
-                                const i = indexAt(contentX + 1, height / 2);
-                                const item = itemAtIndex(i);
-                                const next = itemAtIndex(i + 1);
-                                if (item && next && item.x < contentX) contentX = next.x;
-                            }
-                            onCountChanged: Qt.callLater(showEnd)
-                            onWidthChanged: Qt.callLater(showEnd)
-                            onContentWidthChanged: Qt.callLater(showEnd)
-                            delegate: Row {
-                                required property var modelData
-                                required property int index
-                                height: crumbs.height
-                                Text {
-                                    visible: index > 0
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "\u{f0142}"
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(Design.font.footnote)
-                                    color: Design.textFaint
-                                }
-                                Rectangle {
-                                    readonly property bool last: index === crumbs.count - 1
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: crumbText.width + Design.s(Design.space.lg)
-                                    height: Design.s(Design.size.xs)
-                                    // No capsule of its own inside the bar's: the
-                                    // folder you are in is the bold one, and the
-                                    // others light up only under the pointer.
-                                    radius: Design.s(Design.radius.ctl) / 2
-                                    color: crumbMa.containsMouse && !last ? Design.hover : "transparent"
-                                    Text {
-                                        id: crumbText
-                                        anchors.centerIn: parent
-                                        // A long name is cut in the middle, so
-                                        // one folder cannot fill the bar alone.
-                                        // Never wider than the bar, however narrow
-                                        // the window: one folder alone did not fit.
-                                        // Not the list's own width (it waits on the
-                                        // "…", which waits on this): the bar's,
-                                        // less that button and a separator.
-                                        width: Math.min(implicitWidth, Design.s(parent.last ? 260 : 160),
-                                                        pathBar.width - Design.s(crumbs.count > 1 ? 104 : 64))
-                                        elide: Text.ElideMiddle
-                                        text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
-                                        font.family: Design.font.sans
-                                        font.pixelSize: Design.s(Design.font.body)
-                                        font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
-                                        color: parent.last ? Design.text : Design.textDim
-                                    }
-                                    Clickable {
-                                        id: crumbMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: window.navigateTo(modelData.path)
-                                    }
-                                    DropArea {
-                                        anchors.fill: parent
-                                        keys: ["text/uri-list"]
-                                        onDropped: drop => window.dropInto(drop, modelData.path)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Field {
-                        id: searchField
-                        visible: toolbar.searchShown
-                        // Narrows before the path does: the path is what
-                        // says where you are.
-                        Layout.fillWidth: true
-                        Layout.maximumWidth: Design.s(Design.width.menuMin)
-                        Layout.minimumWidth: Design.s(Design.size.thumb)
-                        Layout.preferredHeight: Design.s(Design.size.knob)
-                        radius: height / 2
-                        color: Design.raised
-                        placeholder: I18n.tr("Search (Ctrl+F)")
-                        onEdited: value => FilesBackend.filterQuery = value
-                        onAccepted: window.currentView().forceActiveFocus()
-                        // Opened from the button: shut again once left empty.
-                        onFocusedChanged: if (!focused && text === "") toolbar.searchOpen = false
-                    }
-                    RowLayout {
-                        spacing: Design.s(Design.space.xxs)
-                        visible: !toolbar.searchShown
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
-                    }
-
-                    Button {
-                        variant: "danger"
-                        visible: FilesBackend.inTrash
-                        icon: "\u{f0a7a}"
-                        label: I18n.tr("Empty Trash")
-                        enabled: FilesBackend.trashCount > 0
-                        onClicked: confirmEmpty.open()
-                    }
-                    // New folder lives in the right-click menu and on
-                    // Ctrl+Shift+N, not on the bar.
-                    // The four views: one choice, so one segmented control,
-                    // as every choice of view is; it was four toggle buttons.
-                    SegmentedControl {
-                        visible: !toolbar.compactViews
-                        size: "sm"
-                        model: [
-                            { id: "grid",    label: "", icon: "\u{f0570}", tip: I18n.tr("Icons (Ctrl+1)") },
-                            { id: "list",    label: "", icon: "\u{f0279}", tip: I18n.tr("List (Ctrl+2)") },
-                            { id: "columns", label: "", icon: "\u{f056d}", tip: I18n.tr("Columns (Ctrl+3)") },
-                            { id: "gallery", label: "", icon: "\u{f056c}", tip: I18n.tr("Gallery (Ctrl+4)") }
-                        ]
-                        current: window.viewMode
-                        onPicked: id => window.viewMode = id
-                    }
-                    RowLayout {
-                        spacing: Design.s(Design.space.xxs)
-                        visible: toolbar.compactViews
-                        Button {
-                            variant: "ghost"
-                            iconOnly: true
-                            icon: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
-                            tip: I18n.tr("View (Ctrl+1 … Ctrl+4)")
-                            onClicked: viewModeMenu.popup()
-                        }
-                    }
-                    RowLayout {
-                        spacing: Design.s(Design.space.xxs)
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
-                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
-                    }
-            }
-
-            // ── Tabs ─────────────────────────────────────────────────────────
-            Flickable {
-                visible: window.tabs.length > 1
-                Layout.fillWidth: true
-                Layout.preferredHeight: Design.s(Design.size.knob)
-                Layout.leftMargin: Design.s(Design.space.md)
-                Layout.rightMargin: Design.s(Design.space.md)
-                contentWidth: tabRow.implicitWidth
-                clip: true
-                flickableDirection: Flickable.HorizontalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                RowLayout {
-                    id: tabRow
-                    height: parent.height
-                    spacing: Design.s(Design.space.xs)
-                    Repeater {
-                        model: window.tabs
-                        delegate: AppTab {
-                            required property var modelData
-                            required property int index
-                            glyph: modelData === FilesBackend.trashPath ? "\u{f0a7a}" : "\u{f024b}"
-                            label: window.tabTitle(modelData)
-                            active: index === window.tabIndex
-                            onClicked: window.switchTab(index)
-                            onCloseRequested: window.closeTab(index)
-                        }
-                    }
-                    Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
-                }
-            }
-
-            // ── Content ──────────────────────────────────────────────────────
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                // Drops on empty space land in this folder.
-                DropArea {
-                    anchors.fill: parent
-                    keys: ["text/uri-list"]
-                    onDropped: drop => window.dropInto(drop, window.currentPath)
-                }
-
-                // Clicks on empty space: clear the selection, right-click for
-                // the folder's own menu. Under the views so items get theirs.
-                MouseArea {
-                    anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onClicked: mouse => {
-                        window.currentView().forceActiveFocus();
-                        if (!(mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))) fm.clearSelection();
-                        if (mouse.button === Qt.RightButton) bgMenu.popup();
-                    }
-                }
-
-                // ── Icons ────────────────────────────────────────────────────
-                GridView {
-                    id: gridView
-                    anchors.fill: parent
-                    anchors.margins: Design.s(Design.space.md)
-                    visible: window.viewMode === "grid"
-                    model: window.viewMode === "grid" ? fm : null
-                    clip: true
-                    // Tiles scrolled away are refilled, not destroyed and made
-                    // again; and a screen below the view is laid out ahead, so
-                    // its thumbnails are being made before they scroll in.
-                    reuseItems: true
-                    cacheBuffer: Math.max(0, height)
-                    // The tiles laid out ahead ask for their thumbnails only
-                    // once the view has been still for a moment: asked at
-                    // once, they queued beside the ones on screen, and a
-                    // folder on a share filled in out of view first.
-                    property bool settled: false
-                    Timer {
-                        id: settleTimer
-                        interval: 250
-                        onTriggered: gridView.settled = true
-                    }
-                    function unsettle() { settled = false; settleTimer.restart(); }
-                    onContentYChanged: unsettle()
-                    onModelChanged: unsettle()
-                    onCountChanged: unsettle()
-                    readonly property string folder: window.currentPath
-                    onFolderChanged: unsettle()
-                    focus: visible
-                    boundsBehavior: Flickable.StopAtBounds
-                    readonly property int columns: Math.max(1, Math.floor(width / cellWidth))
-                    cellWidth: Design.s(window.iconSize + 44)
-                    cellHeight: Design.s(window.iconSize + 62)
-                    currentIndex: fm.currentIndex
-                    highlightFollowsCurrentItem: false
-                    C.ScrollBar.vertical: OverflowBar {}
-                    Keys.onPressed: event => window.handleKey(event, gridView.columns)
-
-                    delegate: Item {
-                        id: tile
-                        required property int index
-                        required property string name
-                        required property string path
-                        required property bool isDir
-                        required property bool isImage
-                        required property bool selected
-                        required property bool hidden
-                        required property bool symlink
-                        required property string category
-                        required property string sizeText
-                        required property var tags
-                        required property var modified
-                        width: gridView.cellWidth
-                        height: gridView.cellHeight
-
-                        readonly property bool hasThumb: tile.isImage || tile.category === "video" || tile.category === "audio"
-                        // From the index, not y: a new tile is at 0 until the
-                        // grid lays it out, and would count as on screen.
-                        readonly property real rowTop: Math.floor(index / gridView.columns) * gridView.cellHeight
-                        readonly property bool onScreen: rowTop + gridView.cellHeight > gridView.contentY - gridView.originY
-                                                         && rowTop < gridView.contentY - gridView.originY + gridView.height
-                        // Once asked for, kept: a tile scrolled just out of
-                        // view does not drop the picture it has.
-                        property bool thumbWanted: false
-                        function wantThumb() { if (!thumbWanted && (onScreen || gridView.settled)) thumbWanted = true; }
-                        onOnScreenChanged: wantThumb()
-                        Component.onCompleted: wantThumb()
-                        GridView.onReused: { thumbWanted = false; wantThumb(); }
-                        Connections {
-                            target: gridView
-                            function onSettledChanged() { tile.wantThumb(); }
-                        }
-
-                        Rectangle {
-                            id: tileBg
-                            anchors.fill: parent
-                            anchors.margins: Design.s(Design.space.xxs)
-                            radius: Design.s(Design.radius.card)
-                            color: tile.selected ? Design.tint(Design.accent, 0.24)
-                                 : tileDrop.containsDrag ? Design.tint(Design.accent, 0.16)
-                                 : tileMa.containsMouse ? Design.hover : "transparent"
-                            border.width: tile.selected || tileDrop.containsDrag ? 1 : 0
-                            border.color: Design.accent
-                            opacity: tile.hidden ? 0.65 : 1.0
-
-                            Item {
-                                id: thumbBox
-                                anchors.top: parent.top
-                                anchors.topMargin: Design.s(Design.space.sm)
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: Design.s(window.iconSize)
-                                height: Design.s(window.iconSize)
-
-                                Image {
-                                    id: thumb
-                                    anchors.fill: parent
-                                    // Made and cached in the background (thumbs.cpp), videos too.
-                                    visible: tile.hasThumb && status === Image.Ready
-                                    source: tile.hasThumb && tile.thumbWanted ? window.thumbUrl(tile.path, tile.modified) : ""
-                                    sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    asynchronous: true
-                                    smooth: true
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    visible: !thumb.visible
-                                    text: window.glyphFor(tile.category)
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(window.iconSize * 0.78)
-                                    color: window.toneFor(tile.category)
-                                }
-                                Text {
-                                    visible: tile.symlink
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    text: "\u{f0339}"
-                                    font.family: Design.font.icon
-                                    font.pixelSize: Design.s(Design.font.glyphSm)
-                                    color: Design.text
-                                }
-                            }
-                            Text {
-                                anchors.top: thumbBox.bottom
-                                anchors.topMargin: Design.s(Design.space.xs)
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.leftMargin: Design.s(Design.space.xs)
-                                anchors.rightMargin: Design.s(Design.space.xs)
-                                text: tile.name
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
-                                font.family: Design.font.sans
-                                font.pixelSize: Design.s(Design.font.body)
-                                color: Design.text
-                            }
-                            // Its tags, as overlapping dots at the thumbnail's corner.
-                            Row {
-                                visible: tile.tags.length > 0
-                                anchors.right: thumbBox.right
-                                anchors.bottom: thumbBox.bottom
-                                spacing: -Design.s(Design.space.xxs)
-                                Repeater {
-                                    model: tile.tags
-                                    Rectangle {
-                                        required property string modelData
-                                        width: Design.s(Design.space.md); height: width; radius: width / 2
-                                        color: window.tagColor(modelData)
-                                        border.color: Design.surface
-                                        border.width: Design.border
-                                    }
-                                }
-                            }
-                        }
-
-                        DragProxy { id: tileProxy; active: tileMa.drag.active; whole: tile.selected; path: tile.path }
-
-                        MouseArea {
-                            id: tileMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                            drag.target: tileProxy
-                            drag.threshold: Design.s(Design.space.sm)
-                            onPressed: mouse => window.itemPressed(tile.index, mouse)
-                            onReleased: mouse => window.itemReleased(tile.index, mouse, drag.active)
-                            onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(tile.index); }
-                        }
-                        DropArea {
-                            id: tileDrop
-                            anchors.fill: parent
-                            enabled: tile.isDir
-                            keys: ["text/uri-list"]
-                            onDropped: drop => window.dropInto(drop, tile.path)
-                        }
-                    }
-                }
-
-                // ── List with columns ────────────────────────────────────────
-                ColumnLayout {
-                    anchors.fill: parent
-                    visible: window.viewMode === "list"
-                    spacing: 0
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(Design.size.md)
-                        color: "transparent"
-                        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Design.s(Design.space.lg)
-                            anchors.rightMargin: Design.s(Design.space.lg)
-                            spacing: Design.s(Design.space.md)
-                            SortHead { Layout.fillWidth: true; label: I18n.tr("Name"); field: "name" }
-                            SortHead { Layout.preferredWidth: Design.s(Design.size.thumb); label: I18n.tr("Size"); field: "size"; alignRight: true }
-                            SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Kind"); field: "type" }
-                            SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Modified"); field: "time" }
-                        }
-                    }
-
-                    ListView {
-                        id: listView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: window.viewMode === "list" ? fm : null
-                        clip: true
-                        reuseItems: true   // as the grid
+                        // Tiles scrolled away are refilled, not destroyed and made
+                        // again; and a screen below the view is laid out ahead, so
+                        // its thumbnails are being made before they scroll in.
+                        reuseItems: true
                         cacheBuffer: Math.max(0, height)
+                        // The tiles laid out ahead ask for their thumbnails only
+                        // once the view has been still for a moment: asked at
+                        // once, they queued beside the ones on screen, and a
+                        // folder on a share filled in out of view first.
+                        property bool settled: false
+                        Timer {
+                            id: settleTimer
+                            interval: 250
+                            onTriggered: gridView.settled = true
+                        }
+                        function unsettle() { settled = false; settleTimer.restart(); }
+                        onContentYChanged: unsettle()
+                        onModelChanged: unsettle()
+                        onCountChanged: unsettle()
+                        readonly property string folder: window.currentPath
+                        onFolderChanged: unsettle()
                         focus: visible
                         boundsBehavior: Flickable.StopAtBounds
+                        readonly property int columns: Math.max(1, Math.floor(width / cellWidth))
+                        cellWidth: Design.s(window.iconSize + 44)
+                        cellHeight: Design.s(window.iconSize + 62)
                         currentIndex: fm.currentIndex
                         highlightFollowsCurrentItem: false
                         C.ScrollBar.vertical: OverflowBar {}
-                        Keys.onPressed: event => window.handleKey(event, 1)
+                        Keys.onPressed: event => window.handleKey(event, gridView.columns)
 
                         delegate: Item {
-                            id: row
+                            id: tile
                             required property int index
                             required property string name
                             required property string path
                             required property bool isDir
+                            required property bool isImage
                             required property bool selected
                             required property bool hidden
+                            required property bool symlink
                             required property string category
                             required property string sizeText
-                            required property string kind
-                            required property string modifiedText
                             required property var tags
-                            width: listView.width
-                            height: Design.s(Design.size.knob)
+                            required property var modified
+                            width: gridView.cellWidth
+                            height: gridView.cellHeight
+
+                            readonly property bool hasThumb: tile.isImage || tile.category === "video" || tile.category === "audio"
+                            // From the index, not y: a new tile is at 0 until the
+                            // grid lays it out, and would count as on screen.
+                            readonly property real rowTop: Math.floor(index / gridView.columns) * gridView.cellHeight
+                            readonly property bool onScreen: rowTop + gridView.cellHeight > gridView.contentY - gridView.originY
+                                                             && rowTop < gridView.contentY - gridView.originY + gridView.height
+                            // Once asked for, kept: a tile scrolled just out of
+                            // view does not drop the picture it has.
+                            property bool thumbWanted: false
+                            function wantThumb() { if (!thumbWanted && (onScreen || gridView.settled)) thumbWanted = true; }
+                            onOnScreenChanged: wantThumb()
+                            Component.onCompleted: wantThumb()
+                            GridView.onReused: { thumbWanted = false; wantThumb(); }
+                            Connections {
+                                target: gridView
+                                function onSettledChanged() { tile.wantThumb(); }
+                            }
 
                             Rectangle {
+                                id: tileBg
                                 anchors.fill: parent
-                                anchors.leftMargin: Design.s(Design.space.sm)
-                                anchors.rightMargin: Design.s(Design.space.sm)
-                                radius: Design.s(Design.radius.sm)
-                                color: row.selected ? Design.tint(Design.accent, 0.24)
-                                     : rowDrop.containsDrag ? Design.tint(Design.accent, 0.16)
-                                     : rowMa.containsMouse ? Design.hover
-                                     : (row.index % 2 ? Design.tint(Design.raised, 0.35) : "transparent")
-                                opacity: row.hidden ? 0.65 : 1.0
+                                anchors.margins: Design.s(Design.space.xxs)
+                                radius: Design.s(Design.radius.card)
+                                color: tile.selected ? Design.tint(Design.accent, 0.24)
+                                     : tileDrop.containsDrag ? Design.tint(Design.accent, 0.16)
+                                     : tileMa.containsMouse ? Design.hover : "transparent"
+                                border.width: tile.selected || tileDrop.containsDrag ? 1 : 0
+                                border.color: Design.accent
+                                opacity: tile.hidden ? 0.65 : 1.0
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Design.s(Design.space.sm)
-                                    anchors.rightMargin: Design.s(Design.space.sm)
-                                    spacing: Design.s(Design.space.md)
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: Design.s(Design.space.sm)
-                                        Text {
-                                            Layout.preferredWidth: Design.s(Design.size.mini)
-                                            text: window.glyphFor(row.category)
-                                            font.family: Design.font.icon
-                                            font.pixelSize: Design.s(Design.font.glyph)
-                                            color: window.toneFor(row.category)
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                        Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
-                                        Row {
-                                            visible: row.tags.length > 0
-                                            spacing: -Design.s(Design.space.xxs)
-                                            Repeater {
-                                                model: row.tags
-                                                Rectangle {
-                                                    required property string modelData
-                                                    width: Design.s(Design.space.sm); height: width; radius: width / 2
-                                                    color: window.tagColor(modelData)
-                                                    border.color: Design.surface
-                                                    border.width: Design.border
-                                                }
-                                            }
+                                Item {
+                                    id: thumbBox
+                                    anchors.top: parent.top
+                                    anchors.topMargin: Design.s(Design.space.sm)
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Design.s(window.iconSize)
+                                    height: Design.s(window.iconSize)
+
+                                    Image {
+                                        id: thumb
+                                        anchors.fill: parent
+                                        // Made and cached in the background (thumbs.cpp), videos too.
+                                        visible: tile.hasThumb && status === Image.Ready
+                                        source: tile.hasThumb && tile.thumbWanted ? window.thumbUrl(tile.path, tile.modified) : ""
+                                        sourceSize: Qt.size(Design.s(window.iconSize) * 2, Design.s(window.iconSize) * 2)
+                                        fillMode: Image.PreserveAspectFit
+                                        asynchronous: true
+                                        smooth: true
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: !thumb.visible
+                                        text: window.glyphFor(tile.category)
+                                        font.family: Design.font.icon
+                                        font.pixelSize: Design.s(window.iconSize * 0.78)
+                                        color: window.toneFor(tile.category)
+                                    }
+                                    Text {
+                                        visible: tile.symlink
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        text: "\u{f0339}"
+                                        font.family: Design.font.icon
+                                        font.pixelSize: Design.s(Design.font.glyphSm)
+                                        color: Design.text
+                                    }
+                                }
+                                Text {
+                                    anchors.top: thumbBox.bottom
+                                    anchors.topMargin: Design.s(Design.space.xs)
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.leftMargin: Design.s(Design.space.xs)
+                                    anchors.rightMargin: Design.s(Design.space.xs)
+                                    text: tile.name
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                    font.family: Design.font.sans
+                                    font.pixelSize: Design.s(Design.font.body)
+                                    color: Design.text
+                                }
+                                // Its tags, as overlapping dots at the thumbnail's corner.
+                                Row {
+                                    visible: tile.tags.length > 0
+                                    anchors.right: thumbBox.right
+                                    anchors.bottom: thumbBox.bottom
+                                    spacing: -Design.s(Design.space.xxs)
+                                    Repeater {
+                                        model: tile.tags
+                                        Rectangle {
+                                            required property string modelData
+                                            width: Design.s(Design.space.md); height: width; radius: width / 2
+                                            color: window.tagColor(modelData)
+                                            border.color: Design.surface
+                                            border.width: Design.border
                                         }
                                     }
-                                    Label { Layout.preferredWidth: Design.s(Design.size.thumb); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
-                                    Label { Layout.preferredWidth: Design.s(Design.width.label); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
-                                    Label { Layout.preferredWidth: Design.s(Design.width.label); text: row.modifiedText; dim: true; elide: Text.ElideRight }
                                 }
                             }
 
-                            DragProxy { id: rowProxy; active: rowMa.drag.active; whole: row.selected; path: row.path }
+                            DragProxy { id: tileProxy; active: tileMa.drag.active; whole: tile.selected; path: tile.path }
 
                             MouseArea {
-                                id: rowMa
+                                id: tileMa
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                drag.target: rowProxy
+                                drag.target: tileProxy
                                 drag.threshold: Design.s(Design.space.sm)
-                                onPressed: mouse => window.itemPressed(row.index, mouse)
-                                onReleased: mouse => window.itemReleased(row.index, mouse, drag.active)
-                                onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(row.index); }
+                                onPressed: mouse => window.itemPressed(tile.index, mouse)
+                                onReleased: mouse => window.itemReleased(tile.index, mouse, drag.active)
+                                onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(tile.index); }
                             }
                             DropArea {
-                                id: rowDrop
+                                id: tileDrop
                                 anchors.fill: parent
-                                enabled: row.isDir
+                                enabled: tile.isDir
                                 keys: ["text/uri-list"]
-                                onDropped: drop => window.dropInto(drop, row.path)
+                                onDropped: drop => window.dropInto(drop, tile.path)
                             }
                         }
                     }
-                }
 
-                // ── Columns: every folder from Home down, side by side ───────
-                //
-                // As a desktop's column view: each folder on the way to this one
-                // in a column of its own, the one gone into lit, and what is
-                // selected previewed in a last column. A click on a folder goes
-                // into it; Left and Right walk out and in.
-                ListView {
-                    id: columnsView
-                    anchors.fill: parent
-                    visible: window.viewMode === "columns"
-                    orientation: ListView.Horizontal
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
-                    // Home and everything under it, or / and everything under that.
-                    readonly property var dirs: {
-                        const cur = window.currentPath;
-                        if (window.tagView || cur === "") return [];
-                        const base = cur === window.homeDir || cur.startsWith(window.homeDir + "/") ? window.homeDir : "/";
-                        const out = [base];
-                        const rest = cur.slice(base.length).split("/").filter(s => s !== "");
-                        let acc = base === "/" ? "" : base;
-                        for (const part of rest) { acc += "/" + part; out.push(acc); }
-                        return out;
-                    }
-                    // Only while shown: hidden, it still opened every folder above this one
-                    // on each move — on a network share a listing each, on the GUI thread.
-                    // A column a folder, and the preview after them, changed
-                    // only where the way down changed: the model was the
-                    // number of columns, and a new number made every column
-                    // anew, each folder above this one listed again on every
-                    // step down or up.
-                    model: ListModel { id: colModel }
-                    function syncColumns() {
-                        const want = window.viewMode === "columns" ? columnsView.dirs : [];
-                        let keep = 0;
-                        while (keep < colModel.count && keep < want.length
-                               && !colModel.get(keep).preview && colModel.get(keep).dir === want[keep])
-                            keep++;
-                        if (colModel.count > keep) colModel.remove(keep, colModel.count - keep);
-                        for (let i = keep; i < want.length; i++) colModel.append({ dir: want[i], preview: false });
-                        if (window.viewMode === "columns") colModel.append({ dir: "", preview: true });
-                    }
-                    onDirsChanged: syncColumns()
-                    Component.onCompleted: syncColumns()
-                    Connections { target: window; function onViewModeChanged() { columnsView.syncColumns(); } }
-                    onCountChanged: Qt.callLater(() => columnsView.positionViewAtEnd())
-                    // The current folder's column takes the keys.
-                    function positionViewAtIndex(i, mode) { if (lastColumn) lastColumn.positionViewAtIndex(i, ListView.Contain); }
-                    function positionViewAtBeginning() { if (lastColumn) lastColumn.positionViewAtBeginning(); }
-                    property ListView lastColumn: null
-                    onActiveFocusChanged: if (activeFocus && lastColumn) lastColumn.forceActiveFocus()
+                    // ── List with columns ────────────────────────────────────────
+                    ColumnLayout {
+                        anchors.fill: parent
+                        // Below the chrome: its column heads stay put.
+                        anchors.topMargin: chrome.height
+                        visible: window.viewMode === "list"
+                        spacing: 0
 
-                    delegate: Loader {
-                        id: col
-                        required property int index
-                        required property string dir
-                        required property bool preview
-                        readonly property bool isPreview: col.preview
-                        readonly property bool isLast: !col.preview && col.index === columnsView.dirs.length - 1
-                        // The next folder on the way, lit in this column.
-                        readonly property string onPath: col.index + 1 < columnsView.dirs.length ? columnsView.dirs[col.index + 1] : ""
-                        width: col.isPreview ? Math.max(Design.s(Design.size.canvas), columnsView.width - columnsView.dirs.length * Design.s(Design.width.control)) : Design.s(Design.width.control)
-                        height: columnsView.height
-                        sourceComponent: col.isPreview ? previewColumn : folderColumn
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(Design.size.md)
+                            color: "transparent"
+                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Design.line }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(Design.space.lg)
+                                anchors.rightMargin: Design.s(Design.space.lg)
+                                spacing: Design.s(Design.space.md)
+                                SortHead { Layout.fillWidth: true; label: I18n.tr("Name"); field: "name" }
+                                SortHead { Layout.preferredWidth: Design.s(Design.size.thumb); label: I18n.tr("Size"); field: "size"; alignRight: true }
+                                SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Kind"); field: "type" }
+                                SortHead { Layout.preferredWidth: Design.s(Design.width.label); label: I18n.tr("Modified"); field: "time" }
+                            }
+                        }
 
-                        Component {
-                            id: folderColumn
-                            Item {
-                                id: folderCol
-                                Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
-                                FileListModel { id: other }
-                                // The last column shows the window's own listing; one
-                                // that stops being last (a step down) lists its folder.
-                                function reopen() {
-                                    // Not one on its way out (a step up): it is no longer on the way.
-                                    if (!col.isLast && columnsView.dirs[col.index] === col.dir)
-                                        other.open(col.dir, FilesBackend.showHidden);
-                                }
-                                Component.onCompleted: reopen()
-                                Connections {
-                                    target: col
-                                    function onIsLastChanged() {
-                                        folderCol.reopen();
-                                        if (col.isLast) columnsView.lastColumn = colList;
-                                    }
-                                }
-                                Connections { target: FilesBackend; function onShowHiddenChanged() { folderCol.reopen(); } }
-                                // A folder further up the way: the window-wide
-                                // state only speaks for the last column.
-                                EmptyState {
-                                    anchors.centerIn: parent
-                                    width: parent.width - Design.s(Design.space.sm) * 2
-                                    visible: !col.isLast && other.count === 0 && !other.loading
-                                    icon: other.error ? "\u{f0b8a}" : "\u{f0256}"
-                                    title: other.error ? I18n.tr("Can't open") : I18n.tr("Empty folder")
-                                }
-                                ListView {
-                                    id: colList
+                        ListView {
+                            id: listView
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            model: window.viewMode === "list" ? fm : null
+                            clip: true
+                            reuseItems: true   // as the grid
+                            cacheBuffer: Math.max(0, height)
+                            focus: visible
+                            boundsBehavior: Flickable.StopAtBounds
+                            currentIndex: fm.currentIndex
+                            highlightFollowsCurrentItem: false
+                            C.ScrollBar.vertical: OverflowBar {}
+                            Keys.onPressed: event => window.handleKey(event, 1)
+
+                            delegate: Item {
+                                id: row
+                                required property int index
+                                required property string name
+                                required property string path
+                                required property bool isDir
+                                required property bool selected
+                                required property bool hidden
+                                required property string category
+                                required property string sizeText
+                                required property string kind
+                                required property string modifiedText
+                                required property var tags
+                                width: listView.width
+                                height: Design.s(Design.size.knob)
+
+                                Rectangle {
                                     anchors.fill: parent
-                                    anchors.margins: Design.s(Design.space.xs)
-                                    anchors.rightMargin: Design.s(Design.space.xs) + 1
-                                    model: col.isLast ? fm : other
-                                    clip: true
-                                    focus: col.isLast
-                                    boundsBehavior: Flickable.StopAtBounds
-                                    C.ScrollBar.vertical: OverflowBar {}
-                                    Component.onCompleted: if (col.isLast) columnsView.lastColumn = colList
-                                    Keys.onPressed: event => {
-                                        if (event.key === Qt.Key_Right) {
-                                            const it = fm.get(fm.currentIndex);
-                                            if (it.isDir) { window.navigateTo(it.path); event.accepted = true; }
-                                        } else if (event.key === Qt.Key_Left) {
-                                            const from = window.currentPath;
-                                            if (columnsView.dirs.length > 1) {
-                                                window.navigateTo(columnsView.dirs[columnsView.dirs.length - 2]);
-                                                fm.selectPaths([from]);
-                                            }
-                                            event.accepted = true;
-                                        } else {
-                                            window.handleKey(event, 1);
-                                        }
-                                    }
-                                    delegate: Rectangle {
-                                        id: crow
-                                        required property int index
-                                        required property string name
-                                        required property string path
-                                        required property bool isDir
-                                        required property bool selected
-                                        required property string category
-                                        required property var tags
-                                        readonly property bool lit: col.isLast ? crow.selected : crow.path === col.onPath
-                                        width: colList.width
-                                        height: Design.s(Design.size.sm)
-                                        radius: Design.s(Design.radius.sm)
-                                        color: crow.lit ? (col.isLast || col.index === columnsView.dirs.length - 2
-                                                           ? Design.accent : Design.tint(Design.text, 0.12))
-                                             : crowMa.containsMouse ? Design.hover : "transparent"
-                                        readonly property color ink: crow.lit && (col.isLast || col.index === columnsView.dirs.length - 2)
-                                                                     ? Design.accentText : Design.text
+                                    anchors.leftMargin: Design.s(Design.space.sm)
+                                    anchors.rightMargin: Design.s(Design.space.sm)
+                                    radius: Design.s(Design.radius.sm)
+                                    color: row.selected ? Design.tint(Design.accent, 0.24)
+                                         : rowDrop.containsDrag ? Design.tint(Design.accent, 0.16)
+                                         : rowMa.containsMouse ? Design.hover
+                                         : (row.index % 2 ? Design.tint(Design.raised, 0.35) : "transparent")
+                                    opacity: row.hidden ? 0.65 : 1.0
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Design.s(Design.space.sm)
+                                        anchors.rightMargin: Design.s(Design.space.sm)
+                                        spacing: Design.s(Design.space.md)
                                         RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: Design.s(Design.space.sm)
-                                            anchors.rightMargin: Design.s(Design.space.xs)
+                                            Layout.fillWidth: true
                                             spacing: Design.s(Design.space.sm)
                                             Text {
-                                                text: window.glyphFor(crow.category)
+                                                Layout.preferredWidth: Design.s(Design.size.mini)
+                                                text: window.glyphFor(row.category)
                                                 font.family: Design.font.icon
-                                                font.pixelSize: Design.s(Design.font.subhead)
-                                                color: crow.lit ? crow.ink : window.toneFor(crow.category)
+                                                font.pixelSize: Design.s(Design.font.glyph)
+                                                color: window.toneFor(row.category)
+                                                horizontalAlignment: Text.AlignHCenter
                                             }
-                                            Label { Layout.fillWidth: true; text: crow.name; color: crow.ink; elide: Text.ElideMiddle }
-                                            Repeater {
-                                                model: crow.tags
-                                                Rectangle {
-                                                    required property string modelData
-                                                    width: Design.s(Design.space.sm); height: width; radius: width / 2
-                                                    color: window.tagColor(modelData)
+                                            Label { Layout.fillWidth: true; text: row.name; elide: Text.ElideMiddle }
+                                            Row {
+                                                visible: row.tags.length > 0
+                                                spacing: -Design.s(Design.space.xxs)
+                                                Repeater {
+                                                    model: row.tags
+                                                    Rectangle {
+                                                        required property string modelData
+                                                        width: Design.s(Design.space.sm); height: width; radius: width / 2
+                                                        color: window.tagColor(modelData)
+                                                        border.color: Design.surface
+                                                        border.width: Design.border
+                                                    }
                                                 }
                                             }
-                                            Text {
-                                                visible: crow.isDir
-                                                text: "\u{f0142}"
-                                                font.family: Design.font.icon
-                                                font.pixelSize: Design.s(Design.font.body)
-                                                color: crow.lit ? crow.ink : Design.textFaint
+                                        }
+                                        Label { Layout.preferredWidth: Design.s(Design.size.thumb); text: row.isDir ? "—" : row.sizeText; dim: true; horizontalAlignment: Text.AlignRight }
+                                        Label { Layout.preferredWidth: Design.s(Design.width.label); text: I18n.tr(row.kind); dim: true; elide: Text.ElideRight }
+                                        Label { Layout.preferredWidth: Design.s(Design.width.label); text: row.modifiedText; dim: true; elide: Text.ElideRight }
+                                    }
+                                }
+
+                                DragProxy { id: rowProxy; active: rowMa.drag.active; whole: row.selected; path: row.path }
+
+                                MouseArea {
+                                    id: rowMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                    drag.target: rowProxy
+                                    drag.threshold: Design.s(Design.space.sm)
+                                    onPressed: mouse => window.itemPressed(row.index, mouse)
+                                    onReleased: mouse => window.itemReleased(row.index, mouse, drag.active)
+                                    onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(row.index); }
+                                }
+                                DropArea {
+                                    id: rowDrop
+                                    anchors.fill: parent
+                                    enabled: row.isDir
+                                    keys: ["text/uri-list"]
+                                    onDropped: drop => window.dropInto(drop, row.path)
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Columns: every folder from Home down, side by side ───────
+                    //
+                    // As a desktop's column view: each folder on the way to this one
+                    // in a column of its own, the one gone into lit, and what is
+                    // selected previewed in a last column. A click on a folder goes
+                    // into it; Left and Right walk out and in.
+                    ListView {
+                        id: columnsView
+                        anchors.fill: parent
+                        anchors.topMargin: chrome.height
+                        visible: window.viewMode === "columns"
+                        orientation: ListView.Horizontal
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
+                        // Home and everything under it, or / and everything under that.
+                        readonly property var dirs: {
+                            const cur = window.currentPath;
+                            if (window.tagView || cur === "") return [];
+                            const base = cur === window.homeDir || cur.startsWith(window.homeDir + "/") ? window.homeDir : "/";
+                            const out = [base];
+                            const rest = cur.slice(base.length).split("/").filter(s => s !== "");
+                            let acc = base === "/" ? "" : base;
+                            for (const part of rest) { acc += "/" + part; out.push(acc); }
+                            return out;
+                        }
+                        // Only while shown: hidden, it still opened every folder above this one
+                        // on each move — on a network share a listing each, on the GUI thread.
+                        // A column a folder, and the preview after them, changed
+                        // only where the way down changed: the model was the
+                        // number of columns, and a new number made every column
+                        // anew, each folder above this one listed again on every
+                        // step down or up.
+                        model: ListModel { id: colModel }
+                        function syncColumns() {
+                            const want = window.viewMode === "columns" ? columnsView.dirs : [];
+                            let keep = 0;
+                            while (keep < colModel.count && keep < want.length
+                                   && !colModel.get(keep).preview && colModel.get(keep).dir === want[keep])
+                                keep++;
+                            if (colModel.count > keep) colModel.remove(keep, colModel.count - keep);
+                            for (let i = keep; i < want.length; i++) colModel.append({ dir: want[i], preview: false });
+                            if (window.viewMode === "columns") colModel.append({ dir: "", preview: true });
+                        }
+                        onDirsChanged: syncColumns()
+                        Component.onCompleted: syncColumns()
+                        Connections { target: window; function onViewModeChanged() { columnsView.syncColumns(); } }
+                        onCountChanged: Qt.callLater(() => columnsView.positionViewAtEnd())
+                        // The current folder's column takes the keys.
+                        function positionViewAtIndex(i, mode) { if (lastColumn) lastColumn.positionViewAtIndex(i, ListView.Contain); }
+                        function positionViewAtBeginning() { if (lastColumn) lastColumn.positionViewAtBeginning(); }
+                        property ListView lastColumn: null
+                        onActiveFocusChanged: if (activeFocus && lastColumn) lastColumn.forceActiveFocus()
+
+                        delegate: Loader {
+                            id: col
+                            required property int index
+                            required property string dir
+                            required property bool preview
+                            readonly property bool isPreview: col.preview
+                            readonly property bool isLast: !col.preview && col.index === columnsView.dirs.length - 1
+                            // The next folder on the way, lit in this column.
+                            readonly property string onPath: col.index + 1 < columnsView.dirs.length ? columnsView.dirs[col.index + 1] : ""
+                            width: col.isPreview ? Math.max(Design.s(Design.size.canvas), columnsView.width - columnsView.dirs.length * Design.s(Design.width.control)) : Design.s(Design.width.control)
+                            height: columnsView.height
+                            sourceComponent: col.isPreview ? previewColumn : folderColumn
+
+                            Component {
+                                id: folderColumn
+                                Item {
+                                    id: folderCol
+                                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Design.line }
+                                    FileListModel { id: other }
+                                    // The last column shows the window's own listing; one
+                                    // that stops being last (a step down) lists its folder.
+                                    function reopen() {
+                                        // Not one on its way out (a step up): it is no longer on the way.
+                                        if (!col.isLast && columnsView.dirs[col.index] === col.dir)
+                                            other.open(col.dir, FilesBackend.showHidden);
+                                    }
+                                    Component.onCompleted: reopen()
+                                    Connections {
+                                        target: col
+                                        function onIsLastChanged() {
+                                            folderCol.reopen();
+                                            if (col.isLast) columnsView.lastColumn = colList;
+                                        }
+                                    }
+                                    Connections { target: FilesBackend; function onShowHiddenChanged() { folderCol.reopen(); } }
+                                    // A folder further up the way: the window-wide
+                                    // state only speaks for the last column.
+                                    EmptyState {
+                                        anchors.centerIn: parent
+                                        width: parent.width - Design.s(Design.space.sm) * 2
+                                        visible: !col.isLast && other.count === 0 && !other.loading
+                                        icon: other.error ? "\u{f0b8a}" : "\u{f0256}"
+                                        title: other.error ? I18n.tr("Can't open") : I18n.tr("Empty folder")
+                                    }
+                                    ListView {
+                                        id: colList
+                                        anchors.fill: parent
+                                        anchors.margins: Design.s(Design.space.xs)
+                                        anchors.rightMargin: Design.s(Design.space.xs) + 1
+                                        model: col.isLast ? fm : other
+                                        clip: true
+                                        focus: col.isLast
+                                        boundsBehavior: Flickable.StopAtBounds
+                                        C.ScrollBar.vertical: OverflowBar {}
+                                        Component.onCompleted: if (col.isLast) columnsView.lastColumn = colList
+                                        Keys.onPressed: event => {
+                                            if (event.key === Qt.Key_Right) {
+                                                const it = fm.get(fm.currentIndex);
+                                                if (it.isDir) { window.navigateTo(it.path); event.accepted = true; }
+                                            } else if (event.key === Qt.Key_Left) {
+                                                const from = window.currentPath;
+                                                if (columnsView.dirs.length > 1) {
+                                                    window.navigateTo(columnsView.dirs[columnsView.dirs.length - 2]);
+                                                    fm.selectPaths([from]);
+                                                }
+                                                event.accepted = true;
+                                            } else {
+                                                window.handleKey(event, 1);
                                             }
                                         }
-                                        MouseArea {
-                                            id: crowMa
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                            onPressed: mouse => {
-                                                if (col.isLast) { window.itemPressed(crow.index, mouse); return; }
-                                                // An earlier column: go there first, then as in the last.
-                                                if (crow.isDir && mouse.button === Qt.LeftButton) { window.navigateTo(crow.path); return; }
-                                                window.navigateTo(col.dir);
-                                                fm.selectPaths([crow.path]);
-                                                if (mouse.button === Qt.RightButton) window.openItemMenu();
+                                        delegate: Rectangle {
+                                            id: crow
+                                            required property int index
+                                            required property string name
+                                            required property string path
+                                            required property bool isDir
+                                            required property bool selected
+                                            required property string category
+                                            required property var tags
+                                            readonly property bool lit: col.isLast ? crow.selected : crow.path === col.onPath
+                                            width: colList.width
+                                            height: Design.s(Design.size.sm)
+                                            radius: Design.s(Design.radius.sm)
+                                            color: crow.lit ? (col.isLast || col.index === columnsView.dirs.length - 2
+                                                               ? Design.accent : Design.tint(Design.text, 0.12))
+                                                 : crowMa.containsMouse ? Design.hover : "transparent"
+                                            readonly property color ink: crow.lit && (col.isLast || col.index === columnsView.dirs.length - 2)
+                                                                         ? Design.accentText : Design.text
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Design.s(Design.space.sm)
+                                                anchors.rightMargin: Design.s(Design.space.xs)
+                                                spacing: Design.s(Design.space.sm)
+                                                Text {
+                                                    text: window.glyphFor(crow.category)
+                                                    font.family: Design.font.icon
+                                                    font.pixelSize: Design.s(Design.font.subhead)
+                                                    color: crow.lit ? crow.ink : window.toneFor(crow.category)
+                                                }
+                                                Label { Layout.fillWidth: true; text: crow.name; color: crow.ink; elide: Text.ElideMiddle }
+                                                Repeater {
+                                                    model: crow.tags
+                                                    Rectangle {
+                                                        required property string modelData
+                                                        width: Design.s(Design.space.sm); height: width; radius: width / 2
+                                                        color: window.tagColor(modelData)
+                                                    }
+                                                }
+                                                Text {
+                                                    visible: crow.isDir
+                                                    text: "\u{f0142}"
+                                                    font.family: Design.font.icon
+                                                    font.pixelSize: Design.s(Design.font.body)
+                                                    color: crow.lit ? crow.ink : Design.textFaint
+                                                }
                                             }
-                                            onReleased: mouse => {
-                                                if (!col.isLast) return;
-                                                window.itemReleased(crow.index, mouse, false);
-                                                // A folder opens into the next column on a plain click.
-                                                if (crow.isDir && mouse.button === Qt.LeftButton && window.clickMode(mouse.modifiers) === 0)
-                                                    window.navigateTo(crow.path);
+                                            MouseArea {
+                                                id: crowMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                                onPressed: mouse => {
+                                                    if (col.isLast) { window.itemPressed(crow.index, mouse); return; }
+                                                    // An earlier column: go there first, then as in the last.
+                                                    if (crow.isDir && mouse.button === Qt.LeftButton) { window.navigateTo(crow.path); return; }
+                                                    window.navigateTo(col.dir);
+                                                    fm.selectPaths([crow.path]);
+                                                    if (mouse.button === Qt.RightButton) window.openItemMenu();
+                                                }
+                                                onReleased: mouse => {
+                                                    if (!col.isLast) return;
+                                                    window.itemReleased(crow.index, mouse, false);
+                                                    // A folder opens into the next column on a plain click.
+                                                    if (crow.isDir && mouse.button === Qt.LeftButton && window.clickMode(mouse.modifiers) === 0)
+                                                        window.navigateTo(crow.path);
+                                                }
+                                                onDoubleClicked: mouse => { if (col.isLast && !crow.isDir && mouse.button === Qt.LeftButton) window.openRow(crow.index); }
                                             }
-                                            onDoubleClicked: mouse => { if (col.isLast && !crow.isDir && mouse.button === Qt.LeftButton) window.openRow(crow.index); }
                                         }
                                     }
                                 }
                             }
-                        }
-                        Component {
-                            id: previewColumn
-                            FilesPreview {
-                                item: fm.selectionCount === 1 ? fm.get(fm.indexOfPath(fm.selectedPaths()[0])) : ({})
-                                glyph: window.glyphFor(item.category || "file")
-                                tone: window.toneFor(item.category || "file")
+                            Component {
+                                id: previewColumn
+                                FilesPreview {
+                                    item: fm.selectionCount === 1 ? fm.get(fm.indexOfPath(fm.selectedPaths()[0])) : ({})
+                                    glyph: window.glyphFor(item.category || "file")
+                                    tone: window.toneFor(item.category || "file")
+                                }
                             }
                         }
                     }
+
+                    // ── Gallery: one large, the rest in a strip under it ─────────
+                    ColumnLayout {
+                        id: galleryView
+                        anchors.fill: parent
+                        anchors.topMargin: chrome.height
+                        visible: window.viewMode === "gallery"
+                        spacing: 0
+                        function positionViewAtIndex(i, mode) { strip.positionViewAtIndex(i, ListView.Contain); }
+                        function positionViewAtBeginning() { strip.positionViewAtBeginning(); }
+                        onActiveFocusChanged: if (activeFocus) strip.forceActiveFocus()
+                        // Something is always shown: the first file (else the first
+                        // item) when nothing is picked.
+                        function pickFirst() {
+                            if (!galleryView.visible || fm.currentIndex >= 0 || fm.count === 0) return;
+                            for (let i = 0; i < fm.count; i++)
+                                if (!fm.get(i).isDir) { fm.select(i, 0); return; }
+                            fm.select(0, 0);
+                        }
+                        onVisibleChanged: pickFirst()
+                        Component.onCompleted: Qt.callLater(pickFirst)
+                        Connections { target: fm; function onReloaded() { Qt.callLater(galleryView.pickFirst); } }
+
+                        FilesPreview {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            large: true
+                            item: fm.currentIndex >= 0 ? fm.get(fm.currentIndex) : ({})
+                            glyph: window.glyphFor(item.category || "file")
+                            tone: window.toneFor(item.category || "file")
+                        }
+                        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
+                        ListView {
+                            id: strip
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Design.s(Design.size.avatar)
+                            orientation: ListView.Horizontal
+                            model: window.viewMode === "gallery" ? fm : null
+                            clip: true
+                            focus: galleryView.visible
+                            spacing: Design.s(Design.space.xs)
+                            leftMargin: Design.s(Design.space.md)
+                            rightMargin: Design.s(Design.space.md)
+                            currentIndex: fm.currentIndex
+                            highlightFollowsCurrentItem: false
+                            boundsBehavior: Flickable.StopAtBounds
+                            C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
+                            Keys.onPressed: event => {
+                                // Left and Right step; Up and Down too, as there is one row.
+                                if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+                                    fm.select(Math.max(0, fm.currentIndex - 1), 0);
+                                    strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
+                                    event.accepted = true;
+                                } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
+                                    fm.select(Math.min(fm.count - 1, fm.currentIndex + 1), 0);
+                                    strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
+                                    event.accepted = true;
+                                } else {
+                                    window.handleKey(event, 1);
+                                }
+                            }
+                            delegate: Rectangle {
+                                id: gthumb
+                                required property int index
+                                required property string path
+                                required property bool isImage
+                                required property bool selected
+                                required property string category
+                                required property var modified
+                                y: Design.s(Design.space.sm)
+                                width: Design.s(Design.size.stat)
+                                height: Design.s(Design.size.stat)
+                                radius: Design.s(Design.radius.sm)
+                                color: gthumb.selected ? Design.tint(Design.accent, 0.2) : Design.well
+                                border.color: gthumb.selected ? Design.accent : "transparent"
+                                border.width: Design.s(Design.focusWidth)
+                                Image {
+                                    id: gimg
+                                    anchors.fill: parent
+                                    anchors.margins: Design.s(Design.space.xs)
+                                    visible: (gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio") && status === Image.Ready
+                                    source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path, gthumb.modified) : ""
+                                    sourceSize: Qt.size(Design.s(Design.width.label), Design.s(Design.width.label))
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: !gimg.visible
+                                    text: window.glyphFor(gthumb.category)
+                                    font.family: Design.font.icon
+                                    font.pixelSize: Design.s(Design.font.display)
+                                    color: window.toneFor(gthumb.category)
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                    onPressed: mouse => window.itemPressed(gthumb.index, mouse)
+                                    onReleased: mouse => window.itemReleased(gthumb.index, mouse, false)
+                                    onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(gthumb.index); }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Still being read (a network drive), or nothing to show ────
+                    AppState {
+                        anchors.fill: parent
+                        anchors.topMargin: chrome.height
+                        mode: fm.count > 0 ? "" : fm.loading ? "loading" : fm.error ? "error" : "empty"
+                        icon: fm.error ? "\u{f0b8a}"
+                                : FilesBackend.filterQuery ? "\u{f0349}"
+                                : FilesBackend.inTrash ? "\u{f0a79}" : "\u{f0256}"
+                        title: fm.loading ? I18n.tr("Loading…") : fm.error ? I18n.tr("Can't open this folder")
+                                    : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
+                                    : FilesBackend.inTrash ? I18n.tr("Trash is empty")
+                                    : window.tagView ? I18n.tr("Nothing tagged %1", window.folderName)
+                                    : I18n.tr("This folder is empty")
+                        hint: fm.error ? fm.error
+                                    : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
+                                    : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
+                                    : window.tagView ? I18n.tr("Right-click a file and pick a colour, or drop files on the tag in the sidebar.")
+                                    // An iPhone's camera folder with nothing in it: the
+                                    // photos are in iCloud, the phone keeps only previews.
+                                    : /\/b1air-devices\/[^/]+\/media\/DCIM\//.test(FilesBackend.currentPath)
+                                      ? I18n.tr("Photos kept only in iCloud are not on the phone itself. Turn off Optimize iPhone Storage in the phone's Photos settings to keep them here.")
+                                    : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
+                    }
                 }
 
-                // ── Gallery: one large, the rest in a strip under it ─────────
-                ColumnLayout {
-                    id: galleryView
-                    anchors.fill: parent
-                    visible: window.viewMode === "gallery"
-                    spacing: 0
-                    function positionViewAtIndex(i, mode) { strip.positionViewAtIndex(i, ListView.Contain); }
-                    function positionViewAtBeginning() { strip.positionViewAtBeginning(); }
-                    onActiveFocusChanged: if (activeFocus) strip.forceActiveFocus()
-                    // Something is always shown: the first file (else the first
-                    // item) when nothing is picked.
-                    function pickFirst() {
-                        if (!galleryView.visible || fm.currentIndex >= 0 || fm.count === 0) return;
-                        for (let i = 0; i < fm.count; i++)
-                            if (!fm.get(i).isDir) { fm.select(i, 0); return; }
-                        fm.select(0, 0);
-                    }
-                    onVisibleChanged: pickFirst()
-                    Component.onCompleted: Qt.callLater(pickFirst)
-                    Connections { target: fm; function onReloaded() { Qt.callLater(galleryView.pickFirst); } }
-
-                    FilesPreview {
+                // ── Status bar ───────────────────────────────────────────────────
+                AppStatusBar {
+                    Layout.fillWidth: true
+                    Label {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        large: true
-                        item: fm.currentIndex >= 0 ? fm.get(fm.currentIndex) : ({})
-                        glyph: window.glyphFor(item.category || "file")
-                        tone: window.toneFor(item.category || "file")
+                        role: "caption"
+                        elide: Text.ElideRight
+                        color: window.statusNote ? Design.text : Design.textDim
+                        text: window.statusNote
+                              || (FilesBackend.busy ? I18n.tr("Copying…")
+                              : fm.selectionCount > 0 ? window.selectionText() : window.folderSummary())
                     }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Design.line }
-                    ListView {
-                        id: strip
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Design.s(Design.size.avatar)
-                        orientation: ListView.Horizontal
-                        model: window.viewMode === "gallery" ? fm : null
-                        clip: true
-                        focus: galleryView.visible
+                    Label { role: "caption"; color: Design.textFaint; text: I18n.tr("%1 free", window.freeText); visible: !FilesBackend.inTrash }
+                    // Icon size, for the icon view.
+                    RowLayout {
+                        visible: window.viewMode === "grid"
                         spacing: Design.s(Design.space.xs)
-                        leftMargin: Design.s(Design.space.md)
-                        rightMargin: Design.s(Design.space.md)
-                        currentIndex: fm.currentIndex
-                        highlightFollowsCurrentItem: false
-                        boundsBehavior: Flickable.StopAtBounds
-                        C.ScrollBar.horizontal: OverflowBar { orientation: Qt.Horizontal }
-                        Keys.onPressed: event => {
-                            // Left and Right step; Up and Down too, as there is one row.
-                            if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
-                                fm.select(Math.max(0, fm.currentIndex - 1), 0);
-                                strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
-                                event.accepted = true;
-                            } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
-                                fm.select(Math.min(fm.count - 1, fm.currentIndex + 1), 0);
-                                strip.positionViewAtIndex(fm.currentIndex, ListView.Contain);
-                                event.accepted = true;
-                            } else {
-                                window.handleKey(event, 1);
-                            }
-                        }
-                        delegate: Rectangle {
-                            id: gthumb
-                            required property int index
-                            required property string path
-                            required property bool isImage
-                            required property bool selected
-                            required property string category
-                            required property var modified
-                            y: Design.s(Design.space.sm)
-                            width: Design.s(Design.size.stat)
-                            height: Design.s(Design.size.stat)
-                            radius: Design.s(Design.radius.sm)
-                            color: gthumb.selected ? Design.tint(Design.accent, 0.2) : Design.well
-                            border.color: gthumb.selected ? Design.accent : "transparent"
-                            border.width: Design.s(Design.focusWidth)
-                            Image {
-                                id: gimg
-                                anchors.fill: parent
-                                anchors.margins: Design.s(Design.space.xs)
-                                visible: (gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio") && status === Image.Ready
-                                source: gthumb.isImage || gthumb.category === "video" || gthumb.category === "audio" ? window.thumbUrl(gthumb.path, gthumb.modified) : ""
-                                sourceSize: Qt.size(Design.s(Design.width.label), Design.s(Design.width.label))
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: !gimg.visible
-                                text: window.glyphFor(gthumb.category)
-                                font.family: Design.font.icon
-                                font.pixelSize: Design.s(Design.font.display)
-                                color: window.toneFor(gthumb.category)
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                onPressed: mouse => window.itemPressed(gthumb.index, mouse)
-                                onReleased: mouse => window.itemReleased(gthumb.index, mouse, false)
-                                onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton) window.openRow(gthumb.index); }
-                            }
-                        }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; size: "sm"; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
+                        Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; size: "sm"; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
                     }
-                }
-
-                // ── Still being read (a network drive), or nothing to show ────
-                AppState {
-                    anchors.fill: parent
-                    mode: fm.count > 0 ? "" : fm.loading ? "loading" : fm.error ? "error" : "empty"
-                    icon: fm.error ? "\u{f0b8a}"
-                            : FilesBackend.filterQuery ? "\u{f0349}"
-                            : FilesBackend.inTrash ? "\u{f0a79}" : "\u{f0256}"
-                    title: fm.loading ? I18n.tr("Loading…") : fm.error ? I18n.tr("Can't open this folder")
-                                : FilesBackend.filterQuery ? I18n.tr("Nothing matches “%1”", FilesBackend.filterQuery)
-                                : FilesBackend.inTrash ? I18n.tr("Trash is empty")
-                                : window.tagView ? I18n.tr("Nothing tagged %1", window.folderName)
-                                : I18n.tr("This folder is empty")
-                    hint: fm.error ? fm.error
-                                : FilesBackend.filterQuery ? I18n.tr("Search looks at names in this folder only.")
-                                : FilesBackend.inTrash ? I18n.tr("Things you delete wait here until you empty it.")
-                                : window.tagView ? I18n.tr("Right-click a file and pick a colour, or drop files on the tag in the sidebar.")
-                                // An iPhone's camera folder with nothing in it: the
-                                // photos are in iCloud, the phone keeps only previews.
-                                : /\/b1air-devices\/[^/]+\/media\/DCIM\//.test(FilesBackend.currentPath)
-                                  ? I18n.tr("Photos kept only in iCloud are not on the phone itself. Turn off Optimize iPhone Storage in the phone's Photos settings to keep them here.")
-                                : I18n.tr("Drop files here, paste with Ctrl+V, or make a folder with Ctrl+Shift+N.")
                 }
             }
 
-            // ── Status bar ───────────────────────────────────────────────────
-            AppStatusBar {
-                Layout.fillWidth: true
-                Label {
+            ScrollEdge {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                backdrop: contentArea
+                barHeight: chrome.height
+            }
+
+            ColumnLayout {
+                id: chrome
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 0
+
+                // Folder chooser bar, in --pick-folder mode.
+                Rectangle {
                     Layout.fillWidth: true
-                    role: "caption"
-                    elide: Text.ElideRight
-                    color: window.statusNote ? Design.text : Design.textDim
-                    text: window.statusNote
-                          || (FilesBackend.busy ? I18n.tr("Copying…")
-                          : fm.selectionCount > 0 ? window.selectionText() : window.folderSummary())
+                    Layout.preferredHeight: Design.s(Design.size.rowTall)
+                    visible: FilesBackend.pickMode
+                    color: Design.well
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Design.s(Design.space.lg)
+                        anchors.rightMargin: Design.s(Design.space.lg)
+                        spacing: Design.s(Design.space.md)
+                        Icon { text: "\u{f024b}"; color: Design.textDim }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Label { text: I18n.tr("Choose a folder"); role: "caption"; dim: true }
+                            Label { Layout.fillWidth: true; text: window.currentPath; weight: Design.weight.semibold; elide: Text.ElideMiddle }
+                        }
+                        Button { variant: "secondary"; label: I18n.tr("Cancel"); onClicked: FilesBackend.cancelPick() }
+                        Button { variant: "primary"; label: I18n.tr("Choose this folder");  onClicked: FilesBackend.confirmPick() }
+                    }
                 }
-                Label { role: "caption"; color: Design.textFaint; text: I18n.tr("%1 free", window.freeText); visible: !FilesBackend.inTrash }
-                // Icon size, for the icon view.
-                RowLayout {
-                    visible: window.viewMode === "grid"
-                    spacing: Design.s(Design.space.xs)
-                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0374}"; size: "sm"; tip: I18n.tr("Smaller (Ctrl+−)"); onClicked: window.iconSize = Math.max(56, window.iconSize - 16) }
-                    Button { variant: "ghost"; iconOnly: true; icon: "\u{f0415}"; size: "sm"; tip: I18n.tr("Larger (Ctrl+=)"); onClicked: window.iconSize = Math.min(176, window.iconSize + 16) }
+
+                // ── Toolbar ──────────────────────────────────────────────────────
+                AppToolbar {
+                    id: toolbar
+                    Layout.fillWidth: true
+                    // Ui/ScrollEdge under it ends it, line and all.
+                    rule: false
+                    // Smart about its width: the search field becomes a button
+                    // that opens it, and the four views one button with a menu,
+                    // before the path is squeezed.
+                    readonly property bool compactSearch: width < Design.s(Design.width.menuMax)
+                    readonly property bool compactViews: width < Design.s(Design.width.menuMax)
+                    property bool searchOpen: false
+                    readonly property bool searchShown: !compactSearch || searchOpen || FilesBackend.filterQuery !== ""
+                    function openSearch() {
+                        searchOpen = true;
+                        Qt.callLater(searchField.focusInput);
+                    }
+
+                        RowLayout {
+                            spacing: Design.s(Design.space.xxs)
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f004d}"; tip: I18n.tr("Back (Alt+←)"); enabled: FilesBackend.canGoBack; onClicked: FilesBackend.historyBack() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f0054}"; tip: I18n.tr("Forward (Alt+→)"); enabled: FilesBackend.canGoForward; onClicked: FilesBackend.historyForward() }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f005d}"; tip: I18n.tr("Up (Alt+↑)"); enabled: window.currentPath !== "/"; onClicked: FilesBackend.goUp() }
+                        }
+
+                        // Path: clickable segments; a click on the empty part of the
+                        // bar, or Ctrl+L, turns it into a field to type a path in —
+                        // or a server's address, smb://nas/media.
+                        Rectangle {
+                            id: pathBar
+                            property bool editing: false
+                            function edit() {
+                                pathInput.text = window.addressOf(window.currentPath);
+                                editing = true;
+                                pathInput.forceActiveFocus();
+                                pathInput.selectAll();
+                            }
+                            function done() {
+                                editing = false;
+                                window.currentView().forceActiveFocus();
+                            }
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: Design.s(Design.size.thumb)
+                            Layout.horizontalStretchFactor: 3
+                            Layout.preferredHeight: Design.s(Design.size.knob)
+                            radius: height / 2
+                            color: Design.raised
+                            border.color: editing ? Design.accent : Design.tint(Design.text, 0.06)
+                            border.width: Design.border
+                            clip: true
+
+                            Clickable {
+                                anchors.fill: parent
+                                visible: !pathBar.editing
+                                cursorShape: Qt.IBeamCursor
+                                onClicked: pathBar.edit()
+                            }
+
+                            TextInput {
+                                id: pathInput
+                                visible: pathBar.editing
+                                anchors.fill: parent
+                                anchors.leftMargin: Design.s(Design.space.md)
+                                anchors.rightMargin: Design.s(Design.space.md)
+                                verticalAlignment: TextInput.AlignVCenter
+                                font.family: Design.font.sans
+                                font.pixelSize: Design.s(Design.font.body)
+                                color: Design.text
+                                selectionColor: Design.tint(Design.accent, 0.35)
+                                selectedTextColor: Design.text
+                                clip: true
+                                onAccepted: { const v = text; pathBar.done(); window.goToAddress(v); }
+                                Keys.onEscapePressed: pathBar.done()
+                                onActiveFocusChanged: if (!activeFocus && pathBar.editing) pathBar.editing = false
+                            }
+
+                            // Where the path starts — home, a share, a phone, the
+                            // trash, the disk — at the head of the bar, so a short
+                            // path is not a lone word adrift in it.
+                            Icon {
+                                id: placeIcon
+                                visible: !pathBar.editing
+                                anchors.left: parent.left
+                                anchors.leftMargin: Design.s(Design.space.md)
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: Design.textDim
+                                text: FilesBackend.inTrash ? "\u{f0a79}"
+                                    : window.shareAt(window.currentPath) ? "\u{f0200}"
+                                    : window.currentPath.indexOf("/b1air-devices/") >= 0 ? "\u{f011c}"
+                                    : window.currentPath.startsWith(window.homeDir) ? "\u{f02dc}"
+                                    : "\u{f02ca}"
+                            }
+
+                            // The start of a path too long for the bar: one button
+                            // in place of the folders cut off, listing them.
+                            Button {
+                                variant: "secondary"
+                                id: crumbMore
+                                visible: !pathBar.editing && crumbs.count > 1 && crumbs.contentWidth > pathBar.width - Design.s(Design.size.tile) + 1
+                                anchors.left: placeIcon.right
+                                anchors.leftMargin: Design.s(Design.space.xs)
+                                anchors.verticalCenter: parent.verticalCenter
+                                size: "sm"
+                                label: "…"
+                                tip: I18n.tr("Whole path")
+                                onClicked: crumbMenu.popup()
+                            }
+                            AppMenu {
+                                id: crumbMenu
+                                Instantiator {
+                                    model: crumbs.model
+                                    delegate: AppMenuItem {
+                                        required property var modelData
+                                        text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
+                                        onTriggered: window.navigateTo(modelData.path)
+                                    }
+                                    onObjectAdded: (i, o) => crumbMenu.insertItem(i, o)
+                                    onObjectRemoved: (i, o) => crumbMenu.removeItem(o)
+                                }
+                            }
+
+                            ListView {
+                                id: crumbs
+                                visible: !pathBar.editing
+                                anchors.fill: parent
+                                anchors.leftMargin: (crumbMore.visible ? crumbMore.x + crumbMore.width : placeIcon.x + placeIcon.width)
+                                                    + Design.s(Design.space.xs)
+                                anchors.rightMargin: Design.s(Design.space.sm)
+                                orientation: ListView.Horizontal
+                                interactive: false
+                                clip: true
+                                spacing: 0
+                                model: FilesBackend.inTrash ? [{ name: I18n.tr("Trash"), path: FilesBackend.trashPath }] : window.shareCrumbs(window.deviceCrumbs(FilesBackend.breadcrumbs))
+                                // Always the end of the path in view: the folder
+                                // you are in, not the root you came from — and
+                                // starting at a whole folder, not the tail of one
+                                // cut off under the "…".
+                                function showEnd() {
+                                    positionViewAtEnd();
+                                    const i = indexAt(contentX + 1, height / 2);
+                                    const item = itemAtIndex(i);
+                                    const next = itemAtIndex(i + 1);
+                                    if (item && next && item.x < contentX) contentX = next.x;
+                                }
+                                onCountChanged: Qt.callLater(showEnd)
+                                onWidthChanged: Qt.callLater(showEnd)
+                                onContentWidthChanged: Qt.callLater(showEnd)
+                                delegate: Row {
+                                    required property var modelData
+                                    required property int index
+                                    height: crumbs.height
+                                    Text {
+                                        visible: index > 0
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "\u{f0142}"
+                                        font.family: Design.font.icon
+                                        font.pixelSize: Design.s(Design.font.footnote)
+                                        color: Design.textFaint
+                                    }
+                                    Rectangle {
+                                        readonly property bool last: index === crumbs.count - 1
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: crumbText.width + Design.s(Design.space.lg)
+                                        height: Design.s(Design.size.xs)
+                                        // No capsule of its own inside the bar's: the
+                                        // folder you are in is the bold one, and the
+                                        // others light up only under the pointer.
+                                        radius: Design.s(Design.radius.ctl) / 2
+                                        color: crumbMa.containsMouse && !last ? Design.hover : "transparent"
+                                        Text {
+                                            id: crumbText
+                                            anchors.centerIn: parent
+                                            // A long name is cut in the middle, so
+                                            // one folder cannot fill the bar alone.
+                                            // Never wider than the bar, however narrow
+                                            // the window: one folder alone did not fit.
+                                            // Not the list's own width (it waits on the
+                                            // "…", which waits on this): the bar's,
+                                            // less that button and a separator.
+                                            width: Math.min(implicitWidth, Design.s(parent.last ? 260 : 160),
+                                                            pathBar.width - Design.s(crumbs.count > 1 ? 104 : 64))
+                                            elide: Text.ElideMiddle
+                                            text: modelData.name === "~" ? I18n.tr("Home") : modelData.name
+                                            font.family: Design.font.sans
+                                            font.pixelSize: Design.s(Design.font.body)
+                                            font.weight: parent.last ? Design.weight.semibold : Design.weight.regular
+                                            color: parent.last ? Design.text : Design.textDim
+                                        }
+                                        Clickable {
+                                            id: crumbMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: window.navigateTo(modelData.path)
+                                        }
+                                        DropArea {
+                                            anchors.fill: parent
+                                            keys: ["text/uri-list"]
+                                            onDropped: drop => window.dropInto(drop, modelData.path)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Field {
+                            id: searchField
+                            visible: toolbar.searchShown
+                            // Narrows before the path does: the path is what
+                            // says where you are.
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: Design.s(Design.width.menuMin)
+                            Layout.minimumWidth: Design.s(Design.size.thumb)
+                            Layout.preferredHeight: Design.s(Design.size.knob)
+                            radius: height / 2
+                            color: Design.raised
+                            placeholder: I18n.tr("Search (Ctrl+F)")
+                            onEdited: value => FilesBackend.filterQuery = value
+                            onAccepted: window.currentView().forceActiveFocus()
+                            // Opened from the button: shut again once left empty.
+                            onFocusedChanged: if (!focused && text === "") toolbar.searchOpen = false
+                        }
+                        RowLayout {
+                            spacing: Design.s(Design.space.xxs)
+                            visible: !toolbar.searchShown
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f0349}"; tip: I18n.tr("Search (Ctrl+F)"); onClicked: toolbar.openSearch() }
+                        }
+
+                        Button {
+                            variant: "danger"
+                            visible: FilesBackend.inTrash
+                            icon: "\u{f0a7a}"
+                            label: I18n.tr("Empty Trash")
+                            enabled: FilesBackend.trashCount > 0
+                            onClicked: confirmEmpty.open()
+                        }
+                        // New folder lives in the right-click menu and on
+                        // Ctrl+Shift+N, not on the bar.
+                        // The four views: one choice, so one segmented control,
+                        // as every choice of view is; it was four toggle buttons.
+                        SegmentedControl {
+                            visible: !toolbar.compactViews
+                            size: "sm"
+                            model: [
+                                { id: "grid",    label: "", icon: "\u{f0570}", tip: I18n.tr("Icons (Ctrl+1)") },
+                                { id: "list",    label: "", icon: "\u{f0279}", tip: I18n.tr("List (Ctrl+2)") },
+                                { id: "columns", label: "", icon: "\u{f056d}", tip: I18n.tr("Columns (Ctrl+3)") },
+                                { id: "gallery", label: "", icon: "\u{f056c}", tip: I18n.tr("Gallery (Ctrl+4)") }
+                            ]
+                            current: window.viewMode
+                            onPicked: id => window.viewMode = id
+                        }
+                        RowLayout {
+                            spacing: Design.s(Design.space.xxs)
+                            visible: toolbar.compactViews
+                            Button {
+                                variant: "ghost"
+                                iconOnly: true
+                                icon: ({ grid: "\u{f0570}", list: "\u{f0279}", columns: "\u{f056d}", gallery: "\u{f056c}" })[window.viewMode] || "\u{f0570}"
+                                tip: I18n.tr("View (Ctrl+1 … Ctrl+4)")
+                                onClicked: viewModeMenu.popup()
+                            }
+                        }
+                        RowLayout {
+                            spacing: Design.s(Design.space.xxs)
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f02fd}"; tip: I18n.tr("Details panel (Ctrl+I)"); checked: window.showInfo; onClicked: window.showInfo = !window.showInfo }
+                            Button { variant: "ghost"; iconOnly: true; icon: "\u{f01d9}"; tip: I18n.tr("View options"); onClicked: viewMenu.popup() }
+                        }
                 }
+
+                // ── Tabs ─────────────────────────────────────────────────────────
+                Flickable {
+                    visible: window.tabs.length > 1
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Design.s(Design.size.knob)
+                    Layout.leftMargin: Design.s(Design.space.md)
+                    Layout.rightMargin: Design.s(Design.space.md)
+                    contentWidth: tabRow.implicitWidth
+                    clip: true
+                    flickableDirection: Flickable.HorizontalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    RowLayout {
+                        id: tabRow
+                        height: parent.height
+                        spacing: Design.s(Design.space.xs)
+                        Repeater {
+                            model: window.tabs
+                            delegate: AppTab {
+                                required property var modelData
+                                required property int index
+                                glyph: modelData === FilesBackend.trashPath ? "\u{f0a7a}" : "\u{f024b}"
+                                label: window.tabTitle(modelData)
+                                active: index === window.tabIndex
+                                onClicked: window.switchTab(index)
+                                onCloseRequested: window.closeTab(index)
+                            }
+                        }
+                        Button { variant: "ghost"; iconOnly: true; size: "sm"; icon: "\u{f0415}"; tip: I18n.tr("New tab (Ctrl+T)"); onClicked: window.newTab("") }
+                    }
+                }
+
             }
         }
 

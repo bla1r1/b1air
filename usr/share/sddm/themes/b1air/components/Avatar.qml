@@ -70,7 +70,11 @@ Item {
             c.drawImage(avatar.url, (iw - side) / 2, (ih - side) / 2, side, side, 0, 0, width, height);
         }
     }
-    readonly property string url: source.startsWith("/") ? "file://" + source : source
+    // sddm hands its stock face (faces/.face.icon) to an account with no
+    // picture: a grey silhouette that reads as somebody else. The initial
+    // says whose account it is.
+    readonly property bool stock: /\/faces\/\.face\.icon$/.test(source)
+    readonly property string url: stock || source === "" ? "" : source.startsWith("/") ? "file://" + source : source
     onUrlChanged: if (url) photo.loadImage(url); else photo.requestPaint()
 
     MouseArea {

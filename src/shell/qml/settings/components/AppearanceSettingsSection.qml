@@ -31,6 +31,31 @@ ColumnLayout {
 
 
 
+    // As Apple names them (HIG: Accessibility): every surface listens to
+    // these through Design — the shell, the apps and the compositor.
+    SettingsGroup {
+        title: I18n.tr("Accessibility")
+
+        SwitchRow {
+            label: I18n.tr("Reduce motion")
+            note: I18n.tr("No springs, sliding or zooming: windows, workspaces and controls fade instead")
+            checked: Settings.reduceMotion === true
+            onToggled: Settings.set("reduceMotion", Settings.reduceMotion !== true)
+        }
+        SwitchRow {
+            label: I18n.tr("Reduce transparency")
+            note: I18n.tr("Panels and windows opaque, nothing showing through")
+            checked: Settings.reduceTransparency === true
+            onToggled: Settings.set("reduceTransparency", Settings.reduceTransparency !== true)
+        }
+        SwitchRow {
+            label: I18n.tr("Increase contrast")
+            note: I18n.tr("Firmer edges and denser glass; secondary text darker or lighter for 7:1")
+            checked: Settings.increaseContrast === true
+            onToggled: Settings.set("increaseContrast", Settings.increaseContrast !== true)
+        }
+    }
+
     // swaymsg changes this session; SwayConfig writes conf.d/custom_look.conf
     // so the change is still there after a logout. All four of these were
     // applied and then forgotten — see Services/SwayConfig.

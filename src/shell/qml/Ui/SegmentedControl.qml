@@ -139,7 +139,10 @@ Rectangle {
                 id: segItem
                 width: root._segWidth
                 height: segmentRow.height
-                clip: true
+                // No clip: the label is held to the segment's width and
+                // elides. A clip here was drawn past the clip of a scrolled
+                // view around it by Qt's software renderer (Settings in its
+                // own window): the segments' labels hung below the setup's card.
 
                 readonly property int itemIndex: index
                 readonly property bool isSelected: root.currentIndex === index

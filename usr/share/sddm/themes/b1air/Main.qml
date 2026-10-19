@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Effects
 import "components"
 import "components/Words.js" as Words
@@ -15,7 +16,9 @@ import "components/Words.js" as Words
 // (components/ThemeColors.qml), the words Russian, Ukrainian or English.
 //
 // The password field has the focus from the start: type and press Enter.
-// Every other screen shows the picture and the clock only.
+// Keys typed anywhere go into it. Every other screen shows the picture and
+// the clock only, until it is the one the keyboard types into: then it shows
+// the password there, with what was typed.
 // =============================================================================
 Rectangle {
     id: root
@@ -35,6 +38,33 @@ Rectangle {
     // sddm draws one of these a screen; `primaryScreen` says which is the
     // one to log in on.
     readonly property bool primary: typeof primaryScreen === "undefined" || primaryScreen
+    // The login shows where the keyboard types, which with no window manager
+    // is the screen under the pointer, not always the primary one.
+    property bool typedHere: false
+    readonly property bool here: primary || typedHere
+
+    focus: true
+    Component.onCompleted: root.here ? password.forceActiveFocus() : root.forceActiveFocus()
+    Window.onActiveChanged: if (Window.active && root.here && !password.activeFocus) password.forceActiveFocus()
+
+    // A key the field did not take, because it did not have the focus: into
+    // the field it goes.
+    Keys.onPressed: event => {
+        if (!root.user || !root.user.needsPassword || root.busy) return;
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.typedHere = true;
+            password.forceActiveFocus();
+            root.login();
+            event.accepted = true;
+        } else if (event.text !== "" && event.text.charCodeAt(0) >= 32 && !(event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))) {
+            root.typedHere = true;
+            root.menu = "";
+            password.forceActiveFocus();
+            password.insert(password.cursorPosition, event.text);
+            root.failed = false;
+            event.accepted = true;
+        }
+    }
 
     // ── Accounts and sessions, out of sddm's models ──────────────────────────
     property var users: []
@@ -175,7 +205,7 @@ Rectangle {
     // ── Who, and the password ────────────────────────────────────────────────
     Column {
         id: login
-        visible: root.primary && root.user !== null
+        visible: root.here && root.user !== null
         anchors.horizontalCenter: parent.horizontalCenter
         y: parent.height / 2 + 54 * root.u
         spacing: 0
@@ -275,7 +305,7 @@ Rectangle {
                     font.pixelSize: (field.reveal ? 16 : 12) * root.u
                     font.letterSpacing: field.reveal ? 0 : 3 * root.u
                     clip: true
-                    focus: root.primary
+                    focus: root.here
                     readOnly: root.busy
                     onAccepted: root.login()
                     onTextEdited: root.failed = false
@@ -369,7 +399,7 @@ Rectangle {
     // ── The foot ─────────────────────────────────────────────────────────────
     Row {
         id: power
-        visible: root.primary
+        visible: root.here
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28 * root.u
@@ -399,7 +429,7 @@ Rectangle {
 
     Row {
         id: footLeft
-        visible: root.primary
+        visible: root.here
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.margins: 28 * root.u
@@ -426,7 +456,7 @@ Rectangle {
     }
 
     Pill {
-        visible: root.primary && keyboard.layouts.length > 1
+        visible: root.here && keyboard.layouts.length > 1
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 28 * root.u
@@ -468,6 +498,4 @@ Rectangle {
             password.forceActiveFocus();
         }
     }
-    // The account list opens under the picture when the picture was clicked.
-    readonly property bool menuFromAvatar: !userPill.visible || userPill.mouseY === undefined
 }

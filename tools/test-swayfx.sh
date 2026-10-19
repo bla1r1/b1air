@@ -7,14 +7,14 @@
 #
 #   tools/test-swayfx.sh [path/to/swayfx]      default: swayfx on PATH
 #
-# Windows are opened with foot, which must be installed. What is drawn is not
+# Windows are opened with b1air-term, the desktop's own terminal. What is drawn is not
 # looked at — that wants eyes — only what the compositor reports: the tree,
 # the focused workspace, the replies to commands.
 set -uo pipefail
 
 SWAY="${1:-swayfx}"
 command -v "$SWAY" >/dev/null || { echo "test-swayfx: no $SWAY" >&2; exit 2; }
-command -v foot >/dev/null || { echo "test-swayfx: foot is needed to open windows" >&2; exit 2; }
+command -v b1air-term >/dev/null || { echo "test-swayfx: b1air-term is needed to open windows" >&2; exit 2; }
 
 RT="$(mktemp -d)"
 LOG="$RT/sway.log"
@@ -28,7 +28,8 @@ default_border none
 gaps inner 0
 EOF
 
-"$SWAY" -c "$RT/config" > "$LOG" 2>&1 &
+# -V: sway says at the info level what the shortcuts test (0014) reads.
+"$SWAY" -V -c "$RT/config" > "$LOG" 2>&1 &
 SWAY_PID=$!
 cleanup() {
     kill "$SWAY_PID" 2>/dev/null; wait "$SWAY_PID" 2>/dev/null
@@ -59,10 +60,11 @@ def walk(n):
     c = 1 if n.get("pid") and n.get("type") in ("con","floating_con") else 0
     return c + sum(walk(k) for k in n.get("nodes",[]) + n.get("floating_nodes",[]))
 print(walk(json.load(sys.stdin)))'; }
-# open_window: one more foot, and wait until the compositor has it.
+# open_window: one more terminal, and wait until the compositor has it.
+# Qt Quick drawn in software: headless there is no GPU.
 open_window() {
     local before; before="$(views)"
-    msg exec "foot sh -c 'sleep 600'" >/dev/null
+    msg exec "env QT_QUICK_BACKEND=software b1air-term -e sh -c 'sleep 600'" >/dev/null
     for _ in $(seq 1 100); do [[ "$(views)" -gt "$before" ]] && return 0; sleep 0.1; done
     return 1
 }
@@ -83,12 +85,12 @@ for _ in 1 2 3; do open_window || fail "a window did not open"; done
 # 1280x800: the second window goes beside the first (wider than tall), the
 # third under the second (640x800, taller than wide) — the dwindle spiral.
 r="$(ws_repr 1)"
-[[ "$r" == "H[foot V[foot foot]]" ]] && ok "autotile: dwindle spiral" || fail "autotile" "$r"
+[[ "$r" == "H[b1air-term V[b1air-term b1air-term]]" ]] && ok "autotile: dwindle spiral" || fail "autotile" "$r"
 # Hyprland's togglesplit is sway's own `layout toggle split` ($mod+j): the
 # pair the focused window is in turns from one above the other to side by side.
 cmd layout toggle split >/dev/null
 r="$(ws_repr 1)"
-[[ "$r" == "H[foot H[foot foot]]" ]] && ok "togglesplit flips the pair" || fail "togglesplit" "$r"
+[[ "$r" == "H[b1air-term H[b1air-term b1air-term]]" ]] && ok "togglesplit flips the pair" || fail "togglesplit" "$r"
 cmd layout toggle split >/dev/null
 cmd autotile disable && ok "autotile disable" || fail "autotile disable"
 cmd autotile toggle && cmd autotile toggle && ok "autotile toggle" || fail "autotile toggle"
@@ -131,7 +133,7 @@ cmd special_workspace toggle && ok "special_workspace toggle" || fail "special_w
 [[ "$(focused_ws)" == special ]] && ok "special: shown" || fail "special show" "$(focused_ws)"
 open_window || fail "a window did not open on special"
 r="$(ws_repr special)"
-[[ "$r" == "H[foot]" ]] && ok "special: a window opens on it" || fail "special window" "$r"
+[[ "$r" == "H[b1air-term]" ]] && ok "special: a window opens on it" || fail "special window" "$r"
 cmd special_workspace toggle >/dev/null
 [[ "$(focused_ws)" == 1 ]] && ok "special: put away, back on 1" || fail "special hide" "$(focused_ws)"
 cmd special_workspace show && cmd special_workspace show && [[ "$(focused_ws)" == special ]] \
@@ -147,7 +149,7 @@ cmd workspace next_on_output >/dev/null; sleep 0.3
 cmd workspace next_on_output >/dev/null; sleep 0.3
 [[ "$(focused_ws)" == 1 ]] && ok "special: and wraps around without it" || fail "next wraps" "$(focused_ws)"
 cmd focus left >/dev/null
-cmd move container to workspace special && [[ "$(ws_repr special)" == "H[foot foot]" ]] \
+cmd move container to workspace special && [[ "$(ws_repr special)" == "H[b1air-term b1air-term]" ]] \
     && ok "special: move container to workspace special" || fail "move to special" "$(ws_repr special)"
 cmd special_workspace sideways && fail "special_workspace takes sideways" || ok "special_workspace refuses sideways"
 
@@ -225,7 +227,7 @@ read -r ax ay <<<"$(cell_centre draga)"; read -r bx by <<<"$(cell_centre dragb)"
 cmd seat - cursor set "$ax" "$ay" >/dev/null; cmd seat - cursor press button1 >/dev/null
 cmd seat - cursor set "$bx" "$by" >/dev/null; cmd seat - cursor release button1 >/dev/null
 sleep 0.3
-[[ "$(ws_repr dragb)" == "H[foot foot]" ]] && ok "overview: a window dragged to another workspace goes there" \
+[[ "$(ws_repr dragb)" == "H[b1air-term b1air-term]" ]] && ok "overview: a window dragged to another workspace goes there" \
     || fail "overview drag" "dragb: $(ws_repr dragb)"
 alive && [[ "$(focused_ws)" == draga ]] && ok "overview: still up, still on the workspace it was" \
     || fail "overview after the drag" "$(focused_ws)"
@@ -321,7 +323,7 @@ cmd minimize_target 600 740 48 48 && ok "minimize_target 600 740 48 48" || fail 
 target() { swaymsg -t get_tree -r | python3 -c '
 import json,sys
 def walk(n):
-    if n.get("focused") or n.get("app_id") == "foot" and n.get("minimize_target"): return n
+    if n.get("focused") or n.get("app_id") == "b1air-term" and n.get("minimize_target"): return n
     for k in n.get("nodes",[]) + n.get("floating_nodes",[]):
         r = walk(k)
         if r: return r
@@ -339,7 +341,7 @@ alive && [[ "$(views)" -ge 1 ]] && [[ "$(target)" == "600 740 48 48" ]] && ok "s
 # Hidden and shown again at once, and closed while the copy is in flight.
 cmd scratchpad show >/dev/null; cmd scratchpad show >/dev/null; cmd scratchpad show >/dev/null
 cmd minimize_target none >/dev/null; cmd scratchpad show >/dev/null
-cmd '[app_id=foot workspace=mintest] kill' >/dev/null; cmd '[app_id=foot] kill' >/dev/null
+cmd '[app_id=b1air-term workspace=mintest] kill' >/dev/null; cmd '[app_id=b1air-term] kill' >/dev/null
 sleep 0.5
 alive && ok "minimize: toggled at once and closed in flight, still running" || fail "swayfx died minimizing"
 cmd animation_duration_ms 0 >/dev/null
@@ -392,6 +394,38 @@ else
 fi
 cmd zoom reset && [[ "$(zoom_now)" == 1.0 ]] && [[ "$(zoom_out_name)" == none ]] && alive && ok "zoom reset" || fail "zoom reset" "$(zoom_now) $(zoom_out_name)"
 cmd '[workspace=zoomtest] kill' >/dev/null; sleep 0.3
+
+# ── Shortcuts in every layout (0014) ─────────────────────────────────────────
+# bindsym --to-code takes the key from us, whatever the layouts and their
+# order. Told by sway itself: a bindcode on the key expected replaces the
+# translated bindsym, and sway logs the overwrite. On a sway without 0014
+# a Cyrillic layout first leaves q untranslated, and nothing is replaced.
+[[ "$(swaymsg -t get_version -r | python3 -c 'import json,sys; print(json.load(sys.stdin).get("b1air_keys_from_us", False))')" == True ]] \
+    && ok "get_version says the keys come from us" || fail "get_version without b1air_keys_from_us"
+n=0
+key_on() {   # key_on <layouts> <keysym> <keycode>
+    n=$((n + 1))
+    cmd input type:keyboard xkb_layout "$1" >/dev/null
+    cmd bindsym --to-code "Mod4+Ctrl+Shift+$2" exec "true k$n" >/dev/null
+    cmd bindcode "Mod4+Ctrl+Shift+$3" exec "false k$n" >/dev/null
+    sleep 0.1
+    if grep -q "to \`exec false k$n\` from \`exec true k$n\`" "$LOG"; then
+        ok "$1: $2 is key $3"
+    else
+        fail "$1: $2 is not key $3"
+    fi
+    cmd unbindcode "Mod4+Ctrl+Shift+$3" >/dev/null
+    cmd unbindsym --to-code "Mod4+Ctrl+Shift+$2" >/dev/null
+}
+key_on "ru,ua" q 24
+key_on "ru,ua" slash 61
+key_on "ua,ru,us" t 28
+key_on "de,ru" z 52       # where us has z, not where de has it
+key_on "de,ru" minus 20   # and minus not on us's slash, which is de's
+key_on "de,ru" slash 61
+key_on "us,ru" period 60
+key_on "ru" Cyrillic_ya 52   # what us does not have, from the layouts
+cmd input type:keyboard xkb_layout us >/dev/null
 
 # ── Every command sway has is still found ────────────────────────────────────
 # sway looks commands up by binary search; one patch adding its command out of

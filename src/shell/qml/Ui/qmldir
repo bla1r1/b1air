@@ -61,3 +61,7 @@ AppStatusBar     1.0 AppStatusBar.qml
 # helpers
 Paths     1.0 Paths.js
 DeviceRow 1.0 DeviceRow.qml
+GradientRect  1.0 GradientRect.qml
+RoundImage    1.0 RoundImage.qml
+LiquidGlass   1.0 LiquidGlass.qml
+ScrollEdge    1.0 ScrollEdge.qml

@@ -22,12 +22,17 @@ QtObject {
     id: root
 
     component FontScale: QtObject {
+        // macOS's text styles (HIG: Typography), each with its line height:
+        // Subheadline 11/14, Callout 12/15, Body 13/16, Title 3 15/20,
+        // Title 2 17/22, Large Title 26/32. Title was 20 and display 28,
+        // between the steps.
         readonly property int caption: 11   // metadata, units, timestamps
         readonly property int footnote: 12  // note, secondary text
         readonly property int body: 13      // standard UI working size
         readonly property int subhead: 15   // card titles, device names
-        readonly property int title: 20     // page and popup titles
-        readonly property int display: 28   // popup headlines, hero numbers
+        readonly property int title: 17     // page and popup titles
+        readonly property int display: 26   // popup headlines, hero numbers
+        readonly property var lineHeight: ({ 11: 14, 12: 15, 13: 16, 15: 20, 17: 22, 26: 32 })
         readonly property int hero: 44      // a clock or a big glyph that is the popup
         readonly property int jumbo: 120    // a screen's number when identifying screens
         readonly property int glyph: 16     // an icon in a button or row
@@ -70,8 +75,28 @@ QtObject {
         readonly property int sm: 4       // chips, badges, inner elements
         readonly property int ctl: 8      // buttons, fields, list rows, selects
         readonly property int card: 12    // cards, groups, quick-tiles
-        readonly property int panel: 16   // popup panels, main windows
+        // The outer shapes, one radius: an app's window (sway's corner_radius,
+        // Settings → Windows) and a popup panel are the same material. 20 so
+        // that what sits inside is concentric with it: a sidebar 8 in at 12,
+        // its rows 4 further in at 8 (see concentric()).
+        readonly property int window: 20
+        readonly property int panel: 20   // popup panels
         readonly property int pill: 999   // toggles, chips, status pills
+    }
+
+    // Apple's rule for corners (HIG: Layout, Toolbars): something inside a
+    // rounded shape, `inset` from its edge, has the shape's radius less that
+    // inset — so the two curves run parallel instead of the inner one
+    // bulging at the corner. Never below the smallest radius.
+    // Letter spacing for Inter at a size, in pixels: its own dynamic
+    // metrics (rsms.me/inter/dynmetrics), as SF's tracking table is Apple's
+    // (HIG: Typography) — a little open when small, tighter as it grows.
+    function tracking(px) {
+        return px * (-0.0223 + 0.185 * Math.exp(-0.1745 * px));
+    }
+
+    function concentric(outer, inset) {
+        return Math.max(root.radius.sm, outer - inset);
     }
 
     component SpaceScale: QtObject {
@@ -141,6 +166,15 @@ QtObject {
         readonly property int slow: 400   // window enter / exit
     }
 
+    // Springs, for what moves as if it had weight: a selection sliding to
+    // its place, a switch's knob, glass that flexes when pressed. Under
+    // Reduce Motion they are not used (reduceMotion below).
+    component SpringScale: QtObject {
+        readonly property var snappy: ({ spring: 5.0, damping: 0.36 })   // a knob, a thumb
+        readonly property var smooth: ({ spring: 3.6, damping: 0.42 })   // a selection moving over
+        readonly property var bouncy: ({ spring: 4.5, damping: 0.26 })   // a press that flexes
+    }
+
     component OpacityScale: QtObject {
         readonly property real disabled: 0.38
         readonly property real muted: 0.62
@@ -191,8 +225,13 @@ QtObject {
 
     // ── Text & Content ───────────────────────────────────────────────────────
     readonly property color text: _p.text
-    readonly property color textDim: _p.textDim
-    readonly property color textFaint: _p.outline
+    readonly property color textDim: root.increaseContrast ? root._ensure(_p.textDim, _p.high, 7.0, root._lum(root._col(_p.text)) > root._lum(root._col(_p.ground))) : _p.textDim
+    // The faintest text — hints, metadata, placeholders — still 4.5:1 on
+    // the lightest surface it is drawn on (hover), as Apple's minimum for
+    // text up to 17 pt asks. It was the outline colour, 2.5:1 on a hovered
+    // row in Breeze Dark: a border's colour, not a text's. Derived from the
+    // palette, so every theme gets it.
+    readonly property color textFaint: root._ensure(_p.outline, _p.high, 4.5, root._lum(root._col(_p.text)) > root._lum(root._col(_p.ground)))
 
     // ── Lines & Borders ──────────────────────────────────────────────────────
     readonly property color line: _p.outlineVariant
@@ -312,13 +351,13 @@ QtObject {
     // dark panel. Behind a real blur (layer_effects in windowrules.conf) 0.7
     // keeps text readable over a bright sky and still shows what is behind.
     readonly property bool darkTheme: _lum(_col(text)) > _lum(_col(ground))
-    readonly property color glassBg: tint(surface, translucent ? (darkTheme ? 0.70 : 0.66) : 1.0)
+    readonly property color glassBg: tint(surface, translucent ? (increaseContrast ? 0.86 : darkTheme ? 0.70 : 0.66) : 1.0)
     // Cards sit on a glass panel, so their own glass adds to it: at 0.5 a
     // card on a 0.7 panel came out nearly opaque. A lighter film keeps them
     // distinct by their edge and a shade, as cards on a desktop's panels are.
     readonly property color glassCard: translucent ? tint(raised, 0.36) : raised
     readonly property color glassTile: translucent ? tint(raised, 0.32) : raised
-    readonly property color glassBorder: tint(text, 0.12)
+    readonly property color glassBorder: tint(text, increaseContrast ? 0.32 : 0.12)
     // The lit top edge of a pane of glass: a hairline lighter than the border.
     readonly property color glassEdge: translucent ? tint("#ffffff", darkTheme ? 0.10 : 0.55) : "transparent"
     // An app's sidebar: the desktop through it, blurred, as a desktop's own
@@ -379,6 +418,17 @@ QtObject {
     }
     readonly property WindowScale window: WindowScale {}
     readonly property DurationScale duration: DurationScale {}
+    readonly property SpringScale spring: SpringScale {}
+
+    // ── Accessibility (HIG: Accessibility, Motion, Materials) ───────────────
+    // Settings → Appearance → Accessibility, read here for the apps and bound
+    // by the shell (Main.qml), as `translucent` is. Reduce Transparency is
+    // `translucent: false` itself.
+    // Reduce Motion: no springs, no scaling or elastic flex, no sliding;
+    // what changes, fades.
+    property bool reduceMotion: false
+    // Increase Contrast: firmer edges, denser glass, secondary text at 7:1.
+    property bool increaseContrast: false
     readonly property OpacityScale opacity: OpacityScale {}
     readonly property ShadowSpec shadow: ShadowSpec {}
 
@@ -623,7 +673,9 @@ QtObject {
             xhr.send();
             if (xhr.responseText) {
                 const s = JSON.parse(xhr.responseText);
-                if (s.blurEnabled === false) root.translucent = false;
+                if (s.blurEnabled === false || s.reduceTransparency === true) root.translucent = false;
+                root.reduceMotion = s.reduceMotion === true;
+                root.increaseContrast = s.increaseContrast === true;
             }
         } catch (e) {}
     }

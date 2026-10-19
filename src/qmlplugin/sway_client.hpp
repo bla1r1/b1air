@@ -43,6 +43,10 @@ class SwayClient : public QObject {
     Q_PROPERTY(bool swayfx READ swayfx NOTIFY versionChanged)
     Q_PROPERTY(QString compositorName READ compositorName NOTIFY versionChanged)   // "swayFX 0.6", "sway 1.11"
     Q_PROPERTY(QString versionText READ versionText NOTIFY versionChanged)         // as `sway --version` prints it
+    // Our swayfx takes the shortcuts' keys from us (src/swayfx/patches/0014),
+    // so the keyboard layouts reach it as chosen; elsewhere b1air-daemon puts
+    // us first for them (settings_manager.cpp, layouts_for_bindings).
+    Q_PROPERTY(bool keysFromUs READ keysFromUs NOTIFY versionChanged)
 
 public:
     explicit SwayClient(QObject* parent = nullptr);
@@ -52,6 +56,7 @@ public:
     bool swayfx() const { return m_swayfx; }
     QString compositorName() const { return m_compositorName; }
     QString versionText() const { return m_versionText; }
+    bool keysFromUs() const { return m_keysFromUs; }
 
     /**
      * Runs a sway command (several, separated by ';', as in the config).
@@ -115,6 +120,7 @@ private:
     QTimer m_retry;
     bool m_up = false;
     bool m_swayfx = true;
+    bool m_keysFromUs = false;
     QString m_compositorName;
     QString m_versionText;
     bool m_everUp = false;

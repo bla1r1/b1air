@@ -26,7 +26,8 @@ Item {
         anchors.leftMargin: root.inset
         anchors.topMargin: root.inset
         anchors.bottomMargin: root.inset
-        radius: Design.s(Design.radius.card)
+        // Concentric with the window it is set into.
+        radius: Design.s(Design.concentric(Design.radius.window, Design.space.sm))
         color: Design.translucent ? Design.glassSidebar : Design.raised
         border.width: Design.border
         border.color: Design.glassBorder

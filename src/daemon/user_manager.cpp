@@ -11,12 +11,13 @@
 #include <fstream>
 #include <vector>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include <algorithm>
 
 namespace b1air {
 
 
-static bool run_argv(const std::vector<std::string>& args) {
+static bool run_argv(const std::vector<std::string>& args, bool quiet = false) {
     if (args.empty()) return false;
     std::vector<char*> argv;
     argv.reserve(args.size() + 1);
@@ -25,11 +26,29 @@ static bool run_argv(const std::vector<std::string>& args) {
     pid_t pid = fork();
     if (pid < 0) return false;
     if (pid == 0) {
+        if (quiet) {
+            int null = open("/dev/null", O_WRONLY);
+            if (null >= 0) { dup2(null, STDOUT_FILENO); close(null); }
+        }
         execvp(argv[0], argv.data());
         _exit(127);
     }
     int status = 0;
     return waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+// AccountsService, which is how the login screen learns the picture and the
+// name: sddm cannot read ~/.face.icon in a home only its owner opens, and
+// /var/lib/AccountsService/icons is root's. Changing one's own account is
+// allowed there without a password (org.freedesktop.accounts.change-own-
+// user-data). FindUserByName first: the service loads an account only when
+// asked about it.
+static bool accounts_call(const UserProfile& p, const std::string& method, const std::string& value) {
+    if (!run_argv({"busctl", "call", "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+                   "org.freedesktop.Accounts", "FindUserByName", "s", p.username}, true))
+        return false;
+    return run_argv({"busctl", "call", "org.freedesktop.Accounts", "/org/freedesktop/Accounts/User" + p.uid,
+                     "org.freedesktop.Accounts.User", method, "s", value}, true);
 }
 
 UserProfile UserManager::get_current_user_profile() {
@@ -135,12 +154,17 @@ bool UserManager::set_avatar(const std::string& image_path) {
     struct stat st;
     if (stat(image_path.c_str(), &st) != 0) return false;
 
-    bool ok1 = copy_file(image_path, p.home + "/.face.icon");
+    // The lock screen and the password dialog read ~/.face.icon; the login
+    // screen reads AccountsService's copy. A copy of the copy, so the picture
+    // stays when the file picked is moved or was a temporary one.
+    const std::string face = p.home + "/.face.icon";
+    bool ok1 = image_path == face || copy_file(image_path, face);
     bool ok2 = copy_file(image_path, p.home + "/.face");
 
-    // Also copy to AccountsService if writable
-    std::string acc = "/var/lib/AccountsService/icons/" + p.username;
-    copy_file(image_path, acc);
+    // At most 1 MB (AccountsService refuses bigger); the shell hands over a
+    // 512-pixel PNG.
+    if (!accounts_call(p, "SetIconFile", ok1 ? face : image_path))
+        std::cerr << "[b1air-daemon] AccountsService did not take the picture; the login screen keeps the old one\n";
 
     return ok1 || ok2;
 }
@@ -148,7 +172,8 @@ bool UserManager::set_avatar(const std::string& image_path) {
 bool UserManager::set_name(const std::string& new_name) {
     if (new_name.empty()) return false;
     UserProfile p = get_current_user_profile();
-    return run_argv({"chfn", "-f", new_name, p.username});
+    // chfn asks for the password on a terminal, and from Settings there is none.
+    return accounts_call(p, "SetRealName", new_name) || run_argv({"chfn", "-f", new_name, p.username});
 }
 
 bool UserManager::set_shell(const std::string& new_shell) {

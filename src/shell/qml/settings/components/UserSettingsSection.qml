@@ -18,8 +18,12 @@ ColumnLayout {
     // Which part of the section to show. "" or "account": the User page —
     // name, picture, shell. "lock": the Lock & Login page — the fingerprint
     // and the login screen. "fingerprint": that card alone (the first-run
-    // setup's step, there only when a reader is).
+    // setup's step, there only when a reader is). "setup": the setup's
+    // account step — the picture's choices, the name and the shell.
     property string part: ""
+    // The picture's choices (AvatarPicker) under the profile, opened from
+    // the picture or "Change Avatar"; the setup's step shows them anyway.
+    property bool pickerOpen: false
     Layout.fillWidth: true
     spacing: Design.s(Design.space.lg)
 
@@ -34,6 +38,9 @@ ColumnLayout {
     })
 
     property string daemonCmd: "b1air-daemon"
+    // The picture is always ~/.face.icon: a new one is the same path, and
+    // the image cache would keep showing the old one without this in its key.
+    property int avatarRev: 0
     property var availableShells: []
 
     function loadUserInfo() {
@@ -78,6 +85,7 @@ ColumnLayout {
                     let raw = this.text.trim();
                     if (raw !== "") {
                         section.userInfo = JSON.parse(raw);
+                        section.avatarRev++;
                     }
                 } catch (e) {}
             }
@@ -104,16 +112,14 @@ ColumnLayout {
                 Layout.preferredWidth: Design.s(Design.size.avatar)
                 Layout.preferredHeight: Design.s(Design.size.avatar)
                 radius: width / 2
-                color: Design.tint(Design.accent, 0.14)
-                clip: true
+                color: section.userInfo.avatar !== "" ? "transparent" : Design.tint(Design.accent, 0.14)
 
-                Image {
+                // Round: `clip` on this Rectangle cut it to a square.
+                RoundImage {
                     anchors.fill: parent
                     visible: section.userInfo.avatar !== ""
-                    // Decoded at the size drawn, not the file's (a 4K picture is 33 MB of pixels).
-                    sourceSize: Qt.size(256, 256)
-                    source: section.userInfo.avatar ? Paths.fileUrl(section.userInfo.avatar) : ""
-                    fillMode: Image.PreserveAspectCrop
+                    source: section.userInfo.avatar ? Paths.fileUrl(section.userInfo.avatar) + "?" + section.avatarRev : ""
+                    cache: false
                 }
 
                 // The initial, where there is no picture.
@@ -129,7 +135,7 @@ ColumnLayout {
                 Clickable {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: avatarFileDialog.open()
+                    onClicked: section.pickerOpen = !section.pickerOpen
                 }
             }
 
@@ -158,7 +164,8 @@ ColumnLayout {
                         Layout.fillWidth: false
                         icon: "\u{f03e}"
                         label: I18n.tr("Change Avatar")
-                        onActivated: avatarFileDialog.open()
+                        checked: section.pickerOpen
+                        onActivated: section.pickerOpen = !section.pickerOpen
                     }
 
                     Button {
@@ -169,6 +176,19 @@ ColumnLayout {
                     }
                 }
             }
+        }
+    }
+
+    SettingsGroup {
+        visible: ((section.part === "" || section.part === "account") && section.pickerOpen) || section.part === "setup"
+        title: I18n.tr("Picture")
+        note: I18n.tr("Shown on the login and lock screens")
+        icon: "\u{f03e}"
+        AvatarPicker {
+            Layout.fillWidth: true
+            current: section.userInfo.avatar || ""
+            name: section.userInfo.name || section.userInfo.username || ""
+            onSaved: section.loadUserInfo()
         }
     }
 
@@ -314,7 +334,7 @@ ColumnLayout {
 
     // ── 3. Account Details Card ──────────────────────────────────────────────
     SettingsGroup {
-        visible: section.part === "" || section.part === "account"
+        visible: section.part === "" || section.part === "account" || section.part === "setup"
         title: I18n.tr("Account Details & Shell")
         icon: "\u{f013}"
 
@@ -531,16 +551,4 @@ ColumnLayout {
     }
 
     Process { id: fpDelete; onExited: section.fpRefresh() }
-
-    // ── 5. File Dialog for Avatar Selection ──────────────────────────────────
-    FileDialog {
-        id: avatarFileDialog
-        title: I18n.tr("Select Avatar Image")
-        nameFilters: [I18n.tr("Image files") + " (*.png *.jpg *.jpeg *.svg)"]
-        onAccepted: {
-            let path = selectedFile.toString().replace(/^file:\/\//, "");
-            Quickshell.execDetached([section.daemonCmd, "user", "set-avatar", path]);
-            section.loadUserInfo();
-        }
-    }
 }

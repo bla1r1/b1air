@@ -91,16 +91,15 @@ Item {
                 NumberAnimation { duration: Design.duration.base; easing.type: Design.easing }
             }
 
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop {
-                    position: 0.0
-                    color: root.muted ? Design.active : root.tone
-                }
-                GradientStop {
-                    position: 1.0
-                    color: root.muted ? Qt.lighter(Design.active, 1.15) : Qt.lighter(root.tone, 1.20)
-                }
+            // GradientRect, not a gradient on this one: drawn by the apps'
+            // software renderer, a rounded gradient has jagged ends.
+            color: "transparent"
+            GradientRect {
+                anchors.fill: parent
+                radius: parent.radius
+                horizontal: true
+                from: root.muted ? Design.active : root.tone
+                to: root.muted ? Qt.lighter(Design.active, 1.15) : Qt.lighter(root.tone, 1.20)
             }
         }
 

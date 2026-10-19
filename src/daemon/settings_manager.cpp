@@ -296,6 +296,10 @@ bool SettingsManager::save(const DesktopSettings& s, const std::string& path_arg
 // the shortcuts when it was not chosen — and the layout chosen first is
 // switched to, so the session still starts in it. (de first would not do:
 // z, /, - and ` are elsewhere on it.)
+//
+// Our swayfx takes those keys from us itself (src/swayfx/patches/0014), and
+// says so in get_version: there the layouts go to sway as chosen, with no
+// English added to the switcher. This is for a sway without it.
 static std::pair<std::string, int> layouts_for_bindings(const std::string& layout) {
     std::vector<std::string> list;
     std::stringstream ss(layout);
@@ -342,7 +346,14 @@ static void apply_keyboard(SwayIPC* ipc, const std::string& chosen_layout, const
     static std::string system_layout, system_options;
 
     if (!valid_sway_token(chosen_layout, 128)) return;
-    const auto [layout, active_layout] = layouts_for_bindings(chosen_layout);
+    // With no compositor to ask, us first: a file that is right for either.
+    bool keys_from_us = false;
+    if (ipc) {
+        const auto v = nlohmann::json::parse(ipc->send_command(7 /* GET_VERSION */), nullptr, false);
+        keys_from_us = v.is_object() && v.value("b1air_keys_from_us", false);
+    }
+    const auto [layout, active_layout] = keys_from_us
+        ? std::pair<std::string, int>{chosen_layout, 0} : layouts_for_bindings(chosen_layout);
     // Empty options are legitimate (no switch shortcut at all); anything else
     // must be a plain xkb token list.
     if (!options.empty() && !valid_sway_token(options, 256)) return;
@@ -404,7 +415,7 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
     };
 
     // Unfocused windows drawn at this much opacity; 100% is off.
-    const int inactive = std::clamp(get_json_int("inactiveOpacityPercent", 50), 10, 100);
+    const int inactive = std::clamp(get_json_int("inactiveOpacityPercent", 100), 10, 100);
     (void)ipc.send_command(0, "inactive_opacity " + std::to_string(inactive / 100.0).substr(0, 4));
 
     // 0 turns every animation off: windows and workspaces alike.
@@ -418,15 +429,19 @@ bool SettingsManager::apply_compositor_extras(SwayIPC& ipc) {
     // three-finger bindgestures in input.conf are never reached for
     // sideways swipes; on any other sway they still switch workspaces at the
     // end of the swipe.
+    // Reduce Motion (Settings → Appearance → Accessibility): what moves,
+    // fades instead — workspaces and windows alike.
+    const bool reduce_motion = get_json_bool("reduceMotion", false);
     (void)ipc.send_command(0, "workspace_animation "
-        + pick(get_json_string("workspaceAnimation"), {"slide", "fade"}, "slide"));
+        + (reduce_motion ? std::string("fade") : pick(get_json_string("workspaceAnimation"), {"slide", "fade"}, "slide")));
     (void)ipc.send_command(0, !get_json_bool("touchpadSwipeWorkspace", true)
         ? std::string("workspace_swipe off")
         : std::string("workspace_swipe 3") + (get_json_bool("touchpadNaturalSwipe", true) ? "" : " invert"));
 
     // How windows open and close (patch 0006); popin grows from a share of
     // the final size.
-    const std::string window = pick(get_json_string("windowAnimation"), {"popin", "fade", "slide", "none"}, "popin");
+    const std::string window = reduce_motion ? std::string("fade")
+        : pick(get_json_string("windowAnimation"), {"popin", "fade", "slide", "none"}, "popin");
     (void)ipc.send_command(0, "window_animation " + window + (window == "popin"
         ? " " + std::to_string(std::clamp(get_json_int("popinPercent", 80), 10, 100)) : std::string()));
 

@@ -24,8 +24,8 @@ ApplicationWindow {
     palette.toolTipBase: Design.raised
     palette.toolTipText: Design.text
     palette.placeholderText: Design.textFaint
-    palette.light: Design.highest
-    palette.midlight: Design.high
+    palette.light: Design.active
+    palette.midlight: Design.hover
     palette.mid: Design.line
     palette.dark: Design.sunken
     palette.shadow: Design.ground
@@ -1140,7 +1140,8 @@ ApplicationWindow {
                         Layout.leftMargin: Design.s(Design.space.sm)
                         Layout.topMargin: Design.s(Design.space.sm)
                         Layout.bottomMargin: Design.s(Design.space.sm)
-                        radius: Design.s(Design.radius.card)
+                        // Concentric with the window, as Ui/AppSidebar.
+                        radius: Design.s(Design.concentric(Design.radius.window, Design.space.sm))
                         color: Design.translucent ? Design.glassSidebar : Design.raised
                         border.width: Design.border
                         border.color: Design.glassBorder
