@@ -411,10 +411,15 @@ QtObject {
     readonly property real light: translucent ? (darkTheme ? 0.10 : 0.55) : 0
     // The lit top edge of a pane of glass: a hairline lighter than the border.
     readonly property color glassEdge: translucent ? tint("#ffffff", light) : "transparent"
-    readonly property real glassRim: 0.15 + 0.45 * light
-    // Light passes through: the dark theme's glass is lit at its foot
-    // nearly as the light one's, though its panes' edge is dimmer.
-    readonly property real glassCaustic: translucent ? 0.5 + 0.5 * light : 0
+    // Glass takes less from the theme than Air does: a pane is a sheet the
+    // light only grazes, a capsule a body it passes through. At 0.15 + 0.45
+    // the dark theme's capsules had a rim of 0.2 and a body of nothing — on
+    // the window's dark Air they read as flat grey pills, not glass.
+    readonly property real glassRim: 0.35 + 0.2 * light
+    // Light passes through: the dark theme's glass is lit at its foot and
+    // across its top nearly as the light one's, though its panes' edge is
+    // dimmer.
+    readonly property real glassCaustic: translucent ? 0.75 + 0.25 * light : 0
     // An app's sidebar: the desktop through it, blurred, as a desktop's own
     // sidebars are. The rest of an app window is glassBg, the same pane as
     // the shell's popups: a window and the Control Center are one material.

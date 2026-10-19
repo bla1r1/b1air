@@ -100,7 +100,9 @@ void main() {
     // inside it; firmer with Increase Contrast.
     vec2 lightDir = normalize(vec2(-0.5, -0.86));
     float facing = dot(n, lightDir);
-    float along = 0.35 + 0.65 * max(facing, 0.0) + 0.25 * max(-facing, 0.0);
+    // Brightest where it faces the light, and again, less, on the far
+    // edge, where the light that came through leaves it.
+    float along = 0.25 + 0.75 * pow(max(facing, 0.0), 1.5) + 0.45 * pow(max(-facing, 0.0), 1.5);
     float line = 1.0 - smoothstep(0.0, 1.5, -d);
     float glowRim = (1.0 - smoothstep(0.0, 6.0, -d)) * 0.25;
     float h = rim * along * (line + glowRim) + contrast * 0.35 * line;
@@ -111,8 +113,18 @@ void main() {
     // a drop of water is brightest at its foot. A soft band inside the rim,
     // never on the line itself.
     float band = smoothstep(1.0, 3.0, -d) * (1.0 - smoothstep(3.0, bevel * 1.6, -d));
-    float gathered = caustic * 0.3 * max(-facing, 0.0) * band;
+    float gathered = caustic * 0.4 * max(-facing, 0.0) * band;
     c += vec4(vec3(gathered), gathered);
+
+    // Its body: lit through the top, a sheen fading out by the middle, and
+    // a touch deeper below it, above the bright foot. Over a flat backdrop
+    // (the dark theme's Air) nothing bends, and without this the glass was
+    // a grey pill.
+    float y = px.y / size.y;
+    float inside = smoothstep(0.0, 2.0, -d);
+    float sheen = caustic * 0.13 * pow(clamp(1.0 - y * 1.8, 0.0, 1.0), 2.0) * inside;
+    c += vec4(vec3(sheen), sheen);
+    c.rgb *= 1.0 - caustic * 0.08 * smoothstep(0.45, 1.0, y) * inside;
 
     // Pressed: lit from within, from under the pointer outward.
     float spread = length(px - glowPos) / max(size.x, size.y);
