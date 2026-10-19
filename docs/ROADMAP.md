@@ -324,9 +324,13 @@ large-text preset in M13 are kept.
       in a calendar is under way (Settings → Notifications → During
       meetings). Calendars are read by `b1air-daemon calendar`
       (src/daemon/calendar.cpp): .ics files, vdir folders, links (Google's
-      secret iCal address, webcal), and CalDAV accounts — iCloud with an
-      app-specific password, Nextcloud, Fastmail — whose password is kept in
-      the secret store. Recurring events, exceptions and time zones handled.
+      secret iCal address, webcal) and accounts, added the way a mail app
+      adds them: Google and Microsoft signed in to in the browser (OAuth with
+      PKCE, once the build is registered with them: docs/CALENDAR-SIGNIN.md;
+      without it, by their private link, step by step), iCloud and any CalDAV
+      server with an app-specific password, checked at once, its calendars
+      listed to pick from. Passwords and sign-ins are kept in the secret
+      store. Recurring events, exceptions and time zones handled.
 - [x] Add granular per-application notification priority rules and channel filtering.
       Each app and each of its channels (the `category` hint: messages, mail,
       calls, transfers…) is Priority (through focus modes and quiet hours),

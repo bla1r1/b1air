@@ -9,6 +9,7 @@
 #include "settings_manager.hpp"
 #include "magic_mouse.hpp"
 #include "calendar.hpp"
+#include "calendar_accounts.hpp"
 #include "session_manager.hpp"
 #include "daemon_dbus.hpp"
 #include "runtime.hpp"
@@ -59,7 +60,8 @@ static void print_usage(const char* prog) {
               << "  media-status                       Get top-bar Media Player JSON\n"
               << "  media-info                         Get full MPRIS & album art palette JSON for player\n"
               << "  weather [json|current|icon|temp]   Get live weather forecast JSON or current conditions\n"
-              << "  calendar [--hours N] <source>…    Events ahead from .ics files, vdir folders or links (JSON)\n"
+              << "  calendar [--hours N] <source>…    Events ahead from .ics files, vdir folders, links, accounts (JSON)\n"
+              << "  calendar-account providers|check <source>|signin google|microsoft   Calendar accounts (JSON)\n"
               << "  schedule                           Get calendar schedule JSON\n"
               << "  appearance apply                   Colour GTK and Qt apps from the theme (Appearance page)\n"
               << "  open-default {terminal|files|browser}\n"
@@ -798,6 +800,13 @@ int main(int argc, char* argv[]) {
             std::cerr << "Usage: " << argv[0] << " ddc {list|set <id> <val>|up [N]|down [N]|status|refresh|dim|undim}\n";
             return 1;
         }
+    } else if (cmd == "calendar-account") {
+        // Settings' way into calendar accounts: which sign-ins this build
+        // has, whether an account's password or sign-in works and what
+        // calendars it has, and the browser sign-in for Google and Microsoft.
+        std::vector<std::string> rest(argv + 2, argv + argc);
+        std::cout << Calendar::account_command(rest) << "\n";
+        return 0;
     } else if (cmd == "calendar") {
         // calendar [--hours N] <source>…: the events in the next N hours
         // (24 by default) from .ics files, vdir folders and links, as JSON.

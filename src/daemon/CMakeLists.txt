@@ -28,6 +28,8 @@ add_library(b1air-core STATIC
     file_index.cpp
     backlight.cpp
     calendar.cpp
+    calendar_accounts.cpp
+    calendar_net.cpp
     daemon_dbus.cpp
     focustime_db.cpp
     magic_mouse.cpp
@@ -41,6 +43,18 @@ add_library(b1air-core STATIC
     user_manager.cpp
 )
 target_include_directories(b1air-core PRIVATE ${IDLE_GEN})
+
+# Signing in to Google and Microsoft calendars in the browser needs the
+# suite registered with them (docs/CALENDAR-SIGNIN.md). Empty: those two
+# are added by their calendar's private link instead.
+set(B1AIR_GOOGLE_CLIENT_ID "" CACHE STRING "OAuth client ID for Google Calendar sign-in")
+set(B1AIR_GOOGLE_CLIENT_SECRET "" CACHE STRING "Its desktop-app client secret (not a secret: every copy has it)")
+set(B1AIR_MICROSOFT_CLIENT_ID "" CACHE STRING "Application (client) ID for Microsoft sign-in")
+foreach(var B1AIR_GOOGLE_CLIENT_ID B1AIR_GOOGLE_CLIENT_SECRET B1AIR_MICROSOFT_CLIENT_ID)
+    if(NOT "${${var}}" STREQUAL "")
+        target_compile_definitions(b1air-core PRIVATE "${var}=\"${${var}}\"")
+    endif()
+endforeach()
 target_include_directories(b1air-core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/common)

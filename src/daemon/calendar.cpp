@@ -15,10 +15,9 @@
 #include <unistd.h>
 
 #include <nlohmann/json.hpp>
-#include <openssl/evp.h>
-#include <regex>
 
-#include "secret_store.hpp"
+#include "calendar_accounts.hpp"
+#include "calendar_net.hpp"
 
 namespace fs = std::filesystem;
 using namespace std::chrono;
@@ -26,21 +25,9 @@ using namespace std::chrono;
 namespace Calendar {
 namespace {
 
+using namespace net;
+
 // ── Reading ──────────────────────────────────────────────────────────────────
-
-std::string read_file(const fs::path& p) {
-    std::ifstream f(p, std::ios::binary);
-    std::ostringstream s;
-    s << f.rdbuf();
-    return s.str();
-}
-
-std::string cache_dir() {
-    const char* xdg = std::getenv("XDG_CACHE_HOME");
-    const char* home = std::getenv("HOME");
-    std::string base = xdg && *xdg ? xdg : std::string(home ? home : "/tmp") + "/.cache";
-    return base + "/b1air/calendar";
-}
 
 // curl into a file beside the cached one, then over it: a failed fetch
 // leaves the last good copy, which is what is read while offline.
@@ -67,233 +54,15 @@ bool fetch(const std::string& url, const fs::path& to) {
     return !ec;
 }
 
-// ── CalDAV ───────────────────────────────────────────────────────────────────
-//
-// "icloud:<Apple ID>" and "caldav:https://user@host/path" (Nextcloud,
-// Fastmail, any CalDAV server): the calendars of an account, found the way
-// RFC 4791 and 6764 describe (the principal, its calendar home, the
-// calendars in it), and the events of the coming days asked of each. The
-// password — for iCloud an app-specific one, made at account.apple.com —
-// is in the secret store as calendar-<md5 of the source>, put there by
-// Settings; it goes to curl on its standard input, never on a command line.
-
-std::string md5_hex(const std::string& s) {
-    unsigned char d[EVP_MAX_MD_SIZE];
-    unsigned int n = 0;
-    EVP_Digest(s.data(), s.size(), d, &n, EVP_md5(), nullptr);
-    static const char* hex = "0123456789abcdef";
-    std::string out;
-    for (unsigned i = 0; i < n; ++i) { out += hex[d[i] >> 4]; out += hex[d[i] & 15]; }
-    return out;
-}
-
-struct Reply { int status = 0; std::string url, body; };
-
-// One request: `config` (curl's own syntax: the user and password) on its
-// standard input, the answer's code and final address after the body.
-Reply dav(const std::string& method, const std::string& url, const std::string& depth,
-          const std::string& body, const std::string& config) {
-    int in_pipe[2], out_pipe[2];
-    Reply r;
-    if (pipe(in_pipe) != 0) return r;
-    if (pipe(out_pipe) != 0) { close(in_pipe[0]); close(in_pipe[1]); return r; }
-    const std::string marker = "\n@@b1air@@";
-    const pid_t pid = fork();
-    if (pid == 0) {
-        dup2(in_pipe[0], STDIN_FILENO);
-        dup2(out_pipe[1], STDOUT_FILENO);
-        const int null_fd = open("/dev/null", O_WRONLY);
-        if (null_fd >= 0) dup2(null_fd, STDERR_FILENO);
-        close(in_pipe[0]); close(in_pipe[1]); close(out_pipe[0]); close(out_pipe[1]);
-        const std::string depth_h = "Depth: " + depth;
-        const std::string write_out = marker + "%{http_code} %{url_effective}";
-        execlp("curl", "curl", "-sS", "-L", "--max-time", "20", "--proto", "=https", "--proto-redir", "=https",
-               "-K", "-", "-X", method.c_str(), "-H", depth_h.c_str(),
-               "-H", "Content-Type: application/xml; charset=utf-8", "--data-binary", body.c_str(),
-               "-w", write_out.c_str(), url.c_str(), (char*)nullptr);
-        _exit(127);
-    }
-    close(in_pipe[0]);
-    close(out_pipe[1]);
-    if (pid < 0) { close(in_pipe[1]); close(out_pipe[0]); return r; }
-    for (size_t off = 0; off < config.size();) {
-        const ssize_t n = write(in_pipe[1], config.data() + off, config.size() - off);
-        if (n > 0) off += size_t(n); else if (n < 0 && errno == EINTR) continue; else break;
-    }
-    close(in_pipe[1]);
-    std::string all;
-    char buf[8192];
-    ssize_t n;
-    while ((n = read(out_pipe[0], buf, sizeof buf)) > 0 || (n < 0 && errno == EINTR))
-        if (n > 0) all.append(buf, size_t(n));
-    close(out_pipe[0]);
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
-    const size_t m = all.rfind(marker);
-    if (m == std::string::npos) return r;
-    r.body = all.substr(0, m);
-    std::istringstream tail(all.substr(m + marker.size()));
-    tail >> r.status >> r.url;
-    return r;
-}
-
-// The text of every element named `name`, whatever namespace prefix the
-// server gives it (d:href, D:href, href).
-std::vector<std::string> elements(const std::string& xml, const std::string& name) {
+// What a file, folder or link holds: every .ics text in it. Accounts
+// (icloud:, caldav:, google:, microsoft:) are calendar_accounts.cpp's.
+std::vector<std::string> load_source(std::string src, std::vector<std::string>& errors) {
     std::vector<std::string> out;
-    const std::regex re("<(?:[A-Za-z0-9_-]+:)?" + name + R"((?:\s[^>]*)?>([\s\S]*?)</(?:[A-Za-z0-9_-]+:)?)" + name + ">");
-    for (std::sregex_iterator it(xml.begin(), xml.end(), re), end; it != end; ++it) out.push_back((*it)[1]);
-    return out;
-}
-std::string xml_text(std::string s) {
-    if (s.rfind("<![CDATA[", 0) == 0) return s.substr(9, s.size() >= 12 ? s.size() - 12 : 0);
-    const std::pair<const char*, const char*> ents[] = {
-        {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&#13;", "\r"}, {"&#xD;", "\r"}, {"&amp;", "&"}};
-    for (const auto& [from, to] : ents)
-        for (size_t at; (at = s.find(from)) != std::string::npos;) s.replace(at, std::strlen(from), to);
-    return s;
-}
-std::string trim(const std::string& s) {
-    const size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
-    return a == std::string::npos ? "" : s.substr(a, b - a + 1);
-}
-// An href against the address it came from: a path keeps that host.
-std::string resolve(const std::string& base, const std::string& href) {
-    if (href.rfind("http", 0) == 0) return href;
-    const size_t host_end = base.find('/', base.find("://") + 3);
-    return (host_end == std::string::npos ? base : base.substr(0, host_end)) + href;
-}
-
-std::string utc_stamp(sys_seconds t) {
-    const auto d = floor<days>(t);
-    const year_month_day ymd{d};
-    const hh_mm_ss hms{t - d};
-    char out[48];
-    std::snprintf(out, sizeof out, "%04d%02u%02uT%02ld%02ld%02ldZ", int(ymd.year()), unsigned(ymd.month()),
-                  unsigned(ymd.day()), long(hms.hours().count()), long(hms.minutes().count()), long(hms.seconds().count()));
-    return out;
-}
-
-// Every event of the account in the window, as .ics texts; "" and an error
-// when it cannot be read.
-std::vector<std::string> load_caldav(const std::string& src, int hours_ahead, std::vector<std::string>& errors) {
-    std::string base, user;
-    if (src.rfind("icloud:", 0) == 0) {
-        user = src.substr(7);
-        base = "https://caldav.icloud.com/";
-    } else {
-        base = src.substr(7);   // after "caldav:"
-        const size_t scheme = base.find("://");
-        // The last @ before the path: a user name may be an address itself.
-        const size_t slash = scheme == std::string::npos ? std::string::npos : base.find('/', scheme + 3);
-        const size_t at = scheme == std::string::npos ? std::string::npos : base.rfind('@', slash);
-        if (at != std::string::npos && at > scheme) {
-            user = base.substr(scheme + 3, at - scheme - 3);
-            base = base.substr(0, scheme + 3) + base.substr(at + 1);
-        }
-    }
-    std::string password;
-    b1air::SecretStore store;
-    if (user.empty() || !store.get("calendar-" + md5_hex(src), password)) {
-        errors.push_back(src + ": no password saved");
-        return {};
-    }
-    auto quote = [](const std::string& v) {
-        std::string q;
-        for (char c : v) { if (c == '"' || c == '\\') q += '\\'; q += c; }
-        return q;
-    };
-    const std::string config = "user = \"" + quote(user) + ":" + quote(password) + "\"\n";
-    std::fill(password.begin(), password.end(), '\0');
-
-    auto failed = [&](const Reply& r) {
-        errors.push_back(src + (r.status == 401 || r.status == 403 ? ": the server refused the password"
-                                : r.status == 0 ? ": could not reach the server"
-                                : ": the server answered " + std::to_string(r.status)));
-        return std::vector<std::string>{};
-    };
-    const std::string propfind = R"(<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>)";
-
-    // The principal, then its calendar home.
-    Reply r = dav("PROPFIND", base, "0", propfind + "<d:current-user-principal/></d:prop></d:propfind>", config);
-    if (r.status != 207) return failed(r);
-    std::string principal = base;
-    for (const auto& p : elements(r.body, "current-user-principal")) {
-        const auto h = elements(p, "href");
-        if (!h.empty()) principal = resolve(r.url, trim(h[0]));
-    }
-    r = dav("PROPFIND", principal, "0", propfind + "<c:calendar-home-set/></d:prop></d:propfind>", config);
-    if (r.status != 207) return failed(r);
-    std::string home;
-    for (const auto& p : elements(r.body, "calendar-home-set")) {
-        const auto h = elements(p, "href");
-        if (!h.empty()) home = resolve(r.url, trim(h[0]));
-    }
-    if (home.empty()) { errors.push_back(src + ": no calendars on this account"); return {}; }
-
-    // The calendars in it that hold events (not reminders' task lists).
-    r = dav("PROPFIND", home, "1", propfind + "<d:resourcetype/><c:supported-calendar-component-set/></d:prop></d:propfind>", config);
-    if (r.status != 207) return failed(r);
-    std::vector<std::string> calendars;
-    for (const auto& resp : elements(r.body, "response")) {
-        const auto types = elements(resp, "resourcetype");
-        if (types.empty() || types[0].find("calendar") == std::string::npos) continue;
-        const auto comps = elements(resp, "supported-calendar-component-set");
-        if (!comps.empty() && comps[0].find("VEVENT") == std::string::npos) continue;
-        const auto h = elements(resp, "href");
-        if (!h.empty()) calendars.push_back(resolve(r.url, trim(h[0])));
-    }
-
-    // The events overlapping the window, from each.
-    const sys_seconds now = floor<seconds>(system_clock::now());
-    const std::string query = R"(<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">)"
-        "<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name=\"VCALENDAR\"><c:comp-filter name=\"VEVENT\">"
-        "<c:time-range start=\"" + utc_stamp(now - days{1}) + "\" end=\"" + utc_stamp(now + hours{hours_ahead}) + "\"/>"
-        "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>";
-    std::vector<std::string> out;
-    for (const auto& cal : calendars) {
-        const Reply q = dav("REPORT", cal, "1", query, config);
-        if (q.status != 207) continue;
-        for (const auto& data : elements(q.body, "calendar-data")) out.push_back(xml_text(trim(data)));
-    }
-    return out;
-}
-
-// What a source holds: every .ics text in it.
-std::vector<std::string> load_source(std::string src, int hours_ahead, std::vector<std::string>& errors) {
-    std::vector<std::string> out;
-    if (src.rfind("icloud:", 0) == 0 || src.rfind("caldav:", 0) == 0) {
-        // Kept like a link's copy: read at most every fifteen minutes, and
-        // the last one used while offline.
-        std::error_code ec;
-        fs::create_directories(cache_dir(), ec);
-        const fs::path file = fs::path(cache_dir()) / (md5_hex(src) + ".dav");
-        const bool fresh = fs::exists(file, ec)
-            && fs::last_write_time(file, ec) > fs::file_time_type::clock::now() - minutes(15);
-        if (!fresh) {
-            const size_t before = errors.size();
-            const auto got = load_caldav(src, std::max(hours_ahead, 24 * 7), errors);
-            if (errors.size() == before) {
-                std::ofstream f(file, std::ios::binary | std::ios::trunc);
-                fs::permissions(file, fs::perms::owner_read | fs::perms::owner_write, ec);
-                for (const auto& t : got) f << t << "\n\x1e\n";
-            }
-        }
-        if (fs::exists(file, ec)) {
-            std::istringstream all(read_file(file));
-            std::string chunk, line;
-            while (std::getline(all, line)) {
-                if (line == "\x1e") { out.push_back(chunk); chunk.clear(); }
-                else chunk += line + "\n";
-            }
-        }
-        return out;
-    }
     if (src.rfind("webcal://", 0) == 0) src = "https://" + src.substr(9);
     if (src.rfind("http://", 0) == 0 || src.rfind("https://", 0) == 0) {
         std::error_code ec;
         fs::create_directories(cache_dir(), ec);
-        const fs::path file = fs::path(cache_dir()) / (std::to_string(std::hash<std::string>{}(src)) + ".ics");
+        const fs::path file = fs::path(cache_dir()) / (md5_hex(src) + ".ics");
         const bool fresh = fs::exists(file, ec)
             && fs::last_write_time(file, ec) > fs::file_time_type::clock::now() - minutes(15);
         if (!fresh && !fetch(src, file) && !fs::exists(file, ec))
@@ -666,9 +435,19 @@ std::vector<sys_seconds> occurrences(const Event& ev, sys_seconds until) {
 std::string events_json(const std::vector<std::string>& sources, int hours_ahead) {
     std::vector<std::string> errors;
     std::vector<Event> all;
-    for (const auto& s : sources)
-        for (const auto& text : load_source(s, hours_ahead, errors))
+    std::vector<Expanded> expanded;
+    for (const auto& s : sources) {
+        std::vector<std::string> texts;
+        if (is_account(s)) {
+            AccountData d = load_account(s, hours_ahead, errors);
+            texts = std::move(d.ics);
+            expanded.insert(expanded.end(), d.events.begin(), d.events.end());
+        } else {
+            texts = load_source(s, errors);
+        }
+        for (const auto& text : texts)
             for (auto& e : parse_events(text)) all.push_back(std::move(e));
+    }
 
     const sys_seconds now = floor<seconds>(system_clock::now());
     const sys_seconds until = now + hours{std::max(1, hours_ahead)};
@@ -693,6 +472,15 @@ std::string events_json(const std::vector<std::string>& sources, int hours_ahead
                 {"allDay", e.start.date_only}, {"busy", e.busy}
             });
         }
+    }
+    for (const auto& e : expanded) {
+        if (e.end <= now || e.start >= until) continue;
+        list.push_back({
+            {"title", e.title}, {"location", e.location},
+            {"start", duration_cast<milliseconds>(e.start.time_since_epoch()).count()},
+            {"end", duration_cast<milliseconds>(e.end.time_since_epoch()).count()},
+            {"allDay", e.all_day}, {"busy", e.busy}
+        });
     }
     std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a["start"] < b["start"]; });
     return nlohmann::json{{"events", list}, {"errors", errors}}.dump();

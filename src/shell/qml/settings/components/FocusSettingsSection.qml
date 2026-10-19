@@ -99,58 +99,6 @@ ColumnLayout {
 
     function _clock(ms) { return Qt.formatTime(new Date(ms), "hh:mm"); }
 
-    // ── Calendars ────────────────────────────────────────────────────────────
-    //
-    // A source as b1air-daemon calendar takes it: a path or link as it is,
-    // "icloud:<Apple ID>", "caldav:https://user@host/path". The password of
-    // an account goes to the secret store as calendar-<md5 of the source>,
-    // where the daemon reads it; never into settings.json.
-    function calendarLabel(src) {
-        if (src.startsWith("icloud:")) return src.slice(7);
-        if (src.startsWith("caldav:")) return src.slice(7).replace(/^https?:\/\/(.*@)?([^/]+).*$/, "$2");
-        if (src.indexOf("calendar.google.com") >= 0) return "Google Calendar";
-        return src.indexOf("://") > 0 ? src.replace(/^[a-z]+:\/\/([^/]+).*$/, "$1") : src;
-    }
-    function calendarKind(src) {
-        return src.startsWith("icloud:") ? "iCloud"
-             : src.startsWith("caldav:") ? I18n.tr("CalDAV account")
-             : src.indexOf("calendar.google.com") >= 0 ? I18n.tr("Google, by its secret address")
-             : src.indexOf("://") > 0 ? I18n.tr("Calendar link") : I18n.tr("Calendar file or folder");
-    }
-    function addCalendar(kind, where, user, password) {
-        let src = where;
-        if (kind === "icloud") src = "icloud:" + user;
-        else if (kind === "caldav") {
-            const url = /^https?:\/\//.test(where) ? where : "https://" + where;
-            src = "caldav:" + url.replace(/^(https?:\/\/)/, "$1" + user + "@");
-        }
-        if ((Settings.calendarSources || []).indexOf(src) >= 0) return;
-        if (kind === "icloud" || kind === "caldav") section._storeSecret("calendar-" + Qt.md5(src), password);
-        Settings.set("calendarSources", (Settings.calendarSources || []).concat([src]));
-        calWhere.text = ""; calUser.text = ""; calPassword.text = "";
-    }
-    function removeCalendar(i) {
-        const list = (Settings.calendarSources || []).slice();
-        const src = list[i];
-        if (src && (src.startsWith("icloud:") || src.startsWith("caldav:")))
-            section._storeSecret("calendar-" + Qt.md5(src), "");
-        list.splice(i, 1);
-        Settings.set("calendarSources", list);
-    }
-    function _storeSecret(name, value) {
-        secretWriter.value = value;
-        secretWriter.command = ["b1air-secret-service", "set", name];
-        secretWriter.running = true;
-    }
-    Process {
-        id: secretWriter
-        property string value: ""
-        stdinEnabled: true
-        onStarted: { write(secretWriter.value); secretWriter.value = ""; stdinEnabled = false; }
-        // The calendar is read once the password is there to read it with.
-        onExited: { stdinEnabled = true; Notifications.refreshCalendar(); }
-    }
-
     // (The page title is in the Settings header bar now.)
 
     // ── 2. Today's Wellbeing Overview ────────────────────────────────────────
@@ -456,10 +404,9 @@ ColumnLayout {
     // ── Meetings ─────────────────────────────────────────────────────────────
     //
     // The Meeting mode while an event in a calendar is under way
-    // (Services/Notifications, b1air-daemon calendar). A calendar is a .ics
-    // file, a folder of them (vdirsyncer's, khal's) or a link to one.
+    // (Services/Notifications, b1air-daemon calendar); the calendars, and
+    // adding one, in CalendarAccounts.
     SettingsGroup {
-        id: meetings
         visible: section.part === "notifications"
         icon: "\u{f0ed7}"
 
@@ -474,91 +421,9 @@ ColumnLayout {
             onToggled: Settings.set("focusDuringMeetings", !(Settings.focusDuringMeetings === true))
         }
 
-        Repeater {
-            model: Settings.focusDuringMeetings === true ? (Settings.calendarSources || []) : []
-            SettingsRow {
-                required property string modelData
-                required property int index
-                label: section.calendarLabel(modelData)
-                note: section.calendarKind(modelData)
-                IconButton {
-                    icon: "\u{f0156}"
-                    label: I18n.tr("Remove")
-                    onClicked: section.removeCalendar(index)
-                }
-            }
-        }
-
-        // Adding one: what kind, then what it needs.
-        SettingsRow {
-            visible: Settings.focusDuringMeetings === true
-            label: I18n.tr("Add a calendar")
-            SegmentedControl {
-                id: calKind
-                size: "sm"
-                model: [{ id: "google", label: "Google" }, { id: "icloud", label: "iCloud" },
-                        { id: "caldav", label: "CalDAV" }, { id: "link", label: I18n.tr("Link or file") }]
-                current: "google"
-                onPicked: id => calKind.current = id
-            }
-        }
-        Label {
+        CalendarAccounts {
             visible: Settings.focusDuringMeetings === true
             Layout.fillWidth: true
-            text: calKind.current === "google"
-                ? I18n.tr("In Google Calendar on the web: Settings, then your calendar, then Integrate calendar. Copy its Secret address in iCal format and paste it here")
-                : calKind.current === "icloud"
-                ? I18n.tr("Your Apple ID and an app-specific password for it, made at account.apple.com under Sign-In and Security. Every calendar of the account is read")
-                : calKind.current === "caldav"
-                ? I18n.tr("The server's address (Nextcloud, Fastmail, Radicale…), your user name and password. Every calendar of the account is read")
-                : I18n.tr("A .ics file, a folder of them (as vdirsyncer and khal keep them), or a link to one (webcal or https)")
-            role: "caption"
-            dim: true
-            wrapMode: Text.WordWrap
-        }
-        RowLayout {
-            visible: Settings.focusDuringMeetings === true
-            Layout.fillWidth: true
-            spacing: Design.s(Design.space.sm)
-            Field {
-                id: calWhere
-                Layout.fillWidth: true
-                visible: calKind.current !== "icloud"
-                placeholder: calKind.current === "google" ? "https://calendar.google.com/calendar/ical/…/basic.ics"
-                           : calKind.current === "caldav" ? "https://cloud.example.org/remote.php/dav"
-                           : "~/.calendars/work"
-            }
-            Field {
-                id: calUser
-                Layout.fillWidth: true
-                visible: calKind.current === "icloud" || calKind.current === "caldav"
-                placeholder: calKind.current === "icloud" ? I18n.tr("Apple ID") : I18n.tr("User name")
-            }
-            Field {
-                id: calPassword
-                Layout.fillWidth: true
-                visible: calKind.current === "icloud" || calKind.current === "caldav"
-                echoMode: TextInput.Password
-                placeholder: calKind.current === "icloud" ? I18n.tr("App-specific password") : I18n.tr("Password")
-            }
-            Button {
-                label: I18n.tr("Add")
-                enabled: calKind.current === "icloud" ? calUser.text.trim() !== "" && calPassword.text !== ""
-                       : calKind.current === "caldav" ? calWhere.text.trim() !== "" && calUser.text.trim() !== "" && calPassword.text !== ""
-                       : calWhere.text.trim() !== ""
-                onClicked: section.addCalendar(calKind.current, calWhere.text.trim(), calUser.text.trim(), calPassword.text)
-            }
-        }
-
-        Repeater {
-            model: Settings.focusDuringMeetings === true ? Notifications.calendarErrors : []
-            InlineStatus {
-                required property string modelData
-                Layout.fillWidth: true
-                status: "warning"
-                showRetry: false
-                text: modelData
-            }
         }
     }
 
