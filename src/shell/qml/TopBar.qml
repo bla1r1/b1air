@@ -162,9 +162,15 @@ PanelWindow {
     
     signal requestCommand(string cmd, bool notify)
 
-    // Wayland Layer-Shell configuration
+    property bool menuOpen: false
+
+    // Wayland Layer-Shell configuration: Top layer so fullscreen covers it,
+    // dynamically elevated to Overlay when application menu/launchpad is open.
     WlrLayershell.namespace: "b1air-topbar"
-    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.layer: WlrLayer.Top
+    onMenuOpenChanged: {
+        topBar.WlrLayershell.layer = menuOpen ? WlrLayer.Overlay : WlrLayer.Top;
+    }
     // The bar reserves its own height and no more.
     //
     // This briefly reserved height + Design.space.sm, to guarantee a gap under

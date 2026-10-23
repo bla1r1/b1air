@@ -226,6 +226,7 @@ Scope {
         delegate: TopBar {
             required property var modelData
             screen: modelData
+            menuOpen: masterWindow.isVisible
             onRequestCommand: (cmd, notify) => masterWindow.handleIpcCommand(cmd, notify)
         }
     }
