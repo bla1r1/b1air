@@ -574,7 +574,7 @@ Scope {
                 focus: true
                 
                 Keys.onEscapePressed: {
-                    switchWidget("hidden", "");
+                    masterWindow.switchWidget("hidden", "");
                     event.accepted = true;
                 }
 
@@ -760,12 +760,18 @@ Scope {
 
         if (sameComponent && widgetStack.currentItem) {
             const target = pageFor(newWidget, arg);
-            if (target && widgetStack.currentItem.page !== undefined)
+            if (target && widgetStack.currentItem.page !== undefined) {
                 widgetStack.currentItem.page = target;
+                if (widgetStack.currentItem.currentView !== undefined)
+                    widgetStack.currentItem.currentView = target;
+            }
             if ((newWidget === "quicklook" || newWidget === "windows") && widgetStack.currentItem.filePath !== undefined)
                 widgetStack.currentItem.filePath = arg;
             if (newWidget === "settings" && arg && !target && widgetStack.currentItem.searchQuery !== undefined)
                 widgetStack.currentItem.searchQuery = arg;
+            if ((newWidget === "spotlight" || newWidget === "launchpad") && widgetStack.currentItem.query !== undefined)
+                widgetStack.currentItem.query = arg || "";
+            masterWindow.loadedWidget = newWidget;
             masterWindow.isVisible = true;
             masterWindow.firstOpen = false;
             masterWindow.disableMorph = false;
@@ -786,6 +792,7 @@ Scope {
         if (newWidget === "settings" && arg && !page)
             props["searchQuery"] = arg;
 
+        const previousItem = widgetStack.currentItem;
         let made = null;
         if (immediate || masterWindow.firstOpen) {
             made = widgetStack.replace(t.comp, props, StackView.Immediate);
@@ -798,7 +805,7 @@ Scope {
         // uses missing): StackView keeps the one before, and that panel
         // opened in its place as if it were the one asked for. Nothing
         // opens instead, and the log says why (the error is above it).
-        if (!made) {
+        if (!made || (previousItem !== null && made === previousItem)) {
             console.warn("Shell: could not open", newWidget, "(" + t.comp + ")");
             masterWindow.switchWidget("hidden", "");
             return false;

@@ -122,7 +122,6 @@ PopupShell {
                         // Key Number Badge
                         Surface {
                             kind: "well"
-                            radius: 0
                             Layout.alignment: Qt.AlignHCenter
                             implicitWidth: Design.s(Design.size.mini); implicitHeight: implicitWidth; radius: width / 2
 
